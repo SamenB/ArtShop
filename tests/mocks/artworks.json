@@ -1,0 +1,51 @@
+[
+    {
+        "title": "Starry Night",
+        "description": "Oil on canvas",
+        "price": 10000,
+        "quantity": 3,
+        "collection_id": 1
+    },
+    {
+        "title": "Mona Lisa Print",
+        "description": "High quality print",
+        "price": 5000,
+        "quantity": 1,
+        "collection_id": 2
+    },
+    {
+        "title": "Urban Graffiti",
+        "description": "Spray paint on wall",
+        "price": 3000,
+        "quantity": 5,
+        "collection_id": 3
+    },
+    {
+        "title": "Sunset Photo",
+        "description": "Landscape photography",
+        "price": 1500,
+        "quantity": 10,
+        "collection_id": 4
+    },
+    {
+        "title": "Digital Abstract",
+        "description": "AI generated art",
+        "price": 2000,
+        "quantity": 8,
+        "collection_id": 5
+    },
+    {
+        "title": "Water Lilies",
+        "description": "Impressionist painting",
+        "price": 8000,
+        "quantity": 2,
+        "collection_id": 1
+    },
+    {
+        "title": "The Scream Copy",
+        "description": "Museum quality replica",
+        "price": 7000,
+        "quantity": 4,
+        "collection_id": 2
+    }
+]

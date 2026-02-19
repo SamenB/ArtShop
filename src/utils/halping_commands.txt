@@ -1,0 +1,7 @@
+# alembic revision --autogenerate -m "message"
+# alembic upgrade head
+# alembic downgrade 01720105d3df
+
+
+
+# python -m src.main

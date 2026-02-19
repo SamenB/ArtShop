@@ -1,0 +1,22 @@
+[
+    {
+        "title": "Modern Art Collection",
+        "location": "New York"
+    },
+    {
+        "title": "Classical Paintings",
+        "location": "Paris"
+    },
+    {
+        "title": "Street Art Gallery",
+        "location": "Berlin"
+    },
+    {
+        "title": "Photography Exhibition",
+        "location": "Tokyo"
+    },
+    {
+        "title": "Digital Art Showcase",
+        "location": "San Francisco"
+    }
+]

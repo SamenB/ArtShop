@@ -1,0 +1,10 @@
+project_plan/
+venv/
+__pycache__/
+.env
+static/*
+!static/.gitkeep
+temp/*
+!temp/.gitkeep
+logs/*
+!logs/.gitkeep

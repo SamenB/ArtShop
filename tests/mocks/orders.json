@@ -1,0 +1,38 @@
+[
+    {
+        "user_id": 1,
+        "collection_id": 1,
+        "artwork_id": 1,
+        "price": 10000
+    },
+    {
+        "user_id": 1,
+        "collection_id": 1,
+        "artwork_id": 1,
+        "price": 10000
+    },
+    {
+        "user_id": 2,
+        "collection_id": 3,
+        "artwork_id": 3,
+        "price": 3000
+    },
+    {
+        "user_id": 2,
+        "collection_id": 1,
+        "artwork_id": 6,
+        "price": 8000
+    },
+    {
+        "user_id": 3,
+        "collection_id": 4,
+        "artwork_id": 4,
+        "price": 1500
+    },
+    {
+        "user_id": 3,
+        "collection_id": 5,
+        "artwork_id": 5,
+        "price": 2000
+    }
+]
