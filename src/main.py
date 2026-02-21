@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
+from fastapi.middleware.cors import CORSMiddleware
 import redis.asyncio as redis
 import uvicorn
 
@@ -41,6 +42,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ArtVault", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,  # Allows explicit origins
+    allow_credentials=True,               # Needs to be True for HTTPOnly Auth Cookies
+    allow_methods=["*"],                  # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"],                  # Allows all headers
+)
 
 @app.exception_handler(ArtVaultExeption)
 async def artvault_exception_handler(request: Request, exc: ArtVaultExeption):

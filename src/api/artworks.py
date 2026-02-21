@@ -13,8 +13,12 @@ bulk_router = APIRouter(prefix="/artworks/bulk", tags=["Artworks"])
 @router.get("")
 async def get_artworks(
     db: DBDep,
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    title: str | None = Query(None),
+    tags: list[int] | None = Query(None)
 ):
-    return await ArtworkService(db).get_all_artworks()
+    return await ArtworkService(db).get_all_artworks(limit=limit, offset=offset, title=title, tags=tags)
 
 
 @router.get("/{artwork_id}")

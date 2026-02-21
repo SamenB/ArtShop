@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Response
 from src.api.dependencies import UserDep, DBDep
 from src.exeptions import ObjectNotFoundException
 from src.services.auth import AuthService
-from src.schemas.users import UserRequestAdd, UserAdd, UserLogin
+from src.schemas.users import UserRequestAdd, UserAdd, UserLogin, User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -35,10 +35,10 @@ async def login_user(data: UserLogin, response: Response, db: DBDep):
     return {"access_token": access_token}
 
 
-@router.get("/me")
+@router.get("/me", response_model=User)
 async def get_current_user(user_id: UserDep, db: DBDep):
     user = await db.users.get_one(id=user_id)
-    return {"data": user}
+    return user
 
 
 @router.post("/logout")

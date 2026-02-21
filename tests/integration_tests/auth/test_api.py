@@ -49,7 +49,7 @@ async def test_auth_flow(ac):
     # 5. Get current user (authenticated)
     response = await ac.get("/auth/me")
     assert response.status_code == 200
-    user = response.json()["data"]
+    user = response.json()
     assert user["email"] == "e2e_test@example.com"
     assert user["username"] == "e2e_user"
 

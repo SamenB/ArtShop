@@ -18,12 +18,12 @@ class ArtworkService(BaseService):
         artwork = await self.db.artworks.get_one(id=artwork_id)
         return artwork
 
-    async def get_all_artworks(self):
+    async def get_all_artworks(self, limit: int = 10, offset: int = 0, title: str | None = None, tags: list[int] | None = None):
         try:
-            artworks = await self.db.artworks.get_available_artworks()
+            artworks = await self.db.artworks.get_available_artworks(limit=limit, offset=offset, title=title, tags=tags)
         except SQLAlchemyError:
             raise DatabaseException
-        logger.info("Artworks retrieved: count={}", len(artworks))
+        logger.info(f"Artworks retrieved: count={len(artworks)}, title={title}, tags={tags}")
         return artworks
 
     async def create_artwork(self, artwork_data: ArtworkAddRequest):

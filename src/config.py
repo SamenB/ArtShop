@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int
     ADMIN_EMAILS: list[str] = []
+    
+    # CORS Origins (useful for Local Dev -> Prod transitions)
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
 
 
     # to load env variables from .env file

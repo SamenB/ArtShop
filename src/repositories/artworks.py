@@ -1,6 +1,7 @@
 from datetime import date
 from src.repositories.base import BaseRepository
 from src.models.artworks import ArtworksOrm
+from src.models.tags import TagsOrm
 from src.repositories.utils import available_artwork_ids
 from sqlalchemy.orm import joinedload
 from sqlalchemy import select
@@ -29,7 +30,7 @@ class ArtworksRepository(BaseRepository):
     )
     """
 
-    async def get_available_artworks(self):
+    async def get_available_artworks(self, limit: int = 10, offset: int = 0, title: str | None = None, tags: list[int] | None = None):
         artworks_ids_to_get = available_artwork_ids()
 
         query = (
@@ -37,6 +38,15 @@ class ArtworksRepository(BaseRepository):
             .options(joinedload(self.model.tags))
             .filter(self.model.id.in_(artworks_ids_to_get))
         )
+
+        if title:
+            query = query.filter(self.model.title.ilike(f"%{title}%"))
+            
+        if tags:
+            query = query.filter(self.model.tags.any(TagsOrm.id.in_(tags)))
+
+        query = query.limit(limit).offset(offset)
+
         result = await self.session.execute(query)
         return [
             ArtworkWithTags.model_validate(model, from_attributes=True)
