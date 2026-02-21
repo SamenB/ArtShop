@@ -2,7 +2,7 @@
 import os
 import shutil
 from fastapi import UploadFile
-from src.tasks.tasks import process_collection_image
+from src.tasks.tasks import process_and_attach_image
 
 
 class ImageService:
@@ -17,5 +17,5 @@ class ImageService:
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        process_collection_image.delay(collection_id, temp_path)  # type: ignore[attr-defined]
+        process_and_attach_image.delay(model_type="collection", model_id=collection_id, temp_paths=[temp_path])
         return temp_path

@@ -29,8 +29,8 @@ class ArtworksRepository(BaseRepository):
     )
     """
 
-    async def get_available_artworks(self, collection_id: int):
-        artworks_ids_to_get = available_artwork_ids(collection_id=collection_id)
+    async def get_available_artworks(self):
+        artworks_ids_to_get = available_artwork_ids()
 
         query = (
             select(self.model)

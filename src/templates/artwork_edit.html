@@ -1,0 +1,34 @@
+{% extends "sqladmin/edit.html" %}
+
+{% block tail %}
+{{ super() }}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Initialize Select2 on the tags multi-select
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $('select[name="tags"]').select2({
+                placeholder: "Select tags...",
+                width: '100%',
+                allowClear: true
+            });
+        }
+
+        // Is Display Only toggle logic
+        var cb = document.getElementById("is_display_only");
+        var fields = ["original_price", "is_original_available", "print_price", "prints_total", "prints_available"];
+        function toggle() {
+            if (!cb) return;
+            var off = cb.checked;
+            fields.forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) {
+                    el.disabled = off;
+                    var wrap = el.closest('.mb-3') || el.closest('.form-group') || el.parentElement;
+                    if (wrap) { wrap.style.opacity = off ? '0.5' : '1'; }
+                }
+            });
+        }
+        if (cb) { toggle(); cb.addEventListener("change", toggle); }
+    });
+</script>
+{% endblock %}

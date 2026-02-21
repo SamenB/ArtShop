@@ -17,7 +17,6 @@ from src.models import *
 from src.config import settings
 from src.utils.db_manager import DBManager
 from src.schemas.users import UserAdd
-from src.schemas.collections import CollectionAdd
 from src.schemas.artworks import ArtworkAdd
 from src.schemas.tags import TagAdd, ArtworkTagAdd
 from src.schemas.orders import OrderAdd
@@ -51,7 +50,6 @@ async def setup_database(check_test_mode):
 
     # 2. Load mock data from JSON
     users_data = load_mock("users.json")
-    collections_data = load_mock("collections.json")
     artworks_data = load_mock("artworks.json")
     tags_data = load_mock("tags.json")
     artwork_tags_data = load_mock("artwork_tags.json")
@@ -60,7 +58,6 @@ async def setup_database(check_test_mode):
 
     # 4. Validate through Pydantic
     users = [UserAdd.model_validate(u) for u in users_data]
-    collections = [CollectionAdd.model_validate(c) for c in collections_data]
     artworks = [ArtworkAdd.model_validate(a) for a in artworks_data]
     tags = [TagAdd.model_validate(t) for t in tags_data]
     artwork_tags = [ArtworkTagAdd.model_validate(at) for at in artwork_tags_data]
@@ -69,7 +66,6 @@ async def setup_database(check_test_mode):
     # 5. Insert using repositories
     async with DBManager(session_factory=new_session_null_pool) as db:
         await db.users.add_bulk(users)
-        await db.collections.add_bulk(collections)
         await db.tags.add_bulk(tags)
         await db.artworks.add_bulk(artworks)
         await db.artwork_tags.add_bulk(artwork_tags)

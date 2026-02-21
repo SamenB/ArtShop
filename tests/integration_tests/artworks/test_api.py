@@ -6,6 +6,7 @@ async def test_add_order(authenticated_ac):
         "/orders",
         json={
             "artwork_id": 1,
+            "edition_type": "original"
         },
     )
     assert response.status_code == 200
@@ -22,6 +23,7 @@ async def test_order_exceeds_artwork_quantity(authenticated_ac):
         "/orders",
         json={
             "artwork_id": 2,
+            "edition_type": "print"
         },
     )
     assert response1.status_code == 200
@@ -31,10 +33,11 @@ async def test_order_exceeds_artwork_quantity(authenticated_ac):
         "/orders",
         json={
             "artwork_id": 2,
+            "edition_type": "print"
         },
     )
     assert response2.status_code == 409
-    assert "All artworks are sold out" in response2.json()["detail"]
+    assert "All prints for this artwork are sold out" in response2.json()["detail"]
 
 
 @pytest.mark.parametrize(
@@ -55,6 +58,7 @@ async def test_create_and_get_my_orders(
             "/orders",
             json={
                 "artwork_id": artwork_id,
+                "edition_type": "print"
             },
         )
         assert response.status_code == 200

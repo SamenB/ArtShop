@@ -12,21 +12,18 @@ async def test_ids(db):
     """Fixture: returns (user_id, artwork_id, collection_id) for tests."""
     user_id = (await db.users.get_all())[0].id
     artwork_id = (await db.artworks.get_all())[0].id
-    collection_id = (
-        await db.collections.get_all(title=None, location=None, limit=1, offset=0)
-    )[0].id
-    return user_id, artwork_id, collection_id
+    return user_id, artwork_id
 
 
 @pytest.fixture(scope="function")
 async def sample_order(db, test_ids):
     """Fixture: creates and returns an order for tests that need existing data."""
-    user_id, artwork_id, collection_id = test_ids
+    user_id, artwork_id = test_ids
 
     order_data = OrderAdd(
         user_id=user_id,
         artwork_id=artwork_id,
-        collection_id=collection_id,
+        edition_type="original",
         price=2000,
     )
 
@@ -40,12 +37,12 @@ async def sample_order(db, test_ids):
 
 async def test_create_order(db, test_ids):
     """Test order creation."""
-    user_id, artwork_id, collection_id = test_ids
+    user_id, artwork_id = test_ids
 
     order_data = OrderAdd(
         user_id=user_id,
         artwork_id=artwork_id,
-        collection_id=collection_id,
+        edition_type="original",
         price=1500,
     )
 
@@ -68,12 +65,12 @@ async def test_read_order(db, sample_order):
 
 async def test_update_order(db, sample_order, test_ids):
     """Test updating order."""
-    user_id, artwork_id, collection_id = test_ids
+    user_id, artwork_id = test_ids
 
     update_data = OrderAdd(
         user_id=user_id,
         artwork_id=artwork_id,
-        collection_id=collection_id,
+        edition_type="original",
         price=5000,
     )
 

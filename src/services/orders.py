@@ -3,12 +3,14 @@ from loguru import logger
 
 from src.exeptions import (
     ObjectNotFoundException,
-    AllArtworksSoldOutException,
+    ArtworkDisplayOnlyException,
+    OriginalSoldOutException,
+    PrintsSoldOutException,
     ObjectAlreadyExistsException,
     DatabaseException,
 )
 from src.services.base import BaseService
-from src.schemas.orders import OrderAddRequest, OrderAdd, OrderBulkRequest
+from src.schemas.orders import OrderAddRequest, OrderAdd, OrderBulkRequest, EditionType
 
 
 class OrderService(BaseService):
@@ -25,10 +27,36 @@ class OrderService(BaseService):
             raise DatabaseException
 
     async def create_order(self, order_data: OrderAddRequest, user_id: int):
+        from src.schemas.artworks import ArtworkPatch
         try:
-            order = await self.db.orders.create_order(order_data, user_id, self.db)
+            artwork = await self.db.artworks.get_one(id=order_data.artwork_id)
+
+            if artwork.is_display_only:
+                raise ArtworkDisplayOnlyException()
+
+            if order_data.edition_type == EditionType.ORIGINAL:
+                if not artwork.is_original_available:
+                    raise OriginalSoldOutException()
+                price = artwork.original_price or 0
+                await self.db.artworks.edit(ArtworkPatch(is_original_available=False), exclude_unset=True, id=artwork.id)
+
+            elif order_data.edition_type == EditionType.PRINT:
+                if artwork.prints_available <= 0:
+                    raise PrintsSoldOutException()
+                price = artwork.print_price or 0
+                await self.db.artworks.edit(ArtworkPatch(prints_available=artwork.prints_available - 1), exclude_unset=True, id=artwork.id)
+
+            order_add = OrderAdd(
+                user_id=user_id,
+                artwork_id=artwork.id,
+                edition_type=order_data.edition_type,
+                price=price
+            )
+
+            order = await self.db.orders.add(order_add)
             await self.db.commit()
-        except (ObjectNotFoundException, AllArtworksSoldOutException):
+            
+        except (ObjectNotFoundException, ArtworkDisplayOnlyException, OriginalSoldOutException, PrintsSoldOutException):
             raise
         except SQLAlchemyError:
             await self.db.rollback()
@@ -39,14 +67,12 @@ class OrderService(BaseService):
     async def create_orders_bulk(self, orders_data: list[OrderBulkRequest]):
         try:
             valid_user_ids = {u.id for u in await self.db.users.get_all()}
-            valid_collection_ids = {c.id for c in await self.db.collections.get_filtered()}
             valid_artwork_ids = {a.id for a in await self.db.artworks.get_all()}
 
             valid = [
                 OrderAdd(**o.model_dump())
                 for o in orders_data
                 if o.user_id in valid_user_ids
-                and o.collection_id in valid_collection_ids
                 and o.artwork_id in valid_artwork_ids
             ]
 

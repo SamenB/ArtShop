@@ -15,8 +15,18 @@ class ObjectNotFoundException(ArtVaultExeption):
     status_code = 404
 
 
-class AllArtworksSoldOutException(ArtVaultExeption):
-    detail = "All artworks are sold out"
+class ArtworkDisplayOnlyException(ArtVaultExeption):
+    detail = "This artwork is for display only"
+    status_code = 409
+
+
+class OriginalSoldOutException(ArtVaultExeption):
+    detail = "The original artwork is already sold"
+    status_code = 409
+
+
+class PrintsSoldOutException(ArtVaultExeption):
+    detail = "All prints for this artwork are sold out"
     status_code = 409
 
 

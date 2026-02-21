@@ -1,7 +1,10 @@
-# alembic revision --autogenerate -m "message"
-# alembic upgrade head
-# alembic downgrade 01720105d3df
+alembic revision --autogenerate -m "message"
+alembic upgrade head
+alembic downgrade 01720105d3df
 
 
 
-# python -m src.main
+python -m src.main
+
+
+celery -A src.tasks.celery_app:celery_instance worker --loglevel=info -P solo

@@ -6,31 +6,27 @@ from src.services.artworks import ArtworkService
 from src.schemas.artworks import ArtworkAddRequest, ArtworkPatchRequest, ArtworkAddBulk
 
 
-router = APIRouter(prefix="/collections/{collection_id}/artworks", tags=["Artworks"])
+router = APIRouter(prefix="/artworks", tags=["Artworks"])
 bulk_router = APIRouter(prefix="/artworks/bulk", tags=["Artworks"])
 
 
 @router.get("")
 async def get_artworks(
-    collection_id: int,
     db: DBDep,
 ):
-    return await ArtworkService(db).get_all_artworks(
-        collection_id=collection_id
-    )
+    return await ArtworkService(db).get_all_artworks()
 
 
 @router.get("/{artwork_id}")
-async def get_artwork(collection_id: int, artwork_id: int, db: DBDep):
+async def get_artwork(artwork_id: int, db: DBDep):
     try:
-        return await ArtworkService(db).get_artwork_by_id(collection_id, artwork_id)
+        return await ArtworkService(db).get_artwork_by_id(artwork_id)
     except ObjectNotFoundException:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
 
 @router.post("")
 async def create_artwork(
-    collection_id: int,
     db: DBDep,
     artwork_data: ArtworkAddRequest = Body(
         openapi_examples={
@@ -47,18 +43,17 @@ async def create_artwork(
         },
     ),
 ):
-    artwork = await ArtworkService(db).create_artwork(collection_id, artwork_data)
+    artwork = await ArtworkService(db).create_artwork(artwork_data)
     return {"status": "OK", "data": artwork}
 
 
 @router.put("/{artwork_id}")
 async def update_artwork(
-    collection_id: int,
     artwork_id: int,
     db: DBDep,
     artwork_data: ArtworkAddRequest = Body(),
 ):
-    await ArtworkService(db).update_artwork(collection_id, artwork_id, artwork_data)
+    await ArtworkService(db).update_artwork(artwork_id, artwork_data)
     return {"status": "OK"}
 
 
@@ -78,14 +73,13 @@ async def patch_artwork(
             },
         },
     ),
-    collection_id: int = 0,
 ):
     await ArtworkService(db).update_artwork_partially(artwork_id, artwork_data)
     return {"status": "OK"}
 
 
 @router.delete("/{artwork_id}")
-async def delete_artwork(artwork_id: int, db: DBDep, collection_id: int = 0):
+async def delete_artwork(artwork_id: int, db: DBDep):
     await ArtworkService(db).delete_artwork(artwork_id)
     return {"status": "OK"}
 

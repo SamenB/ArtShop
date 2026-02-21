@@ -2,7 +2,6 @@ import asyncio
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.collections import CollectionsRepository
 from src.repositories.artworks import ArtworksRepository
 from src.repositories.users import UsersRepository
 from src.repositories.orders import OrdersRepository
@@ -15,7 +14,7 @@ class DBManager:
 
     async def __aenter__(self):
         self.session = self.session_factory()
-        self.collections = CollectionsRepository(self.session)
+
         self.artworks = ArtworksRepository(self.session)
         self.users = UsersRepository(self.session)
         self.orders = OrdersRepository(self.session)

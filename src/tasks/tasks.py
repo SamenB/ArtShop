@@ -6,7 +6,7 @@ from sqlalchemy import update
 from loguru import logger
 
 from src.tasks.celery_app import celery_instance
-from src.models.collections import CollectionsOrm
+from src.models.artworks import ArtworksOrm
 from src.utils.db_manager import DBManager
 from src.database import new_session_null_pool
 
@@ -22,50 +22,68 @@ def run_async(coro):
 
 
 @celery_instance.task
-def process_collection_image(collection_id: int, temp_file_path: str):
-    logger.info("Processing image for collection_id={}", collection_id)
-    file_path = Path(temp_file_path)
+def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[str]):
+    logger.info("Processing images for {} id={}", model_type, model_id)
     output_dir = Path("static/images")
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    final_paths = []
 
     try:
-        with Image.open(file_path) as img:
-            original_name = f"{collection_id}_original.webp"
-            img.save(output_dir / original_name, format="WEBP")
+        for idx, temp_file_path in enumerate(temp_paths):
+            file_path = Path(temp_file_path)
+            if not file_path.exists():
+                continue
+                
+            with Image.open(file_path) as img:
+                # Convert to RGB if saving to WebP and mode is RGBA with transparency
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    alpha = img.convert('RGBA').split()[-1]
+                    bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                    bg.paste(img, mask=alpha)
+                    img = bg.convert('RGB')
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
 
-            img.thumbnail((400, 400))
-            thumb_name = f"{collection_id}_thumb.webp"
-            img.save(output_dir / thumb_name, format="WEBP")
+                prefix = f"{model_type}_{model_id}_{idx}"
+                original_name = f"{prefix}_original.webp"
+                img.save(output_dir / original_name, format="WEBP", quality=85)
+
+                img.thumbnail((800, 800))
+                thumb_name = f"{prefix}_thumb.webp"
+                img.save(output_dir / thumb_name, format="WEBP", quality=85)
+                
+                final_paths.extend([
+                    f"/static/images/{original_name}",
+                    f"/static/images/{thumb_name}",
+                ])
+                
+            file_path.unlink(missing_ok=True)
 
         async def update_db():
             async with new_session_null_pool() as session:
+                orm_model = ArtworksOrm
                 stmt = (
-                    update(CollectionsOrm)
-                    .where(CollectionsOrm.id == collection_id)
-                    .values(
-                        images=[
-                            f"/static/images/{original_name}",
-                            f"/static/images/{thumb_name}",
-                        ]
-                    )
+                    update(orm_model)
+                    .where(orm_model.id == model_id)
+                    .values(images=final_paths)
                 )
                 await session.execute(stmt)
                 await session.commit()
 
-        run_async(update_db())
+        if final_paths:
+            run_async(update_db())
+            
         logger.info(
-            "Image processed for collection_id={}: original={}, thumb={}",
-            collection_id,
-            original_name,
-            thumb_name,
+            "Images processed for {} id={}: paths={}",
+            model_type,
+            model_id,
+            final_paths,
         )
 
     except Exception as e:
-        logger.error("Failed to process image for collection_id={}: {}", collection_id, e)
+        logger.error("Failed to process images for {} id={}: {}", model_type, model_id, e)
         raise
-
-    finally:
-        file_path.unlink(missing_ok=True)
 
 
 async def send_emails_to_users_with_today_checkin_helper():
