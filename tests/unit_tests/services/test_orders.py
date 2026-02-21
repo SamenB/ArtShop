@@ -1,0 +1,125 @@
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from src.services.orders import OrderService
+from src.schemas.orders import OrderAddRequest, EditionType
+from src.exeptions import (
+    ArtworkDisplayOnlyException,
+    OriginalSoldOutException,
+    PrintsSoldOutException,
+)
+from src.schemas.artworks import ArtworkWithTags
+
+# Mock DB Manager that OrderService will use
+class MockDBManager:
+    def __init__(self):
+        self.artworks = AsyncMock()
+        self.orders = AsyncMock()
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
+
+@pytest.fixture
+def order_service():
+    service = OrderService(MockDBManager())
+    return service
+
+@pytest.mark.asyncio
+async def test_create_order_display_only_fails(order_service):
+    # Setup mock artwork that is display only
+    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork.id = 1
+    mock_artwork.is_display_only = True
+    
+    order_service.db.artworks.get_one.return_value = mock_artwork
+    
+    order_data = OrderAddRequest(artwork_id=1, edition_type=EditionType.ORIGINAL)
+    
+    with pytest.raises(ArtworkDisplayOnlyException):
+        await order_service.create_order(order_data, user_id=1)
+
+@pytest.mark.asyncio
+async def test_create_order_original_sold_out_fails(order_service):
+    # Setup mock artwork that has original already sold
+    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork.id = 1
+    mock_artwork.is_display_only = False
+    mock_artwork.is_original_available = False
+    
+    order_service.db.artworks.get_one.return_value = mock_artwork
+    
+    order_data = OrderAddRequest(artwork_id=1, edition_type=EditionType.ORIGINAL)
+    
+    with pytest.raises(OriginalSoldOutException):
+        await order_service.create_order(order_data, user_id=1)
+
+@pytest.mark.asyncio
+async def test_create_order_print_sold_out_fails(order_service):
+    # Setup mock artwork that has 0 prints available
+    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork.id = 1
+    mock_artwork.is_display_only = False
+    mock_artwork.prints_available = 0
+    
+    order_service.db.artworks.get_one.return_value = mock_artwork
+    
+    order_data = OrderAddRequest(artwork_id=1, edition_type=EditionType.PRINT)
+    
+    with pytest.raises(PrintsSoldOutException):
+        await order_service.create_order(order_data, user_id=1)
+
+@pytest.mark.asyncio
+async def test_create_order_original_success(order_service):
+    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork.id = 1
+    mock_artwork.is_display_only = False
+    mock_artwork.is_original_available = True
+    mock_artwork.original_price = 1000
+    
+    order_service.db.artworks.get_one.return_value = mock_artwork
+    
+    mock_created_order = MagicMock()
+    mock_created_order.id = 100
+    order_service.db.orders.add.return_value = mock_created_order
+    
+    order_data = OrderAddRequest(artwork_id=1, edition_type=EditionType.ORIGINAL)
+    
+    result = await order_service.create_order(order_data, user_id=1)
+    
+    assert result.id == 100
+    
+    # Assert edit was called with is_original_available=False
+    order_service.db.artworks.edit.assert_awaited_once()
+    args, kwargs = order_service.db.artworks.edit.call_args
+    assert args[0].is_original_available is False
+    assert kwargs.get("id") == 1
+    
+    order_service.db.orders.add.assert_awaited_once()
+    order_service.db.commit.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_create_order_print_success(order_service):
+    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork.id = 1
+    mock_artwork.is_display_only = False
+    mock_artwork.prints_available = 10
+    mock_artwork.print_price = 50
+    
+    order_service.db.artworks.get_one.return_value = mock_artwork
+    
+    mock_created_order = MagicMock()
+    mock_created_order.id = 101
+    order_service.db.orders.add.return_value = mock_created_order
+    
+    order_data = OrderAddRequest(artwork_id=1, edition_type=EditionType.PRINT)
+    
+    result = await order_service.create_order(order_data, user_id=1)
+    
+    assert result.id == 101
+
+    # Assert edit was called with exactly 1 less print available
+    order_service.db.artworks.edit.assert_awaited_once()
+    args, kwargs = order_service.db.artworks.edit.call_args
+    assert args[0].prints_available == 9
+    assert kwargs.get("id") == 1
+
+    order_service.db.orders.add.assert_awaited_once()
+    order_service.db.commit.assert_awaited_once()

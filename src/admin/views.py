@@ -1,6 +1,7 @@
 import os
 from typing import Type
 
+from markupsafe import Markup
 from sqladmin import ModelView
 from wtforms import Form, MultipleFileField
 from starlette.datastructures import UploadFile
@@ -9,6 +10,16 @@ from src.models.users import UsersOrm
 from src.models.artworks import ArtworksOrm
 from src.models.tags import TagsOrm
 from src.models.orders import OrdersOrm
+
+
+def format_artwork_images(model: ArtworksOrm, attribute: str) -> Markup:
+    images = getattr(model, attribute, [])
+    if not images:
+        return Markup("")
+    
+    # Try to find a thumbnail; fallback to the first image if none found
+    thumb_url = next((img for img in images if "_thumb" in img), images[0])
+    return Markup(f'<img src="{thumb_url}" style="max-height: 100px; max-width: 100px; object-fit: contain; border-radius: 4px;" alt="thumbnail">')
 
 
 class UserAdmin(ModelView, model=UsersOrm):
@@ -45,6 +56,13 @@ class ArtworkAdmin(ModelView, model=ArtworksOrm):
         ArtworksOrm.prints_total, ArtworksOrm.prints_available,
         ArtworksOrm.tags, ArtworksOrm.images,
     ]
+
+    column_formatters = {
+        ArtworksOrm.images: format_artwork_images,
+    }
+    column_formatters_detail = {
+        ArtworksOrm.images: format_artwork_images,
+    }
 
     # Hide raw images JSON from the form, it is managed by Celery
     form_excluded_columns = [ArtworksOrm.images]
