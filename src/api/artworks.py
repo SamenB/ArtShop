@@ -1,11 +1,7 @@
 from fastapi import APIRouter, Body, HTTPException, Query
 
 from src.api.dependencies import DBDep
-from src.exeptions import (
-    ObjectNotFoundException,
-    ObjectAlreadyExistsException,
-    DatabaseException,
-)
+from src.exeptions import ObjectNotFoundException
 from src.services.artworks import ArtworkService
 from src.schemas.artworks import ArtworkAddRequest, ArtworkPatchRequest, ArtworkAddBulk
 
@@ -19,12 +15,9 @@ async def get_artworks(
     collection_id: int,
     db: DBDep,
 ):
-    try:
-        return await ArtworkService(db).get_all_artworks(
-            collection_id=collection_id
-        )
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    return await ArtworkService(db).get_all_artworks(
+        collection_id=collection_id
+    )
 
 
 @router.get("/{artwork_id}")
@@ -54,14 +47,7 @@ async def create_artwork(
         },
     ),
 ):
-    try:
-        artwork = await ArtworkService(db).create_artwork(collection_id, artwork_data)
-    except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    except ObjectAlreadyExistsException:
-        raise HTTPException(status_code=409, detail="Artwork already exists")
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    artwork = await ArtworkService(db).create_artwork(collection_id, artwork_data)
     return {"status": "OK", "data": artwork}
 
 
@@ -72,12 +58,7 @@ async def update_artwork(
     db: DBDep,
     artwork_data: ArtworkAddRequest = Body(),
 ):
-    try:
-        await ArtworkService(db).update_artwork(collection_id, artwork_id, artwork_data)
-    except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Artwork not found")
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await ArtworkService(db).update_artwork(collection_id, artwork_id, artwork_data)
     return {"status": "OK"}
 
 
@@ -99,34 +80,17 @@ async def patch_artwork(
     ),
     collection_id: int = 0,
 ):
-    try:
-        await ArtworkService(db).update_artwork_partially(artwork_id, artwork_data)
-    except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Artwork not found")
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await ArtworkService(db).update_artwork_partially(artwork_id, artwork_data)
     return {"status": "OK"}
 
 
 @router.delete("/{artwork_id}")
 async def delete_artwork(artwork_id: int, db: DBDep, collection_id: int = 0):
-    try:
-        await ArtworkService(db).delete_artwork(artwork_id)
-    except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Artwork not found")
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await ArtworkService(db).delete_artwork(artwork_id)
     return {"status": "OK"}
 
 
 @bulk_router.post("")
 async def create_artworks_bulk(db: DBDep, artworks_data: list[ArtworkAddBulk] = Body()):
-    try:
-        count = await ArtworkService(db).create_artworks_bulk(artworks_data)
-    except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    except ObjectAlreadyExistsException:
-        raise HTTPException(status_code=409, detail="Artwork already exists")
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    count = await ArtworkService(db).create_artworks_bulk(artworks_data)
     return {"status": "OK", "count": count}

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Body, HTTPException, UploadFile, Query
 
 from src.api.dependencies import PaginationDep, DBDep
-from src.exeptions import ObjectNotFoundException, ObjectAlreadyExistsException, DatabaseException
+from src.exeptions import ObjectNotFoundException
 from src.services.collections import CollectionService
 from src.schemas.collections import CollectionAdd, CollectionPatch
 
@@ -19,16 +19,13 @@ async def get_collections(
 ):
     per_page = pagination.per_page
     offset = per_page * (pagination.page - 1)
-    try:
-        return await CollectionService(db).get_all_collections(
-            available=available,
-            title=title,
-            location=location,
-            per_page=per_page,
-            offset=offset,
-        )
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    return await CollectionService(db).get_all_collections(
+        available=available,
+        title=title,
+        location=location,
+        per_page=per_page,
+        offset=offset,
+    )
 
 
 @router.get("/{collection_id}")
@@ -41,12 +38,7 @@ async def get_collection(collection_id: int, db: DBDep):
 
 @router.post("")
 async def create_collection(db: DBDep, collection_data: CollectionAdd = Body()):
-    try:
-        await CollectionService(db).create_collection(collection_data)
-    except ObjectAlreadyExistsException:
-        raise HTTPException(status_code=409, detail="Collection already exists")
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await CollectionService(db).create_collection(collection_data)
     return {"status": "OK"}
 
 
@@ -66,10 +58,7 @@ async def update_collection(
         },
     ),
 ):
-    try:
-        await CollectionService(db).update_collection(collection_id, collection_data)
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await CollectionService(db).update_collection(collection_id, collection_data)
     return {"status": "OK"}
 
 
@@ -90,19 +79,13 @@ async def patch_collection(
         },
     ),
 ):
-    try:
-        await CollectionService(db).update_collection_partially(collection_id, collection_data)
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await CollectionService(db).update_collection_partially(collection_id, collection_data)
     return {"status": "OK"}
 
 
 @router.delete("/{collection_id}")
 async def delete_collection(collection_id: int, db: DBDep):
-    try:
-        await CollectionService(db).delete_collection(collection_id)
-    except DatabaseException:
-        raise HTTPException(status_code=500, detail="Database error")
+    await CollectionService(db).delete_collection(collection_id)
     return {"status": "OK"}
 
 

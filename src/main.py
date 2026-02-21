@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
@@ -19,6 +20,7 @@ from sqladmin import Admin
 from src.database import engine
 from src.admin.auth import authentication_backend
 from src.admin.views import UserAdmin, ArtworkAdmin, CollectionAdmin, TagAdmin, OrderAdmin
+from src.exeptions import ArtVaultExeption
 
 
 setup_logging()
@@ -40,6 +42,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ArtVault", lifespan=lifespan)
+
+@app.exception_handler(ArtVaultExeption)
+async def artvault_exception_handler(request: Request, exc: ArtVaultExeption):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

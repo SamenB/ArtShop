@@ -42,8 +42,9 @@ class BaseRepository:
         try:
             model = result.scalar_one()
         except NoResultFound:
-            logger.debug("Object not found in {}: filters={}", self.model.__tablename__, filter_by)
-            raise ObjectNotFoundException
+            msg = f"Object not found in {self.model.__tablename__}"
+            logger.debug(f"{msg}: filters={filter_by}")
+            raise ObjectNotFoundException(detail=msg)
         return self.mapper.map_to_schema(model)
 
     async def add(self, data: BaseModel | Sequence[BaseModel]) -> BaseModel | Sequence[BaseModel]:
@@ -58,9 +59,9 @@ class BaseRepository:
         except IntegrityError as ex:
             logger.warning("IntegrityError in {}: {}", self.model.__tablename__, str(ex))
             if isinstance(ex.orig.__cause__, UniqueViolationError):
-                raise ObjectAlreadyExistsException from ex
+                raise ObjectAlreadyExistsException(detail=f"Entity already exists in {self.model.__tablename__}") from ex
             else:
-                raise ex
+                raise DatabaseException(detail=str(ex))
         return self.mapper.map_to_schema(model)
 
     async def edit(self, data: BaseModel, exclude_unset: bool = False, **filter_by) -> None:
@@ -86,6 +87,6 @@ class BaseRepository:
             await self.session.execute(add_stmt)
         except IntegrityError as ex:
             if isinstance(ex.orig.__cause__, UniqueViolationError):
-                raise ObjectAlreadyExistsException from ex
+                raise ObjectAlreadyExistsException(detail=f"Entity already exists in {self.model.__tablename__}") from ex
             else:
-                raise ex
+                raise DatabaseException(detail=str(ex))

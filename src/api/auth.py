@@ -1,12 +1,7 @@
 from fastapi import APIRouter, HTTPException, Response
 
 from src.api.dependencies import UserDep, DBDep
-from src.exeptions import (
-    ObjectNotFoundException,
-    ObjectAlreadyExistsException,
-    TokenExpiredException,
-    InvalidTokenException,
-)
+from src.exeptions import ObjectNotFoundException
 from src.services.auth import AuthService
 from src.schemas.users import UserRequestAdd, UserAdd, UserLogin
 
@@ -21,11 +16,8 @@ async def register_user(user: UserRequestAdd, db: DBDep):
         email=user.email,
         hashed_password=hashed_password,
     )
-    try:
-        await db.users.add(new_user_data)
-        await db.commit()
-    except ObjectAlreadyExistsException:
-        raise HTTPException(status_code=409, detail="User already exists")
+    await db.users.add(new_user_data)
+    await db.commit()
     return {"status": "OK"}
 
 
@@ -45,12 +37,7 @@ async def login_user(data: UserLogin, response: Response, db: DBDep):
 
 @router.get("/me")
 async def get_current_user(user_id: UserDep, db: DBDep):
-    try:
-        user = await db.users.get_one(id=user_id)
-    except (TokenExpiredException, InvalidTokenException):
-        raise HTTPException(status_code=401, detail="Not authorized")
-    except ObjectNotFoundException:
-        raise HTTPException(status_code=401, detail="User not found")
+    user = await db.users.get_one(id=user_id)
     return {"data": user}
 
 
