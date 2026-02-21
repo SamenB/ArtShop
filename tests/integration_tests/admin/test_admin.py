@@ -11,7 +11,7 @@ async def test_admin_auth_flow(ac):
     6. Try login as regular user (fail)
     """
 
-    admin_email = "super_admin@artvault.com"
+    admin_email = "super_admin@artshop.com"
     admin_password = "admin_password_123"
 
     # 1. Register future admin user

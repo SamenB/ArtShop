@@ -20,7 +20,7 @@ from sqladmin import Admin
 from src.database import engine
 from src.admin.auth import authentication_backend
 from src.admin.views import UserAdmin, ArtworkAdmin, TagAdmin, OrderAdmin
-from src.exeptions import ArtVaultExeption
+from src.exeptions import ArtShopExeption
 
 
 setup_logging()
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
 
     # Init fastapi-cache
     redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-    FastAPICache.init(RedisBackend(redis_client), prefix="artvault-cache")
+    FastAPICache.init(RedisBackend(redis_client), prefix="artshop-cache")
 
     yield
 
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     await redis_manager.close()
 
 
-app = FastAPI(title="ArtVault", lifespan=lifespan)
+app = FastAPI(title="ArtShop", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,8 +51,8 @@ app.add_middleware(
     allow_headers=["*"],                  # Allows all headers
 )
 
-@app.exception_handler(ArtVaultExeption)
-async def artvault_exception_handler(request: Request, exc: ArtVaultExeption):
+@app.exception_handler(ArtShopExeption)
+async def artshop_exception_handler(request: Request, exc: ArtShopExeption):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},

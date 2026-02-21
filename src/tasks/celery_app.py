@@ -6,7 +6,7 @@ from src.logging_config import setup_logging
 setup_logging()
 
 celery_instance = Celery(
-    "art_vault_app",
+    "art_shop_app",
     broker=settings.REDIS_URL,
     include=["src.tasks.tasks"],
 )
