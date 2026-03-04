@@ -8,3 +8,4 @@ temp/*
 !temp/.gitkeep
 logs/*
 !logs/.gitkeep
+src/utils/halping_commands.txt
