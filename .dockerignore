@@ -1,0 +1,17 @@
+# Игнорируем всё, что связано с Git
+.git/
+.gitignore
+
+# Игнорируем сами инструкции Docker (не нужно их копировать внутрь)
+docker-compose.yml
+.dockerignore
+README.md
+
+# Локальные базы данных (если появятся в корне)
+*.sqlite3
+
+# Вложенные игнор-файлы обработают свои папки
+# Но для подстраховки можно добавить:
+backend/venv/
+frontend/node_modules/
+frontend/.next/

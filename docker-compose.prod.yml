@@ -1,0 +1,97 @@
+networks:
+  artshop-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
+
+services:
+  # === 1. PostgreSQL Database ===
+  db:
+    image: postgres:15-alpine
+    container_name: artshop_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - artshop-net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # === 2. Redis Message Broker ===
+  redis:
+    image: redis:7-alpine
+    container_name: artshop_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - artshop-net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # === 3. FastAPI Backend ===
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artshop_api
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - artshop-net
+
+  # === 4. Celery Worker ===
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artshop_worker
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    command: [ "celery", "-A", "src.tasks.celery_app", "worker", "--loglevel=info" ]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - artshop-net
+
+  # === 5. Next.js Frontend ===
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: artshop_frontend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    ports:
+      - "3000:3000"
+    networks:
+      - artshop-net

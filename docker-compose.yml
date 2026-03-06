@@ -1,0 +1,45 @@
+networks:
+  artshop-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
+
+services:
+  # === 1. PostgreSQL Database ===
+  db:
+    image: postgres:15-alpine
+    container_name: artshop_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - artshop-net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # === 2. Redis Message Broker ===
+  redis:
+    image: redis:7-alpine
+    container_name: artshop_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - artshop-net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5

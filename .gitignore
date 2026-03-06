@@ -1,11 +1,34 @@
 project_plan/
-venv/
-__pycache__/
+
+# Python
+backend/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Tests cache
+.pytest_cache/
+backend/.pytest_cache/
+
+# Secrets
 .env
-static/*
-!static/.gitkeep
-temp/*
-!temp/.gitkeep
-logs/*
-!logs/.gitkeep
-src/utils/halping_commands.txt
+.env.prod
+.env-test
+
+# Redis dump file
+*.rdb
+backend/dump.rdb
+
+# Project folders to keep empty but tracked
+backend/static/*
+!backend/static/.gitkeep
+backend/temp/*
+!backend/temp/.gitkeep
+backend/logs/*
+!backend/logs/.gitkeep
+
+# Dev notes
+backend/src/utils/halping_commands.txt
+
+# OS
+.DS_Store

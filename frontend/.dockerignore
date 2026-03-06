@@ -1,0 +1,26 @@
+# Зависимости проекта
+node_modules/
+
+# Кэш и билды Next.js
+.next/
+out/
+build/
+
+# Логи npm
+npm-debug.log*
+
+# Секреты (будут передаваться снаружи)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Системные файлы
+.DS_Store
+*.pem
+
+# Конфигурации IDE и git
+.vscode/
+.git/
+.gitignore

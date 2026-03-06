@@ -43,7 +43,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-20 py-8 text-xs text-zinc-400 uppercase tracking-widest">
-        © {currentYear} {storeName}. Built for enthusiasts.
+        © 2026 {storeName}. Built for enthusiasts.
       </footer>
     </div>
   );
