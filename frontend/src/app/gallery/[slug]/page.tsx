@@ -62,6 +62,8 @@ export default function ArtworkDetailPage() {
     // State for print size selector (only relevant if printAvailable)
     const [selectedPrint, setSelectedPrint] = useState(PRINT_SIZES[1]);
     const [inquireOpen, setInquireOpen] = useState(false);
+    // Full-size image viewer state
+    const [fullSizeOpen, setFullSizeOpen] = useState(false);
 
     // 404 state — artwork not found
     if (!work) {
@@ -164,27 +166,48 @@ export default function ArtworkDetailPage() {
                         </span>
                     </div>
 
-                    {/* Tags below image */}
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "1rem" }}>
-                        {work.tags.map((tag) => (
-                            <Link
-                                key={tag}
-                                href={`/gallery?tag=${tag}`}
-                                style={{
-                                    padding: "0.25rem 0.75rem",
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.08em",
-                                    textTransform: "uppercase",
-                                    fontFamily: "var(--font-sans)",
-                                    color: "var(--color-charcoal-mid)",
-                                    border: "1px solid var(--color-border-dark)",
-                                    textDecoration: "none",
-                                    transition: "all 0.2s ease",
-                                }}
-                            >
-                                {tag}
-                            </Link>
-                        ))}
+                    {/* Tags + full-size button row */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                            {work.tags.map((tag) => (
+                                <Link
+                                    key={tag}
+                                    href={`/gallery?tag=${tag}`}
+                                    style={{
+                                        padding: "0.25rem 0.75rem",
+                                        fontSize: "0.7rem",
+                                        letterSpacing: "0.08em",
+                                        textTransform: "uppercase",
+                                        fontFamily: "var(--font-sans)",
+                                        color: "var(--color-charcoal-mid)",
+                                        border: "1px solid var(--color-border-dark)",
+                                        textDecoration: "none",
+                                        transition: "all 0.2s ease",
+                                    }}
+                                >
+                                    {tag}
+                                </Link>
+                            ))}
+                        </div>
+                        {/* View full size button */}
+                        <button
+                            onClick={() => setFullSizeOpen(true)}
+                            style={{
+                                display: "flex", alignItems: "center", gap: "0.4rem",
+                                background: "none", border: "none", cursor: "pointer",
+                                fontFamily: "var(--font-sans)", fontSize: "0.7rem",
+                                fontWeight: 500, letterSpacing: "0.1em",
+                                textTransform: "uppercase", color: "var(--color-muted)",
+                                padding: "0.25rem 0", transition: "color 0.15s",
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.color = "var(--color-charcoal)")}
+                            onMouseLeave={e => (e.currentTarget.style.color = "var(--color-muted)")}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                <path d="M9 1h4v4M5 13H1V9M13 1L8 6M1 13l5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            View full size
+                        </button>
                     </div>
                 </div>
 
@@ -441,6 +464,36 @@ export default function ArtworkDetailPage() {
                     </Link>
                 </div>
             </div>
+
+            {/* ── Full Size Viewer ── */}
+            {fullSizeOpen && (
+                <div
+                    onClick={() => setFullSizeOpen(false)}
+                    style={{
+                        position: "fixed", inset: 0, zIndex: 200,
+                        backgroundColor: "rgba(0,0,0,0.92)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "zoom-out",
+                    }}
+                >
+                    <div style={{
+                        maxWidth: "90vw", maxHeight: "90vh",
+                        aspectRatio: "4/5",
+                        background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})`,
+                        boxShadow: "0 40px 120px rgba(0,0,0,0.8)",
+                    }} />
+                    <button
+                        onClick={() => setFullSizeOpen(false)}
+                        style={{
+                            position: "fixed", top: "1.5rem", right: "1.5rem",
+                            background: "rgba(255,255,255,0.1)", border: "none",
+                            color: "#fff", fontSize: "1.5rem", width: "44px", height: "44px",
+                            borderRadius: "50%", cursor: "pointer", display: "flex",
+                            alignItems: "center", justifyContent: "center",
+                        }}
+                    >✕</button>
+                </div>
+            )}
 
             {/* ── Inquire Modal ── */}
             {/*

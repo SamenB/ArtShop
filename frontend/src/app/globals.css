@@ -1,49 +1,53 @@
 /* ─────────────────────────────────────────────
-   Google Fonts — Playfair Display + Inter
-   Playfair = elegant serif for titles
-   Inter    = clean sans-serif for body text
+   Google Fonts — DM Serif Display + Cormorant Garamond + IBM Plex Mono + Inter
+   DM Serif    = elegant editorial serif, Le Labo feel
+   Cormorant   = label-style condensed for collection titles
+   IBM Plex Mono = typewriter label text (sizes, prices, metadata)
+   Inter       = clean sans-serif for body
 ───────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&family=Inter:wght@300;400;500;600&display=swap');
 
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────
-   Tailwind v4 Design Tokens (@theme block)
-   These become Tailwind utility classes automatically:
-   bg-cream, text-charcoal, etc.
+   Design Tokens — Le Labo / Santal 33 language
+   Warm parchment, near-black, no decoration
 ───────────────────────────────────────────── */
 @theme {
-  /* Color palette - warm art gallery feel */
-  --color-cream: #EDEBE3;
-  /* main bg — warm limestone, gallery-worthy */
-  --color-cream-dark: #E4E1D8;
-  /* cards, secondary bg */
-  --color-charcoal: #1A1A18;
-  /* main text, dark backgrounds */
-  --color-charcoal-mid: #3D3D3A;
-  /* secondary text */
-  --color-muted: #8A8A7A;
-  /* captions, meta info */
-  --color-accent: #C8965A;
-  /* golden accent - buttons, highlights */
-  --color-accent-dark: #A87840;
-  /* hover state for accent */
-  --color-border: #E2E2DA;
-  /* subtle borders */
-  --color-border-dark: #C8C8BD;
-  /* stronger borders */
-  --color-sold: #B04040;
-  /* "Sold" badge color */
-  --color-available: #4A7C59;
-  /* "Available" badge color */
+  /* Le Labo color palette — parchment + near-black */
+  --color-cream: #F7F3EC;
+  /* base parchment */
+  --color-cream-dark: #EDE9E1;
+  /* slightly deeper parchment */
+  --color-charcoal: #1C1916;
+  /* warm near-black */
+  --color-charcoal-mid: #4A4640;
+  /* warm mid-tone */
+  --color-muted: #8C8880;
+  /* warm gray for captions */
+  --color-accent: #1C1916;
+  /* no gold — accent = black label */
+  --color-accent-dark: #1C1916;
+  --color-border: rgba(28, 25, 22, 0.10);
+  /* hairline */
+  --color-border-dark: rgba(28, 25, 22, 0.22);
+  /* stronger line */
+  --color-sold: #8C4040;
+  /* muted terracotta for sold */
+  --color-available: #3D6B50;
+  /* muted forest for available */
 
-  /* Typography scale */
-  --font-serif: 'Playfair Display', Georgia, serif;
+  /* Typography */
+  --font-serif: 'DM Serif Display', Georgia, serif;
+  /* headings, logo */
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  /* collection labels */
   --font-sans: 'Inter', system-ui, sans-serif;
+  /* body copy */
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  /* typewriter labels — Le Labo printed form style */
 
-  /* Spacing extras */
   --spacing-section: 6rem;
-  /* consistent vertical section padding */
 }
 
 /* ─────────────────────────────────────────────
@@ -60,6 +64,7 @@ html {
 }
 
 body {
+  /* Le Labo parchment background */
   background-color: var(--color-cream);
   color: var(--color-charcoal);
   font-family: var(--font-sans);
@@ -71,15 +76,17 @@ body {
 
 /* ─────────────────────────────────────────────
    Typography helpers
-   .font-serif  → Playfair Display (headings)
-   .font-sans   → Inter (body)
+   h1-h3 → DM Serif Display (editorial, Le Labo feel)
+   .font-sans → Inter (body)
 ───────────────────────────────────────────── */
 h1,
 h2,
 h3 {
   font-family: var(--font-serif);
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+  /* DM Serif Display looks best at regular weight */
 }
 
 /* ─────────────────────────────────────────────
@@ -164,4 +171,27 @@ h3 {
       var(--color-cream-dark) 75%);
   background-size: 1000px 100%;
   animation: shimmer 1.5s infinite linear;
+}
+
+/* Art grid — mobile override for edge-to-edge single column */
+@media (max-width: 600px) {
+  .art-grid {
+    grid-template-columns: 1fr !important;
+    gap: 3rem 0 !important;
+  }
+}
+
+.art-card-container {
+  /* Плавный переход для самой карточки-окна */
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.art-card:hover .art-card-container {
+  /* Увеличиваем (приближаем) всё окно-карточку вместе с картиной */
+  transform: scale(1.04);
+}
+
+.art-card:active .art-card-container {
+  /* При нажатии карточка слегка проседает */
+  transform: scale(0.98);
 }

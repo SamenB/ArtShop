@@ -36,67 +36,57 @@ const PRICE_RANGES = [{ label: "Any Price", min: 0, max: Infinity }, { label: "U
 const SORT_OPTIONS = [{ label: "Newest", fn: (a: Product, b: Product) => b.year - a.year }, { label: "Price ↑", fn: (a: Product, b: Product) => a.price - b.price }, { label: "Price ↓", fn: (a: Product, b: Product) => b.price - a.price }];
 
 function ProductCard({ product }: { product: Product }) {
-    const [hovered, setHovered] = useState(false);
-
     return (
-        <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-            style={{ display: "flex", flexDirection: "column", width: "100%" }}>
+        <div className="art-card"
+            style={{ display: "flex", flexDirection: "column", width: "100%", padding: 0 }}>
+
             <Link href={`/gallery/${product.id}`} style={{ textDecoration: "none", display: "block", width: "100%" }}>
-                {/* OUTER — handles soft shadow + lift */}
-                <div style={{
+                {/* Контейнер для обрезки (crop) при наведении */}
+                <div className="art-card-container" style={{
                     width: "100%",
                     aspectRatio: product.aspectRatio,
-                    borderRadius: "3px",
-                    // Punchy double shadow — always clearly visible
-                    boxShadow: hovered
-                        ? "0 20px 60px rgba(0,0,0,0.45), 0 6px 16px rgba(0,0,0,0.22)"
-                        : "0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.14)",
-                    transform: hovered ? "translateY(-4px)" : "translateY(0)",
-                    transition: "transform 0.4s ease-out, box-shadow 0.4s ease-out",
+                    borderRadius: "2px",
+                    overflow: "hidden",
                 }}>
-                    {/* INNER — clips the zoom animation */}
-                    <div style={{
+                    <div className="art-card-inner" style={{
                         width: "100%", height: "100%",
-                        overflow: "hidden",
-                        borderRadius: "2px",
+                        background: `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
+                        position: "relative",
                     }}>
-                        <div style={{
-                            width: "100%", height: "100%",
-                            background: `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
-                            transform: hovered ? "scale(1.02)" : "scale(1)",
-                            transition: "transform 0.5s ease",
-                        }} />
                     </div>
                 </div>
             </Link>
 
-            {/* Fixed-height text block: same height for ALL cards → align-items:center on grid
-                aligns painting centers on one axis regardless of SOLD/available text length */}
-            <div style={{ paddingTop: "0.8rem", minHeight: "6rem" }}>
+            {/* Compact text — same column width as image, quiet and unobtrusive */}
+            {/* Fixed-height text block — ensures painting centers align across the row */}
+            <div style={{ paddingTop: "0.55rem", height: "7rem" }}>
                 <p style={{
-                    fontFamily: "var(--font-serif)", fontSize: "1.1rem",
+                    fontFamily: "var(--font-serif)", fontSize: "0.85rem",
                     fontWeight: 400, fontStyle: "italic",
-                    color: "var(--color-charcoal)", marginBottom: "0.15rem",
+                    color: "var(--color-charcoal)", marginBottom: "0.1rem",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>{product.title}</p>
                 <p style={{
-                    fontFamily: "var(--font-sans)", fontSize: "0.65rem",
+                    fontFamily: "var(--font-mono)", fontSize: "0.57rem",
                     fontWeight: 300, color: "var(--color-muted)",
-                    marginBottom: "0.35rem",
+                    letterSpacing: "0.03em", marginBottom: "0.25rem",
                 }}>{product.size}</p>
 
                 {product.available ? (
                     <>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 300, color: "var(--color-charcoal)", marginBottom: "0.1rem" }}>
-                            Original {product.medium} ${product.price.toLocaleString()}
+                        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", fontWeight: 300, color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>
+                            Original {product.medium} — ${product.price.toLocaleString()}
                         </p>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 300, color: "var(--color-charcoal-mid)" }}>
+                        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", fontWeight: 300, color: "var(--color-muted)", lineHeight: 1.5 }}>
                             Textured Replicas starting at ${(product.price * 0.15).toFixed(0)}
+                        </p>
+                        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", fontWeight: 300, color: "var(--color-muted)", lineHeight: 1.5 }}>
+                            Prints starting at ${Math.round(product.price * 0.023)}
                         </p>
                     </>
                 ) : (
-                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-sold)", letterSpacing: "0.05em" }}>
-                        SOLD <span style={{ fontWeight: 300, color: "var(--color-charcoal-mid)" }}>— {product.medium}</span>
+                    <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", fontWeight: 300, color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>
+                        Original {product.medium} — <span style={{ color: "var(--color-sold)", fontWeight: 400 }}>SOLD</span>
                     </p>
                 )}
             </div>
@@ -191,7 +181,7 @@ export default function ShopPage() {
         const update = () => {
             const w = window.innerWidth;
             setIsMobile(w < 768);
-            setCols(w < 480 ? 2 : w < 768 ? 2 : w < 1200 ? 3 : 4);
+            setCols(w < 480 ? 1 : w < 768 ? 2 : w < 1200 ? 3 : 4);
         };
         update();
         window.addEventListener("resize", update);
@@ -311,10 +301,11 @@ export default function ShopPage() {
                     </div>
 
                     {filtered.length > 0 ? (
-                        <div style={{
+                        <div className="art-grid" style={{
                             display: "grid",
-                            gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                            gap: "5rem 3.5rem",
+                            gridTemplateColumns: "repeat(auto-fit, 320px)",
+                            justifyContent: "space-evenly",
+                            gap: "4rem 180px",
                             alignItems: "center",
                         }}>
                             {filtered.map(p => (

@@ -24,16 +24,16 @@ export default function Footer() {
     return (
         <footer
             style={{
-                backgroundColor: "var(--color-cream)", // Сделаем светлым в тон странице
-                color: "var(--color-charcoal)",
-                padding: "4rem 2rem 2rem",
+                backgroundColor: "#1C1916",
+                color: "#F7F3EC",
+                padding: "5rem 2rem 2.5rem",
                 marginTop: "auto",
-                borderTop: "1px solid rgba(26, 26, 24, 0.08)", // Тонкая линия сверху
+                borderTop: "none",
             }}
         >
             <div
                 style={{
-                    maxWidth: "1280px",
+                    maxWidth: "1600px",
                     margin: "0 auto",
                 }}
             >
@@ -44,7 +44,7 @@ export default function Footer() {
                         gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
                         gap: "3rem",
                         paddingBottom: "3rem",
-                        borderBottom: "1px solid rgba(26, 26, 24, 0.08)",
+                        borderBottom: "1px solid rgba(247,243,236,0.12)",
                     }}
                 >
                     {/* Brand column */}
@@ -54,12 +54,13 @@ export default function Footer() {
                             style={{
                                 fontFamily: "var(--font-serif)",
                                 fontSize: "1.75rem",
-                                fontWeight: 500, // Чуть тоньше
+                                fontWeight: 400,
                                 fontStyle: "italic",
-                                color: "var(--color-charcoal)",
+                                color: "#F7F3EC",
                                 textDecoration: "none",
                                 display: "block",
                                 marginBottom: "1rem",
+                                letterSpacing: "-0.01em",
                             }}
                         >
                             ArtShop
@@ -67,11 +68,12 @@ export default function Footer() {
                         <p
                             style={{
                                 fontFamily: "var(--font-sans)",
-                                fontSize: "0.85rem",
+                                fontSize: "0.82rem",
                                 fontWeight: 300,
-                                color: "var(--color-charcoal-mid)",
+                                color: "rgba(247,243,236,0.5)",
                                 lineHeight: 1.7,
                                 maxWidth: "260px",
+                                letterSpacing: "0.02em",
                             }}
                         >
                             Original paintings and fine art prints.<br />
@@ -84,11 +86,11 @@ export default function Footer() {
                         <p
                             style={{
                                 fontFamily: "var(--font-sans)",
-                                fontSize: "0.7rem",
-                                fontWeight: 500,
-                                letterSpacing: "0.15em",
+                                fontSize: "0.65rem",
+                                fontWeight: 400,
+                                letterSpacing: "0.18em",
                                 textTransform: "uppercase",
-                                color: "var(--color-muted)",
+                                color: "rgba(247,243,236,0.35)",
                                 marginBottom: "1.25rem",
                             }}
                         >
@@ -103,12 +105,13 @@ export default function Footer() {
                                             fontFamily: "var(--font-sans)",
                                             fontSize: "0.85rem",
                                             fontWeight: 300,
-                                            color: "var(--color-charcoal)",
+                                            color: "rgba(247,243,236,0.7)",
                                             textDecoration: "none",
-                                            transition: "opacity 0.2s ease",
+                                            transition: "color 0.2s ease",
+                                            letterSpacing: "0.02em",
                                         }}
-                                        onMouseEnter={(e) => (e.target as HTMLElement).style.opacity = "0.5"}
-                                        onMouseLeave={(e) => (e.target as HTMLElement).style.opacity = "1"}
+                                        onMouseEnter={(e) => (e.target as HTMLElement).style.color = "#F7F3EC"}
+                                        onMouseLeave={(e) => (e.target as HTMLElement).style.color = "rgba(247,243,236,0.7)"}
                                     >
                                         {link.label}
                                     </Link>
@@ -122,11 +125,11 @@ export default function Footer() {
                         <p
                             style={{
                                 fontFamily: "var(--font-sans)",
-                                fontSize: "0.7rem",
-                                fontWeight: 500,
-                                letterSpacing: "0.15em",
+                                fontSize: "0.65rem",
+                                fontWeight: 400,
+                                letterSpacing: "0.18em",
                                 textTransform: "uppercase",
-                                color: "var(--color-muted)",
+                                color: "rgba(247,243,236,0.35)",
                                 marginBottom: "1.25rem",
                             }}
                         >
@@ -176,9 +179,9 @@ export default function Footer() {
                     <p
                         style={{
                             fontFamily: "var(--font-sans)",
-                            fontSize: "0.75rem",
+                            fontSize: "0.72rem",
                             fontWeight: 300,
-                            color: "var(--color-muted)",
+                            color: "rgba(247,243,236,0.3)",
                             letterSpacing: "0.05em",
                         }}
                     >
@@ -189,7 +192,7 @@ export default function Footer() {
                             fontFamily: "var(--font-serif)",
                             fontStyle: "italic",
                             fontSize: "0.85rem",
-                            color: "var(--color-muted)",
+                            color: "rgba(247,243,236,0.3)",
                         }}
                     >
                         Art is not what you see, but what you make others see.

@@ -50,11 +50,10 @@ export default function Navbar() {
                     position: "fixed",
                     top: 0, left: 0, right: 0,
                     zIndex: 100,
-                    // Frosted glass blur on scroll — this effect stays
-                    backgroundColor: scrolled ? "rgba(237, 235, 227, 0.82)" : "transparent",
-                    backdropFilter: scrolled ? "blur(20px) saturate(180%)" : "none",
-                    WebkitBackdropFilter: scrolled ? "blur(20px) saturate(180%)" : "none",
-                    borderBottom: scrolled ? "1px solid rgba(200, 200, 190, 0.4)" : "1px solid transparent",
+                    backgroundColor: scrolled ? "rgba(247, 243, 236, 0.90)" : "transparent",
+                    backdropFilter: scrolled ? "blur(20px) saturate(160%)" : "none",
+                    WebkitBackdropFilter: scrolled ? "blur(20px) saturate(160%)" : "none",
+                    borderBottom: scrolled ? "1px solid rgba(28,25,22,0.10)" : "1px solid transparent",
                     transition: "background-color 0.3s ease, border-color 0.3s ease",
                 }}
             >
@@ -69,17 +68,18 @@ export default function Navbar() {
                         justifyContent: "space-between",
                     }}
                 >
-                    {/* Logo */}
+                    {/* Logo — DM Serif Display italic */}
                     <Link
                         href="/"
                         style={{
                             fontFamily: "var(--font-serif)",
-                            fontSize: "1.3rem",
-                            fontWeight: 600,
+                            fontSize: "1.25rem",
+                            fontWeight: 400,
                             fontStyle: "italic",
                             color: "var(--color-charcoal)",
                             textDecoration: "none",
                             flexShrink: 0,
+                            letterSpacing: "-0.01em",
                         }}
                     >
                         ArtShop
@@ -96,17 +96,17 @@ export default function Navbar() {
                                         href={link.href}
                                         style={{
                                             fontFamily: "var(--font-sans)",
-                                            fontSize: "0.75rem",
+                                            fontSize: "0.7rem",
                                             fontWeight: isActive ? 500 : 300,
-                                            letterSpacing: "0.15em",
+                                            letterSpacing: "0.14em",
                                             textTransform: "uppercase",
                                             textDecoration: "none",
                                             color: isActive ? "var(--color-charcoal)" : "var(--color-charcoal-mid)",
-                                            borderBottom: isActive ? "1px solid rgba(26,26,24,0.4)" : "1px solid transparent",
-                                            paddingBottom: "4px",
+                                            borderBottom: isActive ? "1px solid rgba(28,25,22,0.5)" : "1px solid transparent",
+                                            paddingBottom: "3px",
                                             transition: "color 0.2s ease, border-color 0.2s ease",
                                         }}
-                                        onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.color = "var(--color-charcoal)"; e.currentTarget.style.borderColor = "rgba(26,26,24,0.15)"; } }}
+                                        onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.color = "var(--color-charcoal)"; e.currentTarget.style.borderColor = "rgba(28,25,22,0.2)"; } }}
                                         onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.color = "var(--color-charcoal-mid)"; e.currentTarget.style.borderColor = "transparent"; } }}
                                     >
                                         {link.label}
@@ -159,9 +159,7 @@ export default function Navbar() {
                     position: "fixed",
                     top: "68px", left: 0, right: 0, bottom: 0,
                     zIndex: 99,
-                    backgroundColor: "rgba(237, 235, 227, 0.96)",
-                    backdropFilter: "blur(20px)",
-                    WebkitBackdropFilter: "blur(20px)",
+                    backgroundColor: "#1C1916",
                     opacity: menuOpen ? 1 : 0,
                     transform: menuOpen ? "translateY(0)" : "translateY(-6px)",
                     pointerEvents: menuOpen ? "auto" : "none",
@@ -184,16 +182,15 @@ export default function Navbar() {
                             style={{
                                 display: "block",
                                 textAlign: "center",
-                                padding: "0.5rem 1.5rem",
-                                fontFamily: "var(--font-sans)",
-                                fontSize: "1.25rem",
-                                fontWeight: isActive ? 400 : 300,
-                                letterSpacing: "0.15em",
-                                textTransform: "uppercase",
+                                padding: "0.75rem 2rem",
+                                fontFamily: "var(--font-serif)",
+                                fontSize: "1.6rem",
+                                fontWeight: 400,
+                                fontStyle: "italic",
+                                letterSpacing: "-0.01em",
                                 textDecoration: "none",
-                                color: isActive ? "var(--color-charcoal)" : "var(--color-charcoal-mid)",
-                                borderBottom: isActive ? "1px solid rgba(26,26,24,0.4)" : "1px solid transparent",
-                                // Staggered animation
+                                color: isActive ? "#F7F3EC" : "rgba(247,243,236,0.55)",
+                                borderBottom: isActive ? "1px solid rgba(247,243,236,0.3)" : "1px solid transparent",
                                 opacity: menuOpen ? 1 : 0,
                                 transform: menuOpen ? "translateY(0)" : "translateY(10px)",
                                 transition: `opacity 0.4s ease ${i * 0.08}s, transform 0.4s ease ${i * 0.08}s`,
