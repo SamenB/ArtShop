@@ -17,8 +17,16 @@ This starts: **PostgreSQL** on port `5432` and **Redis** on port `6379`.
 ### Step 2 — Start backend
 ```bash
 cd backend
-# First time only:
+
+# First time only — install dependencies:
 pip install -r requirements.txt
+
+# Activate virtual environment:
+# Windows:
+.\venv\Scripts\activate
+# Mac / Linux:
+source venv/bin/activate
+
 # Run:
 uvicorn src.main:app --reload
 ```
@@ -34,11 +42,19 @@ npm run dev
 ```
 App available at: http://localhost:3000
 
-### Step 4 — (Optional) Start Celery worker
-Open a separate terminal:
+### Step 4 — (Optional) Start Celery worker + beat scheduler
+Open two separate terminals:
 ```bash
+# Terminal A — Worker
 cd backend
-celery -A src.tasks.celery_app worker --loglevel=info
+# Windows:
+celery -A src.tasks.celery_app:celery_instance worker --loglevel=info -P solo
+# Mac / Linux:
+celery -A src.tasks.celery_app:celery_instance worker --loglevel=info
+
+# Terminal B — Beat (triggers scheduled tasks)
+cd backend
+celery -A src.tasks.celery_app:celery_instance beat --loglevel=info
 ```
 
 ---
@@ -115,6 +131,7 @@ alembic history --verbose
 make infra                        # Start PostgreSQL + Redis in Docker
 make api                          # Start FastAPI (hot reload)
 make worker                       # Start Celery worker
+make beat                         # Start Celery beat scheduler
 make frontend                     # Start Next.js
 make migrate                      # Apply all migrations
 make migrate-gen m="add users"    # Create new migration

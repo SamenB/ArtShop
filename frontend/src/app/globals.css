@@ -1,19 +1,167 @@
+/* ─────────────────────────────────────────────
+   Google Fonts — Playfair Display + Inter
+   Playfair = elegant serif for titles
+   Inter    = clean sans-serif for body text
+───────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
+
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─────────────────────────────────────────────
+   Tailwind v4 Design Tokens (@theme block)
+   These become Tailwind utility classes automatically:
+   bg-cream, text-charcoal, etc.
+───────────────────────────────────────────── */
+@theme {
+  /* Color palette - warm art gallery feel */
+  --color-cream: #EDEBE3;
+  /* main bg — warm limestone, gallery-worthy */
+  --color-cream-dark: #E4E1D8;
+  /* cards, secondary bg */
+  --color-charcoal: #1A1A18;
+  /* main text, dark backgrounds */
+  --color-charcoal-mid: #3D3D3A;
+  /* secondary text */
+  --color-muted: #8A8A7A;
+  /* captions, meta info */
+  --color-accent: #C8965A;
+  /* golden accent - buttons, highlights */
+  --color-accent-dark: #A87840;
+  /* hover state for accent */
+  --color-border: #E2E2DA;
+  /* subtle borders */
+  --color-border-dark: #C8C8BD;
+  /* stronger borders */
+  --color-sold: #B04040;
+  /* "Sold" badge color */
+  --color-available: #4A7C59;
+  /* "Available" badge color */
+
+  /* Typography scale */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Spacing extras */
+  --spacing-section: 6rem;
+  /* consistent vertical section padding */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─────────────────────────────────────────────
+   Global Base Styles
+───────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-cream);
+  color: var(--color-charcoal);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─────────────────────────────────────────────
+   Typography helpers
+   .font-serif  → Playfair Display (headings)
+   .font-sans   → Inter (body)
+───────────────────────────────────────────── */
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+/* ─────────────────────────────────────────────
+   Custom selection color
+───────────────────────────────────────────── */
+::selection {
+  background-color: var(--color-accent);
+  color: var(--color-cream);
+}
+
+/* ─────────────────────────────────────────────
+   Scrollbar styling (webkit browsers)
+───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-cream-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-dark);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* ─────────────────────────────────────────────
+   Utility animations
+───────────────────────────────────────────── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-fade-up {
+  /* animation-fill-mode: forwards means the element keeps the final keyframe state */
+  /* (opacity:1, translateY:0) even after the animation finishes */
+  /* Without this, after animation ends on iOS, element can flash back to opacity:0 */
+  animation: fadeUp 0.6s ease forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+/* Loading skeleton shimmer */
+.skeleton {
+  background: linear-gradient(90deg,
+      var(--color-cream-dark) 25%,
+      var(--color-border) 50%,
+      var(--color-cream-dark) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 1.5s infinite linear;
 }

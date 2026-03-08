@@ -44,7 +44,25 @@ services:
       timeout: 5s
       retries: 5
 
-  # === 3. FastAPI Backend ===
+  # === 3. Database Migrations (runs once and exits) ===
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artshop_migrator
+    env_file:
+      - .env.prod
+    # Run only migrations, then exit. Not a long-running service.
+    command: [ "alembic", "upgrade", "head" ]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - artshop-net
+    # Do not restart after it finishes successfully
+    restart: "no"
+
+  # === 4. FastAPI Backend ===
   api:
     build:
       context: ./backend
@@ -60,10 +78,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrator:
+        # Wait until migrator exits successfully (not just starts)
+        condition: service_completed_successfully
     networks:
       - artshop-net
 
-  # === 4. Celery Worker ===
+  # === 5. Celery Worker ===
   worker:
     build:
       context: ./backend
@@ -72,16 +93,38 @@ services:
     restart: unless-stopped
     env_file:
       - .env.prod
-    command: [ "celery", "-A", "src.tasks.celery_app", "worker", "--loglevel=info" ]
+    command: [ "celery", "-A", "src.tasks.celery_app:celery_instance", "worker", "--loglevel=info" ]
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     networks:
       - artshop-net
 
-  # === 5. Next.js Frontend ===
+  # === 6. Celery Beat (Periodic Task Scheduler) ===
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artshop_beat
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    command: [ "celery", "-A", "src.tasks.celery_app:celery_instance", "beat", "--loglevel=info" ]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    networks:
+      - artshop-net
+
+  # === 7. Next.js Frontend ===
   frontend:
     build:
       context: ./frontend

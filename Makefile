@@ -4,7 +4,14 @@
 # Windows: install make via "choco install make" or use WSL
 # ============================================================
 
-.PHONY: infra api worker frontend migrate test down
+# Detect OS for venv activation
+ifeq ($(OS),Windows_NT)
+	ACTIVATE = venv\Scripts\activate
+else
+	ACTIVATE = source venv/bin/activate
+endif
+
+.PHONY: infra api worker beat frontend migrate migrate-gen test down
 
 # Start infrastructure (PostgreSQL + Redis in Docker)
 infra:
@@ -16,11 +23,20 @@ down:
 
 # Start FastAPI backend with hot reload
 api:
-	cd backend && venv\Scripts\activate && uvicorn src.main:app --reload
+	cd backend && $(ACTIVATE) && uvicorn src.main:app --reload
 
-# Start Celery worker (-P solo required on Windows)
+# Start Celery worker (-P solo required on Windows, not needed on Mac/Linux)
+ifeq ($(OS),Windows_NT)
 worker:
-	cd backend && venv\Scripts\activate && celery -A src.tasks.celery_app:celery_instance worker --loglevel=info -P solo
+	cd backend && $(ACTIVATE) && celery -A src.tasks.celery_app:celery_instance worker --loglevel=info -P solo
+else
+worker:
+	cd backend && $(ACTIVATE) && celery -A src.tasks.celery_app:celery_instance worker --loglevel=info
+endif
+
+# Start Celery beat scheduler (runs periodic tasks)
+beat:
+	cd backend && $(ACTIVATE) && celery -A src.tasks.celery_app:celery_instance beat --loglevel=info
 
 # Start Next.js frontend
 frontend:
@@ -28,12 +44,12 @@ frontend:
 
 # Run Alembic migrations (apply all)
 migrate:
-	cd backend && venv\Scripts\activate && alembic upgrade head
+	cd backend && $(ACTIVATE) && alembic upgrade head
 
 # Create a new migration (usage: make migrate-gen m="your message")
 migrate-gen:
-	cd backend && venv\Scripts\activate && alembic revision --autogenerate -m "$(m)"
+	cd backend && $(ACTIVATE) && alembic revision --autogenerate -m "$(m)"
 
 # Run tests
 test:
-	cd backend && venv\Scripts\activate && pytest
+	cd backend && $(ACTIVATE) && pytest

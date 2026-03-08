@@ -15,10 +15,6 @@ backend/.pytest_cache/
 .env.prod
 .env-test
 
-# Redis dump file
-*.rdb
-backend/dump.rdb
-
 # Project folders to keep empty but tracked
 backend/static/*
 !backend/static/.gitkeep
