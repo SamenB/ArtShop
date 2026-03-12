@@ -41,18 +41,18 @@ class ArtworkAdmin(ModelView, model=ArtworksOrm):
     column_list = [
         ArtworksOrm.id, ArtworksOrm.title,
         ArtworksOrm.is_display_only, ArtworksOrm.original_price,
-        ArtworksOrm.is_original_available, ArtworksOrm.print_price,
+        ArtworksOrm.original_status, ArtworksOrm.print_price,
         ArtworksOrm.prints_available, ArtworksOrm.tags,
     ]
     column_searchable_list = [ArtworksOrm.title]
     column_sortable_list = [
         ArtworksOrm.title, ArtworksOrm.is_display_only,
-        ArtworksOrm.is_original_available, ArtworksOrm.prints_available,
+        ArtworksOrm.original_status, ArtworksOrm.prints_available,
     ]
     column_details_list = [
         ArtworksOrm.id, ArtworksOrm.title, ArtworksOrm.description,
         ArtworksOrm.is_display_only, ArtworksOrm.original_price,
-        ArtworksOrm.is_original_available, ArtworksOrm.print_price,
+        ArtworksOrm.original_status, ArtworksOrm.print_price,
         ArtworksOrm.prints_total, ArtworksOrm.prints_available,
         ArtworksOrm.tags, ArtworksOrm.images,
     ]

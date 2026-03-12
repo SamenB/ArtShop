@@ -5,30 +5,32 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 
+type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
+
 interface Artwork {
     id: string; title: string; collection: string; year: number;
     medium: string; size: string; aspectRatio: string;
-    tags: string[]; gradientFrom: string; gradientTo: string; available: boolean;
+    tags: string[]; gradientFrom: string; gradientTo: string; originalStatus: OriginalStatus;
 }
 
 const ARTWORKS: Artwork[] = [
-    { id: "morning-tide", title: "Morning Tide", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "24 × 30 in", aspectRatio: "4/5", tags: ["Seascape", "Light"], gradientFrom: "#6A9FB5", gradientTo: "#3A6E85", available: true },
-    { id: "deep-blue", title: "Deep Blue", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "16 × 20 in", aspectRatio: "4/5", tags: ["Seascape"], gradientFrom: "#2A5F7A", gradientTo: "#1A3A55", available: true },
-    { id: "coastal-evening", title: "Coastal Evening", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "12 × 16 in", aspectRatio: "3/4", tags: ["Seascape", "Light"], gradientFrom: "#8A7AB5", gradientTo: "#4A5A8A", available: false },
-    { id: "still-waters", title: "Still Waters", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "30 × 40 in", aspectRatio: "3/4", tags: ["Seascape"], gradientFrom: "#5A8A8A", gradientTo: "#2A5A5A", available: true },
-    { id: "horizon-glow", title: "Horizon Glow", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "20 × 24 in", aspectRatio: "5/4", tags: ["Seascape", "Light"], gradientFrom: "#D4905A", gradientTo: "#8A5030", available: true },
-    { id: "salt-air", title: "Salt Air", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "18 × 24 in", aspectRatio: "3/4", tags: ["Seascape"], gradientFrom: "#A8C8D8", gradientTo: "#5A8A9A", available: true },
-    { id: "low-tide", title: "Low Tide", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "24 × 36 in", aspectRatio: "2/3", tags: ["Seascape"], gradientFrom: "#7A9A8A", gradientTo: "#3A5A4A", available: false },
-    { id: "kelp-forest", title: "Kelp Forest", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "36 × 48 in", aspectRatio: "3/4", tags: ["Seascape"], gradientFrom: "#3A6A4A", gradientTo: "#1A3A2A", available: true },
-    { id: "sea-fog", title: "Sea Fog", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "14 × 18 in", aspectRatio: "7/9", tags: ["Seascape", "Light"], gradientFrom: "#C8D4DC", gradientTo: "#8A9AA8", available: true },
-    { id: "morning-rush", title: "Morning Rush", collection: "Urban Studies", year: 2023, medium: "Oil on Canvas", size: "20 × 24 in", aspectRatio: "5/4", tags: ["Urban"], gradientFrom: "#8A7A6A", gradientTo: "#5A4A3A", available: true },
-    { id: "city-lights", title: "City Lights", collection: "Urban Studies", year: 2023, medium: "Oil on Canvas", size: "24 × 36 in", aspectRatio: "2/3", tags: ["Urban", "Light"], gradientFrom: "#3A3A5A", gradientTo: "#1A1A3A", available: false },
-    { id: "rainy-street", title: "Rainy Street", collection: "Urban Studies", year: 2023, medium: "Watercolor", size: "14 × 18 in", aspectRatio: "7/9", tags: ["Urban"], gradientFrom: "#6A7A8A", gradientTo: "#3A4A5A", available: true },
-    { id: "ethereal-dreams", title: "Ethereal Dreams", collection: "Golden Fields", year: 2024, medium: "Oil on Canvas", size: "24 × 30 in", aspectRatio: "4/5", tags: ["Landscape", "Light"], gradientFrom: "#C4B882", gradientTo: "#8A8040", available: true },
-    { id: "golden-hour", title: "Golden Hour", collection: "Golden Fields", year: 2023, medium: "Oil on Canvas", size: "30 × 40 in", aspectRatio: "3/4", tags: ["Landscape"], gradientFrom: "#D4B86A", gradientTo: "#C8965A", available: false },
-    { id: "summer-meadow", title: "Summer Meadow", collection: "Golden Fields", year: 2023, medium: "Oil on Canvas", size: "18 × 24 in", aspectRatio: "3/4", tags: ["Landscape"], gradientFrom: "#B8C870", gradientTo: "#8A9840", available: true },
-    { id: "inner-light", title: "Inner Light", collection: "Portraits", year: 2022, medium: "Oil on Canvas", size: "16 × 20 in", aspectRatio: "4/5", tags: ["Portrait"], gradientFrom: "#C4A882", gradientTo: "#8A6840", available: true },
-    { id: "contemplation", title: "Contemplation", collection: "Portraits", year: 2022, medium: "Oil on Canvas", size: "20 × 24 in", aspectRatio: "5/6", tags: ["Portrait"], gradientFrom: "#9A8870", gradientTo: "#6A5840", available: true },
+    { id: "morning-tide", title: "Morning Tide", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "24 × 30 in", aspectRatio: "4/5", tags: ["Seascape", "Light"], gradientFrom: "#6A9FB5", gradientTo: "#3A6E85", originalStatus: "available" },
+    { id: "deep-blue", title: "Deep Blue", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "16 × 20 in", aspectRatio: "4/5", tags: ["Seascape"], gradientFrom: "#2A5F7A", gradientTo: "#1A3A55", originalStatus: "available" },
+    { id: "coastal-evening", title: "Coastal Evening", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "12 × 16 in", aspectRatio: "3/4", tags: ["Seascape", "Light"], gradientFrom: "#8A7AB5", gradientTo: "#4A5A8A", originalStatus: "sold" },
+    { id: "still-waters", title: "Still Waters", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "30 × 40 in", aspectRatio: "3/4", tags: ["Seascape"], gradientFrom: "#5A8A8A", gradientTo: "#2A5A5A", originalStatus: "available" },
+    { id: "horizon-glow", title: "Horizon Glow", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "20 × 24 in", aspectRatio: "5/4", tags: ["Seascape", "Light"], gradientFrom: "#D4905A", gradientTo: "#8A5030", originalStatus: "not_for_sale" },
+    { id: "salt-air", title: "Salt Air", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "18 × 24 in", aspectRatio: "3/4", tags: ["Seascape"], gradientFrom: "#A8C8D8", gradientTo: "#5A8A9A", originalStatus: "available" },
+    { id: "low-tide", title: "Low Tide", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "24 × 36 in", aspectRatio: "2/3", tags: ["Seascape"], gradientFrom: "#7A9A8A", gradientTo: "#3A5A4A", originalStatus: "sold" },
+    { id: "kelp-forest", title: "Kelp Forest", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "36 × 48 in", aspectRatio: "3/4", tags: ["Seascape"], gradientFrom: "#3A6A4A", gradientTo: "#1A3A2A", originalStatus: "available" },
+    { id: "sea-fog", title: "Sea Fog", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "14 × 18 in", aspectRatio: "7/9", tags: ["Seascape", "Light"], gradientFrom: "#C8D4DC", gradientTo: "#8A9AA8", originalStatus: "available" },
+    { id: "morning-rush", title: "Morning Rush", collection: "Urban Studies", year: 2023, medium: "Oil on Canvas", size: "20 × 24 in", aspectRatio: "5/4", tags: ["Urban"], gradientFrom: "#8A7A6A", gradientTo: "#5A4A3A", originalStatus: "available" },
+    { id: "city-lights", title: "City Lights", collection: "Urban Studies", year: 2023, medium: "Oil on Canvas", size: "24 × 36 in", aspectRatio: "2/3", tags: ["Urban", "Light"], gradientFrom: "#3A3A5A", gradientTo: "#1A1A3A", originalStatus: "sold" },
+    { id: "rainy-street", title: "Rainy Street", collection: "Urban Studies", year: 2023, medium: "Watercolor", size: "14 × 18 in", aspectRatio: "7/9", tags: ["Urban"], gradientFrom: "#6A7A8A", gradientTo: "#3A4A5A", originalStatus: "available" },
+    { id: "ethereal-dreams", title: "Ethereal Dreams", collection: "Golden Fields", year: 2024, medium: "Oil on Canvas", size: "24 × 30 in", aspectRatio: "4/5", tags: ["Landscape", "Light"], gradientFrom: "#C4B882", gradientTo: "#8A8040", originalStatus: "available" },
+    { id: "golden-hour", title: "Golden Hour", collection: "Golden Fields", year: 2023, medium: "Oil on Canvas", size: "30 × 40 in", aspectRatio: "3/4", tags: ["Landscape"], gradientFrom: "#D4B86A", gradientTo: "#C8965A", originalStatus: "sold" },
+    { id: "summer-meadow", title: "Summer Meadow", collection: "Golden Fields", year: 2023, medium: "Oil on Canvas", size: "18 × 24 in", aspectRatio: "3/4", tags: ["Landscape"], gradientFrom: "#B8C870", gradientTo: "#8A9840", originalStatus: "available" },
+    { id: "inner-light", title: "Inner Light", collection: "Portraits", year: 2022, medium: "Oil on Canvas", size: "16 × 20 in", aspectRatio: "4/5", tags: ["Portrait"], gradientFrom: "#C4A882", gradientTo: "#8A6840", originalStatus: "not_for_sale" },
+    { id: "contemplation", title: "Contemplation", collection: "Portraits", year: 2022, medium: "Oil on Canvas", size: "20 × 24 in", aspectRatio: "5/6", tags: ["Portrait"], gradientFrom: "#9A8870", gradientTo: "#6A5840", originalStatus: "available" },
 ];
 
 const COLLECTIONS = ARTWORKS.reduce<Record<string, Artwork[]>>((acc, a) => { (acc[a.collection] ??= []).push(a); return acc; }, {});
@@ -42,7 +44,7 @@ const sortWorks = (works: Artwork[], key: SortKey) => {
     const c = [...works];
     if (key === "year") c.sort((a, b) => b.year - a.year);
     if (key === "title") c.sort((a, b) => a.title.localeCompare(b.title));
-    if (key === "available") c.sort((a, b) => (+b.available) - (+a.available));
+    if (key === "available") c.sort((a, b) => (a.originalStatus === "available" ? 0 : 1) - (b.originalStatus === "available" ? 0 : 1));
     return c;
 };
 
@@ -51,13 +53,31 @@ function Lightbox({ works, startIndex, onClose }: { works: Artwork[]; startIndex
     const [idx, setIdx] = useState(startIndex);
     const w = works[idx];
     const tx = useRef<number | null>(null);
-    const prev = useCallback(() => setIdx(i => (i - 1 + works.length) % works.length), [works.length]);
-    const next = useCallback(() => setIdx(i => (i + 1) % works.length), [works.length]);
+    // Zoom + pan state
+    const [zoomPoint, setZoomPoint] = useState<{ x: number; y: number } | null>(null);
+    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    const dragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number; moved: boolean } | null>(null);
+    const prev = useCallback(() => { setIdx(i => (i - 1 + works.length) % works.length); setZoomPoint(null); setPanOffset({ x: 0, y: 0 }); }, [works.length]);
+    const next = useCallback(() => { setIdx(i => (i + 1) % works.length); setZoomPoint(null); setPanOffset({ x: 0, y: 0 }); }, [works.length]);
+    // Touch device detection + mobile hint
+    const [isTouchDevice, setIsTouchDevice] = useState(false);
+    const [showHint, setShowHint] = useState(false);
+    useEffect(() => {
+        setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+    }, []);
+    useEffect(() => {
+        if (isTouchDevice) { setShowHint(true); const t = setTimeout(() => setShowHint(false), 3000); return () => clearTimeout(t); }
+    }, [idx, isTouchDevice]);
     useEffect(() => {
         const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); if (e.key === "ArrowLeft") prev(); if (e.key === "ArrowRight") next(); };
         window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
     }, [onClose, prev, next]);
     useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
+
+    // Parse aspect ratio string "4/5" into numeric ratio for CSS min()
+    const ratioParts = w.aspectRatio.split("/").map(Number);
+    const ratio = (ratioParts[0] || 4) / (ratioParts[1] || 5);
+
     return (
         <div onTouchStart={e => { tx.current = e.touches[0].clientX; }}
             onTouchEnd={e => { if (!tx.current) return; const d = tx.current - e.changedTouches[0].clientX; if (d > 40) next(); else if (d < -40) prev(); tx.current = null; }}
@@ -70,21 +90,99 @@ function Lightbox({ works, startIndex, onClose }: { works: Artwork[]; startIndex
             <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", padding: "2rem 3.5rem" }}>
                 {works.length > 1 && <button onClick={prev} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", zIndex: 1, width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "1.3rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background-color 0.2s" }}>‹</button>}
                 {works.length > 1 && <button onClick={next} style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", zIndex: 1, width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "1.3rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background-color 0.2s" }}>›</button>}
-                {/* Contains painting within available space, no cropping, no dimension collapse */}
-                <div style={{
-                    aspectRatio: w.aspectRatio,
-                    height: "100%",
-                    maxWidth: "100%",
-                    background: `linear-gradient(160deg, ${w.gradientFrom} 0%, ${w.gradientTo} 100%)`,
-                    borderRadius: "2px",
-                    boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
-                }} />
+                {/* Painting — wheel zoom (PC) + double-tap (mobile) + drag pan */}
+                <div
+                    onWheel={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        if (e.deltaY < 0 && !zoomPoint) {
+                            const x = ((e.clientX - rect.left) / rect.width) * 100;
+                            const y = ((e.clientY - rect.top) / rect.height) * 100;
+                            setZoomPoint({ x, y }); setPanOffset({ x: 0, y: 0 });
+                        } else if (e.deltaY > 0 && zoomPoint) {
+                            setZoomPoint(null); setPanOffset({ x: 0, y: 0 });
+                        }
+                    }}
+                    onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        if (zoomPoint) { setZoomPoint(null); setPanOffset({ x: 0, y: 0 }); }
+                        else {
+                            const x = ((e.clientX - rect.left) / rect.width) * 100;
+                            const y = ((e.clientY - rect.top) / rect.height) * 100;
+                            setZoomPoint({ x, y }); setPanOffset({ x: 0, y: 0 });
+                        }
+                    }}
+                    onMouseDown={(e) => {
+                        if (!zoomPoint) return;
+                        e.preventDefault();
+                        dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panOffset.x, startPanY: panOffset.y, moved: false };
+                    }}
+                    onMouseMove={(e) => {
+                        if (!dragRef.current) return;
+                        const dx = e.clientX - dragRef.current.startX;
+                        const dy = e.clientY - dragRef.current.startY;
+                        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
+                        setPanOffset({ x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy });
+                    }}
+                    onMouseUp={() => { if (dragRef.current) dragRef.current = null; }}
+                    onMouseLeave={() => { dragRef.current = null; }}
+                    onTouchStart={(e) => {
+                        if (!zoomPoint || e.touches.length !== 1) return;
+                        dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, startPanX: panOffset.x, startPanY: panOffset.y, moved: false };
+                    }}
+                    onTouchMove={(e) => {
+                        if (!dragRef.current || e.touches.length !== 1) return;
+                        e.preventDefault();
+                        const dx = e.touches[0].clientX - dragRef.current.startX;
+                        const dy = e.touches[0].clientY - dragRef.current.startY;
+                        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
+                        setPanOffset({ x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy });
+                    }}
+                    onTouchEnd={() => { dragRef.current = null; }}
+                    onClick={(e) => { e.stopPropagation(); }}
+                    style={{
+                        width: `min(100%, calc((100vh - 160px) * ${ratio}))`,
+                        height: `min(100%, calc(100vh - 160px))`,
+                        maxWidth: "100%",
+                        aspectRatio: w.aspectRatio,
+                        background: `linear-gradient(160deg, ${w.gradientFrom} 0%, ${w.gradientTo} 100%)`,
+                        borderRadius: "2px",
+                        boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+                        cursor: zoomPoint ? (dragRef.current ? "grabbing" : "grab") : "default",
+                        transition: dragRef.current ? "none" : "transform 0.3s ease",
+                        transform: zoomPoint
+                            ? `scale(2) translate(${panOffset.x / 2}px, ${panOffset.y / 2}px)`
+                            : "scale(1)",
+                        transformOrigin: zoomPoint ? `${zoomPoint.x}% ${zoomPoint.y}%` : "center center",
+                        userSelect: "none",
+                    }}
+                />
+                {/* Mobile hint — bottom, fades out */}
+                {isTouchDevice && !zoomPoint && (
+                    <div style={{
+                        position: "absolute", bottom: "1rem", left: "50%", transform: "translateX(-50%)",
+                        background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)",
+                        padding: "0.5rem 1.25rem", borderRadius: "24px",
+                        backdropFilter: "blur(8px)", zIndex: 10, pointerEvents: "none",
+                        opacity: showHint ? 1 : 0, transition: "opacity 0.8s ease",
+                    }}>
+                        <span style={{
+                            fontFamily: "var(--font-sans)", fontSize: "0.7rem",
+                            fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase",
+                            color: "rgba(255,255,255,0.7)",
+                        }}>
+                            Double tap to zoom
+                        </span>
+                    </div>
+                )}
+
             </div>
             <div style={{ flexShrink: 0, padding: "0.85rem 1.25rem 1.1rem", borderTop: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(8,8,6,0.98)" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: works.length > 1 ? "0.65rem" : 0 }}>
                     <div>
-                        <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "1rem", fontWeight: 600, color: "#FAFAF7", marginBottom: "0.2rem" }}>{w.title}</p>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.68rem", color: "rgba(255,255,255,0.45)" }}>{w.size} · {w.medium}{w.available && <span style={{ marginLeft: "0.6rem", color: "#6DB87E" }}>● Available</span>}</p>
+                        <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "1.1rem", fontWeight: 600, color: "#FAFAF7", marginBottom: "0.3rem" }}>{w.title}</p>
+                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "rgba(255,255,255,0.45)" }}>{w.size.replace(/([\d.]+) × ([\d.]+) in/, (m, wd, h) => `${m} | ${Math.round(Number(wd) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`)} · {w.medium}{w.originalStatus === "available" && <span style={{ marginLeft: "0.6rem", color: "#6DB87E" }}>● Available</span>}{w.originalStatus === "sold" && <span style={{ marginLeft: "0.6rem", color: "#C87070" }}>● Sold</span>}{w.originalStatus === "reserved" && <span style={{ marginLeft: "0.6rem", color: "#C4963A" }}>● Reserved</span>}{w.originalStatus === "not_for_sale" && <span style={{ marginLeft: "0.6rem", color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>Not for Sale</span>}{w.originalStatus === "on_exhibition" && <span style={{ marginLeft: "0.6rem", color: "#7A9FC8", fontStyle: "italic" }}>On Exhibition</span>}{w.originalStatus === "digital" && <span style={{ marginLeft: "0.6rem", color: "#B89AEE" }}>● Digital</span>}</p>
                     </div>
                     <Link href={`/shop?work=${w.id}`} onClick={onClose} style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.2)", paddingBottom: "1px", flexShrink: 0, whiteSpace: "nowrap", alignSelf: "center" }}>Shop →</Link>
                 </div>
@@ -129,22 +227,26 @@ function ArtCard({ work, onClick }: { work: Artwork; onClick: () => void }) {
 
             {/* Compact metadata — IBM Plex Mono typewriter style */}
             {/* Fixed-height text — painting centers align across the row */}
-            <div style={{ paddingTop: "0.55rem", height: "5rem" }}>
+            <div style={{ paddingTop: "1rem", height: "6.5rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
                 <p style={{
-                    fontFamily: "var(--font-serif)", fontSize: "0.85rem",
+                    fontFamily: "var(--font-serif)", fontSize: "1.1rem",
                     fontWeight: 400, fontStyle: "italic",
-                    color: "var(--color-charcoal)", marginBottom: "0.1rem",
+                    color: "var(--color-charcoal)", marginBottom: "0",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    lineHeight: 1.35, paddingBottom: "0.15rem"
                 }}>{work.title}</p>
                 <p style={{
-                    fontFamily: "var(--font-mono)", fontSize: "0.57rem",
-                    fontWeight: 300, letterSpacing: "0.03em",
+                    fontFamily: "var(--font-mono)", fontSize: "0.75rem",
+                    fontWeight: 300, letterSpacing: "0.02em", lineHeight: 1.35,
                     color: "var(--color-muted)",
                 }}>
-                    {work.size} · {work.medium}
-                    {work.available
-                        ? <span style={{ color: "var(--color-available)", marginLeft: "0.4rem" }}>●</span>
-                        : <span style={{ color: "var(--color-sold)", marginLeft: "0.4rem" }}>●</span>}
+                    {work.size.replace(/([\d.]+) × ([\d.]+) in/, (m, wd, h) => `${m} | ${Math.round(Number(wd) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`)} · {work.medium}
+                    {work.originalStatus === "available" && <span style={{ color: "var(--color-available)", marginLeft: "0.4rem" }}>●</span>}
+                    {work.originalStatus === "sold" && <span style={{ color: "var(--color-sold)", marginLeft: "0.4rem" }}>●</span>}
+                    {work.originalStatus === "reserved" && <span style={{ color: "#C4963A", marginLeft: "0.4rem" }}>●</span>}
+                    {work.originalStatus === "not_for_sale" && <span style={{ color: "var(--color-muted)", marginLeft: "0.4rem", fontStyle: "italic", fontSize: "0.65rem" }}>Not for Sale</span>}
+                    {work.originalStatus === "on_exhibition" && <span style={{ color: "#5A7AB5", marginLeft: "0.4rem", fontStyle: "italic", fontSize: "0.65rem" }}>On Exhibition</span>}
+                    {work.originalStatus === "digital" && <span style={{ color: "#9B7AE8", marginLeft: "0.4rem" }}>●</span>}
                 </p>
             </div>
         </button>
@@ -158,10 +260,27 @@ export default function GalleryPage() {
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
     const [lightbox, setLightbox] = useState<{ works: Artwork[]; index: number } | null>(null);
     const [cols, setCols] = useState(3);
+    const [denseGrid, setDenseGrid] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const saved = localStorage.getItem("artshop_denseGrid");
+        if (saved !== null) {
+            setDenseGrid(saved === "true");
+        } else {
+            setDenseGrid(window.innerWidth < 768);
+        }
+    }, []);
+
+    const handleSetDenseGrid = (val: boolean) => {
+        setDenseGrid(val);
+        localStorage.setItem("artshop_denseGrid", String(val));
+    };
 
     useEffect(() => {
         const update = () => {
             const w = window.innerWidth;
+            setIsMobile(w < 768);
             setCols(w < 480 ? 1 : w < 768 ? 2 : w < 1100 ? 3 : 4);
         };
         update();
@@ -174,18 +293,87 @@ export default function GalleryPage() {
     return (
         <>
             {lightbox && <Lightbox works={lightbox.works} startIndex={lightbox.index} onClose={() => setLightbox(null)} />}
-            <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "1.5rem 2.5rem 2rem" }}>
+            <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 1rem 2rem 1rem" : "1.5rem 2.5rem 2rem" }}>
                 {/* Sort bar */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", marginRight: "0.25rem" }}>Sort</span>
-                        {SORT_OPTIONS.map(opt => (
-                            <button key={opt.key} onClick={() => setSortKey(opt.key)} style={{ padding: "0.28rem 0.75rem", borderRadius: "999px", border: "1px solid", borderColor: sortKey === opt.key ? "var(--color-charcoal)" : "var(--color-border-dark)", backgroundColor: sortKey === opt.key ? "var(--color-charcoal)" : "transparent", color: sortKey === opt.key ? "var(--color-cream)" : "var(--color-charcoal-mid)", fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: sortKey === opt.key ? 600 : 400, cursor: "pointer", transition: "all 0.15s ease", whiteSpace: "nowrap" }}>
-                                {opt.label}
-                            </button>
-                        ))}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? "0.75rem" : "1rem", flexWrap: isMobile ? "nowrap" : "wrap", overflowX: isMobile ? "auto" : "visible", paddingBottom: isMobile ? "5px" : 0, scrollbarWidth: "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>Sort</span>
+                        <div style={{ position: "relative" }}>
+                            <select
+                                value={sortKey}
+                                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                                style={{
+                                    appearance: "none",
+                                    backgroundColor: "transparent",
+                                    border: "1px solid rgba(26,26,24,0.2)",
+                                    borderRadius: "20px",
+                                    padding: "0.35rem 2.2rem 0.35rem 1rem",
+                                    fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)",
+                                    cursor: "pointer", outline: "none"
+                                }}
+                            >
+                                {SORT_OPTIONS.map(opt => (
+                                    <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                ))}
+                            </select>
+                            <span style={{ position: "absolute", right: "0.8rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.65rem", color: "var(--color-charcoal)", fontWeight: 300 }}>∨</span>
+                        </div>
                     </div>
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "var(--color-muted)", flexShrink: 0 }}>{ARTWORKS.length} works</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1.5rem", flexShrink: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>View</span>
+                            <div style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
+                                <button
+                                    onClick={() => handleSetDenseGrid(false)}
+                                    title="Normal Grid"
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: "6px",
+                                        padding: "4px 10px",
+                                        backgroundColor: !denseGrid ? "#ffffff" : "transparent",
+                                        color: !denseGrid ? "var(--color-charcoal)" : "var(--color-muted)",
+                                        border: "none", borderRadius: "4px",
+                                        boxShadow: !denseGrid ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                        cursor: "pointer", transition: "all 0.2s"
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                        <rect x="2" y="2" width="5" height="5" rx="1" />
+                                        <rect x="9" y="2" width="5" height="5" rx="1" />
+                                        <rect x="2" y="9" width="5" height="5" rx="1" />
+                                        <rect x="9" y="9" width="5" height="5" rx="1" />
+                                    </svg>
+                                    <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 500, display: isMobile ? "none" : "inline" }}>Normal</span>
+                                </button>
+                                <button
+                                    onClick={() => handleSetDenseGrid(true)}
+                                    title="Dense Grid"
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: "6px",
+                                        padding: "4px 10px",
+                                        backgroundColor: denseGrid ? "#ffffff" : "transparent",
+                                        color: denseGrid ? "var(--color-charcoal)" : "var(--color-muted)",
+                                        border: "none", borderRadius: "4px",
+                                        boxShadow: denseGrid ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                        cursor: "pointer", transition: "all 0.2s"
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                        <rect x="1" y="1" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="6.25" y="1" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="11.5" y="1" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="1" y="6.25" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="6.25" y="6.25" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="11.5" y="6.25" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="1" y="11.5" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="6.25" y="11.5" width="3.5" height="3.5" rx="0.5" />
+                                        <rect x="11.5" y="11.5" width="3.5" height="3.5" rx="0.5" />
+                                    </svg>
+                                    <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 500, display: isMobile ? "none" : "inline" }}>Dense</span>
+                                </button>
+                            </div>
+                        </div>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "var(--color-muted)", flexShrink: 0 }}>{ARTWORKS.length} works</span>
+                    </div>
                 </div>
             </div>
 
@@ -195,14 +383,15 @@ export default function GalleryPage() {
                     const isCollapsed = !!collapsed[name];
 
                     return (
-                        <section key={name} style={{ marginBottom: "5rem" }}>
-                            {/* Collection header — outside the box, spatially free */}
-                            <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "0 2.5rem" }}>
+                        <section key={name} style={{ paddingBottom: "4rem", marginBottom: 0, background: "linear-gradient(180deg, rgba(17, 17, 17, 0.08) 0%, rgba(17, 17, 17, 0.03) 12rem, rgba(17, 17, 17, 0) 100%)" }}>
+                            {/* Collection header — full width bar */}
+                            <div style={{ width: "100%" }}>
                                 <button
                                     onClick={() => setCollapsed(p => ({ ...p, [name]: !p[name] }))}
                                     style={{
+                                        maxWidth: "1600px", margin: "0 auto",
                                         width: "100%", display: "flex", alignItems: "center",
-                                        justifyContent: "space-between", padding: "0 0 1.25rem",
+                                        justifyContent: "space-between", padding: isMobile ? "1rem 1.25rem" : "1.25rem 2.5rem",
                                         background: "none", border: "none", cursor: "pointer", textAlign: "left",
                                     }}
                                 >
@@ -234,12 +423,12 @@ export default function GalleryPage() {
 
                             <div style={{ display: "grid", gridTemplateRows: isCollapsed ? "0fr" : "1fr", transition: "grid-template-rows 0.4s ease-out" }}>
                                 <div style={{ overflow: "hidden" }}>
-                                    <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "2rem 2.5rem 3rem" }}>
-                                        <div className="art-grid" style={{
+                                    <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 0.5rem 2rem" : "2rem 2.5rem 3rem" }}>
+                                        <div className={`art-grid ${denseGrid ? "dense" : ""}`} style={{
                                             display: "grid",
-                                            gridTemplateColumns: "repeat(auto-fit, 350px)",
+                                            gridTemplateColumns: denseGrid ? "repeat(auto-fit, 175px)" : "repeat(auto-fit, 350px)",
                                             justifyContent: "space-evenly",
-                                            gap: "4rem 180px",
+                                            gap: denseGrid ? "2rem 90px" : "4rem 180px",
                                             alignItems: "center",
                                         }}>
                                             {works.map((work, i) => (

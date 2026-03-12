@@ -13,6 +13,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import ClientProviders from "@/components/ClientProviders";
 
 // Metadata is a Next.js feature for SEO.
 // These values appear in the browser tab and Google search results.
@@ -48,28 +49,30 @@ export default function RootLayout({
     // browser extensions that modify the DOM (very common on Chrome)
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        {/*
+        <ClientProviders>
+          {/*
           min-h-screen + flex column = ensures Footer sticks to the bottom
           even when page content is short (e.g. a sparse About page)
         */}
-        <div
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* Navbar appears at the top of EVERY page */}
-          <Navbar />
+          <div
+            style={{
+              minHeight: "100vh",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* Navbar appears at the top of EVERY page */}
+            <Navbar />
 
-          {/* Main content — this is where each page renders */}
-          <main style={{ flex: 1 }}>
-            {children}
-          </main>
+            {/* Main content — this is where each page renders */}
+            <main style={{ flex: 1 }}>
+              {children}
+            </main>
 
-          {/* Footer appears at the bottom of EVERY page */}
-          <Footer />
-        </div>
+            {/* Footer appears at the bottom of EVERY page */}
+            <Footer />
+          </div>
+        </ClientProviders>
       </body>
     </html>
   );

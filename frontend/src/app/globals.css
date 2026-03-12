@@ -14,28 +14,28 @@
    Warm parchment, near-black, no decoration
 ───────────────────────────────────────────── */
 @theme {
-  /* Le Labo color palette — parchment + near-black */
-  --color-cream: #F7F3EC;
-  /* base parchment */
-  --color-cream-dark: #EDE9E1;
-  /* slightly deeper parchment */
-  --color-charcoal: #1C1916;
-  /* warm near-black */
-  --color-charcoal-mid: #4A4640;
-  /* warm mid-tone */
-  --color-muted: #8C8880;
-  /* warm gray for captions */
-  --color-accent: #1C1916;
-  /* no gold — accent = black label */
-  --color-accent-dark: #1C1916;
-  --color-border: rgba(28, 25, 22, 0.10);
+  /* Modern Gray palette — strict gray, no warmth */
+  --color-cream: #F4F4F4;
+  /* base gray */
+  --color-cream-dark: #E8E8E8;
+  /* slightly deeper gray */
+  --color-charcoal: #111111;
+  /* near-black for text */
+  --color-charcoal-mid: #4A4A4A;
+  /* mid-tone gray */
+  --color-muted: #808080;
+  /* gray for captions */
+  --color-accent: #111111;
+  /* accent = black label */
+  --color-accent-dark: #000000;
+  --color-border: rgba(17, 17, 17, 0.10);
   /* hairline */
-  --color-border-dark: rgba(28, 25, 22, 0.22);
+  --color-border-dark: rgba(17, 17, 17, 0.22);
   /* stronger line */
-  --color-sold: #8C4040;
-  /* muted terracotta for sold */
-  --color-available: #3D6B50;
-  /* muted forest for available */
+  --color-sold: #666666;
+  /* dark gray for sold */
+  --color-available: #333333;
+  /* deep gray for available */
 
   /* Typography */
   --font-serif: 'DM Serif Display', Georgia, serif;
@@ -173,11 +173,42 @@ h3 {
   animation: shimmer 1.5s infinite linear;
 }
 
-/* Art grid — mobile override for edge-to-edge single column */
+/* Art grid — mobile override for edge-to-edge single column or 3-col dense */
 @media (max-width: 600px) {
-  .art-grid {
+  .art-grid:not(.dense) {
     grid-template-columns: 1fr !important;
     gap: 3rem 0 !important;
+  }
+
+  .art-grid.dense {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1.5rem 0.5rem !important;
+  }
+
+  /* Fixed height text block ensures grid correctly aligns images by center regardless of text wrapping */
+  .art-grid.dense .art-card {
+    height: auto !important;
+  }
+
+  .art-grid.dense .art-card>div:last-child {
+    padding-top: 0.4rem !important;
+    height: 4.8rem !important;
+    min-height: 4.8rem !important;
+    max-height: 4.8rem !important;
+    flex: 0 0 4.8rem !important;
+    overflow: hidden !important;
+  }
+
+  .art-grid.dense .art-card p:first-child {
+    font-size: 0.8rem !important;
+    line-height: 1.35 !important;
+    padding-bottom: 0.15rem !important;
+    /* Prevents italic descenders from getting cropped by overflow: hidden */
+  }
+
+  .art-grid.dense .art-card p:nth-child(n+2) {
+    font-size: 0.55rem !important;
+    line-height: 1.2 !important;
   }
 }
 

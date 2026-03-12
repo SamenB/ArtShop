@@ -52,18 +52,24 @@ export default function Footer() {
                         <Link
                             href="/"
                             style={{
-                                fontFamily: "var(--font-serif)",
-                                fontSize: "1.75rem",
-                                fontWeight: 400,
-                                fontStyle: "italic",
+                                fontFamily: '"Didot", "Bodoni MT", "Times New Roman", serif',
                                 color: "#F7F3EC",
                                 textDecoration: "none",
-                                display: "block",
-                                marginBottom: "1rem",
-                                letterSpacing: "-0.01em",
+                                display: "flex",
+                                flexDirection: "column",
+                                marginBottom: "1.5rem",
+                                lineHeight: 0.95,
+                                width: "fit-content",
+                                transform: "scale(0.7)",
+                                transformOrigin: "left center",
                             }}
                         >
-                            ArtShop
+                            <span style={{ fontSize: "1.45rem", fontWeight: 400, letterSpacing: "0.01em" }}>Samen</span>
+                            <span style={{ fontSize: "1.45rem", fontWeight: 400, letterSpacing: "0.01em" }}>Bondarenko</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", width: "100%" }}>
+                                <span style={{ flex: 1, minWidth: "45px", height: "1px", backgroundColor: "#F7F3EC", marginLeft: "2px" }} />
+                                <span style={{ fontSize: "1rem", fontWeight: 400, transform: "translateY(-1px)", flexShrink: 0, paddingRight: "4px" }}>Gallery</span>
+                            </div>
                         </Link>
                         <p
                             style={{
