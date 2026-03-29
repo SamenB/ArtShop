@@ -5,6 +5,8 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
 
 
 services:
@@ -152,5 +154,72 @@ services:
     depends_on:
       - api
       - frontend
+      - grafana # Depends on Grafana for the /grafana/ proxy
+    networks:
+      - artshop-net
+
+  # === 9. Prometheus metrics database ===
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: monitoring_prom
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d' # Store metrics for 15 days
+    networks:
+      - artshop-net
+
+  # === 10. Node Exporter (Server Hardware Metrics) ===
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: monitoring_node
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - artshop-net
+
+  # === 11. cAdvisor (Docker Container Metrics) ===
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: monitoring_cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    networks:
+      - artshop-net
+    privileged: true
+
+  # === 12. Grafana (Dashboard UI) ===
+  grafana:
+    image: grafana/grafana:latest
+    container_name: monitoring_grafana
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=strongpassword123
+      - GF_SERVER_ROOT_URL=https://samen-bondarenko.com/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     networks:
       - artshop-net

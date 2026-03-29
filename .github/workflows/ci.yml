@@ -66,6 +66,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: ESLint
+        run: npx eslint .
+
       - name: Next.js — build
         run: npm run build
         env:
@@ -133,4 +136,4 @@ jobs:
           JWT_SECRET_KEY: test-secret-key-for-ci
           JWT_ALGORITHM: HS256
           JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
-          ADMIN_EMAILS: '["admin@test.com", "test_admin@artshop.com"]'
+          ADMIN_EMAILS: '["admin@test.com"]'

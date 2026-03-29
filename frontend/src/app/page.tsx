@@ -4,8 +4,6 @@
 import Link from "next/link";
 import { getApiUrl, getImageUrl } from "@/utils";
 
-export const dynamic = "force-dynamic";
-
 // FEATURED_WORKS will be fetched from API
 type OriginalStatus = "available" | "sold" | "reserved";
 
@@ -27,16 +25,16 @@ interface Artwork {
 type FeaturedWork = Artwork;
 
 const DEFAULT_GRADIENTS = [
-    ["#6A9FB5", "#3A6E85"],
-    ["#2A5F7A", "#1A3A55"],
-    ["#8A7AB5", "#4A5A8A"],
-    ["#5A8A8A", "#2A5A5A"],
-    ["#D4905A", "#8A5030"],
+  ["#6A9FB5", "#3A6E85"],
+  ["#2A5F7A", "#1A3A55"],
+  ["#8A7AB5", "#4A5A8A"],
+  ["#5A8A8A", "#2A5A5A"],
+  ["#D4905A", "#8A5030"],
 ];
 
 // Fetch directly inside the Async Server Component
 export default async function Home() {
-  
+
   let settings: any = null;
   let featuredWorks: FeaturedWork[] = [];
 
@@ -46,7 +44,7 @@ export default async function Home() {
 
   const worksRes = await fetch(`${getApiUrl()}/artworks?limit=3`, { next: { revalidate: 60 } });
   if (!worksRes.ok) throw new Error(`Failed to fetch artworks: ${worksRes.status}`);
-  
+
   const data = await worksRes.json();
   const items = (data.items || data).map((item: any, idx: number) => ({
     ...item,
@@ -84,9 +82,9 @@ export default async function Home() {
             {settings?.main_bg_mobile_url && (
               <source media="(max-width: 768px)" srcSet={getImageUrl(settings.main_bg_mobile_url, 'medium')} />
             )}
-            <img 
-              src={getImageUrl(settings?.main_bg_desktop_url || settings?.main_bg_mobile_url, 'original')} 
-              alt="Hero Background" 
+            <img
+              src={getImageUrl(settings?.main_bg_desktop_url || settings?.main_bg_mobile_url, 'original')}
+              alt="Hero Background"
               fetchPriority="high"
               decoding="sync"
               loading="eager"
@@ -97,8 +95,8 @@ export default async function Home() {
                 height: "100%",
                 objectFit: "cover",
                 filter: "brightness(0.6)"
-              }} 
-              aria-hidden="true" 
+              }}
+              aria-hidden="true"
             />
           </picture>
         ) : (
@@ -390,8 +388,8 @@ export default async function Home() {
                       className="home-img-inner"
                       style={{
                         width: "100%", height: "100%",
-                        background: (work.images && work.images.length > 0) 
-                          ? `url(${getImageUrl(work.images[0], 'medium')}) center/cover no-repeat` 
+                        background: (work.images && work.images.length > 0)
+                          ? `url(${getImageUrl(work.images[0], 'medium')}) center/cover no-repeat`
                           : `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})`,
                         transition: "transform 0.5s cubic-bezier(0.165, 0.84, 0.44, 1)",
                       }}
@@ -494,7 +492,7 @@ export default async function Home() {
             }}
           >
             {settings?.artist_photo_url ? (
-                <img src={getImageUrl(settings.artist_photo_url, 'original')} alt="Artist" className="w-full h-full object-cover" />
+              <img src={getImageUrl(settings.artist_photo_url, 'original')} alt="Artist" className="w-full h-full object-cover" />
             ) : "Artist Photo"}
           </div>
 
