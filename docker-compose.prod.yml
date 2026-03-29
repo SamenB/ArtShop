@@ -192,25 +192,7 @@ services:
     networks:
       - artshop-net
 
-  # === 11. cAdvisor (Docker Container Metrics) ===
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: monitoring_cadvisor
-    restart: unless-stopped
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:rw
-      - /sys:/sys:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /var/snap/docker/common/var-lib-docker:/var/snap/docker/common/var-lib-docker:ro
-      - /dev/disk/:/dev/disk:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    devices:
-      - /dev/kmsg
-    networks:
-      - artshop-net
-    privileged: true
+
 
   # === 12. Grafana (Dashboard UI) ===
   grafana:
