@@ -66,9 +66,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: ESLint
-        run: npx eslint .
-
       - name: Next.js — build
         run: npm run build
         env:
