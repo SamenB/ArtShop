@@ -6,8 +6,8 @@
 
 FastAPI · Next.js · PostgreSQL · Redis · Celery · Docker · CI/CD
 
-[![CI](https://github.com/YOUR_USERNAME/ArtShop/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/ArtShop/actions/workflows/ci.yml)
-[![CD](https://github.com/YOUR_USERNAME/ArtShop/actions/workflows/cd.yml/badge.svg)](https://github.com/YOUR_USERNAME/ArtShop/actions/workflows/cd.yml)
+[![CI](https://github.com/SamenB/ArtShop/actions/workflows/ci.yml/badge.svg)](https://github.com/SamenB/ArtShop/actions/workflows/ci.yml)
+[![CD](https://github.com/SamenB/ArtShop/actions/workflows/cd.yml/badge.svg)](https://github.com/SamenB/ArtShop/actions/workflows/cd.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -18,7 +18,7 @@ FastAPI · Next.js · PostgreSQL · Redis · Celery · Docker · CI/CD
 
 ## Overview
 
-ArtShop is a commercial open-source platform where artists can showcase and sell their artwork. The project demonstrates production-grade architecture including async Python backend, server-side rendered React frontend, background task processing, reverse proxy setup, and automated CI/CD deployment.
+ArtShop is a commercial platform where artists can showcase and sell their artwork. The project features a production-grade architecture including async Python backend, server-side rendered React frontend, background task processing, reverse proxy setup, and automated CI/CD deployment.
 
 ### Key Features
 
@@ -39,8 +39,8 @@ ArtShop is a commercial open-source platform where artists can showcase and sell
 | **Task Queue** | Celery 5 (worker + beat scheduler) |
 | **Proxy** | Nginx (reverse proxy, gzip, rate limiting, security headers) |
 | **Containerization** | Docker, Docker Compose (multi-service) |
-| **CI/CD** | GitHub Actions (lint, type-check, test, deploy via SSH) |
-| **Code Quality** | Ruff, Pyright, ESLint 9, TypeScript strict mode |
+| **CI/CD** | GitHub Actions (lint, test, deploy via SSH) |
+| **Code Quality** | Ruff (lint + format), ESLint 9 |
 
 ## Architecture
 
@@ -83,14 +83,14 @@ ArtShop/
 │   │   ├── repositories/        # Data access layer (Repository pattern)
 │   │   ├── services/            # Business logic layer
 │   │   ├── tasks/               # Celery tasks & app configuration
-│   │   ├── admin/               # SQLAdmin panel setup
+│   │   ├── connectors/          # External service connectors (Redis)
 │   │   ├── migrations/          # Alembic version scripts
-│   │   └── utils/               # Shared utilities
+│   │   └── utils/               # Shared utilities (DBManager)
 │   ├── tests/
 │   │   ├── conftest.py          # Fixtures (DB, auth, mock data)
 │   │   ├── mocks/               # JSON test data
-│   │   ├── unit_tests/          # Unit tests
-│   │   └── integration_tests/   # API endpoint tests
+│   │   ├── unit_tests/          # Unit tests (schemas, repos, services)
+│   │   └── integration_tests/   # API endpoint & DB tests
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── pyproject.toml           # Ruff linter config
@@ -102,7 +102,7 @@ ArtShop/
 ├── nginx/
 │   └── nginx.conf               # Reverse proxy configuration
 ├── .github/workflows/
-│   ├── ci.yml                   # Lint → Type-check → Test
+│   ├── ci.yml                   # Lint → Test
 │   └── cd.yml                   # Deploy via SSH + Docker
 ├── docker-compose.yml           # Local dev (DB + Redis only)
 ├── docker-compose.prod.yml      # Production (8 services)
@@ -213,8 +213,8 @@ Automated via **GitHub Actions**:
 
 ```
 Push / PR  ──►  CI Pipeline
-                 ├─ backend-lint    (Ruff + Pyright)
-                 ├─ frontend-lint   (ESLint + TSC + Build)
+                 ├─ backend-lint    (Ruff lint + format)
+                 ├─ frontend-lint   (ESLint + Next.js build)
                  └─ backend-test    (Pytest + PostgreSQL + Redis)
                          │
                   CI passes on main
@@ -236,11 +236,9 @@ Push / PR  ──►  CI Pipeline
 
 ## Code Quality
 
-- **Python Linting:** [Ruff](https://docs.astral.sh/ruff/) (line-length=100)
-- **Python Type Checking:** [Pyright](https://github.com/microsoft/pyright) (strict)
+- **Python Linting & Formatting:** [Ruff](https://docs.astral.sh/ruff/) (line-length=100, isort)
 - **JavaScript/TypeScript Linting:** [ESLint 9](https://eslint.org/) with `eslint-config-next`
-- **TypeScript:** Strict mode enabled
-- **Pre-deploy Checks:** All linters + formatters + type checkers + tests run in CI before merge
+- **Pre-deploy Checks:** All linters + formatters + tests run in CI before deploy
 
 ## Environment Variables
 
@@ -271,14 +269,10 @@ Tests require running PostgreSQL and Redis (`make infra`).
 - **Isolation:** Fresh database per session, mock data loaded from JSON fixtures
 - **Cache:** Production cache decorator mocked with InMemoryBackend in tests
 
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
 ---
 
 <div align="center">
 
-Built with ❤️ by [Semen Bondarenko](https://github.com/YOUR_USERNAME)
+Built with ❤️ by [Semen Bondarenko](https://github.com/SamenB)
 
 </div>
