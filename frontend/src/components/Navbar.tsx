@@ -15,6 +15,11 @@ import {
     type Currency,
     type Units,
 } from "@/context/PreferencesContext";
+import { UserCircle, ShoppingBag } from "lucide-react";
+import AuthModal from "@/components/AuthModal";
+import { useUser } from "@/context/UserContext";
+import { useCart } from "@/context/CartContext";
+
 
 const NAV_LINKS = [
     { href: "/gallery", label: "Gallery" },
@@ -23,10 +28,6 @@ const NAV_LINKS = [
     { href: "/contact", label: "Contact" },
 ];
 
-// Reusable segmented pill switcher
-// Renders a group of buttons side-by-side in a rounded container.
-// Light theme switcher — minimal text with underline indicator on active option.
-// No backgrounds, no borders — just clean typography.
 function SegmentedPill<T extends string>({
     options,
     labels,
@@ -41,8 +42,10 @@ function SegmentedPill<T extends string>({
     return (
         <div style={{
             display: "inline-flex",
-            alignItems: "center",
-            gap: "12px", // Increased gap for better touch/click targets
+            backgroundColor: "rgba(26,26,24,0.04)",
+            borderRadius: "8px",
+            padding: "4px",
+            width: "fit-content",
         }}>
             {options.map((opt) => {
                 const active = opt === value;
@@ -51,76 +54,18 @@ function SegmentedPill<T extends string>({
                         key={opt}
                         onClick={() => onChange(opt)}
                         style={{
-                            padding: "4px 0",
+                            padding: "6px 16px",
                             border: "none",
-                            backgroundColor: "transparent",
+                            backgroundColor: active ? "#ffffff" : "transparent",
+                            boxShadow: active ? "0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)" : "none",
+                            borderRadius: "6px",
                             color: active ? "var(--color-charcoal)" : "var(--color-muted)",
                             fontFamily: "var(--font-sans)",
-                            fontSize: "0.75rem", // Slightly larger
-                            fontWeight: active ? 500 : 300,
-                            letterSpacing: "0.08em",
-                            cursor: "pointer",
-                            position: "relative",
-                            transition: "color 0.2s ease",
-                            lineHeight: 1.3,
-                        }}
-                    >
-                        {labels[opt]}
-                        {/* More elegant indicator: a small dot or thin bar below */}
-                        <span style={{
-                            position: "absolute",
-                            bottom: 0,
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            width: active ? "100%" : "0%",
-                            height: "1px",
-                            backgroundColor: "var(--color-charcoal)",
-                            transition: "width 0.3s ease",
-                        }} />
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
-// Dark variant — used in the mobile fullscreen menu (dark background)
-function SegmentedPillDark<T extends string>({
-    options,
-    labels,
-    value,
-    onChange,
-}: {
-    options: T[];
-    labels: Record<T, string>;
-    value: T;
-    onChange: (v: T) => void;
-}) {
-    return (
-        <div style={{
-            display: "inline-flex",
-            borderRadius: "20px",
-            border: "1px solid rgba(247,243,236,0.15)",
-            overflow: "hidden",
-            backgroundColor: "rgba(247,243,236,0.05)",
-        }}>
-            {options.map((opt) => {
-                const active = opt === value;
-                return (
-                    <button
-                        key={opt}
-                        onClick={() => onChange(opt)}
-                        style={{
-                            padding: "5px 14px",
-                            border: "none",
-                            backgroundColor: active ? "rgba(247,243,236,0.15)" : "transparent",
-                            color: active ? "#F7F3EC" : "rgba(247,243,236,0.4)",
-                            fontFamily: "var(--font-sans)",
-                            fontSize: "0.65rem",
+                            fontSize: "0.75rem",
                             fontWeight: active ? 500 : 400,
-                            letterSpacing: "0.1em",
+                            letterSpacing: "0.02em",
                             cursor: "pointer",
-                            transition: "background-color 0.2s ease, color 0.2s ease",
+                            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                         }}
                     >
                         {labels[opt]}
@@ -195,50 +140,44 @@ function PreferencesDropdown({
             }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: "200px" }}>
                     {/* Language Section */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                         <span style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: "0.6rem",
-                            color: "var(--color-muted)",
-                            letterSpacing: "0.1em",
-                            textTransform: "uppercase",
-                            opacity: 0.8
+                            fontFamily: "var(--font-sans)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-charcoal)",
+                            fontWeight: 500,
                         }}>
-                            01. Language
+                            Language
                         </span>
-                        <SegmentedPill<Language> options={["en", "uk", "ru"]} labels={LANGUAGE_LABELS} value={language} onChange={setLanguage} />
+                        <SegmentedPill<Language> options={["en", "uk"]} labels={LANGUAGE_LABELS} value={language} onChange={setLanguage} />
                     </div>
 
-                    <div style={{ height: "1px", backgroundColor: "var(--color-border)" }} />
+                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", opacity: 0.5 }} />
 
                     {/* Currency Section */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                         <span style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: "0.6rem",
-                            color: "var(--color-muted)",
-                            letterSpacing: "0.1em",
-                            textTransform: "uppercase",
-                            opacity: 0.8
+                            fontFamily: "var(--font-sans)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-charcoal)",
+                            fontWeight: 500,
                         }}>
-                            02. Currency
+                            Currency
                         </span>
-                        <SegmentedPill<Currency> options={["USD", "EUR", "UAH"]} labels={CURRENCY_LABELS} value={currency} onChange={setCurrency} />
+                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={CURRENCY_LABELS} value={currency} onChange={setCurrency} />
                     </div>
 
-                    <div style={{ height: "1px", backgroundColor: "var(--color-border)" }} />
+                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", opacity: 0.5 }} />
 
                     {/* Units Section */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                         <span style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: "0.6rem",
-                            color: "var(--color-muted)",
-                            letterSpacing: "0.1em",
-                            textTransform: "uppercase",
-                            opacity: 0.8
+                            fontFamily: "var(--font-sans)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-charcoal)",
+                            fontWeight: 500,
                         }}>
-                            03. Measurement
+                            Measurement
                         </span>
                         <SegmentedPill<Units> options={["cm", "in"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
                     </div>
@@ -252,8 +191,24 @@ export default function Navbar() {
     const [menuOpen, setMenuOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [authModalOpen, setAuthModalOpen] = useState(false);
+    const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+    const profileMenuRef = useRef<HTMLDivElement>(null);
     const pathname = usePathname();
     const { language, currency, units, setLanguage, setCurrency, setUnits } = usePreferences();
+    const { user, logout } = useUser();
+    const { cartCount, setIsCartOpen } = useCart();
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+                setProfileMenuOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
 
     useEffect(() => {
         const onScroll = () => setScrolled(window.scrollY > 20);
@@ -340,7 +295,7 @@ export default function Navbar() {
                                         href={link.href}
                                         style={{
                                             fontFamily: '"Didot", "Bodoni MT", "Times New Roman", serif',
-                                            fontSize: "clamp(0.95rem, 0.61rem + 0.54vw, 2rem)",
+                                            fontSize: "clamp(0.76rem, 0.49rem + 0.43vw, 1.6rem)",
                                             fontWeight: 400,
                                             letterSpacing: "0.08em",
                                             textTransform: "uppercase",
@@ -367,12 +322,115 @@ export default function Navbar() {
                                 currency={currency} setCurrency={setCurrency}
                                 units={units} setUnits={setUnits}
                             />
+
+                            <div ref={profileMenuRef} style={{ position: "relative" }}>
+                                <button
+                                    onClick={() => user ? setProfileMenuOpen(!profileMenuOpen) : setAuthModalOpen(true)}
+                                    style={{
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        background: "none", border: "none", cursor: "pointer",
+                                        color: (profileMenuOpen || user) ? "#FFFFFF" : "rgba(244,244,244,0.6)",
+                                        padding: "4px",
+                                        transition: "color 0.2s ease"
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#FFFFFF"; }}
+                                    onMouseLeave={(e) => { if (!profileMenuOpen && !user) e.currentTarget.style.color = "rgba(244,244,244,0.6)"; }}
+                                >
+                                    <UserCircle size={22} strokeWidth={1.5} />
+                                </button>
+
+                                {profileMenuOpen && user && (
+                                    <div style={{
+                                        position: "absolute", top: "100%", right: 0, marginTop: "16px",
+                                        backgroundColor: "var(--color-cream)", border: "1px solid var(--color-border)",
+                                        borderRadius: "12px", padding: "8px", minWidth: "150px",
+                                        display: "flex", flexDirection: "column", gap: "4px",
+                                        boxShadow: "0 8px 30px rgba(0,0,0,0.08)", zIndex: 100
+                                    }}>
+                                        <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--color-border)", marginBottom: "4px" }}>
+                                            <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 500, color: "var(--color-charcoal)" }}>
+                                                {user.username}
+                                            </span>
+                                            <span style={{ display: "block", fontSize: "0.7rem", color: "var(--color-muted)" }}>
+                                                {user.email}
+                                            </span>
+                                        </div>
+                                        <Link
+                                            href="/profile"
+                                            onClick={() => setProfileMenuOpen(false)}
+                                            style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                        >
+                                            {user.is_admin ? "Admin Dashboard" : "Dashboard"}
+                                        </Link>
+                                        <button
+                                            onClick={() => { logout(); setProfileMenuOpen(false); }}
+                                            style={{ textAlign: "left", padding: "8px 12px", fontSize: "0.85rem", color: "#E53E3E", background: "none", border: "none", cursor: "pointer", borderRadius: "8px" }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(244,0,0,0.05)"}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                        >
+                                            Sign out
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Cart Button Desktop */}
+                            <button
+                                onClick={() => setIsCartOpen(true)}
+                                style={{
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    background: "none", border: "none", cursor: "pointer",
+                                    color: "rgba(244,244,244,0.6)", padding: "4px",
+                                    transition: "color 0.2s ease", position: "relative"
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "#FFFFFF"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(244,244,244,0.6)"; }}
+                            >
+                                <ShoppingBag size={20} strokeWidth={1.5} stroke="currentColor" />
+                                {cartCount > 0 && (
+                                    <span style={{
+                                        position: "absolute", top: "0", right: "0",
+                                        background: "#E53E3E", color: "#FFFFFF",
+                                        fontSize: "0.6rem", fontWeight: 600, width: "16px", height: "16px",
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        borderRadius: "50%", transform: "translate(30%, -30%)"
+                                    }}>
+                                        {cartCount}
+                                    </span>
+                                )}
+                            </button>
                         </div>
                     )}
 
-                    {/* ── MOBILE: Minimalist Menu Button ── */}
+                    {/* ── MOBILE: Minimalist Menu Button + Cart ── */}
                     {isMobile && (
-                        <button
+                        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                            {/* Cart Button Mobile */}
+                            <button
+                                onClick={() => setIsCartOpen(true)}
+                                style={{
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    background: "none", border: "none", cursor: "pointer",
+                                    color: "#F4F4F4", padding: "4px", position: "relative"
+                                }}
+                            >
+                                <ShoppingBag size={20} strokeWidth={1.5} stroke="currentColor" />
+                                {cartCount > 0 && (
+                                    <span style={{
+                                        position: "absolute", top: "0", right: "0",
+                                        background: "#E53E3E", color: "#FFFFFF",
+                                        fontSize: "0.6rem", fontWeight: 600, width: "16px", height: "16px",
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        borderRadius: "50%", transform: "translate(30%, -30%)"
+                                    }}>
+                                        {cartCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            <button
                             onClick={() => setMenuOpen((p) => !p)}
                             aria-label={menuOpen ? "Close menu" : "Open menu"}
                             style={{
@@ -406,104 +464,104 @@ export default function Navbar() {
                                 ))}
                             </div>
                         </button>
+                        </div>
                     )}
                 </nav>
             </header>
 
-            {/* ── MOBILE FULL-SCREEN MENU ─────────────────────────────── */}
+            {/* ── MOBILE DRAWER MENU ─────────────────────────────── */}
+            {/* Backdrop */}
+            <div
+                onClick={() => setMenuOpen(false)}
+                style={{
+                    position: "fixed",
+                    top: "70px", left: 0, right: 0, bottom: 0,
+                    backgroundColor: "rgba(26,26,24,0.3)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    zIndex: 98,
+                    opacity: menuOpen ? 1 : 0,
+                    pointerEvents: menuOpen ? "auto" : "none",
+                    transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+                }}
+            />
+            {/* Drawer */}
             <div
                 style={{
                     position: "fixed",
-                    top: "70px", left: 0, right: 0, bottom: 0, // Match new height
+                    top: "70px", right: 0, bottom: 0,
+                    width: "75%", maxWidth: "340px",
                     zIndex: 99,
-                    backgroundColor: "#1C1916",
-                    opacity: menuOpen ? 1 : 0,
-                    transform: menuOpen ? "translateY(0)" : "translateY(-6px)",
+                    backgroundColor: "#FAFAF8", // Extremely light cream
+                    borderLeft: "1px solid rgba(26,26,24,0.06)",
+                    boxShadow: "-10px 0 40px rgba(0,0,0,0.06)",
+                    transform: menuOpen ? "translateX(0)" : "translateX(100%)",
                     pointerEvents: menuOpen ? "auto" : "none",
-                    transition: "opacity 0.3s ease, transform 0.3s ease",
+                    transition: "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
                     display: "flex",
                     flexDirection: "column",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                    padding: "2rem",
+                    padding: "2.5rem 2rem",
+                    overflowY: "auto",
                 }}
             >
-                {NAV_LINKS.map((link, i) => {
-                    const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
-                    return (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            onClick={() => setMenuOpen(false)}
-                            style={{
-                                display: "block",
-                                textAlign: "center",
-                                padding: "0.75rem 2rem",
-                                fontFamily: "var(--font-serif)",
-                                fontSize: "1.6rem",
-                                fontWeight: 400,
-                                fontStyle: "italic",
-                                letterSpacing: "-0.01em",
-                                textDecoration: "none",
-                                color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.55)",
-                                borderBottom: isActive ? "1px solid rgba(255,255,255,0.3)" : "1px solid transparent",
-                                opacity: menuOpen ? 1 : 0,
-                                transform: menuOpen ? "translateY(0)" : "translateY(10px)",
-                                transition: `opacity 0.4s ease ${i * 0.08}s, transform 0.4s ease ${i * 0.08}s`,
-                            }}
-                        >
-                            {link.label}
-                        </Link>
-                    );
-                })}
-
-                {/* ── Preference switchers in mobile menu ── */}
-                <div style={{
-                    position: "absolute",
-                    bottom: "5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.6rem",
-                    opacity: menuOpen ? 1 : 0,
-                    transition: "opacity 0.4s ease 0.3s",
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
-                        <SegmentedPillDark<Language>
-                            options={["en", "uk", "ru"]}
-                            labels={LANGUAGE_LABELS}
-                            value={language}
-                            onChange={setLanguage}
-                        />
-                        <SegmentedPillDark<Currency>
-                            options={["USD", "EUR", "UAH"]}
-                            labels={CURRENCY_LABELS}
-                            value={currency}
-                            onChange={setCurrency}
-                        />
-                        <SegmentedPillDark<Units>
-                            options={["cm", "in"]}
-                            labels={UNITS_LABELS}
-                            value={units}
-                            onChange={setUnits}
-                        />
-                    </div>
+                {/* Links */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    {NAV_LINKS.map((link, i) => {
+                        const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+                        return (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                onClick={() => setMenuOpen(false)}
+                                style={{
+                                    display: "block",
+                                    padding: "0.5rem 0",
+                                    fontFamily: "var(--font-sans)",
+                                    fontSize: "1.45rem",
+                                    fontWeight: isActive ? 500 : 300,
+                                    letterSpacing: "0.02em",
+                                    textDecoration: "none",
+                                    color: isActive ? "var(--color-charcoal)" : "var(--color-charcoal-mid)",
+                                    transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                    opacity: menuOpen ? 1 : 0,
+                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05 + 0.15}s`,
+                                }}
+                            >
+                                {link.label}
+                            </Link>
+                        );
+                    })}
                 </div>
 
-                <p style={{
-                    position: "absolute",
-                    bottom: "2.5rem",
-                    fontFamily: "var(--font-serif)",
-                    fontStyle: "italic",
-                    fontSize: "0.8rem",
-                    color: "var(--color-muted)",
-                    opacity: menuOpen ? 0.6 : 0,
-                    transition: "opacity 0.4s ease 0.28s",
+                {/* Preferences at bottom */}
+                <div style={{
+                    marginTop: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1.25rem",
+                    borderTop: "1px solid rgba(26,26,24,0.08)",
+                    paddingTop: "2rem",
+                    opacity: menuOpen ? 1 : 0,
+                    transform: menuOpen ? "translateY(0)" : "translateY(15px)",
+                    transition: "opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s",
                 }}>
-                    Original Paintings &amp; Fine Art Prints
-                </p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Language</span>
+                        <SegmentedPill<Language> options={["en", "uk"]} labels={LANGUAGE_LABELS} value={language} onChange={setLanguage} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Currency</span>
+                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={CURRENCY_LABELS} value={currency} onChange={setCurrency} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Units</span>
+                        <SegmentedPill<Units> options={["cm", "in"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
+                    </div>
+                </div>
             </div>
+
+            {/* Auth Modal */}
+            <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
             {/* Spacer */}
             <div style={{ height: "70px" }} />

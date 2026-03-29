@@ -1,23 +1,46 @@
-# === СТАДИЯ 1: Базовый образ и зависимости ===
+# === STAGE 1: Base — install dependencies ===
 FROM node:20-alpine AS base
 WORKDIR /app
 
-# Копируем ИСКЛЮЧИТЕЛЬНО файлы конфигурации пакетов (магия кеширования, помнишь?)
-# package-lock.json критически важен для воспроизводимости версий
 COPY package.json package-lock.json ./
-
-# Устанавливаем зависимости чисто (ci = clean install)
-# Это быстрее и надежнее, чем обычный npm install
 RUN npm ci
 
-# === СТАДИЯ 2: Среда для локальной разработки ===
-# Мы используем её в docker-compose.yml для Hot Reloading
+# === STAGE 2: Development (hot reload via volume mount) ===
 FROM base AS development
 WORKDIR /app
-
-# Мы НЕ копируем код здесь через COPY,
-# потому что локальный код будет "пробрасываться" через volume в docker-compose.yml,
-# чтобы React (Next.js) видел твои сохранения файлов в реальном времени.
-
-# Просто задаем дефолтную команду запуска сервера разработки
+# Code is mounted via docker-compose volume — not copied here.
 CMD ["npm", "run", "dev"]
+
+# === STAGE 3: Production build ===
+FROM base AS builder
+WORKDIR /app
+
+# Copy all source code for the build
+COPY . .
+
+# Build-time env (Next.js inlines NEXT_PUBLIC_* at build time)
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+RUN npm run build
+
+# === STAGE 4: Production runtime (minimal image) ===
+FROM node:20-alpine AS production
+WORKDIR /app
+
+# Security: non-root user
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser  --system --uid 1001 nextjs
+
+# Copy only what's needed to run
+COPY --from=builder /app/public        ./public
+COPY --from=builder /app/.next         ./.next
+COPY --from=builder /app/node_modules  ./node_modules
+COPY --from=builder /app/package.json  ./package.json
+COPY --from=builder /app/next.config.ts ./next.config.ts
+
+USER nextjs
+EXPOSE 3000
+
+ENV NODE_ENV=production
+CMD ["npm", "start"]

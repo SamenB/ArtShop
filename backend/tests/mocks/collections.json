@@ -1,22 +1,22 @@
 [
     {
         "title": "Modern Art Collection",
-        "location": "New York"
+        "bg_color": "#1a1a2e"
     },
     {
         "title": "Classical Paintings",
-        "location": "Paris"
+        "bg_color": "#16213e"
     },
     {
         "title": "Street Art Gallery",
-        "location": "Berlin"
+        "bg_color": "#0f3460"
     },
     {
         "title": "Photography Exhibition",
-        "location": "Tokyo"
+        "bg_color": "#533483"
     },
     {
         "title": "Digital Art Showcase",
-        "location": "San Francisco"
+        "bg_color": "#e94560"
     }
 ]

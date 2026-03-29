@@ -1,12 +1,16 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
+from sqlalchemy import JSON, BigInteger, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, BigInteger, ForeignKey, JSON
+
 from src.database import Base
 
 if TYPE_CHECKING:
+    from src.models.collections import CollectionsOrm
     from src.models.tags import TagsOrm
+    from src.models.users import UsersOrm
 
 
 class ArtworksOrm(Base):
@@ -21,16 +25,31 @@ class ArtworksOrm(Base):
         default="available",
         server_default="available",
     )
-    print_price: Mapped[int | None] = mapped_column(default=None)
+    year: Mapped[int | None] = mapped_column(default=None)
+    materials: Mapped[str | None] = mapped_column(String(200), default=None)
+    style: Mapped[str | None] = mapped_column(String(100), default=None)
+    width_cm: Mapped[float | None] = mapped_column(default=None)
+    height_cm: Mapped[float | None] = mapped_column(default=None)
+    depth_cm: Mapped[float | None] = mapped_column(default=None)
+    width_in: Mapped[float | None] = mapped_column(default=None)
+    height_in: Mapped[float | None] = mapped_column(default=None)
+    depth_in: Mapped[float | None] = mapped_column(default=None)
     prints_total: Mapped[int] = mapped_column(default=27)
     prints_available: Mapped[int] = mapped_column(default=27)
-    images: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    images: Mapped[list[str | dict] | None] = mapped_column(JSON, nullable=True)
+    collection_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("collections.id"), nullable=True
+    )
+
+    collection: Mapped["CollectionsOrm"] = relationship(back_populates="artworks")
 
     tags: Mapped[list["TagsOrm"]] = relationship(
         secondary="artwork_tags", back_populates="artworks"
     )
 
+    liked_by_users: Mapped[list["UsersOrm"]] = relationship(
+        secondary="user_likes", back_populates="liked_artworks"
+    )
+
     def __str__(self):
         return self.title
-
-

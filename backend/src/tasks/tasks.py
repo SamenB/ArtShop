@@ -1,14 +1,15 @@
 # src/tasks/tasks.py
-from PIL import Image
-from pathlib import Path
 import asyncio
-from sqlalchemy import update
-from loguru import logger
+from pathlib import Path
 
-from src.tasks.celery_app import celery_instance
-from src.models.artworks import ArtworksOrm
-from src.utils.db_manager import DBManager
+from loguru import logger
+from PIL import Image
+from sqlalchemy import update
+
 from src.database import new_session_null_pool
+from src.models.artworks import ArtworksOrm
+from src.tasks.celery_app import celery_instance
+from src.utils.db_manager import DBManager
 
 
 def run_async(coro):
@@ -26,7 +27,7 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
     logger.info("Processing images for {} id={}", model_type, model_id)
     output_dir = Path("static/images")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     final_paths = []
 
     try:
@@ -34,46 +35,55 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
             file_path = Path(temp_file_path)
             if not file_path.exists():
                 continue
-                
+
             with Image.open(file_path) as img:
                 # Convert to RGB if saving to WebP and mode is RGBA with transparency
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    alpha = img.convert('RGBA').split()[-1]
+                if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                    alpha = img.convert("RGBA").split()[-1]
                     bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
                     bg.paste(img, mask=alpha)
-                    img = bg.convert('RGB')
-                elif img.mode != 'RGB':
-                    img = img.convert('RGB')
+                    img = bg.convert("RGB")
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
 
                 prefix = f"{model_type}_{model_id}_{idx}"
-                original_name = f"{prefix}_original.webp"
-                img.save(output_dir / original_name, format="WEBP", quality=85)
 
-                img.thumbnail((800, 800))
+                # 1. Original (High Quality)
+                original_name = f"{prefix}_original.webp"
+                img.save(output_dir / original_name, format="WEBP", quality=92)
+
+                # 2. Medium (Max 1200px)
+                medium_img = img.copy()
+                medium_img.thumbnail((1200, 1200))
+                medium_name = f"{prefix}_medium.webp"
+                medium_img.save(output_dir / medium_name, format="WEBP", quality=82)
+
+                # 3. Thumb (Max 400px)
+                thumb_img = img.copy()
+                thumb_img.thumbnail((400, 400))
                 thumb_name = f"{prefix}_thumb.webp"
-                img.save(output_dir / thumb_name, format="WEBP", quality=85)
-                
-                final_paths.extend([
-                    f"/static/images/{original_name}",
-                    f"/static/images/{thumb_name}",
-                ])
-                
+                thumb_img.save(output_dir / thumb_name, format="WEBP", quality=75)
+
+                final_paths.append(
+                    {
+                        "original": f"/static/images/{original_name}",
+                        "medium": f"/static/images/{medium_name}",
+                        "thumb": f"/static/images/{thumb_name}",
+                    }
+                )
+
             file_path.unlink(missing_ok=True)
 
         async def update_db():
             async with new_session_null_pool() as session:
                 orm_model = ArtworksOrm
-                stmt = (
-                    update(orm_model)
-                    .where(orm_model.id == model_id)
-                    .values(images=final_paths)
-                )
+                stmt = update(orm_model).where(orm_model.id == model_id).values(images=final_paths)
                 await session.execute(stmt)
                 await session.commit()
 
         if final_paths:
             run_async(update_db())
-            
+
         logger.info(
             "Images processed for {} id={}: paths={}",
             model_type,

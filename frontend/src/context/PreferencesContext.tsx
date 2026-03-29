@@ -14,11 +14,12 @@
 // 4. Values are saved to localStorage so they persist across page reloads
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { getApiUrl } from "@/utils";
 
 // Supported languages — extend this list as translations are added
-export type Language = "en" | "uk" | "ru";
+export type Language = "en" | "uk";
 // Supported currencies
-export type Currency = "USD" | "EUR" | "UAH";
+export type Currency = "USD" | "UAH";
 // Measurement units
 export type Units = "cm" | "in";
 
@@ -30,18 +31,19 @@ interface PreferencesContextType {
     setLanguage: (lang: Language) => void;
     setCurrency: (cur: Currency) => void;
     setUnits: (u: Units) => void;
+    rates: Record<Currency, number>;
+    convertPrice: (usdPrice: number) => string;
+    globalPrintPrice: number;
 }
 
 // Labels for display in the UI
 export const LANGUAGE_LABELS: Record<Language, string> = {
-    en: "EN",
-    uk: "UA",
-    ru: "RU",
+    en: "🇬🇧 EN",
+    uk: "🇺🇦 UA",
 };
 
 export const CURRENCY_LABELS: Record<Currency, string> = {
     USD: "$",
-    EUR: "€",
     UAH: "₴",
 };
 
@@ -70,6 +72,46 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     const [currency, setCurrencyState] = useState<Currency>(DEFAULTS.currency);
     const [units, setUnitsState] = useState<Units>(DEFAULTS.units);
     const [loaded, setLoaded] = useState(false);
+    const [rates, setRates] = useState<Record<Currency, number>>({
+        USD: 1,
+        UAH: 39.5,
+    });
+    const [globalPrintPrice, setGlobalPrintPrice] = useState<number>(150);
+
+    // Fetch site settings (for global print price, etc.)
+    useEffect(() => {
+        async function fetchSettings() {
+            try {
+                const res = await fetch(`${getApiUrl()}/settings`);
+                const data = await res.json();
+                if (data && data.global_print_price) {
+                    setGlobalPrintPrice(data.global_print_price);
+                }
+            } catch (err) {
+                console.error("Failed to fetch settings:", err);
+            }
+        }
+        fetchSettings();
+    }, []);
+
+    // Fetch live currency rates on mount
+    useEffect(() => {
+        async function fetchRates() {
+            try {
+                const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+                const data = await res.json();
+                if (data && data.rates) {
+                    setRates({
+                        USD: 1,
+                        UAH: data.rates.UAH || 39.5,
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to fetch rates, using fallbacks:", err);
+            }
+        }
+        fetchRates();
+    }, []);
 
     // On mount: read saved preferences from localStorage
     // useEffect runs only on the client (not during SSR) — safe to access localStorage
@@ -104,8 +146,22 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     const setCurrency = (cur: Currency) => setCurrencyState(cur);
     const setUnits = (u: Units) => setUnitsState(u);
 
+    // Helper to format price according to current currency and fetched rates
+    const convertPrice = (usdPrice: number) => {
+        const rate = rates[currency] || 1;
+        const converted = usdPrice * rate;
+        
+        let formatted = new Intl.NumberFormat(language === "uk" ? "uk-UA" : "en-US", {
+            style: "decimal",
+            maximumFractionDigits: 0,
+        }).format(converted);
+
+        const symbol = CURRENCY_LABELS[currency] || "$";
+        return `${symbol}${formatted}`;
+    };
+
     return (
-        <PreferencesContext.Provider value={{ language, currency, units, setLanguage, setCurrency, setUnits }}>
+        <PreferencesContext.Provider value={{ language, currency, units, setLanguage, setCurrency, setUnits, rates, convertPrice, globalPrintPrice }}>
             {children}
         </PreferencesContext.Provider>
     );

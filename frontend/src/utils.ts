@@ -1,0 +1,41 @@
+const ENV_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+export const getApiUrl = (serverHost?: string) => {
+    // If we are in the browser, use exact window.location.hostname
+    if (typeof window !== "undefined") {
+        const apiHost = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
+        const url = `http://${apiHost}:8000`;
+        return url;
+    }
+    // If we are in SSR and a host was provided (e.g., from headers() in a Server Component)
+    if (serverHost) {
+        // Strip out the port if present (e.g., "192.168.0.x:3000" -> "192.168.0.x")
+        const cleanHost = serverHost.split(':')[0];
+        return `http://${cleanHost}:8000`;
+    }
+    
+    // Fallback for SSR where no host is available
+    return ENV_API_URL;
+};
+
+export const getImageUrl = (
+    image: string | { thumb?: string; medium?: string; original?: string } | null | undefined, 
+    prefer: 'thumb' | 'medium' | 'original' = 'medium',
+    serverHost?: string
+) => {
+    if (!image) return undefined;
+    
+    let path: string | undefined;
+    if (typeof image === 'string') {
+        path = image;
+    } else {
+        path = image[prefer] || image.medium || image.original || image.thumb;
+    }
+
+    if (!path) return undefined;
+    // Always return relative path for static files so Next.js can proxy and cache HTML statically.
+    if (path.startsWith("/static")) return path;
+    
+    if (!path.startsWith("/")) return path;
+    return `${getApiUrl(serverHost)}${path}`;
+};

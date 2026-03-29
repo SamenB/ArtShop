@@ -1,5 +1,5 @@
-async def test_add_tags(ac):
-    tags = await ac.post(
+async def test_add_tags(authenticated_ac):
+    tags = await authenticated_ac.post(
         "/tags",
         json={
             "title": "Test Tag 2",

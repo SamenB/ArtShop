@@ -1,7 +1,8 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from src.config import settings
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
+
+from src.config import settings
 
 db_params = {}
 if settings.MODE == "TEST":

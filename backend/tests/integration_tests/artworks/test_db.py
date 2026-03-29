@@ -1,15 +1,14 @@
 import pytest
-from datetime import date
 
+from src.models.orders import OrderItemOrm, OrdersOrm
 from src.schemas.orders import OrderAdd
-
 
 # ============ FIXTURES ============
 
 
 @pytest.fixture(scope="function")
 async def test_ids(db):
-    """Fixture: returns (user_id, artwork_id, collection_id) for tests."""
+    """Fixture: returns (user_id, artwork_id) for tests."""
     user_id = (await db.users.get_all())[0].id
     artwork_id = (await db.artworks.get_all())[0].id
     return user_id, artwork_id
@@ -20,30 +19,39 @@ async def sample_order(db, test_ids):
     """Fixture: creates and returns an order for tests that need existing data."""
     user_id, artwork_id = test_ids
 
-    order_data = OrderAdd(
+    # Using ORM for direct relationship insertion in tests
+    order_orm = OrdersOrm(
         user_id=user_id,
-        artwork_id=artwork_id,
-        edition_type="original",
-        price=2000,
+        first_name="Test",
+        last_name="User",
+        email="test@user.com",
+        phone="12345678",
+        total_price=2000,
     )
-
-    created = await db.orders.add(order_data)
+    item_orm = OrderItemOrm(
+        artwork_id=artwork_id, edition_type="original", finish="none", price=2000
+    )
+    order_orm.items = [item_orm]
+    db.session.add(order_orm)
     await db.commit()
-    return created
+    return order_orm
 
 
 # ============ TESTS ============
 
 
 async def test_create_order(db, test_ids):
-    """Test order creation."""
-    user_id, artwork_id = test_ids
+    """Test order creation using repository (only main order record)."""
+    user_id, _ = test_ids
 
     order_data = OrderAdd(
         user_id=user_id,
-        artwork_id=artwork_id,
-        edition_type="original",
-        price=1500,
+        first_name="New",
+        last_name="Order",
+        email="new@order.com",
+        phone="123456",
+        total_price=1500,
+        items=[],  # relationships handled separately
     )
 
     result = await db.orders.add(order_data)
@@ -51,7 +59,7 @@ async def test_create_order(db, test_ids):
 
     assert result.id is not None
     assert result.user_id == user_id
-    assert result.price == 1500
+    assert result.total_price == 1500
 
 
 async def test_read_order(db, sample_order):
@@ -60,7 +68,7 @@ async def test_read_order(db, sample_order):
 
     assert fetched is not None
     assert fetched.id == sample_order.id
-    assert fetched.price == sample_order.price
+    assert fetched.total_price == sample_order.total_price
 
 
 async def test_update_order(db, sample_order, test_ids):
@@ -69,9 +77,12 @@ async def test_update_order(db, sample_order, test_ids):
 
     update_data = OrderAdd(
         user_id=user_id,
-        artwork_id=artwork_id,
-        edition_type="original",
-        price=5000,
+        first_name="Updated",
+        last_name="Name",
+        email="test@user.com",
+        phone="12345678",
+        total_price=5000,
+        items=[],
     )
 
     await db.orders.edit(update_data, id=sample_order.id)
@@ -79,14 +90,16 @@ async def test_update_order(db, sample_order, test_ids):
 
     updated = await db.orders.get_one_or_none(id=sample_order.id)
 
-    assert updated.price == 5000
+    assert updated.total_price == 5000
+    assert updated.first_name == "Updated"
 
 
 async def test_delete_order(db, sample_order):
-    """Test deleting order."""
+    """Test deleting order. Requires deleting items first due to foreign keys."""
     order_id = sample_order.id
 
     # Delete
+    await db.order_items.delete(order_id=order_id)
     await db.orders.delete(id=order_id)
     await db.commit()
 

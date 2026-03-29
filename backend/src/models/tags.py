@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import BigInteger, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.database import Base
-from sqlalchemy import String, BigInteger
 
 if TYPE_CHECKING:
     from src.models.artworks import ArtworksOrm
@@ -18,7 +18,6 @@ class TagsOrm(Base):
 
     def __str__(self):
         return self.title
-
 
     artworks: Mapped[list["ArtworksOrm"]] = relationship(
         secondary="artwork_tags", back_populates="tags"

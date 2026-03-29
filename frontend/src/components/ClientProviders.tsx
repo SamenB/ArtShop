@@ -10,12 +10,22 @@
 // So we create this thin wrapper to hold all our client-side providers.
 
 import { PreferencesProvider } from "@/context/PreferencesContext";
+import { UserProvider } from "@/context/UserContext";
+import { CartProvider } from "@/context/CartContext";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { type ReactNode } from "react";
 
 export default function ClientProviders({ children }: { children: ReactNode }) {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID";
     return (
-        <PreferencesProvider>
-            {children}
-        </PreferencesProvider>
+        <GoogleOAuthProvider clientId={clientId}>
+            <PreferencesProvider>
+                <CartProvider>
+                    <UserProvider>
+                        {children}
+                    </UserProvider>
+                </CartProvider>
+            </PreferencesProvider>
+        </GoogleOAuthProvider>
     );
 }

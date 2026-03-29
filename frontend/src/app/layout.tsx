@@ -14,6 +14,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ClientProviders from "@/components/ClientProviders";
+import CartDrawer from "@/components/CartDrawer";
+import ImagePreloader from "@/components/ImagePreloader";
 
 // Metadata is a Next.js feature for SEO.
 // These values appear in the browser tab and Google search results.
@@ -71,6 +73,8 @@ export default function RootLayout({
 
             {/* Footer appears at the bottom of EVERY page */}
             <Footer />
+            <CartDrawer />
+            <ImagePreloader />
           </div>
         </ClientProviders>
       </body>

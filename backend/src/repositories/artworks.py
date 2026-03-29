@@ -1,11 +1,11 @@
-from datetime import date
-from src.repositories.base import BaseRepository
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
+
 from src.models.artworks import ArtworksOrm
 from src.models.tags import TagsOrm
-from src.repositories.utils import available_artwork_ids
-from sqlalchemy.orm import joinedload
-from sqlalchemy import select
+from src.repositories.base import BaseRepository
 from src.repositories.mappers.mappers import ArtworkMapper
+from src.repositories.utils import available_artwork_ids
 from src.schemas.artworks import ArtworkWithTags
 
 
@@ -14,14 +14,14 @@ class ArtworksRepository(BaseRepository):
     mapper = ArtworkMapper
     """
     with artworks_count as (
-        select artwork_id, count(*) as artworks_ordered from orders 
+        select artwork_id, count(*) as artworks_ordered from orders
         where check_in_date  <= :date_to
         and check_out_date >= :date_from
         group by artwork_id
     ),
     available_artworks as(
         select artworks.id as artwork_id, quantity - coalesce(artworks_ordered, 0) as artworks_available from artworks
-        left join artworks_count on artworks.id = artworks_count.artwork_id 
+        left join artworks_count on artworks.id = artworks_count.artwork_id
 
     )
     select * from available_artworks
@@ -30,7 +30,13 @@ class ArtworksRepository(BaseRepository):
     )
     """
 
-    async def get_available_artworks(self, limit: int = 10, offset: int = 0, title: str | None = None, tags: list[int] | None = None):
+    async def get_available_artworks(
+        self,
+        limit: int = 10,
+        offset: int = 0,
+        title: str | None = None,
+        tags: list[int] | None = None,
+    ):
         artworks_ids_to_get = available_artwork_ids()
 
         query = (
@@ -41,7 +47,7 @@ class ArtworksRepository(BaseRepository):
 
         if title:
             query = query.filter(self.model.title.ilike(f"%{title}%"))
-            
+
         if tags:
             query = query.filter(self.model.tags.any(TagsOrm.id.in_(tags)))
 

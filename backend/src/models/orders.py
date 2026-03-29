@@ -1,27 +1,58 @@
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
-from datetime import datetime
-from sqlalchemy import DateTime, Integer, ForeignKey, func, String
 
 
 class OrdersOrm(Base):
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
-    edition_type: Mapped[str] = mapped_column(String(20))
-    price: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Guest & Contact Info
+    first_name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[str] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(200))
+    phone: Mapped[str] = mapped_column(String(50))
+
+    # Marketing & Discovery
+    newsletter_opt_in: Mapped[bool] = mapped_column(default=False)
+    discovery_source: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Order Specifics
+    promo_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    total_price: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
+    # Payment
+    payment_status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending, paid, failed, mock_paid
+    invoice_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    payment_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     user: Mapped["UsersOrm"] = relationship("UsersOrm")
-    artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm")
-
-
-    @property
-    def total_price(self) -> int:
-        return self.price
+    items: Mapped[list["OrderItemOrm"]] = relationship(
+        "OrderItemOrm", back_populates="order", lazy="selectin"
+    )
 
     def __str__(self):
-        return f"Order #{self.id}"
+        return f"Order #{self.id} ({self.email})"
 
+
+class OrderItemOrm(Base):
+    __tablename__ = "order_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"))
+    artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
+
+    edition_type: Mapped[str] = mapped_column(String(20))  # 'original' or 'print'
+    finish: Mapped[str] = mapped_column(String(50))  # 'Rolled' or 'Framed'
+    size: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    price: Mapped[int] = mapped_column(Integer)
+
+    order: Mapped["OrdersOrm"] = relationship("OrdersOrm", back_populates="items")
+    artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm")

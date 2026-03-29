@@ -23,7 +23,7 @@ down:
 
 # Start FastAPI backend with hot reload
 api:
-	cd backend && $(ACTIVATE) && uvicorn src.main:app --reload
+	cd backend && $(ACTIVATE) && uvicorn src.main:app --host 0.0.0.0 --reload
 
 # Start Celery worker (-P solo required on Windows, not needed on Mac/Linux)
 ifeq ($(OS),Windows_NT)
@@ -36,7 +36,7 @@ endif
 
 # Start Celery beat scheduler (runs periodic tasks)
 beat:
-	cd backend && $(ACTIVATE) && celery -A src.tasks.celery_app:celery_instance beat --loglevel=info
+	cd backend && $(ACTIVATE) && celery -A src.tasks.celery_app:celery_instance beat --loglevel=info -s temp/celerybeat-schedule
 
 # Start Next.js frontend
 frontend:

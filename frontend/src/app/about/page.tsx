@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiUrl, getImageUrl } from "@/utils";
 
 export default function AboutPage() {
     const [isVisible, setIsVisible] = useState(false);
+    const [settings, setSettings] = useState<any>(null);
 
     useEffect(() => {
         setIsVisible(true);
+        fetch(`${getApiUrl()}/settings`)
+            .then(res => res.json())
+            .then(data => setSettings(data))
+            .catch(console.error);
     }, []);
 
     return (
@@ -45,7 +51,7 @@ export default function AboutPage() {
                         }}>
                             {/* Placeholder for generated image */}
                             <img
-                                src="/artist_studio_portrait.png"
+                                src={settings?.artist_photo_url ? getImageUrl(settings.artist_photo_url) : "/artist_studio_portrait.png"}
                                 alt="Artist in Studio"
                                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                 onError={(e) => {
@@ -71,9 +77,9 @@ export default function AboutPage() {
                             </h3>
                             <p style={{
                                 fontFamily: "var(--font-sans)", fontSize: "1rem", color: "var(--color-charcoal-mid)",
-                                lineHeight: 1.8, marginBottom: "1.5rem", fontWeight: 300
+                                lineHeight: 1.8, marginBottom: "1.5rem", fontWeight: 300, whiteSpace: "pre-wrap"
                             }}>
-                                Based on the belief that art is a bridge between the seen and the felt, my work focuses on the subtle interplay of light and texture. Born from a fascination with the natural world, each painting is an exploration of memory and atmosphere.
+                                {settings?.about_text || "Based on the belief that art is a bridge between the seen and the felt, my work focuses on the subtle interplay of light and texture. Born from a fascination with the natural world, each painting is an exploration of memory and atmosphere."}
                             </p>
                             <p style={{
                                 fontFamily: "var(--font-sans)", fontSize: "1rem", color: "var(--color-charcoal-mid)",

@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from src.services.tags import TagService
+
+import pytest
+
 from src.schemas.tags import TagAdd
+from src.services.tags import TagService
+
 
 class MockDBManager:
     def __init__(self):
@@ -9,10 +12,12 @@ class MockDBManager:
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
 
+
 @pytest.fixture
 def tag_service():
     service = TagService(MockDBManager())
     return service
+
 
 @pytest.mark.asyncio
 async def test_create_tag(tag_service):

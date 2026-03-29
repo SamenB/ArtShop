@@ -4,8 +4,7 @@
         "description": "Oil on canvas",
         "is_display_only": false,
         "original_price": 10000,
-        "is_original_available": true,
-        "print_price": 1000,
+        "original_status": "available",
         "prints_total": 27,
         "prints_available": 27,
         "collection_id": 1
@@ -15,8 +14,7 @@
         "description": "High quality print",
         "is_display_only": false,
         "original_price": null,
-        "is_original_available": false,
-        "print_price": 5000,
+        "original_status": "sold",
         "prints_total": 100,
         "prints_available": 1,
         "collection_id": 2
@@ -26,8 +24,7 @@
         "description": "Spray paint on wall",
         "is_display_only": false,
         "original_price": 3000,
-        "is_original_available": true,
-        "print_price": 300,
+        "original_status": "available",
         "prints_total": 27,
         "prints_available": 5,
         "collection_id": 3
@@ -37,8 +34,7 @@
         "description": "Landscape photography",
         "is_display_only": false,
         "original_price": 1500,
-        "is_original_available": true,
-        "print_price": 150,
+        "original_status": "available",
         "prints_total": 50,
         "prints_available": 10,
         "collection_id": 4
@@ -48,8 +44,7 @@
         "description": "AI generated art",
         "is_display_only": false,
         "original_price": 2000,
-        "is_original_available": true,
-        "print_price": null,
+        "original_status": "available",
         "prints_total": 0,
         "prints_available": 0,
         "collection_id": 5
@@ -59,8 +54,7 @@
         "description": "Impressionist painting",
         "is_display_only": true,
         "original_price": 8000,
-        "is_original_available": true,
-        "print_price": 800,
+        "original_status": "available",
         "prints_total": 27,
         "prints_available": 2,
         "collection_id": 1
@@ -70,8 +64,7 @@
         "description": "Museum quality replica",
         "is_display_only": false,
         "original_price": 7000,
-        "is_original_available": true,
-        "print_price": 700,
+        "original_status": "available",
         "prints_total": 27,
         "prints_available": 4,
         "collection_id": 2

@@ -10,8 +10,18 @@ README.md
 # Локальные базы данных (если появятся в корне)
 *.sqlite3
 
+# Секреты
+.env
+.env*
+frontend/.env*
+backend/.env*
+
 # Вложенные игнор-файлы обработают свои папки
 # Но для подстраховки можно добавить:
 backend/venv/
 frontend/node_modules/
 frontend/.next/
+
+# CI/CD and Nginx (not needed in container builds)
+.github/
+nginx/

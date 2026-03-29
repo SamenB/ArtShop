@@ -1,12 +1,14 @@
-from src.repositories.mappers.base import DataMapper
-from src.models.users import UsersOrm
 from src.models.artworks import ArtworksOrm
-from src.models.tags import TagsOrm, ArtworkTagsOrm
-from src.models.orders import OrdersOrm
-from src.schemas.users import User
+from src.models.collections import CollectionsOrm
+from src.models.orders import OrderItemOrm, OrdersOrm
+from src.models.tags import ArtworkTagsOrm, TagsOrm
+from src.models.users import UsersOrm
+from src.repositories.mappers.base import DataMapper
 from src.schemas.artworks import Artwork
-from src.schemas.tags import Tag, ArtworkTag
-from src.schemas.orders import Order
+from src.schemas.collections import Collection
+from src.schemas.orders import Order, OrderItem
+from src.schemas.tags import ArtworkTag, Tag
+from src.schemas.users import User
 
 
 class UserMapper(DataMapper):
@@ -32,3 +34,13 @@ class ArtworkTagMapper(DataMapper):
 class OrderMapper(DataMapper):
     db_model = OrdersOrm
     schema = Order
+
+
+class OrderItemMapper(DataMapper):
+    db_model = OrderItemOrm
+    schema = OrderItem
+
+
+class CollectionMapper(DataMapper):
+    db_model = CollectionsOrm
+    schema = Collection

@@ -1,12 +1,14 @@
 from typing import Any, Sequence
-from sqlalchemy import select, insert, update, delete
-from sqlalchemy.exc import NoResultFound, IntegrityError
-from pydantic import BaseModel
+
 from asyncpg import UniqueViolationError
-from src.repositories.mappers.base import DataMapper
-from src.database import Base
-from src.exeptions import ObjectNotFoundException, ObjectAlreadyExistsException
 from loguru import logger
+from pydantic import BaseModel
+from sqlalchemy import delete, insert, select, update
+from sqlalchemy.exc import IntegrityError, NoResultFound
+
+from src.database import Base
+from src.exeptions import DatabaseException, ObjectAlreadyExistsException, ObjectNotFoundException
+from src.repositories.mappers.base import DataMapper
 
 
 class BaseRepository:
@@ -59,7 +61,9 @@ class BaseRepository:
         except IntegrityError as ex:
             logger.warning("IntegrityError in {}: {}", self.model.__tablename__, str(ex))
             if isinstance(ex.orig.__cause__, UniqueViolationError):
-                raise ObjectAlreadyExistsException(detail=f"Entity already exists in {self.model.__tablename__}") from ex
+                raise ObjectAlreadyExistsException(
+                    detail=f"Entity already exists in {self.model.__tablename__}"
+                ) from ex
             else:
                 raise DatabaseException(detail=str(ex))
         return self.mapper.map_to_schema(model)
@@ -87,6 +91,8 @@ class BaseRepository:
             await self.session.execute(add_stmt)
         except IntegrityError as ex:
             if isinstance(ex.orig.__cause__, UniqueViolationError):
-                raise ObjectAlreadyExistsException(detail=f"Entity already exists in {self.model.__tablename__}") from ex
+                raise ObjectAlreadyExistsException(
+                    detail=f"Entity already exists in {self.model.__tablename__}"
+                ) from ex
             else:
                 raise DatabaseException(detail=str(ex))

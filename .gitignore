@@ -14,7 +14,10 @@ backend/.pytest_cache/
 .env
 .env.prod
 .env-test
-
+.env.local
+frontend/.env.local
+frontend/.env
+backend/.env
 # Project folders to keep empty but tracked
 backend/static/*
 !backend/static/.gitkeep
@@ -25,6 +28,13 @@ backend/logs/*
 
 # Dev notes
 backend/src/utils/halping_commands.txt
+
+# SSL certificates
+nginx/ssl/
+
+# Temp files
+error.txt
+test_script.py
 
 # OS
 .DS_Store

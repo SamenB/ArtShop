@@ -1,16 +1,16 @@
-from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.exeptions import (
-    ObjectNotFoundException,
     ArtworkDisplayOnlyException,
+    DatabaseException,
+    ObjectAlreadyExistsException,
+    ObjectNotFoundException,
     OriginalSoldOutException,
     PrintsSoldOutException,
-    ObjectAlreadyExistsException,
-    DatabaseException,
 )
+from src.schemas.orders import EditionType, OrderAdd, OrderAddRequest, OrderBulkRequest
 from src.services.base import BaseService
-from src.schemas.orders import OrderAddRequest, OrderAdd, OrderBulkRequest, EditionType
 
 
 class OrderService(BaseService):
@@ -26,43 +26,81 @@ class OrderService(BaseService):
         except SQLAlchemyError:
             raise DatabaseException
 
-    async def create_order(self, order_data: OrderAddRequest, user_id: int):
+    async def create_order(self, order_data: OrderAddRequest, user_id: int | None):
         from src.schemas.artworks import ArtworkPatch
+        from src.schemas.orders import OrderAdd, OrderItemAdd
+
         try:
-            artwork = await self.db.artworks.get_one(id=order_data.artwork_id)
-
-            if artwork.is_display_only:
-                raise ArtworkDisplayOnlyException()
-
-            if order_data.edition_type == EditionType.ORIGINAL:
-                if not artwork.is_original_available:
-                    raise OriginalSoldOutException()
-                price = artwork.original_price or 0
-                await self.db.artworks.edit(ArtworkPatch(is_original_available=False), exclude_unset=True, id=artwork.id)
-
-            elif order_data.edition_type == EditionType.PRINT:
-                if artwork.prints_available <= 0:
-                    raise PrintsSoldOutException()
-                price = artwork.print_price or 0
-                await self.db.artworks.edit(ArtworkPatch(prints_available=artwork.prints_available - 1), exclude_unset=True, id=artwork.id)
-
+            # 1. Create the main order entry
             order_add = OrderAdd(
                 user_id=user_id,
-                artwork_id=artwork.id,
-                edition_type=order_data.edition_type,
-                price=price
+                first_name=order_data.first_name,
+                last_name=order_data.last_name,
+                email=order_data.email,
+                phone=order_data.phone,
+                newsletter_opt_in=order_data.newsletter_opt_in,
+                discovery_source=order_data.discovery_source,
+                promo_code=order_data.promo_code,
+                total_price=sum(item.price for item in order_data.items),
+                items=[],
             )
 
             order = await self.db.orders.add(order_add)
+
+            # 2. Process each item
+            for item_data in order_data.items:
+                artwork = await self.db.artworks.get_one(id=item_data.artwork_id)
+
+                if artwork.is_display_only:
+                    raise ArtworkDisplayOnlyException()
+
+                if item_data.edition_type == EditionType.ORIGINAL:
+                    if artwork.original_status != "available":
+                        raise OriginalSoldOutException()
+                    await self.db.artworks.edit(
+                        ArtworkPatch(original_status="sold"), exclude_unset=True, id=artwork.id
+                    )
+
+                elif item_data.edition_type == EditionType.PRINT:
+                    if artwork.prints_available <= 0:
+                        raise PrintsSoldOutException()
+                    await self.db.artworks.edit(
+                        ArtworkPatch(prints_available=artwork.prints_available - 1),
+                        exclude_unset=True,
+                        id=artwork.id,
+                    )
+
+                # 3. Create the order item entry
+                item_add = OrderItemAdd(
+                    order_id=order.id,
+                    artwork_id=artwork.id,
+                    edition_type=item_data.edition_type,
+                    finish=item_data.finish,
+                    size=item_data.size,
+                    price=item_data.price,
+                )
+                await self.db.order_items.add(item_add)
+
             await self.db.commit()
-            
-        except (ObjectNotFoundException, ArtworkDisplayOnlyException, OriginalSoldOutException, PrintsSoldOutException):
+
+            # Re-fetch so items relationship is populated in the response
+            order = await self.db.orders.get_one(id=order.id)
+
+            logger.info("Order created successfully: {}", order)
+            return order
+
+        except (
+            ObjectNotFoundException,
+            ArtworkDisplayOnlyException,
+            OriginalSoldOutException,
+            PrintsSoldOutException,
+        ):
+            await self.db.rollback()
             raise
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            logger.error("Database error during order creation: {}", e)
             await self.db.rollback()
             raise DatabaseException
-        logger.info("Order created: {}", order)
-        return order
 
     async def create_orders_bulk(self, orders_data: list[OrderBulkRequest]):
         try:
@@ -72,8 +110,7 @@ class OrderService(BaseService):
             valid = [
                 OrderAdd(**o.model_dump())
                 for o in orders_data
-                if o.user_id in valid_user_ids
-                and o.artwork_id in valid_artwork_ids
+                if o.user_id in valid_user_ids and o.artwork_id in valid_artwork_ids
             ]
 
             if valid:
@@ -94,4 +131,15 @@ class OrderService(BaseService):
         try:
             return await self.db.orders.get_all()
         except SQLAlchemyError:
+            raise DatabaseException
+
+    async def update_payment_status(self, order_id: int, payment_status: str):
+        try:
+            # We pass a dict to db.orders.edit
+            await self.db.orders.edit(
+                {"payment_status": payment_status}, exclude_unset=True, id=order_id
+            )
+            await self.db.commit()
+        except SQLAlchemyError:
+            await self.db.rollback()
             raise DatabaseException

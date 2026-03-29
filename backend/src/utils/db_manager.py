@@ -1,11 +1,12 @@
 import asyncio
+
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.repositories.artworks import ArtworksRepository
+from src.repositories.collections import CollectionsRepository
+from src.repositories.orders import OrderItemsRepository, OrdersRepository
+from src.repositories.tags import ArtworkTagsRepository, TagsRepository
 from src.repositories.users import UsersRepository
-from src.repositories.orders import OrdersRepository
-from src.repositories.tags import TagsRepository, ArtworkTagsRepository
 
 
 class DBManager:
@@ -18,8 +19,10 @@ class DBManager:
         self.artworks = ArtworksRepository(self.session)
         self.users = UsersRepository(self.session)
         self.orders = OrdersRepository(self.session)
+        self.order_items = OrderItemsRepository(self.session)
         self.tags = TagsRepository(self.session)
         self.artwork_tags = ArtworkTagsRepository(self.session)
+        self.collections = CollectionsRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

@@ -1,6 +1,10 @@
-from pydantic import BaseModel, Field
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 class EditionType(str, Enum):
@@ -8,24 +12,52 @@ class EditionType(str, Enum):
     PRINT = "print"
 
 
+class OrderItemBase(BaseModel):
+    artwork_id: int
+    edition_type: EditionType
+    finish: str
+    size: Optional[str] = None
+    price: int
+
+
+class OrderItem(OrderItemBase):
+    id: int
+    order_id: int
+
+
+class OrderItemAdd(OrderItemBase):
+    order_id: int
+
+
 class OrderAddRequest(BaseModel):
-    artwork_id: int = Field(..., description="ID of the artwork")
-    edition_type: EditionType = Field(..., description="Type of edition being purchased")
+    first_name: str
+    last_name: str
+    email: str
+    phone: str
+    newsletter_opt_in: bool = False
+    discovery_source: Optional[str] = None
+    promo_code: Optional[str] = None
+    items: List[OrderItemBase]
 
 
 class OrderAdd(OrderAddRequest):
-    user_id: int = Field(..., description="ID of the user")
-    price: int = Field(..., description="Price of the order")
+    user_id: Optional[int] = None
+    total_price: int
 
 
 class Order(OrderAdd):
-    id: int = Field(..., description="ID of the order")
+    id: int
+    created_at: datetime
+    items: List[OrderItem]
 
 
-class OrderBulkRequest(BaseModel):
-    """Schema for bulk order with all fields"""
+class OrderBulkRequest(OrderAdd):
+    artwork_id: Optional[int] = None  # For legacy bulk compatibility
 
-    user_id: int
-    artwork_id: int
-    edition_type: EditionType
-    price: int
+
+class OrderStatusUpdate(BaseModel):
+    payment_status: str
+
+
+Order.model_rebuild()
+OrderBulkRequest.model_rebuild()

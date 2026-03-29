@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 from loguru import logger
 
 from src.config import settings
@@ -37,8 +38,8 @@ def setup_logging():
     logger.add(
         log_path / "app.log",
         level=settings.LOG_LEVEL,
-        rotation="10 MB",       # new file every 10 MB
-        retention="7 days",     # delete old files after 7 days
-        compression="zip",      # compress rotated files
-        serialize=True,         # JSON in files (easy to parse)
+        rotation="10 MB",  # new file every 10 MB
+        retention="7 days",  # delete old files after 7 days
+        compression="zip",  # compress rotated files
+        serialize=True,  # JSON in files (easy to parse)
     )

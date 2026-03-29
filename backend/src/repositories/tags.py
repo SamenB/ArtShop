@@ -1,8 +1,8 @@
-from src.models.tags import ArtworkTagsOrm
+from sqlalchemy import delete, insert, select
+
+from src.models.tags import ArtworkTagsOrm, TagsOrm
 from src.repositories.base import BaseRepository
-from src.models.tags import TagsOrm
-from src.repositories.mappers.mappers import TagMapper, ArtworkTagMapper
-from sqlalchemy import select, delete, insert
+from src.repositories.mappers.mappers import ArtworkTagMapper, TagMapper
 
 
 class TagsRepository(BaseRepository):

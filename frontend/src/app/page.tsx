@@ -1,60 +1,58 @@
-"use client";
 // page.tsx — the HOME PAGE ("/")
-// "use client" is required because this file uses onMouseEnter/onMouseLeave
-// (browser event handlers). Client Components:
-//   - Still render on the server first (SSR) for fast initial load + SEO
-//   - Then "hydrate" in the browser to add interactivity
-// So we don't lose SEO benefits — we just also get browser interactivity.
+// Converted to Server Component for instant loading and SEO.
 
 import Link from "next/link";
-// NOTE: metadata export is NOT allowed in Client Components.
-// Page title is set in layout.tsx default title instead.
+import { getApiUrl, getImageUrl } from "@/utils";
 
-// ─────────────────────────────────────────────
-// Mock data — later this will come from the API/backend.
-// Keeping it separate makes it easy to replace.
-// ─────────────────────────────────────────────
-const FEATURED_WORKS = [
-  {
-    id: "ethereal-dreams",
-    title: "Ethereal Dreams",
-    year: 2024,
-    medium: "Oil on canvas",
-    size: '24" × 30"',
-    price: 1200,
-    available: true,
-    tag: "Landscape",
-    // Gradient placeholder — will be replaced with real <img> tags later
-    gradientFrom: "#8DB4C4",
-    gradientTo: "#4A7A8A",
-  },
-  {
-    id: "urban-silence",
-    title: "Urban Silence",
-    year: 2024,
-    medium: "Watercolor",
-    size: '16" × 20"',
-    price: 850,
-    available: true,
-    tag: "Urban",
-    gradientFrom: "#C4A882",
-    gradientTo: "#8A6840",
-  },
-  {
-    id: "golden-hour",
-    title: "Golden Hour",
-    year: 2023,
-    medium: "Oil on canvas",
-    size: '30" × 40"',
-    price: 2100,
-    available: false,  // Sold!
-    tag: "Landscape",
-    gradientFrom: "#D4B86A",
-    gradientTo: "#C8965A",
-  },
+// FEATURED_WORKS will be fetched from API
+type OriginalStatus = "available" | "sold" | "reserved";
+
+interface Artwork {
+  id: number;
+  title: string;
+  description: string;
+  medium: string;
+  size: string;
+  original_price: number;
+  original_status: OriginalStatus;
+  images?: (string | { thumb: string; medium: string; original: string })[];
+  // UI fallbacks
+  aspectRatio?: string;
+  gradientFrom?: string;
+  gradientTo?: string;
+}
+
+type FeaturedWork = Artwork;
+
+const DEFAULT_GRADIENTS = [
+    ["#6A9FB5", "#3A6E85"],
+    ["#2A5F7A", "#1A3A55"],
+    ["#8A7AB5", "#4A5A8A"],
+    ["#5A8A8A", "#2A5A5A"],
+    ["#D4905A", "#8A5030"],
 ];
 
-export default function Home() {
+// Fetch directly inside the Async Server Component
+export default async function Home() {
+  
+  let settings: any = null;
+  let featuredWorks: FeaturedWork[] = [];
+
+  const settingsRes = await fetch(`${getApiUrl()}/settings`, { next: { revalidate: 60 } });
+  if (!settingsRes.ok) throw new Error(`Failed to fetch settings: ${settingsRes.status}`);
+  settings = await settingsRes.json();
+
+  const worksRes = await fetch(`${getApiUrl()}/artworks?limit=3`, { next: { revalidate: 60 } });
+  if (!worksRes.ok) throw new Error(`Failed to fetch artworks: ${worksRes.status}`);
+  
+  const data = await worksRes.json();
+  const items = (data.items || data).map((item: any, idx: number) => ({
+    ...item,
+    gradientFrom: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][0],
+    gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1],
+  }));
+  featuredWorks = items;
+
   return (
     <>
       {/* ════════════════════════════════════════
@@ -78,16 +76,39 @@ export default function Home() {
           paddingBottom: "5rem",
         }}
       >
-        {/* Background — rich dark teal/cyan gradient simulating a canvas texture */}
-        {/* When we have a real hero image, just swap this div for <img> */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(135deg, #0A1A1C 0%, #1A3638 40%, #254D4F 70%, #0A1A1C 100%)",
-          }}
-        />
+        {/* Background */}
+        {settings?.main_bg_desktop_url || settings?.main_bg_mobile_url ? (
+          <picture>
+            {settings?.main_bg_mobile_url && (
+              <source media="(max-width: 768px)" srcSet={getImageUrl(settings.main_bg_mobile_url, 'medium')} />
+            )}
+            <img 
+              src={getImageUrl(settings?.main_bg_desktop_url || settings?.main_bg_mobile_url, 'original')} 
+              alt="Hero Background" 
+              fetchPriority="high"
+              decoding="sync"
+              loading="eager"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                filter: "brightness(0.6)"
+              }} 
+              aria-hidden="true" 
+            />
+          </picture>
+        ) : (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "linear-gradient(135deg, #0A1A1C 0%, #1A3638 40%, #254D4F 70%, #0A1A1C 100%)",
+            }}
+          />
+        )}
         {/* Subtle texture overlay — adds depth */}
         <div
           aria-hidden="true"
@@ -181,6 +202,7 @@ export default function Home() {
             {/* Minimalist Link instead of solid button */}
             <Link
               href="/gallery"
+              className="hero-link"
               style={{
                 fontFamily: "var(--font-sans)",
                 fontSize: "0.75rem",
@@ -188,18 +210,9 @@ export default function Home() {
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 textDecoration: "none",
-                color: "var(--color-cream)",
-                borderBottom: "1px solid rgba(250,250,247,0.4)",
+                borderBottom: "1px solid",
                 paddingBottom: "4px",
                 transition: "color 0.2s ease, border-color 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "var(--color-cream)";
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--color-cream)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "var(--color-cream)";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(250,250,247,0.4)";
               }}
             >
               Explore Gallery
@@ -207,6 +220,7 @@ export default function Home() {
 
             <Link
               href="/shop"
+              className="hero-shop-link"
               style={{
                 fontFamily: "var(--font-sans)",
                 fontSize: "0.75rem",
@@ -214,18 +228,9 @@ export default function Home() {
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 textDecoration: "none",
-                color: "rgba(250,250,247,0.6)",
-                borderBottom: "1px solid transparent",
+                borderBottom: "1px solid",
                 paddingBottom: "4px",
                 transition: "color 0.2s ease, border-color 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "var(--color-cream)";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(250,250,247,0.2)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "rgba(250,250,247,0.6)";
-                (e.currentTarget as HTMLElement).style.borderColor = "transparent";
               }}
             >
               Shop Prints
@@ -320,25 +325,17 @@ export default function Home() {
           </div>
           <Link
             href="/gallery"
+            className="home-section-link"
             style={{
               fontFamily: "var(--font-sans)",
               fontSize: "0.875rem",
               fontWeight: 500,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "var(--color-charcoal-mid)",
               textDecoration: "none",
-              borderBottom: "1px solid var(--color-border-dark)",
+              borderBottom: "1px solid",
               paddingBottom: "2px",
               transition: "color 0.2s ease, border-color 0.2s ease",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "var(--color-accent)";
-              (e.currentTarget as HTMLElement).style.borderColor = "var(--color-accent)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "var(--color-charcoal-mid)";
-              (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border-dark)";
             }}
           >
             View All Works →
@@ -353,7 +350,7 @@ export default function Home() {
             gap: "2rem",
           }}
         >
-          {FEATURED_WORKS.map((work) => (
+          {featuredWorks.map((work) => (
             <Link
               key={work.id}
               href={`/gallery/${work.id}`}
@@ -361,24 +358,11 @@ export default function Home() {
             >
               {/* Card (Clean style matching gallery) */}
               <article
+                className="home-art-card"
                 style={{
                   backgroundColor: "transparent",
                   transition: "transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)",
                   cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(-6px)";
-                  const innerImg = e.currentTarget.querySelector('.home-img-inner') as HTMLElement;
-                  if (innerImg) innerImg.style.transform = "scale(1.02)";
-                  const shadowBox = e.currentTarget.querySelector('.home-shadow-box') as HTMLElement;
-                  if (shadowBox) shadowBox.style.boxShadow = "0 28px 64px rgba(26,26,24,0.32)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-                  const innerImg = e.currentTarget.querySelector('.home-img-inner') as HTMLElement;
-                  if (innerImg) innerImg.style.transform = "scale(1)";
-                  const shadowBox = e.currentTarget.querySelector('.home-shadow-box') as HTMLElement;
-                  if (shadowBox) shadowBox.style.boxShadow = "0 6px 24px rgba(26,26,24,0.18)";
                 }}
               >
                 {/* OUTER — shadow + lift */}
@@ -404,7 +388,9 @@ export default function Home() {
                       className="home-img-inner"
                       style={{
                         width: "100%", height: "100%",
-                        background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})`,
+                        background: (work.images && work.images.length > 0) 
+                          ? `url(${getImageUrl(work.images[0], 'medium')}) center/cover no-repeat` 
+                          : `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})`,
                         transition: "transform 0.5s cubic-bezier(0.165, 0.84, 0.44, 1)",
                       }}
                     />
@@ -428,10 +414,10 @@ export default function Home() {
                     >
                       <span style={{
                         display: "inline-block", width: "4px", height: "4px", borderRadius: "50%",
-                        backgroundColor: work.available ? "rgba(250,250,247,0.8)" : "currentColor",
-                        opacity: work.available ? 1 : 0.5
+                        backgroundColor: work.original_status === "available" ? "rgba(250,250,247,0.8)" : "currentColor",
+                        opacity: work.original_status === "available" ? 1 : 0.5
                       }} />
-                      {work.available ? "Available" : "Sold"}
+                      {work.original_status === "available" ? "Available" : work.original_status === "sold" ? "Sold" : "Reserved"}
                     </span>
                   </div>
                 </div>
@@ -502,9 +488,12 @@ export default function Home() {
               fontFamily: "var(--font-serif)",
               fontStyle: "italic",
               fontSize: "1rem",
+              overflow: "hidden"
             }}
           >
-            Artist Photo
+            {settings?.artist_photo_url ? (
+                <img src={getImageUrl(settings.artist_photo_url, 'original')} alt="Artist" className="w-full h-full object-cover" />
+            ) : "Artist Photo"}
           </div>
 
           {/* Text content */}
@@ -548,13 +537,11 @@ export default function Home() {
                 maxWidth: "480px",
               }}
             >
-              Every painting begins with a feeling. I work primarily in oil,
-              capturing light, texture, and emotion in each brushstroke.
-              My work explores the dialogue between the natural world and
-              the human experience.
+              {settings?.about_text || ""}
             </p>
             <Link
               href="/about"
+              className="home-about-link"
               style={{
                 fontFamily: "var(--font-sans)",
                 fontSize: "0.75rem",
@@ -562,18 +549,9 @@ export default function Home() {
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 textDecoration: "none",
-                color: "var(--color-charcoal)",
-                borderBottom: "1px solid rgba(26,26,24,0.4)",
+                borderBottom: "1px solid",
                 paddingBottom: "4px",
                 transition: "color 0.2s ease, border-color 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "var(--color-charcoal)";
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--color-charcoal)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "var(--color-charcoal)";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(26,26,24,0.4)";
               }}
             >
               Read My Story

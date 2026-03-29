@@ -2,42 +2,70 @@
 // Shop — CSS Grid, natural aspect-ratios, no broken max-height tricks.
 // Sidebar hidden on mobile. Hover only on image.
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useInView } from "react-intersection-observer";
+import { usePreferences, CURRENCY_LABELS } from "@/context/PreferencesContext";
+import { useCart } from "@/context/CartContext";
+import { getApiUrl, getImageUrl } from "@/utils";
 
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
+// PRODUCTS will be fetched from API
 interface Product {
-    id: string; title: string; collection: string; year: number;
-    medium: string; size: string; sizeCategory: "Small" | "Medium" | "Large";
-    aspectRatio: string; price: number; originalStatus: OriginalStatus;
-    tags: string[]; gradientFrom: string; gradientTo: string;
+    id: number;
+    title: string;
+    description: string;
+    medium: string;
+    size: string;
+    original_price: number;
+    original_status: OriginalStatus;
+    images?: (string | { thumb: string; medium: string; original: string })[];
+    width_cm?: number;
+    height_cm?: number;
+    // UI fallbacks
+    aspectRatio?: string;
+    gradientFrom?: string;
+    gradientTo?: string;
+    sizeCategory: string;
+    tags?: string[];
 }
 
-const PRODUCTS: Product[] = [
-    { id: "morning-tide", title: "Morning Tide", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "24 × 30 in", sizeCategory: "Medium", aspectRatio: "4/5", price: 1800, originalStatus: "available", tags: ["Seascape", "Light"], gradientFrom: "#6A9FB5", gradientTo: "#3A6E85" },
-    { id: "deep-blue", title: "Deep Blue", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "16 × 20 in", sizeCategory: "Small", aspectRatio: "4/5", price: 1200, originalStatus: "sold", tags: ["Seascape"], gradientFrom: "#2A5F7A", gradientTo: "#1A3A55" },
-    { id: "coastal-evening", title: "Coastal Evening", collection: "Sea Cycles 2024", year: 2024, medium: "Watercolor", size: "12 × 16 in", sizeCategory: "Small", aspectRatio: "3/4", price: 750, originalStatus: "reserved", tags: ["Seascape", "Light"], gradientFrom: "#8A7AB5", gradientTo: "#4A5A8A" },
-    { id: "still-waters", title: "Still Waters", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "30 × 40 in", sizeCategory: "Large", aspectRatio: "3/4", price: 2800, originalStatus: "available", tags: ["Seascape"], gradientFrom: "#5A8A8A", gradientTo: "#2A5A5A" },
-    { id: "horizon-glow", title: "Horizon Glow", collection: "Sea Cycles 2024", year: 2024, medium: "Oil on Canvas", size: "20 × 24 in", sizeCategory: "Medium", aspectRatio: "5/4", price: 1600, originalStatus: "not_for_sale", tags: ["Seascape", "Light"], gradientFrom: "#D4905A", gradientTo: "#8A5030" },
-    { id: "morning-rush", title: "Morning Rush", collection: "Urban Studies", year: 2023, medium: "Oil on Canvas", size: "20 × 24 in", sizeCategory: "Medium", aspectRatio: "5/4", price: 1500, originalStatus: "on_exhibition", tags: ["Urban"], gradientFrom: "#8A7A6A", gradientTo: "#5A4A3A" },
-    { id: "city-lights", title: "City Lights", collection: "Urban Studies", year: 2023, medium: "Oil on Canvas", size: "24 × 36 in", sizeCategory: "Large", aspectRatio: "2/3", price: 2100, originalStatus: "archived", tags: ["Urban", "Light"], gradientFrom: "#3A3A5A", gradientTo: "#1A1A3A" },
-    { id: "rainy-street", title: "Rainy Street", collection: "Urban Studies", year: 2023, medium: "Watercolor", size: "14 × 18 in", sizeCategory: "Small", aspectRatio: "7/9", price: 680, originalStatus: "digital", tags: ["Urban"], gradientFrom: "#6A7A8A", gradientTo: "#3A4A5A" },
-    { id: "ethereal-dreams", title: "Ethereal Dreams", collection: "Golden Fields", year: 2024, medium: "Oil on Canvas", size: "24 × 30 in", sizeCategory: "Medium", aspectRatio: "4/5", price: 1200, originalStatus: "available", tags: ["Landscape", "Light"], gradientFrom: "#C4B882", gradientTo: "#8A8040" },
-    { id: "golden-hour", title: "Golden Hour", collection: "Golden Fields", year: 2023, medium: "Oil on Canvas", size: "30 × 40 in", sizeCategory: "Large", aspectRatio: "3/4", price: 2100, originalStatus: "sold", tags: ["Landscape"], gradientFrom: "#D4B86A", gradientTo: "#C8965A" },
-    { id: "summer-meadow", title: "Summer Meadow", collection: "Golden Fields", year: 2023, medium: "Oil on Canvas", size: "18 × 24 in", sizeCategory: "Medium", aspectRatio: "3/4", price: 1350, originalStatus: "available", tags: ["Landscape"], gradientFrom: "#B8C870", gradientTo: "#8A9840" },
-    { id: "inner-light", title: "Inner Light", collection: "Portraits", year: 2022, medium: "Oil on Canvas", size: "16 × 20 in", sizeCategory: "Small", aspectRatio: "4/5", price: 1600, originalStatus: "not_for_sale", tags: ["Portrait"], gradientFrom: "#C4A882", gradientTo: "#8A6840" },
-    { id: "contemplation", title: "Contemplation", collection: "Portraits", year: 2022, medium: "Oil on Canvas", size: "20 × 24 in", sizeCategory: "Medium", aspectRatio: "5/6", price: 1900, originalStatus: "available", tags: ["Portrait"], gradientFrom: "#9A8870", gradientTo: "#6A5840" },
+const DEFAULT_GRADIENTS = [
+    ["#6A9FB5", "#3A6E85"],
+    ["#2A5F7A", "#1A3A55"],
+    ["#8A7AB5", "#4A5A8A"],
+    ["#5A8A8A", "#2A5A5A"],
+    ["#D4905A", "#8A5030"],
 ];
-
-const ALL_TAGS = Array.from(new Set(PRODUCTS.flatMap(p => p.tags)));
-const ALL_YEARS = Array.from(new Set(PRODUCTS.map(p => String(p.year)))).sort((a, b) => +b - +a);
-const ALL_MEDIUMS = Array.from(new Set(PRODUCTS.map(p => p.medium)));
+const ALL_TAGS = ["Original Paintings"]; // Fallback for now
+const ALL_MEDIUMS = ["Oil on Canvas", "Watercolor", "Digital"];
 const ALL_SIZES = ["Small", "Medium", "Large"] as const;
 const PRICE_RANGES = [{ label: "Any Price", min: 0, max: Infinity }, { label: "Under $1k", min: 0, max: 999 }, { label: "$1k–$2k", min: 1000, max: 2000 }, { label: "Over $2k", min: 2001, max: Infinity }];
-const SORT_OPTIONS = [{ label: "Newest", fn: (a: Product, b: Product) => b.year - a.year }, { label: "Price ↑", fn: (a: Product, b: Product) => a.price - b.price }, { label: "Price ↓", fn: (a: Product, b: Product) => b.price - a.price }];
+
+type SortKey = "newest" | "price-low" | "price-high" | "size-small" | "size-large";
+
+const getArea = (p: Product) => (p.width_cm || 0) * (p.height_cm || 0);
+
+const sortProducts = (products: Product[], key: SortKey, globalPrintPrice: number) => {
+    const c = [...products];
+    if (key === "newest") c.sort((a, b) => b.id - a.id);
+    if (key === "price-low") c.sort((a, b) => (a.original_price || globalPrintPrice) - (b.original_price || globalPrintPrice));
+    if (key === "price-high") c.sort((a, b) => (b.original_price || globalPrintPrice) - (a.original_price || globalPrintPrice));
+    if (key === "size-small") c.sort((a, b) => getArea(a) - getArea(b));
+    if (key === "size-large") c.sort((a, b) => getArea(b) - getArea(a));
+    return c;
+};
+const SORT_OPTIONS: { label: string; key: SortKey }[] = [
+    { label: "Newest", key: "newest" },
+    { label: "Price ↑", key: "price-low" },
+    { label: "Price ↓", key: "price-high" },
+    { label: "Size ↑", key: "size-small" },
+    { label: "Size ↓", key: "size-large" }
+];
 
 function ProductCard({ product }: { product: Product }) {
+    const { convertPrice } = usePreferences();
     return (
         <div className="art-card"
             style={{ display: "flex", flexDirection: "column", width: "100%", padding: 0 }}>
@@ -52,7 +80,12 @@ function ProductCard({ product }: { product: Product }) {
                 }}>
                     <div className="art-card-inner" style={{
                         width: "100%", height: "100%",
-                        background: `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
+                        backgroundColor: "#ffffff",
+                        backgroundImage: product.images && product.images.length > 0 
+                            ? `url(${getImageUrl(product.images[0], 'original')})` 
+                            : `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
                         position: "relative",
                     }}>
                     </div>
@@ -73,17 +106,17 @@ function ProductCard({ product }: { product: Product }) {
                     fontFamily: "var(--font-sans)", fontSize: "0.8rem",
                     fontWeight: 400, color: "#aaa",
                     letterSpacing: "0.01em", marginBottom: "0.05rem", lineHeight: 1.3,
-                }}>{product.size.replace(/([\d.]+) × ([\d.]+) in/, (m, w, h) => `${m} | ${Math.round(Number(w) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`)}</p>
+                }}>{(product.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m, w, h) => `${m} | ${Math.round(Number(w) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`)}</p>
 
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 400, color: "#888", lineHeight: 1.4 }}>
                     Original {product.medium}
-                    {product.originalStatus === "available" && <> — <span style={{ color: "#555", fontWeight: 600 }}>${product.price.toLocaleString()}</span></>}
-                    {product.originalStatus === "sold" && <> — <span style={{ color: "#D48A8A", fontWeight: 600 }}>SOLD</span></>}
-                    {product.originalStatus === "reserved" && <> — <span style={{ color: "#C8B478", fontWeight: 600 }}>RESERVED</span></>}
-                    {product.originalStatus === "not_for_sale" && <> — <span style={{ color: "#b0b0b0", fontWeight: 500, fontStyle: "italic" }}>Not for Sale</span></>}
-                    {product.originalStatus === "on_exhibition" && <> — <span style={{ color: "#8AACC8", fontWeight: 500, fontStyle: "italic" }}>On Exhibition</span></>}
-                    {product.originalStatus === "archived" && <> — <span style={{ color: "#b0b0b0", fontWeight: 500, fontStyle: "italic" }}>Archived</span></>}
-                    {product.originalStatus === "digital" && <> — <span style={{ color: "#B8A0D8", fontWeight: 600 }}>Digital</span></>}
+                    {product.original_status === "available" && <> — <span style={{ color: "#555", fontWeight: 600 }}>{convertPrice(product.original_price)}</span></>}
+                    {product.original_status === "sold" && <> — <span style={{ color: "#D48A8A", fontWeight: 600 }}>SOLD</span></>}
+                    {product.original_status === "reserved" && <> — <span style={{ color: "#C8B478", fontWeight: 600 }}>RESERVED</span></>}
+                    {product.original_status === "not_for_sale" && <> — <span style={{ color: "#b0b0b0", fontWeight: 500, fontStyle: "italic" }}>Not for Sale</span></>}
+                    {product.original_status === "on_exhibition" && <> — <span style={{ color: "#8AACC8", fontWeight: 500, fontStyle: "italic" }}>On Exhibition</span></>}
+                    {product.original_status === "archived" && <> — <span style={{ color: "#b0b0b0", fontWeight: 500, fontStyle: "italic" }}>Archived</span></>}
+                    {product.original_status === "digital" && <> — <span style={{ color: "#B8A0D8", fontWeight: 600 }}>Digital</span></>}
                 </p>
             </div>
         </div>
@@ -162,6 +195,8 @@ function SidebarSection({ title, children, defaultOpen = true }: { title: string
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function ShopPage() {
+    const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTags, setActiveTags] = useState<string[]>([]);
     const [activeYears, setActiveYears] = useState<string[]>([]);
     const [activeMediums, setActiveMediums] = useState<string[]>([]);
@@ -172,20 +207,56 @@ export default function ShopPage() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [cols, setCols] = useState(3);
-    const [denseGrid, setDenseGrid] = useState(false);
+    const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
+
+    const { globalPrintPrice } = usePreferences();
+
+    const itemsPerPage = gridMode === "3" ? 36 : gridMode === "2" ? 24 : 12;
+    const [visibleCount, setVisibleCount] = useState(12);
+
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const saved = localStorage.getItem("artshop_denseGrid");
-        if (saved !== null) {
-            setDenseGrid(saved === "true");
+        fetch(`${getApiUrl()}/artworks?limit=1000`)
+            .then(res => res.json())
+            .then(data => {
+                const rawData = data.items || data.data || data;
+                if (!Array.isArray(rawData)) {
+                    console.error("Expected array but got:", data);
+                    setError("Failed to load artworks. Please try again later.");
+                    setLoading(false);
+                    return;
+                }
+                const items = rawData.map((item: any, idx: number) => ({
+                    ...item,
+                    aspectRatio: "4/5",
+                    gradientFrom: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][0],
+                    gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1],
+                    sizeCategory: "Medium" // Fallback
+                }));
+                setAllProducts(items);
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setError("A network error occurred.");
+                setLoading(false);
+            });
+    }, []);
+    const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
+
+    useEffect(() => {
+        const saved = localStorage.getItem("artshop_gridMode") as "1" | "2" | "3" | null;
+        if (saved === "1" || saved === "2" || saved === "3") {
+            setGridMode(saved);
         } else {
-            setDenseGrid(window.innerWidth < 768);
+            setGridMode("2");
         }
     }, []);
 
-    const handleSetDenseGrid = (val: boolean) => {
-        setDenseGrid(val);
-        localStorage.setItem("artshop_denseGrid", String(val));
+    const handleSetGridMode = (val: "1" | "2" | "3") => {
+        setGridMode(val);
+        localStorage.setItem("artshop_gridMode", val);
     };
 
     useEffect(() => {
@@ -200,18 +271,72 @@ export default function ShopPage() {
     }, []);
 
     const filtered = useMemo(() => {
-        const r = PRICE_RANGES[priceRange];
-        return PRODUCTS
-            .filter(p =>
-                (activeTags.length === 0 || activeTags.some(t => p.tags.includes(t))) &&
-                (activeYears.length === 0 || activeYears.includes(String(p.year))) &&
-                (activeMediums.length === 0 || activeMediums.includes(p.medium)) &&
-                (activeSizes.length === 0 || activeSizes.includes(p.sizeCategory)) &&
-                p.price >= r.min && p.price <= r.max &&
-                (!availOnly || p.originalStatus === "available")
-            )
-            .sort(SORT_OPTIONS[sortIdx].fn);
-    }, [activeTags, activeYears, activeMediums, activeSizes, priceRange, availOnly, sortIdx]);
+        let list = allProducts;
+        if (activeTags.length > 0) {
+            list = list.filter(p => (p.tags || []).some(t => activeTags.includes(String(t))));
+        }
+        if (activeMediums.length > 0) {
+            list = list.filter(p => activeMediums.includes(p.medium));
+        }
+        if (priceRange !== 0) { 
+            const range = PRICE_RANGES[priceRange];
+            if (range) {
+                list = list.filter(p => {
+                    const price = p.original_price || globalPrintPrice;
+                    return price >= range.min && price <= range.max;
+                });
+            }
+        }
+        if (availOnly) {
+            list = list.filter(p => p.original_status === "available");
+        }
+        return list;
+    }, [allProducts, activeTags, activeMediums, priceRange, availOnly, globalPrintPrice]);
+
+    const displayed = useMemo(() => {
+        const sorted = sortProducts(filtered, SORT_OPTIONS[sortIdx].key, globalPrintPrice);
+        return sorted.slice(0, visibleCount);
+    }, [filtered, sortIdx, visibleCount, globalPrintPrice]);
+
+    const getColumns = () => {
+        if (isMobile) {
+            if (gridMode === "1") return "1fr";
+            if (gridMode === "2") return "repeat(2, 1fr)";
+            if (gridMode === "3") return "repeat(3, 1fr)";
+        }
+        if (gridMode === "1") return "repeat(auto-fill, minmax(350px, 1fr))";
+        if (gridMode === "2") return "repeat(auto-fill, minmax(240px, 1fr))";
+        return "repeat(auto-fill, minmax(175px, 1fr))";
+    };
+
+    const getGap = () => {
+        if (isMobile) {
+            if (gridMode === "1") return "2rem";
+            if (gridMode === "2") return "1rem";
+            if (gridMode === "3") return "0.5rem";
+        }
+        if (gridMode === "1") return "4rem 180px";
+        if (gridMode === "2") return "3rem 120px";
+        return "2rem 90px";
+    };
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setVisibleCount(itemsPerPage);
+    }, [activeTags, activeYears, activeMediums, activeSizes, priceRange, availOnly, sortIdx, itemsPerPage]);
+
+    // Ensure visible count is at least enough to fill the screen if we switch to dense grid
+    useEffect(() => {
+        setVisibleCount(prev => Math.max(prev, itemsPerPage));
+    }, [itemsPerPage]);
+
+    // When the infinite scroll marker comes into view, load more items
+    useEffect(() => {
+        if (inView && visibleCount < filtered.length) {
+            setVisibleCount(prev => prev + itemsPerPage);
+        }
+    }, [inView, filtered.length, visibleCount, itemsPerPage]);
+
 
     const afc = activeTags.length + activeYears.length + activeMediums.length + activeSizes.length + (priceRange !== 0 ? 1 : 0) + (availOnly ? 1 : 0);
     const clearAll = () => { setActiveTags([]); setActiveYears([]); setActiveMediums([]); setActiveSizes([]); setPriceRange(0); setAvailOnly(false); };
@@ -223,9 +348,8 @@ export default function ShopPage() {
     const filtersJSX = (<>
         <SidebarSection title="Collections">{ALL_TAGS.map(t => <FilterCheckbox key={t} label={t} active={activeTags.includes(t)} onClick={() => toggleFilter(setActiveTags, t)} />)}</SidebarSection>
         <SidebarSection title="Price">{PRICE_RANGES.map((r, i) => <FilterCheckbox key={r.label} label={r.label} active={priceRange === i} onClick={() => setPriceRange(i)} />)}</SidebarSection>
-        <SidebarSection title="Size">{ALL_SIZES.map(s => <FilterCheckbox key={s} label={s} active={activeSizes.includes(s)} onClick={() => toggleFilter(setActiveSizes, s)} />)}</SidebarSection>
-        <SidebarSection title="Year">{ALL_YEARS.map(y => <FilterCheckbox key={y} label={y} active={activeYears.includes(y)} onClick={() => toggleFilter(setActiveYears, y)} />)}</SidebarSection>
         <SidebarSection title="Medium">{ALL_MEDIUMS.map(m => <FilterCheckbox key={m} label={m} active={activeMediums.includes(m)} onClick={() => toggleFilter(setActiveMediums, m)} />)}</SidebarSection>
+
         <SidebarSection title="Availability">
             <FilterCheckbox label="Available only" active={availOnly} onClick={() => setAvailOnly(p => !p)} />
         </SidebarSection>
@@ -240,7 +364,15 @@ export default function ShopPage() {
                     <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 500, letterSpacing: "0.15em", textTransform: "uppercase", marginTop: "0.5rem", color: "var(--color-charcoal)" }}>Filters</h3>
                     <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginTop: "0.5rem" }}>
                         {afc > 0 && <button onClick={clearAll} style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 300, color: "var(--color-charcoal-mid)", background: "none", border: "none", cursor: "pointer", borderBottom: "1px solid rgba(26,26,24,0.2)", paddingBottom: "1px", transition: "border-color 0.2s ease" }} onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--color-charcoal)"} onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(26,26,24,0.2)"}>Clear all</button>}
-                        <button onClick={() => setDrawerOpen(false)} style={{ fontSize: "1.2rem", fontWeight: 300, color: "var(--color-charcoal-mid)", background: "none", border: "none", cursor: "pointer", minWidth: "44px", minHeight: "44px", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>✕</button>
+                        <button onClick={() => setDrawerOpen(false)} aria-label="Close filters" style={{ 
+                            fontSize: "2rem", // significantly larger X
+                            fontWeight: 200, 
+                            color: "var(--color-charcoal)", 
+                            background: "none", border: "none", cursor: "pointer", 
+                            minWidth: "64px", minHeight: "64px", // massive touch target
+                            display: "flex", alignItems: "center", justifyContent: "flex-end",
+                            lineHeight: 1, padding: "0 10px"
+                        }}>✕</button>
                     </div>
                 </div>
                 <div style={{ padding: "1.25rem 1.5rem 1rem" }}>{filtersJSX}</div>
@@ -303,15 +435,32 @@ export default function ShopPage() {
                                 <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>View</span>
                                 <div style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
                                     <button
-                                        onClick={() => handleSetDenseGrid(false)}
-                                        title="Normal Grid"
+                                        onClick={() => handleSetGridMode("1")}
+                                        title="1 in a row"
                                         style={{
-                                            display: "flex", alignItems: "center", gap: "6px",
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                                             padding: "4px 8px",
-                                            backgroundColor: !denseGrid ? "#ffffff" : "transparent",
-                                            color: !denseGrid ? "var(--color-charcoal)" : "var(--color-muted)",
+                                            backgroundColor: gridMode === "1" ? "#ffffff" : "transparent",
+                                            color: gridMode === "1" ? "var(--color-charcoal)" : "var(--color-muted)",
                                             border: "none", borderRadius: "4px",
-                                            boxShadow: !denseGrid ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                            boxShadow: gridMode === "1" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                            cursor: "pointer", transition: "all 0.2s"
+                                        }}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                            <rect x="2" y="2" width="12" height="12" rx="1" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => handleSetGridMode("2")}
+                                        title="2 in a row"
+                                        style={{
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                                            padding: "4px 8px",
+                                            backgroundColor: gridMode === "2" ? "#ffffff" : "transparent",
+                                            color: gridMode === "2" ? "var(--color-charcoal)" : "var(--color-muted)",
+                                            border: "none", borderRadius: "4px",
+                                            boxShadow: gridMode === "2" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                                             cursor: "pointer", transition: "all 0.2s"
                                         }}
                                     >
@@ -321,18 +470,17 @@ export default function ShopPage() {
                                             <rect x="2" y="9" width="5" height="5" rx="1" />
                                             <rect x="9" y="9" width="5" height="5" rx="1" />
                                         </svg>
-                                        {!isMobile && <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 500 }}>Normal</span>}
                                     </button>
                                     <button
-                                        onClick={() => handleSetDenseGrid(true)}
-                                        title="Dense Grid"
+                                        onClick={() => handleSetGridMode("3")}
+                                        title="3 in a row"
                                         style={{
-                                            display: "flex", alignItems: "center", gap: "6px",
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                                             padding: "4px 8px",
-                                            backgroundColor: denseGrid ? "#ffffff" : "transparent",
-                                            color: denseGrid ? "var(--color-charcoal)" : "var(--color-muted)",
+                                            backgroundColor: gridMode === "3" ? "#ffffff" : "transparent",
+                                            color: gridMode === "3" ? "var(--color-charcoal)" : "var(--color-muted)",
                                             border: "none", borderRadius: "4px",
-                                            boxShadow: denseGrid ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                            boxShadow: gridMode === "3" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                                             cursor: "pointer", transition: "all 0.2s"
                                         }}
                                     >
@@ -347,7 +495,6 @@ export default function ShopPage() {
                                             <rect x="6.25" y="11.5" width="3.5" height="3.5" rx="0.5" />
                                             <rect x="11.5" y="11.5" width="3.5" height="3.5" rx="0.5" />
                                         </svg>
-                                        {!isMobile && <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 500 }}>Dense</span>}
                                     </button>
                                 </div>
                             </div>
@@ -375,14 +522,14 @@ export default function ShopPage() {
                     </div>
 
                     {filtered.length > 0 ? (
-                        <div className={`art-grid ${denseGrid ? "dense" : ""}`} style={{
+                        <div className={`art-grid`} style={{
                             display: "grid",
-                            gridTemplateColumns: denseGrid ? "repeat(auto-fit, 160px)" : "repeat(auto-fit, 320px)",
-                            justifyContent: "space-evenly",
-                            gap: denseGrid ? "2rem 90px" : "4rem 180px",
+                            gridTemplateColumns: getColumns(),
+                            justifyContent: "start",
+                            gap: getGap(),
                             alignItems: "center",
                         }}>
-                            {filtered.map(p => (
+                            {displayed.map(p => (
                                 <ProductCard key={p.id} product={p} />
                             ))}
                         </div>
@@ -390,6 +537,13 @@ export default function ShopPage() {
                         <div style={{ textAlign: "center", padding: "5rem 1rem" }}>
                             <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "1.2rem", color: "var(--color-muted)", marginBottom: "1.25rem" }}>No works match these filters</p>
                             <button onClick={clearAll} style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-accent)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Clear all filters</button>
+                        </div>
+                    )}
+                    
+                    {/* Infinite Scroll target marker */}
+                    {visibleCount < filtered.length && (
+                        <div ref={loadMoreRef} style={{ height: "40px", marginTop: "2rem", display: "flex", justifyContent: "center" }}>
+                            <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", fontFamily: "var(--font-sans)" }}>Loading more...</span>
                         </div>
                     )}
                 </div>
