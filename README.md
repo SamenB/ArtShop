@@ -230,9 +230,8 @@ Push / PR  ──►  CI Pipeline
 | `SSH_HOST` | Server IP or domain |
 | `SSH_USER` | SSH username |
 | `SSH_PRIVATE_KEY` | SSH private key |
-| `POSTGRES_PASSWORD` | Production DB password |
-| `JWT_SECRET_KEY` | JWT signing secret |
-| `ADMIN_EMAILS` | JSON array of admin emails |
+
+> `.env.prod` is created manually on the server — CD only pulls code and restarts Docker.
 
 ## Code Quality
 

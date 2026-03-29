@@ -1,20 +1,28 @@
 const ENV_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export const getApiUrl = (serverHost?: string) => {
-    // If we are in the browser, use exact window.location.hostname
+    // 1. If we are in the browser (CSR)
     if (typeof window !== "undefined") {
-        const apiHost = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
-        const url = `http://${apiHost}:8000`;
-        return url;
+        // In production or behind proxy, we use relative /api
+        if (process.env.NODE_ENV === "production") {
+            return "/api"; 
+        }
+        // Local dev: connect to local FastAPI
+        const apiHost = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+        return `http://${apiHost}:8000`;
     }
-    // If we are in SSR and a host was provided (e.g., from headers() in a Server Component)
+
+    // 2. If we are in SSR (Server-Side)
+    // In production Docker, use the defined docker network URL (http://api:8000)
+    if (process.env.NODE_ENV === "production") {
+        return ENV_API_URL;
+    }
+
+    // Local SSR fallback
     if (serverHost) {
-        // Strip out the port if present (e.g., "192.168.0.x:3000" -> "192.168.0.x")
         const cleanHost = serverHost.split(':')[0];
         return `http://${cleanHost}:8000`;
     }
-    
-    // Fallback for SSR where no host is available
     return ENV_API_URL;
 };
 

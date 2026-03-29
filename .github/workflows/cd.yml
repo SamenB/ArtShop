@@ -37,36 +37,18 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # ── 3. Generate .env.prod from secrets ──
-            echo "🔐 Writing .env.prod..."
-            cat > .env.prod << 'ENVEOF'
-            MODE=PROD
-            LOG_LEVEL=INFO
-            POSTGRES_DB=artshop
-            POSTGRES_USER=postgres
-            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            DB_HOST=db
-            DB_PORT=5432
-            REDIS_HOST=redis
-            REDIS_PORT=6379
-            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-            JWT_ALGORITHM=HS256
-            JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-            ADMIN_EMAILS=${{ secrets.ADMIN_EMAILS }}
-            NEXT_PUBLIC_API_URL=http://localhost:8000
-            ENVEOF
-
-            # ── 4. Build and deploy ──
+            # ── 3. Build and deploy ──
+            # .env.prod is created manually on the server once (not overwritten)
             echo "🐳 Building and deploying..."
             docker compose -f docker-compose.prod.yml down
             docker compose -f docker-compose.prod.yml up --build -d
 
-            # ── 5. Health check ──
+            # ── 4. Health check ──
             echo "🩺 Checking service health..."
             sleep 10
             docker compose -f docker-compose.prod.yml ps
 
-            # ── 6. Cleanup ──
+            # ── 5. Cleanup ──
             echo "🧹 Cleaning up old images..."
             docker image prune -f
 
