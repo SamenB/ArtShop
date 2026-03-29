@@ -194,7 +194,7 @@ services:
 
   # === 11. cAdvisor (Docker Container Metrics) ===
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: monitoring_cadvisor
     restart: unless-stopped
     volumes:
@@ -203,6 +203,7 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     devices:
       - /dev/kmsg
     networks:
