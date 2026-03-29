@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { getApiUrl, getImageUrl } from "@/utils";
 
+export const dynamic = "force-dynamic";
+
 // FEATURED_WORKS will be fetched from API
 type OriginalStatus = "available" | "sold" | "reserved";
 
