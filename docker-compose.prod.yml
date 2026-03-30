@@ -195,15 +195,15 @@ services:
 
   # === 11. Dozzle (Live Logging UI) ===
   dozzle:
-    image: amir20/dozzle:v7.0.5
+    image: amir20/dozzle:latest
     container_name: monitoring_dozzle
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/dozzle/data:/data
     environment:
       - DOZZLE_BASE=/logs
-      - DOZZLE_USERNAME=admin
-      - DOZZLE_PASSWORD=strongpassword123
+      - DOZZLE_AUTH_PROVIDER=simple
     networks:
       - artshop-net
 
@@ -215,8 +215,6 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=strongpassword123
       - GF_SERVER_ROOT_URL=https://samen-bondarenko.com/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
     networks:
