@@ -7,6 +7,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  dozzle_data:
 
 
 services:
@@ -200,7 +201,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./monitoring/dozzle/data:/data
+      - dozzle_data:/data
     environment:
       - DOZZLE_BASE=/logs
       - DOZZLE_AUTH_PROVIDER=simple
@@ -219,3 +220,4 @@ services:
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
     networks:
       - artshop-net
+
