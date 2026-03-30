@@ -31,6 +31,8 @@ backend/src/utils/halping_commands.txt
 
 # SSL certificates
 nginx/ssl/
+# htpasswd — generated on server at deploy time from DOZZLE_PASSWORD secret
+nginx/htpasswd
 
 # Temp files
 error.txt

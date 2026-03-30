@@ -151,10 +151,12 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
     depends_on:
       - api
       - frontend
-      - grafana # Depends on Grafana for the /grafana/ proxy
+      - grafana
+      - dozzle
     networks:
       - artshop-net
 
@@ -194,6 +196,7 @@ services:
 
 
   # === 11. Dozzle (Live Logging UI) ===
+  # Note: Dozzle is protected by Nginx IP filtering (see nginx.conf)
   dozzle:
     image: amir20/dozzle:v7.0.5
     container_name: monitoring_dozzle
@@ -202,8 +205,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - DOZZLE_BASE=/logs
-      - DOZZLE_USERNAME=admin
-      - DOZZLE_PASSWORD=strongpassword123
     networks:
       - artshop-net
 

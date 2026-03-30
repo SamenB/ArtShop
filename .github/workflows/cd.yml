@@ -37,6 +37,11 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            # ── 3. Generate htpasswd for Dozzle (Basic Auth) ──
+            echo "🔑 Generating htpasswd for Nginx Basic Auth..."
+            DOZZLE_PASSWORD=$(grep '^DOZZLE_PASSWORD=' ~/ArtShop/.env.prod | cut -d '=' -f2)
+            echo "admin:$(openssl passwd -apr1 $DOZZLE_PASSWORD)" > ~/ArtShop/nginx/htpasswd
+
             # ── 3. Build and deploy ──
             # .env.prod is created manually on the server once (not overwritten)
             echo "🐳 Building and deploying..."
