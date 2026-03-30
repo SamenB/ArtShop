@@ -195,7 +195,7 @@ services:
 
   # === 11. Dozzle (Live Logging UI) ===
   dozzle:
-    image: amir20/dozzle:latest
+    image: amir20/dozzle:v7.0.5
     container_name: monitoring_dozzle
     restart: unless-stopped
     volumes:
