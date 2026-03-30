@@ -7,7 +7,6 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
-  dozzle_data:
 
 
 services:
@@ -196,16 +195,15 @@ services:
 
   # === 11. Dozzle (Live Logging UI) ===
   dozzle:
-    image: amir20/dozzle:latest
+    image: amir20/dozzle:v7.0.5
     container_name: monitoring_dozzle
-    user: "0:0"
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - dozzle_data:/data
     environment:
       - DOZZLE_BASE=/logs
-      - DOZZLE_AUTH_PROVIDER=simple
+      - DOZZLE_USERNAME=admin
+      - DOZZLE_PASSWORD=strongpassword123
     networks:
       - artshop-net
 
