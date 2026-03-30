@@ -193,6 +193,19 @@ services:
       - artshop-net
 
 
+  # === 11. Dozzle (Live Logging UI) ===
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: monitoring_dozzle
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_BASE=/logs
+      - DOZZLE_USERNAME=admin
+      - DOZZLE_PASSWORD=strongpassword123
+    networks:
+      - artshop-net
 
   # === 12. Grafana (Dashboard UI) ===
   grafana:
