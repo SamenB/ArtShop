@@ -45,8 +45,8 @@ jobs:
             # ── 3. Build and deploy ──
             # .env.prod is created manually on the server once (not overwritten)
             echo "🐳 Building and deploying..."
-            docker compose -f docker-compose.prod.yml down
-            docker compose -f docker-compose.prod.yml up --build -d
+            docker compose --env-file .env.prod -f docker-compose.prod.yml down
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d
 
             # ── 4. Health check ──
             echo "🩺 Checking service health..."
