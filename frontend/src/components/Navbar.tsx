@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
     usePreferences,
@@ -259,27 +260,20 @@ export default function Navbar() {
                     <div style={{ display: "flex", alignItems: "center" }}>
                         {/* Logo */}
                         <div style={{ display: "flex", alignItems: "center" }}>
-                            <Link
-                                href="/"
-                                style={{
-                                    fontFamily: '"Didot", "Bodoni MT", "Times New Roman", serif',
-                                    color: "#F4F4F4",
-                                    textDecoration: "none",
-                                    flexShrink: 0,
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    lineHeight: 0.95,
-                                    width: "fit-content",
-                                    transform: "scale(0.94)",
-                                    transformOrigin: "left center",
-                                }}
-                            >
-                                <span style={{ fontSize: isMobile ? "1.45rem" : "clamp(1.45rem, 0.94rem + 0.8vw, 3rem)", fontWeight: 400, letterSpacing: "0.01em" }}>Samen</span>
-                                <span style={{ fontSize: isMobile ? "1.45rem" : "clamp(1.45rem, 0.94rem + 0.8vw, 3rem)", fontWeight: 400, letterSpacing: "0.01em" }}>Bondarenko</span>
-                                <div style={{ display: "flex", alignItems: "center", gap: "clamp(6px, 3.5px + 0.25vw, 12px)", marginTop: "2px", width: "100%" }}>
-                                    <span style={{ flex: 1, minWidth: "clamp(45px, 33.5px + 1.1vw, 80px)", height: "1.5px", backgroundColor: "#F4F4F4", marginLeft: "2px" }} />
-                                    <span style={{ fontSize: isMobile ? "1rem" : "clamp(1rem, 0.66rem + 0.54vw, 2rem)", fontWeight: 400, transform: "translateY(-1px)", flexShrink: 0, paddingRight: "5px" }}>Gallery</span>
-                                </div>
+                            <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none", flexShrink: 0 }}>
+                                <Image
+                                    src="/logo.png"
+                                    alt="Samen Bondarenko Gallery"
+                                    width={600}
+                                    height={200}
+                                    priority
+                                    style={{
+                                        height: isMobile ? "52px" : "clamp(52px, 36px + 1.6vw, 95px)",
+                                        width: "auto",
+                                        objectFit: "contain",
+                                        display: "block",
+                                    }}
+                                />
                             </Link>
                         </div>
                     </div>
