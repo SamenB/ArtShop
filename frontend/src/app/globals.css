@@ -223,14 +223,16 @@ h3 {
   backface-visibility: hidden;
 }
 
-.art-card:hover .art-card-container {
-  /* Слегка приближаем всё окно-карточку вместе с картиной (кроп стал меньше) */
-  transform: scale(1.02);
-  /* Дополнительные тени убраны, тень остается такой же, как в состоянии покоя */
+/* Hover lift only on real pointer devices (mouse/trackpad) — not on touchscreens */
+@media (hover: hover) and (pointer: fine) {
+  .art-card:hover .art-card-container {
+    /* Слегка приближаем всё окно-карточку вместе с картиной (кроп стал меньше) */
+    transform: scale(1.02);
+  }
 }
 
+/* Active press feedback — stays on ALL devices (tactile confirmation on touch too) */
 .art-card:active .art-card-container {
-  /* При нажатии карточка проседает, тень становится четким контуром (70%) */
   transform: scale(0.98);
   box-shadow: 0 0 5px 1px rgba(28, 25, 22, 0.7);
 }
@@ -275,18 +277,22 @@ h3 {
 .home-art-card {
   transform: translateY(0);
 }
-.home-art-card:hover {
-  transform: translateY(-6px);
-}
 .home-art-card .home-img-inner {
   transform: scale(1);
-}
-.home-art-card:hover .home-img-inner {
-  transform: scale(1.02);
 }
 .home-art-card .home-shadow-box {
   box-shadow: 0 6px 24px rgba(26,26,24,0.18);
 }
-.home-art-card:hover .home-shadow-box {
-  box-shadow: 0 28px 64px rgba(26,26,24,0.32);
+
+/* Home page art card hover — pointer devices only */
+@media (hover: hover) and (pointer: fine) {
+  .home-art-card:hover {
+    transform: translateY(-6px);
+  }
+  .home-art-card:hover .home-img-inner {
+    transform: scale(1.02);
+  }
+  .home-art-card:hover .home-shadow-box {
+    box-shadow: 0 28px 64px rgba(26,26,24,0.32);
+  }
 }
