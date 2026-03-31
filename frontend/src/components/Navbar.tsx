@@ -476,22 +476,22 @@ export default function Navbar() {
                 style={{
                     position: "fixed",
                     top: "70px", right: 0, bottom: 0,
-                    width: "75%", maxWidth: "340px",
+                    width: "68%", maxWidth: "300px",
                     zIndex: 99,
-                    backgroundColor: "#FAFAF8", // Extremely light cream
-                    borderLeft: "1px solid rgba(26,26,24,0.06)",
-                    boxShadow: "-10px 0 40px rgba(0,0,0,0.06)",
+                    backgroundColor: "#F7F6F3",
+                    borderLeft: "1px solid rgba(26,26,24,0.07)",
+                    boxShadow: "-16px 0 48px rgba(0,0,0,0.08)",
                     transform: menuOpen ? "translateX(0)" : "translateX(100%)",
                     pointerEvents: menuOpen ? "auto" : "none",
                     transition: "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
                     display: "flex",
                     flexDirection: "column",
-                    padding: "2.5rem 2rem",
+                    padding: "2rem 1.5rem 1.75rem",
                     overflowY: "auto",
                 }}
             >
-                {/* Links */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {/* ── Navigation Links ── */}
+                <nav style={{ display: "flex", flexDirection: "column" }}>
                     {NAV_LINKS.map((link, i) => {
                         const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
                         return (
@@ -501,44 +501,55 @@ export default function Navbar() {
                                 onClick={() => setMenuOpen(false)}
                                 style={{
                                     display: "block",
-                                    padding: "0.5rem 0",
+                                    padding: "0.55rem 0",
                                     fontFamily: "var(--font-sans)",
-                                    fontSize: "1.45rem",
+                                    fontSize: "1.15rem",
                                     fontWeight: isActive ? 500 : 300,
-                                    letterSpacing: "0.02em",
+                                    letterSpacing: "0.01em",
                                     textDecoration: "none",
-                                    color: isActive ? "var(--color-charcoal)" : "var(--color-charcoal-mid)",
-                                    transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                    color: isActive ? "var(--color-charcoal)" : "rgba(26,26,24,0.55)",
+                                    borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                    transform: menuOpen ? "translateX(0)" : "translateX(18px)",
                                     opacity: menuOpen ? 1 : 0,
-                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05 + 0.15}s`,
+                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05 + 0.1}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.05 + 0.1}s, color 0.2s ease`,
                                 }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
                             >
                                 {link.label}
                             </Link>
                         );
                     })}
 
-                    {/* Cart in Mobile Drawer */}
+                    {/* Cart */}
                     <button
-                        onClick={() => {
-                            setMenuOpen(false);
-                            setIsCartOpen(true);
-                        }}
+                        onClick={() => { setMenuOpen(false); setIsCartOpen(true); }}
                         style={{
-                            display: "flex", alignItems: "center", gap: "0.5rem",
-                            padding: "0.5rem 0", background: "none", border: "none",
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "0.55rem 0", background: "none", border: "none",
+                            borderBottom: "1px solid rgba(26,26,24,0.06)",
                             cursor: "pointer", fontFamily: "var(--font-sans)",
-                            fontSize: "1.45rem", fontWeight: 300, letterSpacing: "0.02em",
-                            color: "var(--color-charcoal)", textAlign: "left",
-                            transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                            fontSize: "1.15rem", fontWeight: 300, letterSpacing: "0.01em",
+                            color: "rgba(26,26,24,0.55)", textAlign: "left", width: "100%",
+                            transform: menuOpen ? "translateX(0)" : "translateX(18px)",
                             opacity: menuOpen ? 1 : 0,
-                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
+                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.1}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.1}s, color 0.2s ease`,
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
                     >
-                        Cart {cartCount > 0 && `(${cartCount})`}
+                        <span>Cart</span>
+                        {cartCount > 0 && (
+                            <span style={{
+                                fontSize: "0.7rem", fontWeight: 600,
+                                background: "rgba(26,26,24,0.08)",
+                                color: "var(--color-charcoal)",
+                                borderRadius: "10px", padding: "2px 7px",
+                            }}>{cartCount}</span>
+                        )}
                     </button>
 
-                    {/* Profile / Login in Mobile Drawer */}
+                    {/* Profile / Login */}
                     {user ? (
                         <>
                             <Link
@@ -546,16 +557,17 @@ export default function Navbar() {
                                 onClick={() => setMenuOpen(false)}
                                 style={{
                                     display: "block",
-                                    padding: "0.5rem 0",
+                                    padding: "0.55rem 0",
                                     fontFamily: "var(--font-sans)",
-                                    fontSize: "1.45rem",
+                                    fontSize: "1.15rem",
                                     fontWeight: 300,
-                                    letterSpacing: "0.02em",
+                                    letterSpacing: "0.01em",
                                     textDecoration: "none",
-                                    color: "var(--color-charcoal)",
-                                    transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                    color: "rgba(26,26,24,0.55)",
+                                    borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                    transform: menuOpen ? "translateX(0)" : "translateX(18px)",
                                     opacity: menuOpen ? 1 : 0,
-                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s`,
+                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
                                 }}
                             >
                                 {user.is_admin ? "Admin Dashboard" : "Dashboard"}
@@ -563,13 +575,14 @@ export default function Navbar() {
                             <button
                                 onClick={() => { setMenuOpen(false); logout(); }}
                                 style={{
-                                    display: "block", padding: "0.5rem 0", background: "none", border: "none",
+                                    display: "block", padding: "0.55rem 0", background: "none",
+                                    border: "none", borderBottom: "1px solid rgba(26,26,24,0.06)",
                                     cursor: "pointer", fontFamily: "var(--font-sans)",
-                                    fontSize: "1.45rem", fontWeight: 300, letterSpacing: "0.02em",
-                                    color: "#E53E3E", textAlign: "left",
-                                    transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                    fontSize: "1.15rem", fontWeight: 300, letterSpacing: "0.01em",
+                                    color: "#C0392B", textAlign: "left", width: "100%",
+                                    transform: menuOpen ? "translateX(0)" : "translateX(18px)",
                                     opacity: menuOpen ? 1 : 0,
-                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.25}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.25}s`,
+                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.2}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.2}s`,
                                 }}
                             >
                                 Sign out
@@ -579,43 +592,97 @@ export default function Navbar() {
                         <button
                             onClick={() => { setMenuOpen(false); setAuthModalOpen(true); }}
                             style={{
-                                display: "block", padding: "0.5rem 0", background: "none", border: "none",
+                                display: "block", padding: "0.55rem 0", background: "none",
+                                border: "none", borderBottom: "1px solid rgba(26,26,24,0.06)",
                                 cursor: "pointer", fontFamily: "var(--font-sans)",
-                                fontSize: "1.45rem", fontWeight: 300, letterSpacing: "0.02em",
-                                color: "var(--color-charcoal)", textAlign: "left",
-                                transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                fontSize: "1.15rem", fontWeight: 300, letterSpacing: "0.01em",
+                                color: "rgba(26,26,24,0.55)", textAlign: "left", width: "100%",
+                                transform: menuOpen ? "translateX(0)" : "translateX(18px)",
                                 opacity: menuOpen ? 1 : 0,
-                                transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s`,
+                                transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
                             }}
                         >
                             Sign In / Profile
                         </button>
                     )}
-                </div>
+                </nav>
 
-                {/* Preferences at bottom */}
+                {/* ── Preferences Card at bottom ── */}
                 <div style={{
                     marginTop: "auto",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1.25rem",
-                    borderTop: "1px solid rgba(26,26,24,0.08)",
-                    paddingTop: "2rem",
+                    paddingTop: "1.25rem",
                     opacity: menuOpen ? 1 : 0,
-                    transform: menuOpen ? "translateY(0)" : "translateY(15px)",
-                    transition: "opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s",
+                    transform: menuOpen ? "translateY(0)" : "translateY(12px)",
+                    transition: "opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s",
                 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Language</span>
-                        <SegmentedPill<Language> options={["en", "uk"]} labels={LANGUAGE_LABELS} value={language} onChange={setLanguage} />
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Currency</span>
-                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={LOCAL_CURRENCY_LABELS} value={currency} onChange={setCurrency} />
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Measurement</span>
-                        <SegmentedPill<Units> options={["in", "cm"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
+                    {/* Section label */}
+                    <span style={{
+                        display: "block",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: "0.6rem",
+                        fontWeight: 600,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: "rgba(26,26,24,0.35)",
+                        marginBottom: "0.6rem",
+                    }}>Preferences</span>
+
+                    {/* Grouped card */}
+                    <div style={{
+                        backgroundColor: "rgba(26,26,24,0.04)",
+                        borderRadius: "10px",
+                        border: "1px solid rgba(26,26,24,0.07)",
+                        overflow: "hidden",
+                    }}>
+                        {/* Language row */}
+                        <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "0.6rem 0.85rem",
+                            borderBottom: "1px solid rgba(26,26,24,0.06)",
+                        }}>
+                            <span style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: "0.72rem",
+                                fontWeight: 500,
+                                letterSpacing: "0.04em",
+                                textTransform: "uppercase",
+                                color: "rgba(26,26,24,0.5)",
+                            }}>Language</span>
+                            <SegmentedPill<Language> options={["en", "uk"]} labels={LANGUAGE_LABELS} value={language} onChange={setLanguage} />
+                        </div>
+
+                        {/* Currency row */}
+                        <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "0.6rem 0.85rem",
+                            borderBottom: "1px solid rgba(26,26,24,0.06)",
+                        }}>
+                            <span style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: "0.72rem",
+                                fontWeight: 500,
+                                letterSpacing: "0.04em",
+                                textTransform: "uppercase",
+                                color: "rgba(26,26,24,0.5)",
+                            }}>Currency</span>
+                            <SegmentedPill<Currency> options={["USD", "UAH"]} labels={LOCAL_CURRENCY_LABELS} value={currency} onChange={setCurrency} />
+                        </div>
+
+                        {/* Measurement row */}
+                        <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "0.6rem 0.85rem",
+                        }}>
+                            <span style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: "0.72rem",
+                                fontWeight: 500,
+                                letterSpacing: "0.04em",
+                                textTransform: "uppercase",
+                                color: "rgba(26,26,24,0.5)",
+                            }}>Units</span>
+                            <SegmentedPill<Units> options={["in", "cm"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
+                        </div>
                     </div>
                 </div>
             </div>

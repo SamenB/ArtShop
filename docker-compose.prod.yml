@@ -219,7 +219,6 @@ services:
     networks:
       - artshop-net
 
-
   # === 11. Dozzle (Live Logging UI) ===
   # Note: Dozzle is protected by Nginx IP filtering (see nginx.conf)
   dozzle:
@@ -245,4 +244,3 @@ services:
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
     networks:
       - artshop-net
-
