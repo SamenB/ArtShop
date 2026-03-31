@@ -7,6 +7,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  media_data:
 
 
 services:
@@ -77,6 +78,8 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+    volumes:
+      - media_data:/app/static/images
     networks:
       - artshop-net
 
@@ -97,6 +100,8 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+    volumes:
+      - media_data:/app/static/images
     networks:
       - artshop-net
 
