@@ -10,6 +10,8 @@ interface SiteSettings {
     artist_about_photo_url: string | null;
     main_bg_desktop_url: string | null;
     main_bg_mobile_url: string | null;
+    social_link: string | null;
+    studio_address: string | null;
     global_print_price: number;
 }
 
@@ -159,6 +161,30 @@ export default function SettingsTab() {
                     onChange={handleChange}
                     className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
                     placeholder="artist@example.com"
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Social Link Handle</label>
+                <input 
+                    type="text"
+                    name="social_link"
+                    value={settings.social_link || ""}
+                    onChange={handleChange}
+                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
+                    placeholder="@artshop_studio"
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Studio Address</label>
+                <textarea 
+                    name="studio_address"
+                    value={settings.studio_address || ""}
+                    onChange={handleChange}
+                    rows={3}
+                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
+                    placeholder="Kiev, Ukraine&#10;By appointment only"
                 />
             </div>
             

@@ -130,46 +130,43 @@ export default async function Home() {
         >
           {/* Text Block */}
           <div style={{ textAlign: "center", maxWidth: "900px" }}>
-          {/* Eyebrow label — serif, bright, beautiful */}
-          <p
-            className="animate-fade-up"
-            style={{
-              fontFamily: '"Didot", "Bodoni MT", "Times New Roman", serif',
-              fontSize: "clamp(1rem, 2.2vw, 1.6rem)",
-              fontWeight: 400,
-              fontStyle: "italic",
-              letterSpacing: "0.06em",
-              color: "rgba(250, 250, 247, 0.92)",
-              marginBottom: "0",
-              animationDelay: "0.15s",
-              animationFillMode: "forwards",
-              lineHeight: 1.6,
-            }}
-          >
-            Original Paintings &amp; Fine Art Prints
-          </p>
+            {/* Eyebrow label — serif, bright, beautiful */}
+            <div className="animate-fade-up" style={{ marginBottom: "0.5rem", animationDelay: "0.15s", animationFillMode: "forwards" }}>
+              <p
+                style={{
+                  fontFamily: '"Didot", "Bodoni MT", "Times New Roman", serif',
+                  fontSize: "clamp(1.5rem, 3.2vw, 2.5rem)",
+                  fontWeight: 400,
+                  fontStyle: "italic",
+                  letterSpacing: "0.06em",
+                  color: "#ffffff",
+                  lineHeight: 1.6,
+                  textShadow: "0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.5)",
+                }}
+              >
+                Original Paintings &amp; Fine Art Prints
+              </p>
+            </div>
 
 
 
-          {/* Subtitle — dimmer, smaller */}
-          <p
-            className="animate-fade-up"
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "clamp(0.75rem, 1.4vw, 0.95rem)",
-              fontWeight: 300,
-              letterSpacing: "0.06em",
-              color: "rgba(250, 250, 247, 0.45)",
-              maxWidth: "500px",
-              margin: "0.75rem auto 0",
-              lineHeight: 1.8,
-              animationDelay: "0.3s",
-              animationFillMode: "forwards",
-            }}
-          >
-            Discover a collection of original works painted with passion.
-            Each piece is a story waiting to hang on your wall.
-          </p>
+            {/* Subtitle — dimmer, smaller */}
+            <div className="animate-fade-up" style={{ maxWidth: "600px", margin: "1rem auto 0", animationDelay: "0.3s", animationFillMode: "forwards" }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "clamp(0.95rem, 1.5vw, 1.2rem)",
+                  fontWeight: 400,
+                  letterSpacing: "0.05em",
+                  color: "#ffffff",
+                  lineHeight: 1.8,
+                  textShadow: "0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.5)",
+                }}
+              >
+                Discover a collection of original works painted with passion.
+                Each piece is a story waiting to hang on your wall.
+              </p>
+            </div>
 
           </div>
 
@@ -199,25 +196,25 @@ export default async function Home() {
               transition: "color 0.2s ease, border-color 0.2s ease",
             }}
           >
-            Explore Gallery
-          </Link>
-          <Link
-            href="/shop"
-            className="hero-shop-link"
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "0.75rem",
-              fontWeight: 300,
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              textDecoration: "none",
-              borderBottom: "1px solid",
-              paddingBottom: "4px",
-              transition: "color 0.2s ease, border-color 0.2s ease",
-            }}
-          >
-            Shop Prints
-          </Link>
+              Explore Gallery
+            </Link>
+            <Link
+              href="/shop"
+              className="hero-shop-link"
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.75rem",
+                fontWeight: 300,
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                textDecoration: "none",
+                borderBottom: "1px solid",
+                paddingBottom: "4px",
+                transition: "color 0.2s ease, border-color 0.2s ease",
+              }}
+            >
+              Shop Prints
+            </Link>
           </div>
         </div>
 

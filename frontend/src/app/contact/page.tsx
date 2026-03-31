@@ -1,13 +1,54 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiUrl } from "@/utils";
 
 export default function ContactPage() {
     const [isVisible, setIsVisible] = useState(false);
+    
+    // Form State
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [message, setMessage] = useState("");
+    
+    // UI State
+    const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+    const [settings, setSettings] = useState<{ contact_email?: string; social_link?: string; studio_address?: string } | null>(null);
 
     useEffect(() => {
         setIsVisible(true);
+        // Fetch public settings for contact details
+        fetch(`${getApiUrl()}/settings`)
+            .then(res => res.json())
+            .then(data => setSettings(data))
+            .catch(err => console.error("Failed to fetch settings", err));
     }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name || !email || !message) return;
+        
+        setStatus("loading");
+        try {
+            const res = await fetch(`${getApiUrl()}/contact`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, email, message })
+            });
+            
+            if (res.ok) {
+                setStatus("success");
+                setName("");
+                setEmail("");
+                setMessage("");
+            } else {
+                setStatus("error");
+            }
+        } catch (error) {
+            console.error(error);
+            setStatus("error");
+        }
+    };
 
     return (
         <div style={{ backgroundColor: "var(--color-cream)", minHeight: "100svh", paddingTop: "120px", paddingBottom: "100px" }}>
@@ -51,7 +92,7 @@ export default function ContactPage() {
                                 fontFamily: "var(--font-mono)", fontSize: "0.9rem", color: "var(--color-charcoal)",
                                 marginTop: "10px"
                             }}>
-                                hello@artshop.com
+                                {settings?.contact_email || "hello@artshop.com"}
                             </p>
                         </div>
 
@@ -66,7 +107,7 @@ export default function ContactPage() {
                                 fontFamily: "var(--font-mono)", fontSize: "0.9rem", color: "var(--color-charcoal)",
                                 marginTop: "10px"
                             }}>
-                                @artshop_studio
+                                {settings?.social_link || "@artshop_studio"}
                             </p>
                         </div>
 
@@ -79,17 +120,16 @@ export default function ContactPage() {
                             </span>
                             <p style={{
                                 fontFamily: "var(--font-mono)", fontSize: "0.9rem", color: "var(--color-charcoal)",
-                                marginTop: "10px", lineHeight: 1.6
+                                marginTop: "10px", lineHeight: 1.6, whiteSpace: "pre-line"
                             }}>
-                                Kiev, Ukraine<br />
-                                By appointment only
+                                {settings?.studio_address || "Kiev, Ukraine\nBy appointment only"}
                             </p>
                         </div>
                     </div>
 
                     {/* ── FORM COLUMN ────────────────────────────────────────── */}
                     <div>
-                        <form style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
+                        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                 <label style={{
                                     fontFamily: "var(--font-mono)", fontSize: "0.55rem", color: "var(--color-muted)",
@@ -99,6 +139,9 @@ export default function ContactPage() {
                                 </label>
                                 <input
                                     type="text"
+                                    required
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
                                     style={{
                                         backgroundColor: "transparent", border: "none",
                                         borderBottom: "1px solid var(--color-border-dark)",
@@ -117,6 +160,9 @@ export default function ContactPage() {
                                 </label>
                                 <input
                                     type="email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     style={{
                                         backgroundColor: "transparent", border: "none",
                                         borderBottom: "1px solid var(--color-border-dark)",
@@ -135,6 +181,9 @@ export default function ContactPage() {
                                 </label>
                                 <textarea
                                     rows={4}
+                                    required
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
                                     style={{
                                         backgroundColor: "transparent", border: "none",
                                         borderBottom: "1px solid var(--color-border-dark)",
@@ -145,20 +194,32 @@ export default function ContactPage() {
                                 />
                             </div>
 
+                            {status === "success" && (
+                                <p style={{ fontFamily: "var(--font-sans)", color: "green", fontSize: "0.85rem", fontStyle: "italic" }}>
+                                    Thank you! Your message has been sent successfully.
+                                </p>
+                            )}
+                            {status === "error" && (
+                                <p style={{ fontFamily: "var(--font-sans)", color: "red", fontSize: "0.85rem", fontStyle: "italic" }}>
+                                    Something went wrong. Please try again later.
+                                </p>
+                            )}
+
                             <button
                                 type="submit"
+                                disabled={status === "loading"}
                                 style={{
                                     marginTop: "20px", padding: "12px 30px", backgroundColor: "var(--color-charcoal)",
                                     color: "var(--color-cream)", border: "none", fontFamily: "var(--font-sans)",
                                     fontSize: "0.75rem", fontWeight: 500, letterSpacing: "0.15em",
-                                    textTransform: "uppercase", cursor: "pointer", borderRadius: "2px",
+                                    textTransform: "uppercase", cursor: status === "loading" ? "default" : "pointer", 
+                                    borderRadius: "2px", opacity: status === "loading" ? 0.7 : 1,
                                     transition: "opacity 0.2s ease"
                                 }}
                                 onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-                                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-                                onClick={(e) => e.preventDefault()}
+                                onMouseLeave={(e) => (e.currentTarget.style.opacity = status === "loading" ? "0.7" : "1")}
                             >
-                                Send Message
+                                {status === "loading" ? "Sending..." : "Send Message"}
                             </button>
                         </form>
                     </div>
