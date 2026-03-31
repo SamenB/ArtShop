@@ -36,6 +36,10 @@ export const metadata: Metadata = {
     siteName: "ArtShop",
     locale: "en_US",
   },
+  icons: {
+    icon: '/sb-icon.svg?v=3',
+    apple: '/sb-icon.svg?v=3',
+  },
 };
 
 // RootLayout wraps every page.
