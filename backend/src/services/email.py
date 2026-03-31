@@ -2,6 +2,7 @@ import smtplib
 from email.message import EmailMessage
 
 from loguru import logger
+
 from src.config import settings
 
 
@@ -24,7 +25,7 @@ def send_contact_emails(name: str, email: str, message: str, admin_email: str | 
         else:
             server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
             server.starttls()
-            
+
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         sender = settings.SMTP_USER
 
@@ -35,7 +36,7 @@ def send_contact_emails(name: str, email: str, message: str, admin_email: str | 
         # Send to the primary admin email or the sender itself
         target_email = admin_email or (settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else sender)
         owner_msg["To"] = target_email
-        
+
         # Set reply-to to the customer's email so the owner can reply directly!
         owner_msg["Reply-To"] = email
         owner_msg.set_content(

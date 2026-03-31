@@ -13,12 +13,12 @@ from src.api.artworks import bulk_router as artworks_bulk_router
 from src.api.artworks import router as artworks_router
 from src.api.auth import router as auth_router
 from src.api.collections import router as collections_router
+from src.api.contact import router as contact_router
 from src.api.orders import router as orders_router
 from src.api.settings import router as settings_router
 from src.api.tags import router as tags_router
 from src.api.upload import router as upload_router
 from src.api.users import router as users_router
-from src.api.contact import router as contact_router
 from src.config import settings
 from src.exeptions import ArtShopExeption
 from src.init import redis_manager
