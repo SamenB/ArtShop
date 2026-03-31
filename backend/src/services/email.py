@@ -6,7 +6,9 @@ from loguru import logger
 from src.config import settings
 
 
-def send_contact_emails(name: str, email: str, message: str, admin_email: str | None = None) -> bool:
+def send_contact_emails(
+    name: str, email: str, message: str, admin_email: str | None = None
+) -> bool:
     """
     Sends two emails:
     1. Notification to the site owner.
@@ -34,7 +36,9 @@ def send_contact_emails(name: str, email: str, message: str, admin_email: str | 
         owner_msg["Subject"] = f"New Inquiry from {name} (The Samen Bondarenko Gallery)"
         owner_msg["From"] = sender
         # Send to the primary admin email or the sender itself
-        target_email = admin_email or (settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else sender)
+        target_email = admin_email or (
+            settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else sender
+        )
         owner_msg["To"] = target_email
 
         # Set reply-to to the customer's email so the owner can reply directly!
