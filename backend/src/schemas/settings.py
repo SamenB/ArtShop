@@ -6,6 +6,8 @@ from pydantic import BaseModel
 class SiteSettingsBase(BaseModel):
     about_text: Optional[str] = None
     contact_email: Optional[str] = None
+    social_link: Optional[str] = None
+    studio_address: Optional[str] = None
     artist_home_photo_url: Optional[str] = None
     artist_about_photo_url: Optional[str] = None
     main_bg_desktop_url: Optional[str] = None

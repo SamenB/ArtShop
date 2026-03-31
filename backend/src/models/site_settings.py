@@ -11,6 +11,8 @@ class SiteSettingsOrm(Base):
     # Texts
     about_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    social_link: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    studio_address: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Images
     artist_home_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

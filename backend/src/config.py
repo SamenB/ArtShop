@@ -46,6 +46,12 @@ class Settings(BaseSettings):
 
     GOOGLE_CLIENT_ID: str | None = None
 
+    # SMTP (Contact Form Emails)
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 465
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+
     # CORS Origins (useful for Local Dev -> Prod transitions)
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
