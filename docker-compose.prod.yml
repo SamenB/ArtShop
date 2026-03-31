@@ -59,7 +59,22 @@ services:
       - artshop-net
     restart: "no"
 
-  # === 4. FastAPI Backend ===
+  # === 4. Persistent Volume Initializer ===
+  # Repairs root-owned Named Volumes before the API attempts writing as appuser
+  media-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artshop_media_init
+    user: root
+    command: [ "chown", "-R", "appuser:appuser", "/app" ]
+    volumes:
+      - media_data:/app/static/images
+    networks:
+      - artshop-net
+    restart: "no"
+
+  # === 5. FastAPI Backend ===
   api:
     build:
       context: ./backend
@@ -77,6 +92,8 @@ services:
       redis:
         condition: service_healthy
       migrator:
+        condition: service_completed_successfully
+      media-init:
         condition: service_completed_successfully
     volumes:
       - media_data:/app/static/images
@@ -99,6 +116,8 @@ services:
       redis:
         condition: service_healthy
       migrator:
+        condition: service_completed_successfully
+      media-init:
         condition: service_completed_successfully
     volumes:
       - media_data:/app/static/images
