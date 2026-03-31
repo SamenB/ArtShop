@@ -63,19 +63,14 @@ export default async function Home() {
           ════════════════════════════════════════ */}
       <section
         style={{
-          // svh = Small Viewport Height — accounts for mobile browser chrome
-          // (address bar, bottom bar). 100vh can be too tall on iOS Safari.
           minHeight: "100svh",
-          // Fallback for old browsers that don't support svh
-          // minHeight: "calc(100vh - 72px)",
           position: "relative",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
+          justifyContent: "flex-start",
+          paddingTop: "clamp(115px, 18vh, 195px)", // Pushed even higher!
           overflow: "hidden",
-          // Extra top padding on mobile so content isn't hidden behind navbar
-          paddingTop: "80px",
-          paddingBottom: "5rem",
         }}
       >
         {/* Background */}
@@ -96,7 +91,6 @@ export default async function Home() {
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
-                filter: "brightness(0.6)"
               }}
               aria-hidden="true"
             />
@@ -121,73 +115,63 @@ export default async function Home() {
           }}
         />
 
-        {/* Hero content */}
+        {/* Main Content Wrapper (Text + Buttons) */}
         <div
           style={{
             position: "relative",
-            zIndex: 1,
-            textAlign: "center",
-            padding: "2rem",
-            maxWidth: "900px",
+            zIndex: 2, // Above the tracking dark panel and image
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "clamp(1.5rem, 3vh, 2.5rem)", // Tightly grouped
+            width: "100%",
+            padding: "0 2rem",
           }}
         >
-          {/* Eyebrow label */}
+          {/* Text Block */}
+          <div style={{ textAlign: "center", maxWidth: "900px" }}>
+          {/* Eyebrow label — serif, bright, beautiful */}
           <p
             className="animate-fade-up"
             style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "0.7rem",
-              fontWeight: 500,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: "rgba(250, 250, 247, 0.8)",
-              marginBottom: "1.5rem",
-              animationDelay: "0.1s",
-              animationFillMode: "forwards",
-            }}
-          >
-            Original Paintings & Fine Art Prints
-          </p>
-
-          {/* Main heading */}
-          <h1
-            className="animate-fade-up"
-            style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "clamp(3rem, 7vw, 7.5rem)",
+              fontFamily: '"Didot", "Bodoni MT", "Times New Roman", serif',
+              fontSize: "clamp(1rem, 2.2vw, 1.6rem)",
               fontWeight: 400,
               fontStyle: "italic",
-              color: "var(--color-cream)",
-              lineHeight: 1,
-              marginBottom: "1.5rem",
-              animationDelay: "0.2s",
+              letterSpacing: "0.06em",
+              color: "rgba(250, 250, 247, 0.92)",
+              marginBottom: "0",
+              animationDelay: "0.15s",
               animationFillMode: "forwards",
+              lineHeight: 1.6,
             }}
           >
-            Where Art
-            <br />
-            <span style={{ color: "rgba(250, 250, 247, 0.7)" }}>Finds Its Home</span>
-          </h1>
+            Original Paintings &amp; Fine Art Prints
+          </p>
 
-          {/* Subtitle */}
+
+
+          {/* Subtitle — dimmer, smaller */}
           <p
             className="animate-fade-up"
             style={{
               fontFamily: "var(--font-sans)",
-              fontSize: "clamp(0.85rem, 2vw, 1.1rem)",
+              fontSize: "clamp(0.75rem, 1.4vw, 0.95rem)",
               fontWeight: 300,
-              letterSpacing: "0.02em",
-              color: "rgba(250, 250, 247, 0.55)",
+              letterSpacing: "0.06em",
+              color: "rgba(250, 250, 247, 0.45)",
               maxWidth: "500px",
-              margin: "0 auto 3rem",
+              margin: "0.75rem auto 0",
               lineHeight: 1.8,
-              animationDelay: "0.35s",
+              animationDelay: "0.3s",
               animationFillMode: "forwards",
             }}
           >
             Discover a collection of original works painted with passion.
             Each piece is a story waiting to hang on your wall.
           </p>
+
+          </div>
 
           {/* CTA Buttons */}
           <div
@@ -196,47 +180,44 @@ export default async function Home() {
               display: "flex",
               gap: "2rem",
               justifyContent: "center",
-              flexWrap: "wrap",
               animationDelay: "0.5s",
               animationFillMode: "forwards",
+              whiteSpace: "nowrap",
+            }}
+          >  <Link
+            href="/gallery"
+            className="hero-link"
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "0.75rem",
+              fontWeight: 400,
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              textDecoration: "none",
+              borderBottom: "1px solid",
+              paddingBottom: "4px",
+              transition: "color 0.2s ease, border-color 0.2s ease",
             }}
           >
-            {/* Minimalist Link instead of solid button */}
-            <Link
-              href="/gallery"
-              className="hero-link"
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.75rem",
-                fontWeight: 400,
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                textDecoration: "none",
-                borderBottom: "1px solid",
-                paddingBottom: "4px",
-                transition: "color 0.2s ease, border-color 0.2s ease",
-              }}
-            >
-              Explore Gallery
-            </Link>
-
-            <Link
-              href="/shop"
-              className="hero-shop-link"
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.75rem",
-                fontWeight: 300,
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                textDecoration: "none",
-                borderBottom: "1px solid",
-                paddingBottom: "4px",
-                transition: "color 0.2s ease, border-color 0.2s ease",
-              }}
-            >
-              Shop Prints
-            </Link>
+            Explore Gallery
+          </Link>
+          <Link
+            href="/shop"
+            className="hero-shop-link"
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "0.75rem",
+              fontWeight: 300,
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              textDecoration: "none",
+              borderBottom: "1px solid",
+              paddingBottom: "4px",
+              transition: "color 0.2s ease, border-color 0.2s ease",
+            }}
+          >
+            Shop Prints
+          </Link>
           </div>
         </div>
 

@@ -38,11 +38,11 @@ async def upload_image(admin_id: AdminDep, file: UploadFile = File(...)):
                 elif img.mode != "RGB":
                     img = img.convert("RGB")
 
-                # Downscale large images (e.g., 30MB originals)
-                max_size = (2000, 2000)
+                # Downscale large images but preserve 4K details (up to 3840px) for beautiful hero backgrounds
+                max_size = (3840, 3840)
                 img.thumbnail(max_size, Image.Resampling.LANCZOS)
 
-                img.save(output_dir / filename, format="WEBP", quality=85)
+                img.save(output_dir / filename, format="WEBP", quality=95)
 
         await asyncio.to_thread(process_image)
 

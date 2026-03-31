@@ -7,9 +7,8 @@ export const getApiUrl = (serverHost?: string) => {
         if (process.env.NODE_ENV === "production") {
             return "/api"; 
         }
-        // Local dev: connect to local FastAPI
-        const apiHost = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-        return `http://${apiHost}:8000`;
+        // Local dev: connect to local FastAPI using same hostname to avoid cross-origin cookie drops for SameSite=Lax
+        return `http://${window.location.hostname}:8000`;
     }
 
     // 2. If we are in SSR (Server-Side)

@@ -240,7 +240,7 @@ export default function Navbar() {
                     position: "fixed",
                     top: 0, left: 0, right: 0,
                     zIndex: 100,
-                    backgroundColor: "rgba(17, 17, 17, 0.75)",
+                    backgroundColor: "rgba(10, 10, 10, 0.45)", // Semi-transparent to let page scroll behind it
                     backdropFilter: "blur(20px) saturate(160%)",
                     WebkitBackdropFilter: "blur(20px) saturate(160%)",
                     borderBottom: "1px solid rgba(255,255,255,0.05)",
@@ -262,8 +262,8 @@ export default function Navbar() {
                         <div style={{ display: "flex", alignItems: "center" }}>
                             <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none", flexShrink: 0 }}>
                                 <Image
-                                    src="/logo.png"
-                                    alt="Samen Bondarenko Gallery"
+                                    src="/logo-v2.png"
+                                    alt="Samen Bondarenko"
                                     width={600}
                                     height={200}
                                     priority
@@ -280,7 +280,12 @@ export default function Navbar() {
 
                     {/* ── DESKTOP: nav links ── */}
                     {!isMobile && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "clamp(2rem, 1.32rem + 1.07vw, 4rem)" }}>
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "clamp(1.5rem, 1rem + 0.8vw, 3rem)",
+                            // removed translateY hack to restore true flex center
+                        }}>
                             {NAV_LINKS.map((link) => {
                                 const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
                                 return (
@@ -294,13 +299,13 @@ export default function Navbar() {
                                             letterSpacing: "0.08em",
                                             textTransform: "uppercase",
                                             textDecoration: "none",
-                                            color: isActive ? "#FFFFFF" : "rgba(244,244,244,0.6)",
+                                            color: isActive ? "#FFFFFF" : "rgba(244,244,244,0.85)", // brighter
                                             borderBottom: isActive ? "1px solid rgba(244,244,244,0.4)" : "1px solid transparent",
-                                            paddingBottom: "4px",
+                                            padding: "4px 0", // equal top/bottom padding fixes vertical alignment with icons
                                             transition: "color 0.2s ease, border-color 0.2s ease",
                                         }}
                                         onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.color = "#FFFFFF"; e.currentTarget.style.borderColor = "rgba(244,244,244,0.2)"; } }}
-                                        onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.color = "rgba(244,244,244,0.6)"; e.currentTarget.style.borderColor = "transparent"; } }}
+                                        onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.color = "rgba(244,244,244,0.85)"; e.currentTarget.style.borderColor = "transparent"; } }}
                                     >
                                         {link.label}
                                     </Link>
@@ -323,12 +328,12 @@ export default function Navbar() {
                                     style={{
                                         display: "flex", alignItems: "center", justifyContent: "center",
                                         background: "none", border: "none", cursor: "pointer",
-                                        color: (profileMenuOpen || user) ? "#FFFFFF" : "rgba(244,244,244,0.6)",
+                                        color: (profileMenuOpen || user) ? "#FFFFFF" : "rgba(244,244,244,0.85)",
                                         padding: "4px",
                                         transition: "color 0.2s ease"
                                     }}
                                     onMouseEnter={(e) => { e.currentTarget.style.color = "#FFFFFF"; }}
-                                    onMouseLeave={(e) => { if (!profileMenuOpen && !user) e.currentTarget.style.color = "rgba(244,244,244,0.6)"; }}
+                                    onMouseLeave={(e) => { if (!profileMenuOpen && !user) e.currentTarget.style.color = "rgba(244,244,244,0.85)"; }}
                                 >
                                     <UserCircle size={22} strokeWidth={1.5} />
                                 </button>
@@ -376,11 +381,11 @@ export default function Navbar() {
                                 style={{
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                     background: "none", border: "none", cursor: "pointer",
-                                    color: "rgba(244,244,244,0.6)", padding: "4px",
+                                    color: "rgba(244,244,244,0.85)", padding: "4px",
                                     transition: "color 0.2s ease", position: "relative"
                                 }}
                                 onMouseEnter={(e) => { e.currentTarget.style.color = "#FFFFFF"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(244,244,244,0.6)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(244,244,244,0.85)"; }}
                             >
                                 <ShoppingBag size={20} strokeWidth={1.5} stroke="currentColor" />
                                 {cartCount > 0 && (
@@ -400,30 +405,7 @@ export default function Navbar() {
 
                     {/* ── MOBILE: Minimalist Menu Button + Cart ── */}
                     {isMobile && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                            {/* Cart Button Mobile */}
-                            <button
-                                onClick={() => setIsCartOpen(true)}
-                                style={{
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    background: "none", border: "none", cursor: "pointer",
-                                    color: "#F4F4F4", padding: "4px", position: "relative"
-                                }}
-                            >
-                                <ShoppingBag size={20} strokeWidth={1.5} stroke="currentColor" />
-                                {cartCount > 0 && (
-                                    <span style={{
-                                        position: "absolute", top: "0", right: "0",
-                                        background: "#E53E3E", color: "#FFFFFF",
-                                        fontSize: "0.6rem", fontWeight: 600, width: "16px", height: "16px",
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        borderRadius: "50%", transform: "translate(30%, -30%)"
-                                    }}>
-                                        {cartCount}
-                                    </span>
-                                )}
-                            </button>
-
+                        <div style={{ display: "flex", alignItems: "center" }}>
                             <button
                             onClick={() => setMenuOpen((p) => !p)}
                             aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -525,6 +507,26 @@ export default function Navbar() {
                             </Link>
                         );
                     })}
+
+                    {/* Cart in Mobile Drawer */}
+                    <button
+                        onClick={() => {
+                            setMenuOpen(false);
+                            setIsCartOpen(true);
+                        }}
+                        style={{
+                            display: "flex", alignItems: "center", gap: "0.5rem",
+                            padding: "0.5rem 0", background: "none", border: "none",
+                            cursor: "pointer", fontFamily: "var(--font-sans)",
+                            fontSize: "1.45rem", fontWeight: 300, letterSpacing: "0.02em",
+                            color: "var(--color-charcoal)", textAlign: "left",
+                            transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                            opacity: menuOpen ? 1 : 0,
+                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
+                        }}
+                    >
+                        Cart {cartCount > 0 && `(${cartCount})`}
+                    </button>
                 </div>
 
                 {/* Preferences at bottom */}
@@ -557,8 +559,25 @@ export default function Navbar() {
             {/* Auth Modal */}
             <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
-            {/* Spacer */}
-            <div style={{ height: "70px" }} />
+            {/* 
+                SPACER / TRACKING BACKGROUND
+                This behaves as normal document flow. It pushes the page content down 
+                so it doesn't hide behind the fixed navbar on load.
+                Because it sits at y=0, the fixed Navbar overlays it perfectly.
+                When the user scrolls, this spacer scrolls UP and away, revealing the 
+                page content under the semi-transparent Navbar.
+            */}
+            <div 
+                style={{ 
+                    width: "100%",
+                    backgroundColor: "rgba(35, 35, 35, 0.75)", // 7.5 out of 10 grey background
+                }} 
+                className="navbar-spacer-bg"
+            />
+            <style dangerouslySetInnerHTML={{__html: `
+                .navbar-spacer-bg { height: clamp(70px, 47px + 2.23vw, 130px); }
+                @media (max-width: 768px) { .navbar-spacer-bg { height: 70px; } }
+            `}} />
         </>
     );
 }

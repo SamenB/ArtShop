@@ -64,7 +64,7 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
         return new Promise((resolve) => {
             canvas.toBlob((file) => {
                 if (file) resolve(file);
-            }, format, 0.9);
+            }, format, 0.98); // Increased from 0.9 to 0.98 to avoid double-compression artifacts
         });
     };
 
