@@ -29,6 +29,11 @@ const NAV_LINKS = [
     { href: "/contact", label: "Contact" },
 ];
 
+const LOCAL_CURRENCY_LABELS: Record<Currency, string> = {
+    USD: "USD",
+    UAH: "UAH",
+};
+
 function SegmentedPill<T extends string>({
     options,
     labels,
@@ -36,17 +41,17 @@ function SegmentedPill<T extends string>({
     onChange,
 }: {
     options: T[];
-    labels: Record<T, string>;
+    labels: Record<T, React.ReactNode>;
     value: T;
     onChange: (v: T) => void;
 }) {
     return (
         <div style={{
             display: "inline-flex",
-            backgroundColor: "rgba(26,26,24,0.04)",
-            borderRadius: "8px",
-            padding: "4px",
-            width: "fit-content",
+            backgroundColor: "rgba(0,0,0,0.05)",
+            borderRadius: "6px",
+            padding: "2px",
+            width: "90px",
         }}>
             {options.map((opt) => {
                 const active = opt === value;
@@ -55,18 +60,22 @@ function SegmentedPill<T extends string>({
                         key={opt}
                         onClick={() => onChange(opt)}
                         style={{
-                            padding: "6px 16px",
+                            flex: 1,
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            padding: "2px 0",
+                            backgroundColor: active ? "#555555" : "transparent",
                             border: "none",
-                            backgroundColor: active ? "#ffffff" : "transparent",
-                            boxShadow: active ? "0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)" : "none",
-                            borderRadius: "6px",
-                            color: active ? "var(--color-charcoal)" : "var(--color-muted)",
+                            borderRadius: "4px",
+                            color: active ? "#ffffff" : "rgba(17,17,17,0.7)",
                             fontFamily: "var(--font-sans)",
                             fontSize: "0.75rem",
-                            fontWeight: active ? 500 : 400,
+                            fontWeight: active ? 600 : 500,
                             letterSpacing: "0.02em",
                             cursor: "pointer",
-                            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                            transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                            boxShadow: active ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
                         }}
                     >
                         {labels[opt]}
@@ -127,25 +136,25 @@ function PreferencesDropdown({
             </button>
 
             <div style={{
-                position: "absolute", top: "100%", right: 0, marginTop: "16px",
-                backgroundColor: "var(--color-cream)", border: "1px solid var(--color-border)",
-                borderRadius: "12px", padding: "16px",
-                display: "flex", flexDirection: "column", gap: "16px",
-                minWidth: "160px",
-                boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+                position: "absolute", top: "100%", right: 0, marginTop: "8px",
+                backgroundColor: "var(--color-cream)", border: "1px solid rgba(26,26,24,0.06)",
+                borderRadius: "10px", padding: "12px",
+                display: "flex", flexDirection: "column", gap: "10px",
+                minWidth: "200px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
                 opacity: open ? 1 : 0,
                 transform: open ? "translateY(0)" : "translateY(-8px)",
                 pointerEvents: open ? "auto" : "none",
                 transition: "opacity 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1)",
                 zIndex: 100,
             }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: "200px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {/* Language Section */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{
                             fontFamily: "var(--font-sans)",
                             fontSize: "0.75rem",
-                            color: "var(--color-charcoal)",
+                            color: "var(--color-charcoal-mid)",
                             fontWeight: 500,
                         }}>
                             Language
@@ -153,34 +162,35 @@ function PreferencesDropdown({
                         <SegmentedPill<Language> options={["en", "uk"]} labels={LANGUAGE_LABELS} value={language} onChange={setLanguage} />
                     </div>
 
-                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", opacity: 0.5 }} />
+                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", opacity: 0.3 }} />
 
                     {/* Currency Section */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{
                             fontFamily: "var(--font-sans)",
                             fontSize: "0.75rem",
-                            color: "var(--color-charcoal)",
+                            color: "var(--color-charcoal-mid)",
                             fontWeight: 500,
                         }}>
                             Currency
                         </span>
-                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={CURRENCY_LABELS} value={currency} onChange={setCurrency} />
+                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={LOCAL_CURRENCY_LABELS} value={currency} onChange={setCurrency} />
                     </div>
 
-                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", opacity: 0.5 }} />
+                    <div style={{ height: "1px", backgroundColor: "var(--color-border)", opacity: 0.3 }} />
 
                     {/* Units Section */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{
                             fontFamily: "var(--font-sans)",
                             fontSize: "0.75rem",
-                            color: "var(--color-charcoal)",
+                            color: "var(--color-charcoal-mid)",
                             fontWeight: 500,
                         }}>
                             Measurement
                         </span>
-                        <SegmentedPill<Units> options={["cm", "in"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
+                        {/* Ordered 'in' before 'cm' per user request */}
+                        <SegmentedPill<Units> options={["in", "cm"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
                     </div>
                 </div>
             </div>
@@ -219,7 +229,7 @@ export default function Navbar() {
     }, []);
 
     useEffect(() => {
-        const onResize = () => setIsMobile(window.innerWidth < 768);
+        const onResize = () => setIsMobile(window.innerWidth < 880); // Tighter breakpoint ~50px from logo
         onResize();
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
@@ -527,6 +537,60 @@ export default function Navbar() {
                     >
                         Cart {cartCount > 0 && `(${cartCount})`}
                     </button>
+
+                    {/* Profile / Login in Mobile Drawer */}
+                    {user ? (
+                        <>
+                            <Link
+                                href="/profile"
+                                onClick={() => setMenuOpen(false)}
+                                style={{
+                                    display: "block",
+                                    padding: "0.5rem 0",
+                                    fontFamily: "var(--font-sans)",
+                                    fontSize: "1.45rem",
+                                    fontWeight: 300,
+                                    letterSpacing: "0.02em",
+                                    textDecoration: "none",
+                                    color: "var(--color-charcoal)",
+                                    transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                    opacity: menuOpen ? 1 : 0,
+                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s`,
+                                }}
+                            >
+                                {user.is_admin ? "Admin Dashboard" : "Dashboard"}
+                            </Link>
+                            <button
+                                onClick={() => { setMenuOpen(false); logout(); }}
+                                style={{
+                                    display: "block", padding: "0.5rem 0", background: "none", border: "none",
+                                    cursor: "pointer", fontFamily: "var(--font-sans)",
+                                    fontSize: "1.45rem", fontWeight: 300, letterSpacing: "0.02em",
+                                    color: "#E53E3E", textAlign: "left",
+                                    transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                    opacity: menuOpen ? 1 : 0,
+                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.25}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.25}s`,
+                                }}
+                            >
+                                Sign out
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => { setMenuOpen(false); setAuthModalOpen(true); }}
+                            style={{
+                                display: "block", padding: "0.5rem 0", background: "none", border: "none",
+                                cursor: "pointer", fontFamily: "var(--font-sans)",
+                                fontSize: "1.45rem", fontWeight: 300, letterSpacing: "0.02em",
+                                color: "var(--color-charcoal)", textAlign: "left",
+                                transform: menuOpen ? "translateX(0)" : "translateX(20px)",
+                                opacity: menuOpen ? 1 : 0,
+                                transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.20}s`,
+                            }}
+                        >
+                            Sign In / Profile
+                        </button>
+                    )}
                 </div>
 
                 {/* Preferences at bottom */}
@@ -547,11 +611,11 @@ export default function Navbar() {
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Currency</span>
-                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={CURRENCY_LABELS} value={currency} onChange={setCurrency} />
+                        <SegmentedPill<Currency> options={["USD", "UAH"]} labels={LOCAL_CURRENCY_LABELS} value={currency} onChange={setCurrency} />
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Units</span>
-                        <SegmentedPill<Units> options={["cm", "in"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)", letterSpacing: "0.05em", fontWeight: 400 }}>Measurement</span>
+                        <SegmentedPill<Units> options={["in", "cm"]} labels={UNITS_LABELS} value={units} onChange={setUnits} />
                     </div>
                 </div>
             </div>
@@ -576,7 +640,7 @@ export default function Navbar() {
             />
             <style dangerouslySetInnerHTML={{__html: `
                 .navbar-spacer-bg { height: clamp(70px, 47px + 2.23vw, 130px); }
-                @media (max-width: 768px) { .navbar-spacer-bg { height: 70px; } }
+                @media (max-width: 880px) { .navbar-spacer-bg { height: 70px; } }
             `}} />
         </>
     );

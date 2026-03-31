@@ -12,7 +12,7 @@ export default function AboutPage() {
         fetch(`${getApiUrl()}/settings`)
             .then(res => res.json())
             .then(data => setSettings(data))
-            .catch(console.error);
+            .catch(() => console.warn("Backend unavailable"));
     }, []);
 
     return (
@@ -51,7 +51,7 @@ export default function AboutPage() {
                         }}>
                             {/* Placeholder for generated image */}
                             <img
-                                src={settings?.artist_photo_url ? getImageUrl(settings.artist_photo_url) : "/artist_studio_portrait.png"}
+                                src={settings?.artist_about_photo_url ? getImageUrl(settings.artist_about_photo_url) : "/artist_studio_portrait.png"}
                                 alt="Artist in Studio"
                                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                 onError={(e) => {

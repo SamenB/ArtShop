@@ -474,8 +474,8 @@ export default async function Home() {
               overflow: "hidden"
             }}
           >
-            {settings?.artist_photo_url ? (
-              <img src={getImageUrl(settings.artist_photo_url, 'original')} alt="Artist" className="w-full h-full object-cover" />
+            {settings?.artist_home_photo_url ? (
+              <img src={getImageUrl(settings.artist_home_photo_url, 'original')} alt="Artist" className="w-full h-full object-cover" />
             ) : "Artist Photo"}
           </div>
 

@@ -37,9 +37,9 @@ interface PreferencesContextType {
 }
 
 // Labels for display in the UI
-export const LANGUAGE_LABELS: Record<Language, string> = {
-    en: "🇬🇧 EN",
-    uk: "🇺🇦 UA",
+export const LANGUAGE_LABELS: Record<Language, ReactNode> = {
+    en: "EN",
+    uk: "UA",
 };
 
 export const CURRENCY_LABELS: Record<Currency, string> = {
@@ -48,8 +48,8 @@ export const CURRENCY_LABELS: Record<Currency, string> = {
 };
 
 export const UNITS_LABELS: Record<Units, string> = {
-    cm: "cm",
-    in: "in",
+    cm: "CM",
+    in: "IN",
 };
 
 // Create the context with undefined default — will be provided by PreferencesProvider
@@ -62,7 +62,7 @@ const STORAGE_KEY = "artshop_preferences";
 const DEFAULTS: { language: Language; currency: Currency; units: Units } = {
     language: "en",
     currency: "USD",
-    units: "cm",
+    units: "in",
 };
 
 // Provider component — wraps the entire app in layout.tsx
@@ -83,12 +83,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         async function fetchSettings() {
             try {
                 const res = await fetch(`${getApiUrl()}/settings`);
+                if (!res.ok) return;
                 const data = await res.json();
                 if (data && data.global_print_price) {
                     setGlobalPrintPrice(data.global_print_price);
                 }
             } catch (err) {
-                console.error("Failed to fetch settings:", err);
+                console.warn("Backend unavailable, using default print prices.");
             }
         }
         fetchSettings();
@@ -142,7 +143,17 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }, [language, currency, units, loaded]);
 
     // Setter functions that update both state and will trigger the save effect above
-    const setLanguage = (lang: Language) => setLanguageState(lang);
+    const setLanguage = (lang: Language) => {
+        setLanguageState(lang);
+        // Automatic syncing: when language changes, update defaults appropriately
+        if (lang === "uk") {
+            setCurrencyState("UAH");
+            setUnitsState("cm");
+        } else if (lang === "en") {
+            setCurrencyState("USD");
+            setUnitsState("in");
+        }
+    };
     const setCurrency = (cur: Currency) => setCurrencyState(cur);
     const setUnits = (u: Units) => setUnitsState(u);
 

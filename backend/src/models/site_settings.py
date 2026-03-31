@@ -13,7 +13,8 @@ class SiteSettingsOrm(Base):
     contact_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Images
-    artist_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    artist_home_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    artist_about_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     main_bg_desktop_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     main_bg_mobile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

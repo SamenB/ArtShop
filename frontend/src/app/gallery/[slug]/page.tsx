@@ -88,7 +88,7 @@ export default function ArtworkDetailPage() {
                     gradientTo: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][1],
                 });
             })
-            .catch(console.error)
+            .catch(() => console.warn("Backend unavailable"))
             .finally(() => setLoading(false));
     }, [slug]);
 

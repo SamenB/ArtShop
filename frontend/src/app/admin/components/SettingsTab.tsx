@@ -6,7 +6,8 @@ import ImageCropperModal from "./ImageCropperModal";
 interface SiteSettings {
     about_text: string | null;
     contact_email: string | null;
-    artist_photo_url: string | null;
+    artist_home_photo_url: string | null;
+    artist_about_photo_url: string | null;
     main_bg_desktop_url: string | null;
     main_bg_mobile_url: string | null;
     global_print_price: number;
@@ -174,23 +175,45 @@ export default function SettingsTab() {
             </div>
 
             <div className="grid grid-cols-2 gap-8">
+                {/* Artist Photo (Home Page) */}
                 <div>
-                    <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Artist Photo</label>
+                    <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Artist Photo (Home)</label>
                     <div className="border border-white/10 border-dashed rounded-sm p-4 text-center relative group">
-                        {settings.artist_photo_url && (
+                        {settings.artist_home_photo_url && (
                             <button
-                                onClick={() => setSettings(prev => prev ? { ...prev, artist_photo_url: null } : null)}
+                                onClick={() => setSettings(prev => prev ? { ...prev, artist_home_photo_url: null } : null)}
                                 className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white text-[10px] uppercase font-mono tracking-widest rounded-sm px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                                 Remove
                             </button>
                         )}
-                        {settings.artist_photo_url ? (
-                            <img src={getImageUrl(settings.artist_photo_url)} alt="Artist" className="mx-auto mb-4 max-h-32 object-contain" />
+                        {settings.artist_home_photo_url ? (
+                            <img src={getImageUrl(settings.artist_home_photo_url)} alt="Artist Home" className="mx-auto mb-4 max-h-32 object-contain" />
                         ) : (
                             <div className="h-32 bg-white/5 mb-4 flex items-center justify-center text-zinc-600 font-mono text-xs">No image</div>
                         )}
-                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_photo_url")} className="text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20" />
+                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_home_photo_url")} className="text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20" />
+                    </div>
+                </div>
+
+                {/* Artist Photo (About Page) */}
+                <div>
+                    <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Artist Photo (About)</label>
+                    <div className="border border-white/10 border-dashed rounded-sm p-4 text-center relative group">
+                        {settings.artist_about_photo_url && (
+                            <button
+                                onClick={() => setSettings(prev => prev ? { ...prev, artist_about_photo_url: null } : null)}
+                                className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white text-[10px] uppercase font-mono tracking-widest rounded-sm px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                Remove
+                            </button>
+                        )}
+                        {settings.artist_about_photo_url ? (
+                            <img src={getImageUrl(settings.artist_about_photo_url)} alt="Artist About" className="mx-auto mb-4 max-h-32 object-contain" />
+                        ) : (
+                            <div className="h-32 bg-white/5 mb-4 flex items-center justify-center text-zinc-600 font-mono text-xs">No image</div>
+                        )}
+                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_about_photo_url")} className="text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20" />
                     </div>
                 </div>
 
