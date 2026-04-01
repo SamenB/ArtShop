@@ -24,6 +24,7 @@ class ArtworkTagsRepository(BaseRepository):
 
     async def set_artwork_tags(self, artwork_id: int, tag_ids: list[int]):
         from sqlalchemy import delete, insert
+
         get_current_tags_id_query = select(self.model.tag_id).where(
             self.model.artwork_id == artwork_id
         )
@@ -40,8 +41,8 @@ class ArtworkTagsRepository(BaseRepository):
             await self.session.execute(delete_stmt)
         if ids_to_add:
             from sqlalchemy import insert
+
             add_stmt = insert(self.model).values(
                 [{"artwork_id": artwork_id, "tag_id": tag_id} for tag_id in ids_to_add]
             )
             await self.session.execute(add_stmt)
-

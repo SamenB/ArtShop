@@ -27,9 +27,6 @@ def order_service():
     return service
 
 
-
-
-
 @pytest.mark.asyncio
 async def test_create_order_original_sold_out_fails(order_service):
     # Setup mock artwork that has original already sold

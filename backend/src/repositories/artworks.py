@@ -58,35 +58,55 @@ class ArtworksRepository(BaseRepository):
 
         if orientation == "horizontal":
             query = query.filter(
-                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
-                     self.model.width_cm > self.model.height_cm * 1.1)
+                and_(
+                    self.model.width_cm.isnot(None),
+                    self.model.height_cm.isnot(None),
+                    self.model.width_cm > self.model.height_cm * 1.1,
+                )
             )
         elif orientation == "vertical":
             query = query.filter(
-                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
-                     self.model.height_cm > self.model.width_cm * 1.1)
+                and_(
+                    self.model.width_cm.isnot(None),
+                    self.model.height_cm.isnot(None),
+                    self.model.height_cm > self.model.width_cm * 1.1,
+                )
             )
         elif orientation == "square":
             query = query.filter(
-                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
-                     self.model.width_cm.between(self.model.height_cm * 0.9, self.model.height_cm * 1.1))
+                and_(
+                    self.model.width_cm.isnot(None),
+                    self.model.height_cm.isnot(None),
+                    self.model.width_cm.between(
+                        self.model.height_cm * 0.9, self.model.height_cm * 1.1
+                    ),
+                )
             )
 
         if size_category == "small":
             query = query.filter(
-                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
-                     (self.model.width_cm * self.model.height_cm) < 900)
+                and_(
+                    self.model.width_cm.isnot(None),
+                    self.model.height_cm.isnot(None),
+                    (self.model.width_cm * self.model.height_cm) < 900,
+                )
             )
         elif size_category == "medium":
             query = query.filter(
-                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
-                     (self.model.width_cm * self.model.height_cm) >= 900,
-                     (self.model.width_cm * self.model.height_cm) <= 3600)
+                and_(
+                    self.model.width_cm.isnot(None),
+                    self.model.height_cm.isnot(None),
+                    (self.model.width_cm * self.model.height_cm) >= 900,
+                    (self.model.width_cm * self.model.height_cm) <= 3600,
+                )
             )
         elif size_category == "large":
             query = query.filter(
-                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
-                     (self.model.width_cm * self.model.height_cm) > 3600)
+                and_(
+                    self.model.width_cm.isnot(None),
+                    self.model.height_cm.isnot(None),
+                    (self.model.width_cm * self.model.height_cm) > 3600,
+                )
             )
 
         query = query.limit(limit).offset(offset)

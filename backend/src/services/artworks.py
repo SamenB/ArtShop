@@ -37,11 +37,17 @@ class ArtworkService(BaseService):
     ):
         try:
             artworks = await self.db.artworks.get_available_artworks(
-                limit=limit, offset=offset, title=title, tags=tags,
+                limit=limit,
+                offset=offset,
+                title=title,
+                tags=tags,
                 collection_id=collection_id,
-                year_from=year_from, year_to=year_to,
-                price_min=price_min, price_max=price_max,
-                orientation=orientation, size_category=size_category,
+                year_from=year_from,
+                year_to=year_to,
+                price_min=price_min,
+                price_max=price_max,
+                orientation=orientation,
+                size_category=size_category,
             )
         except SQLAlchemyError:
             raise DatabaseException
