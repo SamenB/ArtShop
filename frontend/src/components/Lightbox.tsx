@@ -19,255 +19,324 @@ interface Artwork {
     gradientTo?: string;
 }
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+const getTouchDist = (t: React.TouchList) => {
+    const dx = t[1].clientX - t[0].clientX;
+    const dy = t[1].clientY - t[0].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+};
+const getTouchCenter = (t: React.TouchList) => ({
+    x: (t[0].clientX + t[1].clientX) / 2,
+    y: (t[0].clientY + t[1].clientY) / 2,
+});
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function Lightbox({
     works,
     startWorkIndex = 0,
     startImageIndex = 0,
-    onClose
+    onClose,
 }: {
     works: Artwork[];
     startWorkIndex?: number;
     startImageIndex?: number;
     onClose: () => void;
 }) {
-    const [wIdx, setWIdx] = useState(startWorkIndex);
+    const [wIdx, setWIdx]       = useState(startWorkIndex);
     const [imageIdx, setImageIdx] = useState(startImageIndex);
     const w = works[wIdx];
 
-    // Zoom + pan
-    const [zoomLevel, setZoomLevel] = useState(1);
-    const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
-    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    // ── Zoom / Pan ──────────────────────────────────────────────────────────
+    const [zoom, setZoom]         = useState(1);
+    const [origin, setOrigin]     = useState({ x: 50, y: 50 });
+    const [pan, setPan]           = useState({ x: 0, y: 0 });
 
-    // UI visibility — hide controls when zoomed in or after idle
-    const [controlsVisible, setControlsVisible] = useState(true);
-    const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // refs for gesture tracking
+    const dragRef  = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+    const pinchRef = useRef<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
+    const swipeRef = useRef<number | null>(null);   // 1-finger swipe on outer wrapper
+    const tapRef   = useRef<number>(0);             // double-tap timing
+    const imgRef   = useRef<HTMLDivElement>(null);
 
-    const dragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number; moved: boolean } | null>(null);
-    const tx = useRef<number | null>(null);
-    const imgContainerRef = useRef<HTMLDivElement>(null);
-
-    // Show controls temporarily then auto-hide after 3s of inactivity
-    const showControls = useCallback(() => {
-        setControlsVisible(true);
-        if (hideTimer.current) clearTimeout(hideTimer.current);
-        hideTimer.current = setTimeout(() => {
-            if (zoomLevel <= 1) setControlsVisible(true); // Keep visible at 1x
-        }, 3000);
-    }, [zoomLevel]);
-
-    // Reset zoom on image change
+    // Reset zoom when painting/image changes
     useEffect(() => {
-        setZoomLevel(1);
-        setPanOffset({ x: 0, y: 0 });
-        setZoomOrigin({ x: 50, y: 50 });
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+        setOrigin({ x: 50, y: 50 });
     }, [wIdx, imageIdx]);
 
-    // Always show controls at 1x zoom
-    useEffect(() => {
-        if (zoomLevel === 1) setControlsVisible(true);
-    }, [zoomLevel]);
+    // ── Zoom helper ─────────────────────────────────────────────────────────
+    const applyZoom = useCallback((newZoom: number, ox = 50, oy = 50) => {
+        const clamped = Math.max(1, Math.min(newZoom, 8));
+        setZoom(prev => {
+            if (clamped === 1) {
+                setPan({ x: 0, y: 0 });
+                setOrigin({ x: 50, y: 50 });
+            } else if (prev === 1 && clamped > 1) {
+                setOrigin({ x: ox, y: oy });
+            }
+            return clamped;
+        });
+    }, []);
 
-    const prevWork = useCallback(() => { setWIdx(i => (i - 1 + works.length) % works.length); setImageIdx(0); }, [works.length]);
-    const nextWork = useCallback(() => { setWIdx(i => (i + 1) % works.length); setImageIdx(0); }, [works.length]);
-    const prevImage = useCallback(() => { if (!w.images) return; setImageIdx(i => (i - 1 + w.images!.length) % w.images!.length); }, [w.images]);
-    const nextImage = useCallback(() => { if (!w.images) return; setImageIdx(i => (i + 1) % w.images!.length); }, [w.images]);
+    // ── Work / image navigation ─────────────────────────────────────────────
+    const prevWork  = useCallback(() => { setWIdx(i => (i - 1 + works.length) % works.length); setImageIdx(0); }, [works.length]);
+    const nextWork  = useCallback(() => { setWIdx(i => (i + 1) % works.length);               setImageIdx(0); }, [works.length]);
+    const prevImage = useCallback(() => { if (w.images) setImageIdx(i => (i - 1 + w.images!.length) % w.images!.length); }, [w.images]);
+    const nextImage = useCallback(() => { if (w.images) setImageIdx(i => (i + 1) % w.images!.length);                     }, [w.images]);
 
-    // Keyboard
+    // ── Keyboard ────────────────────────────────────────────────────────────
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-            if (e.key === "ArrowLeft") prevWork();
-            if (e.key === "ArrowRight") nextWork();
-            if (e.key === "ArrowUp") prevImage();
-            if (e.key === "ArrowDown") nextImage();
+            if (e.key === "Escape")      onClose();
+            if (e.key === "ArrowLeft")   prevWork();
+            if (e.key === "ArrowRight")  nextWork();
+            if (e.key === "ArrowUp")     prevImage();
+            if (e.key === "ArrowDown")   nextImage();
         };
         window.addEventListener("keydown", h);
         return () => window.removeEventListener("keydown", h);
     }, [onClose, prevWork, nextWork, prevImage, nextImage]);
 
-    // Lock body scroll
+    // ── Lock body scroll ────────────────────────────────────────────────────
     useEffect(() => {
         document.body.style.overflow = "hidden";
         return () => { document.body.style.overflow = ""; };
     }, []);
 
-    const handleZoomUpdate = (newZoom: number, originX: number = 50, originY: number = 50) => {
-        const clampedZoom = Math.max(1, Math.min(newZoom, 5));
-        if (clampedZoom === 1) {
-            setPanOffset({ x: 0, y: 0 });
-            setZoomOrigin({ x: 50, y: 50 });
-        } else if (zoomLevel === 1 && clampedZoom > 1) {
-            setZoomOrigin({ x: originX, y: originY });
+    // ── Prevent passive touch-move on the image container (needed for pinch) ─
+    useEffect(() => {
+        const el = imgRef.current;
+        if (!el) return;
+        const prevent = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
+        el.addEventListener("touchmove", prevent, { passive: false });
+        return () => el.removeEventListener("touchmove", prevent);
+    }, []);
+
+    // ── Double-tap / double-click handler ───────────────────────────────────
+    const handleDoubleTap = (clientX: number, clientY: number) => {
+        if (zoom > 1) {
+            applyZoom(1);
+        } else {
+            const x = (clientX / window.innerWidth) * 100;
+            const y = (clientY / window.innerHeight) * 100;
+            applyZoom(3, x, y);
         }
-        setZoomLevel(clampedZoom);
     };
 
-    // Aspect ratio
-    const ratioStr = w.aspectRatio || w.aspect_ratio || "4/5";
-    const ratioParts = ratioStr.split("/").map(Number);
-    const ratio = ratioParts.length === 2 ? (ratioParts[0] / ratioParts[1]) : Number(ratioStr) || 0.8;
-
-    const overlayBase: React.CSSProperties = {
-        position: "absolute",
-        zIndex: 10,
-        transition: "opacity 0.3s ease",
-        opacity: controlsVisible ? 1 : 0,
-        pointerEvents: controlsVisible ? "auto" : "none",
-    };
-
+    // ─────────────────────────────────────────────────────────────────────────
     return (
         <div
-            onMouseMove={showControls}
+            // ── Outer: backdrop + 1-finger swipe navigation ──────────────────
             onTouchStart={e => {
-                showControls();
-                tx.current = e.touches[0].clientX;
+                if (e.touches.length === 1) swipeRef.current = e.touches[0].clientX;
+                else swipeRef.current = null; // 2-finger → pinch, no swipe
             }}
             onTouchEnd={e => {
-                if (!tx.current || zoomLevel > 1) return;
-                const d = tx.current - e.changedTouches[0].clientX;
-                if (d > 40) nextWork(); else if (d < -40) prevWork();
-                tx.current = null;
+                if (swipeRef.current === null || zoom > 1) return;
+                const d = swipeRef.current - e.changedTouches[0].clientX;
+                if (d > 48) nextWork();
+                else if (d < -48) prevWork();
+                swipeRef.current = null;
             }}
             style={{
                 position: "fixed", inset: 0, zIndex: 2000,
                 backgroundColor: "#050504",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 overflow: "hidden",
+                touchAction: "none", // let JS own all touch handling
             }}
         >
-            {/* ── Full-screen Image ── */}
+            {/* ── Full-screen image ─────────────────────────────────────── */}
             <div
-                ref={imgContainerRef}
+                ref={imgRef}
+
+                // ── Desktop: scroll-wheel zoom ──────────────────────────────
                 onWheel={e => {
                     e.stopPropagation();
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = ((e.clientX - rect.left) / rect.width) * 100;
                     const y = ((e.clientY - rect.top) / rect.height) * 100;
-                    handleZoomUpdate(zoomLevel + (e.deltaY > 0 ? -0.5 : 0.5), x, y);
+                    applyZoom(zoom + (e.deltaY > 0 ? -0.4 : 0.4), x, y);
                 }}
-                onDoubleClick={e => {
-                    e.stopPropagation();
-                    if (zoomLevel > 1) {
-                        handleZoomUpdate(1);
-                    } else {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const x = ((e.clientX - rect.left) / rect.width) * 100;
-                        const y = ((e.clientY - rect.top) / rect.height) * 100;
-                        handleZoomUpdate(3, x, y);
-                    }
-                }}
+
+                // ── Desktop: double-click zoom ──────────────────────────────
+                onDoubleClick={e => { e.stopPropagation(); handleDoubleTap(e.clientX, e.clientY); }}
+
+                // ── Desktop: drag-to-pan ────────────────────────────────────
                 onMouseDown={e => {
-                    if (zoomLevel <= 1) return;
+                    if (zoom <= 1) return;
                     e.preventDefault();
-                    dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panOffset.x, startPanY: panOffset.y, moved: false };
+                    dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y };
                 }}
                 onMouseMove={e => {
                     if (!dragRef.current) return;
-                    const dx = e.clientX - dragRef.current.startX;
-                    const dy = e.clientY - dragRef.current.startY;
-                    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
-                    setPanOffset({ x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy });
+                    setPan({
+                        x: dragRef.current.px + (e.clientX - dragRef.current.sx),
+                        y: dragRef.current.py + (e.clientY - dragRef.current.sy),
+                    });
                 }}
                 onMouseUp={() => { dragRef.current = null; }}
                 onMouseLeave={() => { dragRef.current = null; }}
+
+                // ── Mobile/Tablet touch ─────────────────────────────────────
                 onTouchStart={e => {
-                    if (zoomLevel <= 1 || e.touches.length !== 1) return;
-                    dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, startPanX: panOffset.x, startPanY: panOffset.y, moved: false };
+                    e.stopPropagation();
+
+                    if (e.touches.length === 2) {
+                        // ── Pinch-to-zoom: record initial state ──────────────
+                        const c = getTouchCenter(e.touches);
+                        pinchRef.current = {
+                            dist: getTouchDist(e.touches),
+                            zoom,
+                            cx: (c.x / window.innerWidth) * 100,
+                            cy: (c.y / window.innerHeight) * 100,
+                        };
+                        dragRef.current = null;
+                    } else if (e.touches.length === 1) {
+                        // ── Single finger: pan (when zoomed) OR double-tap ──
+                        pinchRef.current = null;
+                        if (zoom > 1) {
+                            dragRef.current = {
+                                sx: e.touches[0].clientX, sy: e.touches[0].clientY,
+                                px: pan.x, py: pan.y,
+                            };
+                        }
+
+                        // Double-tap detection
+                        const now = Date.now();
+                        if (now - tapRef.current < 280) {
+                            handleDoubleTap(e.touches[0].clientX, e.touches[0].clientY);
+                            tapRef.current = 0;
+                        } else {
+                            tapRef.current = now;
+                        }
+                    }
                 }}
                 onTouchMove={e => {
-                    if (!dragRef.current || e.touches.length !== 1) return;
-                    e.preventDefault();
-                    const dx = e.touches[0].clientX - dragRef.current.startX;
-                    const dy = e.touches[0].clientY - dragRef.current.startY;
-                    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
-                    setPanOffset({ x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy });
+                    e.stopPropagation();
+
+                    if (e.touches.length === 2 && pinchRef.current) {
+                        // ── Pinch zoom ───────────────────────────────────────
+                        const newDist = getTouchDist(e.touches);
+                        const scale  = newDist / pinchRef.current.dist;
+                        applyZoom(
+                            pinchRef.current.zoom * scale,
+                            pinchRef.current.cx,
+                            pinchRef.current.cy,
+                        );
+                    } else if (e.touches.length === 1 && dragRef.current && zoom > 1) {
+                        // ── Pan ──────────────────────────────────────────────
+                        setPan({
+                            x: dragRef.current.px + (e.touches[0].clientX - dragRef.current.sx),
+                            y: dragRef.current.py + (e.touches[0].clientY - dragRef.current.sy),
+                        });
+                    }
                 }}
-                onTouchEnd={() => { dragRef.current = null; }}
-                onClick={e => { e.stopPropagation(); }}
+                onTouchEnd={e => {
+                    if (e.touches.length < 2) pinchRef.current = null;
+                    if (e.touches.length < 1) dragRef.current  = null;
+                }}
+
+                onClick={e => e.stopPropagation()}
+
                 style={{
-                    // Fill entire viewport — letterbox with object-fit if needed
                     width: "100vw",
                     height: "100vh",
                     backgroundImage: w.images?.[imageIdx]
-                        ? `url(${getImageUrl(w.images[imageIdx], 'original')})`
+                        ? `url(${getImageUrl(w.images[imageIdx], "original")})`
                         : `linear-gradient(160deg, ${w.gradientFrom} 0%, ${w.gradientTo} 100%)`,
                     backgroundSize: "contain",
                     backgroundRepeat: "no-repeat",
                     backgroundPosition: "center",
-                    cursor: zoomLevel > 1 ? (dragRef.current ? "grabbing" : "grab") : "default",
-                    transition: dragRef.current ? "none" : "transform 0.15s ease",
-                    transform: `scale(${zoomLevel}) translate(${panOffset.x / zoomLevel}px, ${panOffset.y / zoomLevel}px)`,
-                    transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
+                    cursor: zoom > 1 ? (dragRef.current ? "grabbing" : "grab") : "default",
+                    transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+                    transformOrigin: `${origin.x}% ${origin.y}%`,
+                    transition: pinchRef.current || dragRef.current ? "none" : "transform 0.12s ease",
                     userSelect: "none",
+                    WebkitUserSelect: "none",
                 }}
             />
 
-            {/* ── Top bar: counter + close ── */}
+            {/* ── TOP BAR: counter + close ───────────────────────────────── */}
             <div style={{
-                ...overlayBase,
-                top: 0, left: 0, right: 0,
+                position: "absolute", top: 0, left: 0, right: 0, zIndex: 20,
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "0.75rem 1rem",
-                background: "linear-gradient(to bottom, rgba(5,5,4,0.75) 0%, transparent 100%)",
-                backdropFilter: "none",
+                background: "linear-gradient(to bottom, rgba(5,5,4,0.72) 0%, transparent 100%)",
+                pointerEvents: "none",
             }}>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", letterSpacing: "0.12em" }}>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.68rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em" }}>
                     {wIdx + 1} / {works.length}
-                </span>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "rgba(255,255,255,0.28)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    Originals &amp; Prints
                 </span>
                 <button
                     onClick={onClose}
                     style={{
-                        background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)",
-                        backdropFilter: "blur(8px)",
-                        color: "rgba(255,255,255,0.85)", fontSize: "1rem", cursor: "pointer",
-                        width: "36px", height: "36px", borderRadius: "50%",
+                        pointerEvents: "auto",
+                        background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)",
+                        backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+                        color: "rgba(255,255,255,0.85)", fontSize: "0.85rem", cursor: "pointer",
+                        width: "34px", height: "34px", borderRadius: "50%",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         transition: "background 0.2s",
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.22)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.12)"}
                 >✕</button>
             </div>
 
-            {/* ── Left/Right artwork nav arrows ── */}
-            {works.length > 1 && zoomLevel === 1 && (
+            {/* ── LEFT / RIGHT arrows ────────────────────────────────────── */}
+            {works.length > 1 && zoom === 1 && (
                 <>
-                    <button
-                        onClick={prevWork}
-                        style={{
-                            ...overlayBase,
-                            left: "0.75rem", top: "50%", transform: "translateY(-50%)",
-                            width: "42px", height: "42px", borderRadius: "50%",
-                            backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)",
-                            backdropFilter: "blur(8px)",
-                            color: "#fff", fontSize: "1.4rem", cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                        }}
-                    >‹</button>
-                    <button
-                        onClick={nextWork}
-                        style={{
-                            ...overlayBase,
-                            right: "0.75rem", top: "50%", transform: "translateY(-50%)",
-                            width: "42px", height: "42px", borderRadius: "50%",
-                            backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)",
-                            backdropFilter: "blur(8px)",
-                            color: "#fff", fontSize: "1.4rem", cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                        }}
-                    >›</button>
+                    {[{ fn: prevWork, side: "left", glyph: "‹" }, { fn: nextWork, side: "right", glyph: "›" }].map(({ fn, side, glyph }) => (
+                        <button
+                            key={side}
+                            onClick={fn}
+                            style={{
+                                position: "absolute", [side]: "0.65rem", top: "50%",
+                                transform: "translateY(-50%)", zIndex: 20,
+                                width: "42px", height: "42px", borderRadius: "50%",
+                                backgroundColor: "rgba(255,255,255,0.1)",
+                                border: "1px solid rgba(255,255,255,0.15)",
+                                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                                color: "#fff", fontSize: "1.5rem", cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                transition: "background 0.2s",
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.2)"}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
+                        >{glyph}</button>
+                    ))}
                 </>
             )}
 
-            {/* ── Multi-image dots (top of bottom bar area) ── */}
-            {w.images && w.images.length > 1 && zoomLevel === 1 && (
+            {/* ── ZOOM LEVEL indicator (only when zoomed) ─────────────────── */}
+            {zoom > 1.05 && (
+                <button
+                    onClick={() => applyZoom(1)}
+                    title="Reset zoom"
+                    style={{
+                        position: "absolute", top: "0.85rem", left: "1rem", zIndex: 20,
+                        background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.15)",
+                        backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+                        color: "rgba(255,255,255,0.75)", cursor: "pointer",
+                        borderRadius: "20px", padding: "4px 10px",
+                        fontFamily: "var(--font-mono)", fontSize: "0.68rem", letterSpacing: "0.06em",
+                        display: "flex", alignItems: "center", gap: "5px",
+                        transition: "background 0.2s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.65)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.45)"}
+                >
+                    {zoom.toFixed(1)}× <span style={{ opacity: 0.5, fontSize: "0.6rem" }}>✕</span>
+                </button>
+            )}
+
+            {/* ── Multi-image dots ─────────────────────────────────────────── */}
+            {w.images && w.images.length > 1 && zoom === 1 && (
                 <div style={{
-                    ...overlayBase,
-                    bottom: "7rem", left: "50%", transform: "translateX(-50%)",
+                    position: "absolute", bottom: "5.5rem", left: "50%",
+                    transform: "translateX(-50%)", zIndex: 20,
                     display: "flex", gap: "8px",
                 }}>
                     {w.images.map((_, i) => (
@@ -286,47 +355,39 @@ export default function Lightbox({
                 </div>
             )}
 
-            {/* ── Bottom bar: zoom slider + metadata ── */}
+            {/* ── BOTTOM BAR: metadata ─────────────────────────────────────── */}
             <div style={{
-                ...overlayBase,
-                bottom: 0, left: 0, right: 0,
-                padding: "1.5rem 1.25rem 1.1rem",
-                background: "linear-gradient(to top, rgba(5,5,4,0.88) 0%, rgba(5,5,4,0.6) 70%, transparent 100%)",
+                position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 20,
+                padding: "2rem 1.25rem 1.1rem",
+                background: "linear-gradient(to top, rgba(5,5,4,0.82) 0%, rgba(5,5,4,0.5) 65%, transparent 100%)",
+                pointerEvents: "none",
             }}>
-                {/* Zoom slider */}
-                <div style={{
-                    display: "flex", alignItems: "center", gap: "0.75rem",
-                    maxWidth: "320px", margin: "0 auto 0.85rem",
+                {/* Hint text (desktop) */}
+                <p style={{
+                    fontFamily: "var(--font-sans)", fontSize: "0.58rem",
+                    color: "rgba(255,255,255,0.22)", textAlign: "center",
+                    letterSpacing: "0.08em", marginBottom: "0.65rem",
+                    display: "block",
                 }}>
-                    <button
-                        onClick={() => handleZoomUpdate(zoomLevel - 0.5)}
-                        style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: "1.2rem", cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0, width: "24px", textAlign: "center" }}
-                    >–</button>
-                    <input
-                        type="range"
-                        min="1" max="5" step="0.05"
-                        value={zoomLevel}
-                        onChange={e => handleZoomUpdate(parseFloat(e.target.value))}
-                        style={{ width: "100%", cursor: "pointer", accentColor: "rgba(255,255,255,0.8)" }}
-                    />
-                    <button
-                        onClick={() => handleZoomUpdate(zoomLevel + 0.5)}
-                        style={{ background: "none", border: "none", color: "rgba(255,255,255,0.45)", fontSize: "1.2rem", cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0, width: "24px", textAlign: "center" }}
-                    >+</button>
-                </div>
+                    scroll to zoom · double-click to zoom in · drag to pan · ← → to browse
+                </p>
 
-                {/* Metadata row */}
                 <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "1rem" }}>
                     <div>
-                        <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "1rem", fontWeight: 400, color: "#FAFAF7", marginBottom: "0.2rem" }}>
+                        <p style={{
+                            fontFamily: "var(--font-serif)", fontStyle: "italic",
+                            fontSize: "1rem", fontWeight: 400, color: "#FAFAF7", marginBottom: "0.2rem",
+                        }}>
                             {w.title}
                         </p>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>
-                            {(w.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m, wd, h) => `${m} | ${Math.round(Number(wd) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`)} · {w.medium}
+                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.68rem", color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>
+                            {(w.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m, wd, h) =>
+                                `${m} | ${Math.round(Number(wd) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`
+                            )} · {w.medium}
                             {w.original_status === "available" && <span style={{ marginLeft: "0.5rem", color: "#6DB87E" }}>● Available</span>}
-                            {w.original_status === "sold" && <span style={{ marginLeft: "0.5rem", color: "#C87070" }}>● Sold</span>}
-                            {w.original_status === "reserved" && <span style={{ marginLeft: "0.5rem", color: "#C4963A" }}>● Reserved</span>}
-                            {w.original_status === "digital" && <span style={{ marginLeft: "0.5rem", color: "#B89AEE" }}>● Digital</span>}
+                            {w.original_status === "sold"      && <span style={{ marginLeft: "0.5rem", color: "#C87070" }}>● Sold</span>}
+                            {w.original_status === "reserved"  && <span style={{ marginLeft: "0.5rem", color: "#C4963A" }}>● Reserved</span>}
+                            {w.original_status === "digital"   && <span style={{ marginLeft: "0.5rem", color: "#B89AEE" }}>● Digital</span>}
                         </p>
                     </div>
                     {window.location.pathname !== `/gallery/${w.id}` && (
@@ -334,6 +395,7 @@ export default function Lightbox({
                             href={`/gallery/${w.id}`}
                             onClick={onClose}
                             style={{
+                                pointerEvents: "auto",
                                 fontFamily: "var(--font-sans)", fontSize: "0.63rem", fontWeight: 500,
                                 letterSpacing: "0.1em", textTransform: "uppercase",
                                 color: "rgba(255,255,255,0.5)", textDecoration: "none",
@@ -346,15 +408,20 @@ export default function Lightbox({
                     )}
                 </div>
 
-                {/* Works dots */}
+                {/* Artwork dots */}
                 {works.length > 1 && (
-                    <div style={{ display: "flex", gap: "5px", alignItems: "center", justifyContent: "center", marginTop: "0.65rem" }}>
+                    <div style={{
+                        display: "flex", gap: "5px", alignItems: "center",
+                        justifyContent: "center", marginTop: "0.7rem",
+                    }}>
                         {works.map((_, i) => (
                             <button
                                 key={i}
                                 onClick={() => setWIdx(i)}
                                 style={{
-                                    width: i === wIdx ? "18px" : "6px", height: "6px", borderRadius: "3px",
+                                    pointerEvents: "auto",
+                                    width: i === wIdx ? "18px" : "6px", height: "6px",
+                                    borderRadius: "3px",
                                     backgroundColor: i === wIdx ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.28)",
                                     border: "none", cursor: "pointer", padding: 0,
                                     transition: "width 0.25s ease, background-color 0.2s ease",
