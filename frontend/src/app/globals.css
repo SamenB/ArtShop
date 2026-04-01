@@ -223,18 +223,16 @@ h3 {
   backface-visibility: hidden;
 }
 
-/* Hover lift only on real pointer devices (mouse/trackpad) — not on touchscreens */
+/* Hover + active — only on real pointer devices (mouse/trackpad).
+   On touch: :active fires on ANY finger contact incl. scroll start → causes jerk. */
 @media (hover: hover) and (pointer: fine) {
   .art-card:hover .art-card-container {
-    /* Слегка приближаем всё окно-карточку вместе с картиной (кроп стал меньше) */
     transform: scale(1.02);
   }
-}
-
-/* Active press feedback — stays on ALL devices (tactile confirmation on touch too) */
-.art-card:active .art-card-container {
-  transform: scale(0.98);
-  box-shadow: 0 0 5px 1px rgba(28, 25, 22, 0.7);
+  .art-card:active .art-card-container {
+    transform: scale(0.98);
+    box-shadow: 0 0 5px 1px rgba(28, 25, 22, 0.7);
+  }
 }
 
 /* ─────────────────────────────────────────────
