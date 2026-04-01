@@ -15,12 +15,11 @@ async def seed_artworks():
             artwork = ArtworksOrm(
                 title=f"Test Artwork #{i}",
                 description=f"This is a description for Test Artwork #{i}. Full of details.",
-                is_display_only=i % 3 == 0,
                 original_price=i * 10 if i % 3 != 0 else None,
                 original_status="available" if i % 2 == 0 else "sold",
-                print_price=i * 5,
-                prints_total=50,
-                prints_available=i,
+                has_prints=True,
+                orientation="Horizontal" if i % 2 == 0 else "Vertical",
+                base_print_price=i * 5,
                 images=[
                     f"https://picsum.photos/seed/{i}/800/1000",
                     f"https://picsum.photos/seed/{100 + i}/800/1000",

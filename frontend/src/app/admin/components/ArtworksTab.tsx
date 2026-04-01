@@ -1,209 +1,371 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getApiUrl, getImageUrl } from "@/utils";
 
-interface ArtworkImage {
-    thumb: string;
-    medium: string;
-    original: string;
-}
+interface ArtworkImage { thumb: string; medium: string; original: string; }
+type ImageEntry = string | ArtworkImage;
 
 interface Artwork {
     id: number;
     title: string;
     original_price: number;
-    images?: (string | ArtworkImage)[];
+    images?: ImageEntry[];
     description?: string;
-    is_display_only?: boolean;
-    original_status?: string;
-    year?: number;
-    materials?: string;
-    style?: string;
-    width_cm?: number;
-    height_cm?: number;
-    depth_cm?: number;
-    width_in?: number;
-    height_in?: number;
-    depth_in?: number;
-    prints_total?: number;
-    prints_available?: number;
+    has_prints?: boolean;
+    orientation?: string;
+    base_print_price?: number;
     collection_id?: number | null;
+    tags?: { id: number; title: string; category?: string }[];
 }
 
-interface Collection {
-    id: number;
-    title: string;
+interface Collection { id: number; title: string; }
+interface Tag { id: number; title: string; category?: string; }
+
+const STATUS_OPTIONS = [
+    { value: "available", label: "Available" },
+    { value: "sold", label: "Sold" },
+    { value: "reserved", label: "Reserved" },
+    { value: "not_for_sale", label: "Not for Sale" },
+    { value: "on_exhibition", label: "On Exhibition" },
+    { value: "archived", label: "Archived" },
+    { value: "digital", label: "Digital" },
+];
+
+// ── Drag-and-drop image grid ──────────────────────────────────────────────────
+interface DragItem {
+    type: "existing" | "new";
+    url: string;           // preview URL (existing = resolved, new = object URL)
+    existingData?: ImageEntry;
+    file?: File;
 }
 
+function ImageReorderGrid({
+    items,
+    onReorder,
+    onRemove,
+    onAddFiles,
+    maxItems = 10,
+}: {
+    items: DragItem[];
+    onReorder: (next: DragItem[]) => void;
+    onRemove: (idx: number) => void;
+    onAddFiles: (files: File[]) => void;
+    maxItems?: number;
+}) {
+    const dragIdx = useRef<number | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleDragStart = (idx: number) => { dragIdx.current = idx; };
+    const handleDrop = (idx: number) => {
+        if (dragIdx.current === null || dragIdx.current === idx) return;
+        const next = [...items];
+        const [moved] = next.splice(dragIdx.current, 1);
+        next.splice(idx, 0, moved);
+        onReorder(next);
+        dragIdx.current = null;
+    };
+
+    return (
+        <div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "12px" }}>
+                {items.map((item, i) => (
+                    <div
+                        key={i}
+                        draggable
+                        onDragStart={() => handleDragStart(i)}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={() => handleDrop(i)}
+                        style={{
+                            position: "relative", width: "100px", height: "100px",
+                            border: "1px solid rgba(255,255,255,0.2)", borderRadius: "3px",
+                            overflow: "hidden", cursor: "grab", flexShrink: 0,
+                            boxShadow: i === 0 ? "0 0 0 2px #EAE5D9" : "none",
+                            transition: "box-shadow 0.2s",
+                        }}
+                    >
+                        <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
+                        {/* Cover badge */}
+                        {i === 0 && (
+                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(234,229,217,0.9)", color: "#111", fontSize: "8px", padding: "2px 5px", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                Cover
+                            </div>
+                        )}
+                        {/* Index badge */}
+                        {i > 0 && (
+                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(0,0,0,0.5)", color: "#fff", fontSize: "8px", padding: "2px 5px", fontFamily: "var(--font-mono)" }}>
+                                #{i + 1}
+                            </div>
+                        )}
+                        {/* Remove button */}
+                        <button
+                            onClick={() => onRemove(i)}
+                            style={{ position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "rgba(200,50,50,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+                        >×</button>
+                    </div>
+                ))}
+
+                {/* Add more button */}
+                {items.length < maxItems && (
+                    <button
+                        onClick={() => inputRef.current?.click()}
+                        style={{ width: "100px", height: "100px", border: "1px dashed rgba(255,255,255,0.25)", borderRadius: "3px", backgroundColor: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)", fontSize: "2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.2s, color 0.2s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}
+                    >+</button>
+                )}
+                <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: "none" }}
+                    onChange={e => {
+                        const files = Array.from(e.target.files || []).slice(0, maxItems - items.length);
+                        onAddFiles(files);
+                        e.target.value = "";
+                    }}
+                />
+            </div>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "rgba(255,255,255,0.3)", marginTop: "8px", letterSpacing: "0.05em" }}>
+                Drag to reorder · First image is cover · Up to {maxItems} photos
+            </p>
+        </div>
+    );
+}
+
+// ── Tag multi-select ──────────────────────────────────────────────────────────
+function TagMultiSelect({ tags, selected, onChange, placeholder }: {
+    tags: Tag[];
+    selected: number[];
+    onChange: (ids: number[]) => void;
+    placeholder: string;
+}) {
+    const toggle = (id: number) =>
+        onChange(selected.includes(id) ? selected.filter(s => s !== id) : [...selected, id]);
+
+    return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {tags.map(t => {
+                const active = selected.includes(t.id);
+                return (
+                    <button key={t.id} type="button" onClick={() => toggle(t.id)}
+                        style={{
+                            padding: "4px 10px", borderRadius: "20px",
+                            border: `1px solid ${active ? "#EAE5D9" : "rgba(255,255,255,0.2)"}`,
+                            backgroundColor: active ? "rgba(234,229,217,0.15)" : "transparent",
+                            color: active ? "#EAE5D9" : "rgba(255,255,255,0.45)",
+                            fontFamily: "var(--font-sans)", fontSize: "0.72rem",
+                            cursor: "pointer", transition: "all 0.15s",
+                        }}>
+                        {t.title}
+                    </button>
+                );
+            })}
+            {tags.length === 0 && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", fontStyle: "italic" }}>
+                    {placeholder}
+                </span>
+            )}
+        </div>
+    );
+}
+
+// ── Internal Components ─────────────────────────────────────────────────────
+
+function FieldLabel({ text, required = false, valid = true }: { text: string; required?: boolean; valid?: boolean }) {
+    return (
+        <div className="flex items-center gap-2 mb-2">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${valid ? "bg-green-500" : "bg-orange-500"}`} />
+            <label className="block text-[10px] uppercase font-mono text-zinc-500 tracking-widest">
+                {text} {required && "*"}
+            </label>
+        </div>
+    );
+}
+
+// ── Section heading ───────────────────────────────────────────────────────────
+function FormSection({ title }: { title: string }) {
+    return (
+        <div className="border-b border-zinc-700 pb-2 mb-4 mt-6">
+            <span className="font-mono text-xs font-bold tracking-widest uppercase text-[#F7F3EC]">{title}</span>
+        </div>
+    );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function ArtworksTab() {
     const [artworks, setArtworks] = useState<Artwork[]>([]);
     const [collections, setCollections] = useState<Collection[]>([]);
+    const [mediumTags, setMediumTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+
+    // Image drag-and-drop state
+    const [imageItems, setImageItems] = useState<DragItem[]>([]);
+
     const defaultForm = {
         title: "",
         description: "",
         materials: "",
-        style: "",
         year: new Date().getFullYear(),
-        width_cm: "",
-        height_cm: "",
-        depth_cm: "",
+        width_cm: "" as string | number,
+        height_cm: "" as string | number,
         original_price: 1000,
-        prints_total: 50,
+        has_prints: false,
+        orientation: "Horizontal",
+        base_print_price: 100,
         tags: [] as number[],
         collection_id: null as number | null,
-        is_display_only: false,
-        original_status: "available"
+        original_status: "available",
     };
     const [formData, setFormData] = useState<any>(defaultForm);
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+    const resolveImageUrl = useCallback((img: ImageEntry): string => {
+        if (typeof img === "string") return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
+        return getImageUrl(img, "thumb") || "";
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [artRes, collRes] = await Promise.all([
+            const [artRes, collRes, tagRes] = await Promise.all([
                 fetch(`${getApiUrl()}/artworks?limit=100`, { credentials: "include" }),
-                fetch(`${getApiUrl()}/collections`, { credentials: "include" })
+                fetch(`${getApiUrl()}/collections`, { credentials: "include" }),
+                fetch(`${getApiUrl()}/tags?category=medium`, { credentials: "include" }),
             ]);
-            
-            if (artRes.ok) {
-                const data = await artRes.json();
-                setArtworks(data.items || data);
-            }
-            
-            if (collRes.ok) {
-                const data = await collRes.json();
-                setCollections(data);
-            }
-        } catch (e) {
-            console.error("Fetch error:", e);
-        } finally {
-            setLoading(false);
-        }
+            if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
+            if (collRes.ok) { const d = await collRes.json(); setCollections(d); }
+            if (tagRes.ok) { const d = await tagRes.json(); setMediumTags(d); }
+        } catch (e) { console.error("Fetch error:", e); }
+        finally { setLoading(false); }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Delete this artwork?")) return;
-        try {
-            const res = await fetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE", credentials: "include" });
-            if (res.ok) {
-                setArtworks(artworks.filter(a => a.id !== id));
-            } else {
-                alert("Delete failed");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Network error during delete");
-        }
+    // ── Image helpers ─────────────────────────────────────────────────────────
+    const addFiles = (files: File[]) => {
+        const newItems: DragItem[] = files.map(f => ({
+            type: "new", url: URL.createObjectURL(f), file: f,
+        }));
+        setImageItems(prev => [...prev, ...newItems].slice(0, 10));
     };
 
+    const removeImage = (idx: number) => setImageItems(prev => prev.filter((_, i) => i !== idx));
+
+    // ── Submit ────────────────────────────────────────────────────────────────
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (!formData.title?.trim()) return alert("Title is required.");
+        if (formData.original_status === "available" && Number(formData.original_price) <= 0) return alert("Original Price is required and must be > 0 when status is Available.");
+        if (formData.has_prints && Number(formData.base_print_price) <= 0) return alert("Base Print Price is required and must be > 0 when Prints are available.");
+        if (imageItems.length === 0) return alert("At least one photo is required.");
+
         setUploading(true);
         const apiUrl = getApiUrl();
-        
-        // Calculate inches from cm
         const payload = { ...formData };
         if (payload.width_cm) payload.width_in = Number((parseFloat(payload.width_cm) * 0.393701).toFixed(2));
         if (payload.height_cm) payload.height_in = Number((parseFloat(payload.height_cm) * 0.393701).toFixed(2));
-        if (payload.depth_cm) payload.depth_in = Number((parseFloat(payload.depth_cm) * 0.393701).toFixed(2));
-        
+
+        // Conditionally nullify unused prices based on status toggles
+        if (payload.original_status !== "available") payload.original_price = null;
+        if (!payload.has_prints) payload.base_print_price = null;
+
         const method = editingId ? "PUT" : "POST";
         const url = editingId ? `${apiUrl}/artworks/${editingId}` : `${apiUrl}/artworks`;
-        
-        console.log(`Attempting to ${method} to ${url}`, payload);
-        
+
         try {
             const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                credentials: "include"
+                method, headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload), credentials: "include",
             });
-            
-            if (res.ok) {
-                const data = await res.json();
-                const targetArtworkId = editingId ? editingId : data.data?.id;
-                
-                // Upload images if selected
-                if (selectedFiles.length > 0 && targetArtworkId) {
-                    const imgFormData = new FormData();
-                    selectedFiles.forEach(file => {
-                        imgFormData.append("files", file);
-                    });
-                    const imgRes = await fetch(`${getApiUrl()}/artworks/${targetArtworkId}/images`, {
-                        method: "POST",
-                        body: imgFormData,
-                        credentials: "include"
-                    });
-                    
-                    if (!imgRes.ok) {
-                        console.error("Image upload failed");
-                        alert("Artwork saved, but image upload failed.");
-                    } else {
-                        alert(`Artwork ${editingId ? 'updated' : 'created'}! Images are processing in the background.`);
-                    }
-                } else {
-                    alert(`Artwork ${editingId ? 'updated' : 'created'}!`);
-                }
-                
-                setIsFormOpen(false);
-                setEditingId(null);
-                setSelectedFiles([]);
-                setPreviewUrls([]);
-                setFormData({ ...defaultForm });
-                fetchData();
-            } else {
-                const errData = await res.json().catch(() => ({}));
-                console.error("Save failed:", res.status, errData);
-                alert(`Save failed: ${res.status} ${JSON.stringify(errData)}`);
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(`Save failed: ${res.status} ${JSON.stringify(err)}`);
+                return;
             }
-        } catch (e: any) {
-            console.error("Network error during save:", e);
-            alert(`Network error: ${e.message}. Please check your connection to the server.`);
+
+            const data = await res.json();
+            const targetId = editingId || data.data?.id;
+
+            // 1. Upload new files
+            const newFiles = imageItems.filter(it => it.type === "new" && it.file).map(it => it.file!);
+            if (newFiles.length > 0 && targetId) {
+                const fd = new FormData();
+                newFiles.forEach(f => fd.append("files", f));
+                await fetch(`${apiUrl}/artworks/${targetId}/images`, { method: "POST", body: fd, credentials: "include" });
+            }
+
+            // 2. If editing & images were reordered, save order
+            if (editingId) {
+                const existingOrdered = imageItems
+                    .filter(it => it.type === "existing")
+                    .map(it => it.existingData!);
+                if (existingOrdered.length > 0) {
+                    await fetch(`${apiUrl}/artworks/${editingId}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ images: existingOrdered }),
+                        credentials: "include",
+                    });
+                }
+            }
+
+            alert(`Artwork ${editingId ? "updated" : "created"}! Images processing in background.`);
+            setIsFormOpen(false);
+            setEditingId(null);
+            setImageItems([]);
+            setFormData({ ...defaultForm });
+            fetchData();
+        } catch (err: any) {
+            alert(`Network error: ${err.message}`);
         } finally {
             setUploading(false);
         }
     };
 
+    // ── Edit click ────────────────────────────────────────────────────────────
     const handleEditClick = async (art: Artwork) => {
         try {
-            // Fetch full details
             const res = await fetch(`${getApiUrl()}/artworks/${art.id}`, { credentials: "include" });
-            if (res.ok) {
-                const fullArt = await res.json();
-                setFormData({
-                    title: fullArt.title || "",
-                    description: fullArt.description || "",
-                    materials: fullArt.materials || "",
-                    style: fullArt.style || "",
-                    year: fullArt.year || new Date().getFullYear(),
-                    width_cm: fullArt.width_cm || "",
-                    height_cm: fullArt.height_cm || "",
-                    depth_cm: fullArt.depth_cm || "",
-                    original_price: fullArt.original_price || 0,
-                    prints_total: fullArt.prints_total || 27,
-                    tags: fullArt.tags ? fullArt.tags.map((t: any) => typeof t === 'number'? t : t.id) : [],
-                    collection_id: fullArt.collection_id || null,
-                    is_display_only: fullArt.is_display_only || false,
-                    original_status: fullArt.original_status || "available"
-                });
-                setEditingId(fullArt.id);
-                setIsFormOpen(true);
-            }
+            if (!res.ok) return;
+            const full = await res.json();
+            setFormData({
+                title: full.title || "",
+                description: full.description || "",
+                materials: full.materials || "",
+                year: full.year || new Date().getFullYear(),
+                width_cm: full.width_cm || "",
+                height_cm: full.height_cm || "",
+                original_price: full.original_price || 0,
+                has_prints: full.has_prints || false,
+                orientation: full.orientation || "Horizontal",
+                base_print_price: full.base_print_price || 0,
+                tags: (full.tags || []).map((t: any) => typeof t === "number" ? t : t.id),
+                collection_id: full.collection_id || null,
+                original_status: full.original_status || "available",
+            });
+            // Populate existing images for reorder
+            const existing: DragItem[] = (full.images || []).map((img: ImageEntry) => ({
+                type: "existing" as const,
+                url: resolveImageUrl(img),
+                existingData: img,
+            }));
+            setImageItems(existing);
+            setEditingId(full.id);
+            setIsFormOpen(true);
         } catch (e) {
             console.error(e);
-            alert("Error loading artwork details for editing.");
+            alert("Error loading artwork details.");
         }
     };
+
+    const handleDelete = async (id: number) => {
+        if (!confirm("Delete this artwork?")) return;
+        const res = await fetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE", credentials: "include" });
+        if (res.ok) setArtworks(artworks.filter(a => a.id !== id));
+        else alert("Delete failed");
+    };
+
+    const inp = "w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white";
 
     if (loading) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Loading admin data...</div>;
 
@@ -211,15 +373,10 @@ export default function ArtworksTab() {
         <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-serif italic">Artworks ({artworks.length})</h2>
-                <button 
+                <button
                     onClick={() => {
-                        if (isFormOpen) {
-                            setIsFormOpen(false);
-                            setEditingId(null);
-                            setFormData({...defaultForm});
-                        } else {
-                            setIsFormOpen(true);
-                        }
+                        if (isFormOpen) { setIsFormOpen(false); setEditingId(null); setFormData({ ...defaultForm }); setImageItems([]); }
+                        else setIsFormOpen(true);
                     }}
                     className="px-4 py-2 border border-[#EAE5D9] text-[#EAE5D9] uppercase font-mono text-xs hover:bg-[#EAE5D9] hover:text-[#111111] transition-colors"
                 >
@@ -228,126 +385,150 @@ export default function ArtworksTab() {
             </div>
 
             {isFormOpen && (
-                <form onSubmit={handleCreate} className="p-6 border border-white/10 bg-[#1A1A1A] rounded-sm space-y-6 mb-8">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Title</label>
-                            <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" placeholder="Artwork title" />
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Collection</label>
-                            <select 
-                                value={formData.collection_id || ""} 
-                                onChange={e => setFormData({...formData, collection_id: e.target.value ? Number(e.target.value) : null})}
-                                className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white"
-                            >
-                                <option value="">Draft / Sketch (Default)</option>
-                                {collections.map(c => (
-                                    <option key={c.id} value={c.id}>{c.title}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Materials</label>
-                            <input value={formData.materials} onChange={e => setFormData({...formData, materials: e.target.value})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Style</label>
-                            <input value={formData.style} onChange={e => setFormData({...formData, style: e.target.value})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Year</label>
-                            <input type="number" required value={formData.year} onChange={e => setFormData({...formData, year: Number(e.target.value)})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Original Price ($)</label>
-                            <input type="number" required value={formData.original_price} onChange={e => setFormData({...formData, original_price: Number(e.target.value)})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-6">
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Width (cm)</label>
-                            <input type="number" step="0.1" value={formData.width_cm} onChange={e => setFormData({...formData, width_cm: e.target.value})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Height (cm)</label>
-                            <input type="number" step="0.1" value={formData.height_cm} onChange={e => setFormData({...formData, height_cm: e.target.value})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Depth (cm)</label>
-                            <input type="number" step="0.1" value={formData.depth_cm} onChange={e => setFormData({...formData, depth_cm: e.target.value})} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" />
-                        </div>
-                    </div>
+                <form onSubmit={handleCreate} className="p-6 border border-white/10 bg-[#151515] rounded-xl shadow-2xl space-y-6 mb-8">
+                    {/* ── Identity ── */}
                     <div>
-                        <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Description (Optional)</label>
-                        <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows={4} className="w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white" placeholder="Artwork description..." />
-                    </div>
-                    
-                    <div>
-                        <label className="block text-xs uppercase font-mono text-zinc-500 mb-2">Images (First is cover, up to 10)</label>
-                        <input 
-                            type="file" 
-                            multiple 
-                            accept="image/*" 
-                            onChange={(e) => {
-                                const files = Array.from(e.target.files || []).slice(0, 10);
-                                setSelectedFiles(files);
-                                
-                                // Generate previews
-                                const urls = files.map(file => URL.createObjectURL(file));
-                                setPreviewUrls(urls);
-                            }} 
-                            className="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20" 
-                        />
-                        
-                        {previewUrls.length > 0 && (
-                            <div className="flex gap-3 mt-4 overflow-x-auto pb-2 overflow-y-hidden">
-                                {previewUrls.map((url, i) => (
-                                    <div key={i} className="relative w-24 h-24 shrink-0 border border-white/20 rounded-sm">
-                                        <img src={url} className="w-full h-full object-cover" alt="Preview" />
-                                        <div className="absolute top-0 left-0 bg-black/60 text-[8px] px-1 text-white font-mono uppercase">
-                                            {i === 0 ? "Cover" : `#${i+1}`}
-                                        </div>
-                                    </div>
-                                ))}
+                        <FormSection title="Identity" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
+                            <div>
+                                <FieldLabel text="Title" required valid={formData.title?.trim().length > 0} />
+                                <input required value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className={inp} placeholder="Artwork title" />
                             </div>
-                        )}
+                            <div>
+                                <FieldLabel text="Year" valid={!!formData.year} />
+                                <input type="number" value={formData.year} onChange={e => setFormData({ ...formData, year: Number(e.target.value) })} className={inp} />
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div className="pt-2">
-                        <button type="submit" disabled={uploading} className="w-full bg-[#EAE5D9] text-[#111111] py-3 uppercase tracking-widest font-mono text-sm disabled:opacity-50 hover:bg-white transition-colors">
-                            {uploading ? "Saving..." : "Save Artwork"}
-                        </button>
+
+                    {/* ── Classification ── */}
+                    <div>
+                        <FormSection title="Classification" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
+                            <div>
+                                <FieldLabel text="Collection" valid={!!formData.collection_id} />
+                                <select value={formData.collection_id || ""} onChange={e => setFormData({ ...formData, collection_id: e.target.value ? Number(e.target.value) : null })} className={inp}>
+                                    <option value="">Uncategorised</option>
+                                    {collections.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <FieldLabel text="Orientation" valid={!!formData.orientation} />
+                                <select value={formData.orientation} onChange={e => setFormData({ ...formData, orientation: e.target.value })} className={inp}>
+                                    <option value="Horizontal">Horizontal</option>
+                                    <option value="Vertical">Vertical</option>
+                                    <option value="Square">Square</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* ── Original ── */}
+                    <div>
+                        <FormSection title="Original" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
+                            <div>
+                                <FieldLabel text="Status" required valid={!!formData.original_status} />
+                                <select value={formData.original_status} onChange={e => setFormData({ ...formData, original_status: e.target.value })} className={inp}>
+                                    {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                            </div>
+                            {formData.original_status === "available" && (
+                                <div>
+                                    <FieldLabel text="Original Price ($)" required valid={Number(formData.original_price) > 0} />
+                                    <input type="number" value={formData.original_price || ""} onChange={e => setFormData({ ...formData, original_price: Number(e.target.value) })} className={inp} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── Prints ── */}
+                    <div>
+                        <FormSection title="Prints" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4 h-full">
+                            <div className="flex flex-col justify-end">
+                                <FieldLabel text="Prints Available" valid={true} />
+                                <select value={formData.has_prints ? "yes" : "no"} onChange={e => setFormData({ ...formData, has_prints: e.target.value === "yes" })} className={inp}>
+                                    <option value="yes">Available</option>
+                                    <option value="no">Not Available</option>
+                                </select>
+                            </div>
+                            {formData.has_prints && (
+                                <div>
+                                    <FieldLabel text="Base Print Price ($)" required valid={Number(formData.base_print_price) > 0} />
+                                    <input type="number" value={formData.base_print_price || ""} onChange={e => setFormData({ ...formData, base_print_price: Number(e.target.value) })} className={inp} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── Dimensions ── */}
+                    <div>
+                        <FormSection title="Dimensions (cm)" />
+                        <div className="grid grid-cols-2 gap-6 mt-4">
+                            <div>
+                                <FieldLabel text="Width" valid={!!formData.width_cm} />
+                                <input type="number" step="0.1" value={formData.width_cm} onChange={e => setFormData({ ...formData, width_cm: e.target.value })} className={inp} />
+                            </div>
+                            <div>
+                                <FieldLabel text="Height" valid={!!formData.height_cm} />
+                                <input type="number" step="0.1" value={formData.height_cm} onChange={e => setFormData({ ...formData, height_cm: e.target.value })} className={inp} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Description ── */}
+                    <div>
+                        <FormSection title="Description" />
+                        <div className="mt-4">
+                            <FieldLabel text="Medium / Materials" valid={formData.tags?.length > 0} />
+                            <TagMultiSelect
+                                tags={mediumTags}
+                                selected={formData.tags}
+                                onChange={ids => setFormData({ ...formData, tags: ids })}
+                                placeholder="No medium tags yet — create them in the Tags tab with category = medium"
+                            />
+                        </div>
+                        <div className="mt-4">
+                            <FieldLabel text="Description" valid={formData.description?.trim().length > 0} />
+                            <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} rows={4} className={inp} placeholder="Artwork description..." />
+                        </div>
+                    </div>
+
+                    {/* ── Images ── */}
+                    <div>
+                        <FormSection title="Photos (up to 10)" />
+                        <ImageReorderGrid
+                            items={imageItems}
+                            onReorder={setImageItems}
+                            onRemove={removeImage}
+                            onAddFiles={addFiles}
+                            maxItems={10}
+                        />
+                    </div>
+
+                    <button type="submit" disabled={uploading} className="w-full bg-[#EAE5D9] text-[#111111] py-3 uppercase tracking-widest font-mono text-sm disabled:opacity-50 hover:bg-white transition-colors">
+                        {uploading ? "Saving..." : editingId ? "Update Artwork" : "Create Artwork"}
+                    </button>
                 </form>
             )}
 
+            {/* Artwork grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                 {artworks.map(art => (
                     <div key={art.id} className="border border-white/10 p-4 relative group bg-white/5">
                         <div className="aspect-4/5 bg-zinc-900 mb-4 overflow-hidden rounded-sm relative">
                             {art.images && art.images.length > 0 ? (
-                                <img src={getImageUrl(art.images[0], 'thumb')} alt={art.title} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                <img src={getImageUrl(art.images[0], "thumb")} alt={art.title} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                             ) : (
-                                <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600 font-mono">Process...</div>
+                                <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600 font-mono">No image</div>
                             )}
                         </div>
                         <h3 className="font-serif italic text-lg text-[#F7F3EC] truncate">{art.title}</h3>
                         <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mt-1">${art.original_price}</p>
-                        
                         <div className="absolute top-6 right-6 flex gap-2">
-                            <button 
-                                onClick={() => handleEditClick(art)}
-                                className="bg-blue-500/90 text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity rounded-sm hover:bg-blue-400"
-                            >
-                                Edit
-                            </button>
-                            <button 
-                                onClick={() => handleDelete(art.id)}
-                                className="bg-red-500/90 text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity rounded-sm hover:bg-red-400"
-                            >
-                                Delete
-                            </button>
+                            <button onClick={() => handleEditClick(art)} className="bg-blue-500/90 text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity rounded-sm hover:bg-blue-400">Edit</button>
+                            <button onClick={() => handleDelete(art.id)} className="bg-red-500/90 text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity rounded-sm hover:bg-red-400">Delete</button>
                         </div>
                     </div>
                 ))}

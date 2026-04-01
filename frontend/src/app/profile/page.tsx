@@ -6,8 +6,7 @@ import Link from "next/link";
 import SettingsTab from "@/app/admin/components/SettingsTab";
 import ArtworksTab from "@/app/admin/components/ArtworksTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
-import CollectionsTab from "@/app/admin/components/CollectionsTab";
-import TagsTab from "@/app/admin/components/TagsTab";
+import LabelsTab from "@/app/admin/components/LabelsTab";
 import { getApiUrl } from "@/utils";
 
 interface Order {
@@ -36,7 +35,7 @@ export default function ProfilePage() {
     const { user, loading } = useUser();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<"orders" | "likes" | "admin">("orders");
-    const [adminSubTab, setAdminSubTab] = useState<"settings" | "artworks" | "collections" | "tags" | "orders">("settings");
+    const [adminSubTab, setAdminSubTab] = useState<"settings" | "artworks" | "labels" | "orders">("settings");
     const [orders, setOrders] = useState<Order[]>([]);
     const [likes, setLikes] = useState<Artwork[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
@@ -164,23 +163,21 @@ export default function ProfilePage() {
                         {activeTab === "admin" && user.is_admin && (
                             <div className="mt-4 border border-white/5 rounded-2xl bg-black/40 p-6 lg:p-10 shadow-2xl">
                                 <div className="flex gap-4 mb-8 border-b border-white/10 overflow-x-auto pb-4">
-                                    {(["settings", "artworks", "collections", "tags", "orders"] as const).map((tab) => (
+                                    {(["settings", "artworks", "labels", "orders"] as const).map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setAdminSubTab(tab)}
-                                            className={`px-4 py-2 text-xs font-mono tracking-widest uppercase transition-all rounded-full whitespace-nowrap ${
-                                                adminSubTab === tab ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
-                                            }`}
+                                            className={`px-4 py-2 text-xs font-mono tracking-widest uppercase transition-all rounded-full whitespace-nowrap ${adminSubTab === tab ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
+                                                }`}
                                         >
-                                            {tab}
+                                            {tab === "labels" ? "Labels & Tags" : tab}
                                         </button>
                                     ))}
                                 </div>
                                 <div className="min-h-[500px]">
                                     {adminSubTab === "settings" && <SettingsTab />}
                                     {adminSubTab === "artworks" && <ArtworksTab />}
-                                    {adminSubTab === "collections" && <CollectionsTab />}
-                                    {adminSubTab === "tags" && <TagsTab />}
+                                    {adminSubTab === "labels" && <LabelsTab />}
                                     {adminSubTab === "orders" && <OrdersTab />}
                                 </div>
                             </div>

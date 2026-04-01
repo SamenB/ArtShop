@@ -30,21 +30,21 @@ async def test_add_order(authenticated_ac):
 
 
 async def test_order_exceeds_artwork_quantity(authenticated_ac):
-    """Artwork 2 (Mona Lisa Print) has prints_available=1, so second order should fail."""
+    """Artwork 1 original gets sold, so second order should fail."""
     # First order — should succeed
     response1 = await authenticated_ac.post(
         "/orders",
-        json=get_base_payload(2, "print"),
+        json=get_base_payload(3, "original"),
     )
     assert response1.status_code == 200
 
-    # Second order for SAME artwork  — should fail
+    # Second order for SAME original — should fail
     response2 = await authenticated_ac.post(
         "/orders",
-        json=get_base_payload(2, "print"),
+        json=get_base_payload(3, "original"),
     )
     assert response2.status_code == 409
-    assert "sold out" in response2.json()["detail"].lower()
+    assert "already sold" in response2.json()["detail"].lower()
 
 
 @pytest.mark.parametrize(

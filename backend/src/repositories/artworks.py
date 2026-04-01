@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import joinedload
 
 from src.models.artworks import ArtworksOrm
@@ -12,23 +12,6 @@ from src.schemas.artworks import ArtworkWithTags
 class ArtworksRepository(BaseRepository):
     model = ArtworksOrm
     mapper = ArtworkMapper
-    """
-    with artworks_count as (
-        select artwork_id, count(*) as artworks_ordered from orders
-        where check_in_date  <= :date_to
-        and check_out_date >= :date_from
-        group by artwork_id
-    ),
-    available_artworks as(
-        select artworks.id as artwork_id, quantity - coalesce(artworks_ordered, 0) as artworks_available from artworks
-        left join artworks_count on artworks.id = artworks_count.artwork_id
-
-    )
-    select * from available_artworks
-    where artworks_available > 0 and artwork_id in (
-        select id from artworks where collection_id = {collection_id}
-    )
-    """
 
     async def get_available_artworks(
         self,
@@ -36,6 +19,13 @@ class ArtworksRepository(BaseRepository):
         offset: int = 0,
         title: str | None = None,
         tags: list[int] | None = None,
+        collection_id: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+        price_min: int | None = None,
+        price_max: int | None = None,
+        orientation: str | None = None,
+        size_category: str | None = None,
     ):
         artworks_ids_to_get = available_artwork_ids()
 
@@ -50,6 +40,54 @@ class ArtworksRepository(BaseRepository):
 
         if tags:
             query = query.filter(self.model.tags.any(TagsOrm.id.in_(tags)))
+
+        if collection_id is not None:
+            query = query.filter(self.model.collection_id == collection_id)
+
+        if year_from is not None:
+            query = query.filter(self.model.year >= year_from)
+
+        if year_to is not None:
+            query = query.filter(self.model.year <= year_to)
+
+        if price_min is not None:
+            query = query.filter(self.model.original_price >= price_min)
+
+        if price_max is not None:
+            query = query.filter(self.model.original_price <= price_max)
+
+        if orientation == "horizontal":
+            query = query.filter(
+                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
+                     self.model.width_cm > self.model.height_cm * 1.1)
+            )
+        elif orientation == "vertical":
+            query = query.filter(
+                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
+                     self.model.height_cm > self.model.width_cm * 1.1)
+            )
+        elif orientation == "square":
+            query = query.filter(
+                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
+                     self.model.width_cm.between(self.model.height_cm * 0.9, self.model.height_cm * 1.1))
+            )
+
+        if size_category == "small":
+            query = query.filter(
+                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
+                     (self.model.width_cm * self.model.height_cm) < 900)
+            )
+        elif size_category == "medium":
+            query = query.filter(
+                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
+                     (self.model.width_cm * self.model.height_cm) >= 900,
+                     (self.model.width_cm * self.model.height_cm) <= 3600)
+            )
+        elif size_category == "large":
+            query = query.filter(
+                and_(self.model.width_cm.isnot(None), self.model.height_cm.isnot(None),
+                     (self.model.width_cm * self.model.height_cm) > 3600)
+            )
 
         query = query.limit(limit).offset(offset)
 

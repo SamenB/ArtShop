@@ -2,7 +2,6 @@ from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.exeptions import (
-    ArtworkDisplayOnlyException,
     DatabaseException,
     ObjectAlreadyExistsException,
     ObjectNotFoundException,
@@ -51,9 +50,6 @@ class OrderService(BaseService):
             for item_data in order_data.items:
                 artwork = await self.db.artworks.get_one(id=item_data.artwork_id)
 
-                if artwork.is_display_only:
-                    raise ArtworkDisplayOnlyException()
-
                 if item_data.edition_type == EditionType.ORIGINAL:
                     if artwork.original_status != "available":
                         raise OriginalSoldOutException()
@@ -62,13 +58,8 @@ class OrderService(BaseService):
                     )
 
                 elif item_data.edition_type == EditionType.PRINT:
-                    if artwork.prints_available <= 0:
+                    if not artwork.has_prints:
                         raise PrintsSoldOutException()
-                    await self.db.artworks.edit(
-                        ArtworkPatch(prints_available=artwork.prints_available - 1),
-                        exclude_unset=True,
-                        id=artwork.id,
-                    )
 
                 # 3. Create the order item entry
                 item_add = OrderItemAdd(
@@ -91,7 +82,6 @@ class OrderService(BaseService):
 
         except (
             ObjectNotFoundException,
-            ArtworkDisplayOnlyException,
             OriginalSoldOutException,
             PrintsSoldOutException,
         ):

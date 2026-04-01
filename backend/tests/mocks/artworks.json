@@ -2,71 +2,71 @@
     {
         "title": "Starry Night",
         "description": "Oil on canvas",
-        "is_display_only": false,
         "original_price": 10000,
         "original_status": "available",
-        "prints_total": 27,
-        "prints_available": 27,
-        "collection_id": 1
+        "collection_id": 1,
+        "has_prints": true,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     },
     {
         "title": "Mona Lisa Print",
         "description": "High quality print",
-        "is_display_only": false,
         "original_price": null,
         "original_status": "sold",
-        "prints_total": 100,
-        "prints_available": 1,
-        "collection_id": 2
+        "collection_id": 2,
+        "has_prints": true,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     },
     {
         "title": "Urban Graffiti",
         "description": "Spray paint on wall",
-        "is_display_only": false,
         "original_price": 3000,
         "original_status": "available",
-        "prints_total": 27,
-        "prints_available": 5,
-        "collection_id": 3
+        "collection_id": 3,
+        "has_prints": true,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     },
     {
         "title": "Sunset Photo",
         "description": "Landscape photography",
-        "is_display_only": false,
         "original_price": 1500,
         "original_status": "available",
-        "prints_total": 50,
-        "prints_available": 10,
-        "collection_id": 4
+        "collection_id": 4,
+        "has_prints": true,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     },
     {
         "title": "Digital Abstract",
         "description": "AI generated art",
-        "is_display_only": false,
         "original_price": 2000,
         "original_status": "available",
-        "prints_total": 0,
-        "prints_available": 0,
-        "collection_id": 5
+        "collection_id": 5,
+        "has_prints": false,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     },
     {
         "title": "Water Lilies",
         "description": "Impressionist painting",
-        "is_display_only": true,
         "original_price": 8000,
         "original_status": "available",
-        "prints_total": 27,
-        "prints_available": 2,
-        "collection_id": 1
+        "collection_id": 1,
+        "has_prints": true,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     },
     {
         "title": "The Scream Copy",
         "description": "Museum quality replica",
-        "is_display_only": false,
         "original_price": 7000,
         "original_status": "available",
-        "prints_total": 27,
-        "prints_available": 4,
-        "collection_id": 2
+        "collection_id": 2,
+        "has_prints": true,
+        "orientation": "Horizontal",
+        "base_print_price": 100
     }
 ]

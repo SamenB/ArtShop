@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class TagAdd(BaseModel):
     title: str = Field(..., description="Title of the tag")
+    category: str | None = Field(None, description="Category: 'medium' or 'general'")
 
 
 class Tag(TagAdd):

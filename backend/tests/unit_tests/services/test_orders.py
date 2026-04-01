@@ -28,27 +28,7 @@ def order_service():
     return service
 
 
-@pytest.mark.asyncio
-async def test_create_order_display_only_fails(order_service):
-    # Setup mock artwork that is display only
-    mock_artwork = MagicMock(spec=ArtworkWithTags)
-    mock_artwork.id = 1
-    mock_artwork.is_display_only = True
 
-    order_service.db.artworks.get_one.return_value = mock_artwork
-
-    order_data = OrderAddRequest(
-        first_name="T",
-        last_name="U",
-        email="e@e.com",
-        phone="123",
-        items=[
-            {"artwork_id": 1, "edition_type": EditionType.ORIGINAL, "finish": "none", "price": 1000}
-        ],
-    )
-
-    with pytest.raises(ArtworkDisplayOnlyException):
-        await order_service.create_order(order_data, user_id=1)
 
 
 @pytest.mark.asyncio
@@ -56,7 +36,6 @@ async def test_create_order_original_sold_out_fails(order_service):
     # Setup mock artwork that has original already sold
     mock_artwork = MagicMock(spec=ArtworkWithTags)
     mock_artwork.id = 1
-    mock_artwork.is_display_only = False
     mock_artwork.original_status = "sold"
 
     order_service.db.artworks.get_one.return_value = mock_artwork
@@ -80,8 +59,7 @@ async def test_create_order_print_sold_out_fails(order_service):
     # Setup mock artwork that has 0 prints available
     mock_artwork = MagicMock(spec=ArtworkWithTags)
     mock_artwork.id = 1
-    mock_artwork.is_display_only = False
-    mock_artwork.prints_available = 0
+    mock_artwork.has_prints = False
 
     order_service.db.artworks.get_one.return_value = mock_artwork
 
@@ -103,7 +81,6 @@ async def test_create_order_print_sold_out_fails(order_service):
 async def test_create_order_original_success(order_service):
     mock_artwork = MagicMock(spec=ArtworkWithTags)
     mock_artwork.id = 1
-    mock_artwork.is_display_only = False
     mock_artwork.original_status = "available"
     mock_artwork.original_price = 1000
 
@@ -142,9 +119,8 @@ async def test_create_order_original_success(order_service):
 async def test_create_order_print_success(order_service):
     mock_artwork = MagicMock(spec=ArtworkWithTags)
     mock_artwork.id = 1
-    mock_artwork.is_display_only = False
-    mock_artwork.prints_available = 10
-    mock_artwork.print_price = 50
+    mock_artwork.has_prints = True
+    mock_artwork.base_print_price = 50
 
     order_service.db.artworks.get_one.return_value = mock_artwork
 
@@ -167,11 +143,8 @@ async def test_create_order_print_success(order_service):
 
     assert result.id == 101
 
-    # Assert edit was called with exactly 1 less print available
-    order_service.db.artworks.edit.assert_awaited_once()
-    args, kwargs = order_service.db.artworks.edit.call_args
-    assert args[0].prints_available == 9
-    assert kwargs.get("id") == 1
+    # Print purchase no longer edits artworks.
+    order_service.db.artworks.edit.assert_not_called()
 
     order_service.db.orders.add.assert_awaited_once()
     order_service.db.commit.assert_awaited_once()

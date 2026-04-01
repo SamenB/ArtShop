@@ -24,8 +24,9 @@ interface Artwork {
     size: string;
     original_price: number;
     original_status: OriginalStatus;
-    prints_total: number;
-    prints_available: number;
+    has_prints: boolean;
+    orientation?: string;
+    base_print_price?: number;
     images?: (string | ArtworkImage)[];
     // UI fallbacks
     aspect_ratio?: string;

@@ -10,11 +10,11 @@ def test_artwork_mapper():
         id=1,
         title="Test Art",
         description="A beautiful piece",
-        is_display_only=False,
+        has_prints=False,
+        orientation="Horizontal",
+        base_print_price=100,
         original_price=1000,
         original_status="available",
-        prints_total=27,
-        prints_available=27,
         images=["/test.png"],
     )
     schema = ArtworkMapper.map_to_schema(mock_artwork)

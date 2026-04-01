@@ -20,8 +20,9 @@ interface Artwork {
     size: string;
     original_price: number;
     original_status: OriginalStatus;
-    prints_total: number;
-    prints_available: number;
+    has_prints: boolean;
+    orientation?: string;
+    base_print_price?: number;
     collection_id?: number;
     images?: (string | { thumb: string; medium: string; original: string })[];
     // UI fallbacks

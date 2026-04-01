@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 from fastapi_cache.decorator import cache
 
 from src.api.dependencies import AdminDep, DBDep
@@ -10,8 +10,15 @@ router = APIRouter(prefix="/tags", tags=["Tags"])
 
 @router.get("")
 @cache(expire=10)
-async def get_tags(db: DBDep):
-    return await TagService(db).get_all_tags()
+async def get_tags(db: DBDep, category: str | None = Query(None)):
+    return await TagService(db).get_all_tags(category=category)
+
+
+@router.get("/{tag_id}/usage")
+async def get_tag_usage(tag_id: int, db: DBDep):
+    """Returns how many artworks reference this tag — used by frontend before deletion."""
+    count = await TagService(db).get_tag_usage_count(tag_id)
+    return {"tag_id": tag_id, "artwork_count": count}
 
 
 @router.post("")

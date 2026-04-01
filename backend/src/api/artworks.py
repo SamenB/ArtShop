@@ -20,9 +20,20 @@ async def get_artworks(
     offset: int = Query(0, ge=0),
     title: str | None = Query(None),
     tags: list[int] | None = Query(None),
+    collection_id: int | None = Query(None),
+    year_from: int | None = Query(None),
+    year_to: int | None = Query(None),
+    price_min: int | None = Query(None),
+    price_max: int | None = Query(None),
+    orientation: str | None = Query(None),     # horizontal | vertical | square
+    size_category: str | None = Query(None),   # small | medium | large
 ):
     return await ArtworkService(db).get_all_artworks(
-        limit=limit, offset=offset, title=title, tags=tags
+        limit=limit, offset=offset, title=title, tags=tags,
+        collection_id=collection_id,
+        year_from=year_from, year_to=year_to,
+        price_min=price_min, price_max=price_max,
+        orientation=orientation, size_category=size_category,
     )
 
 

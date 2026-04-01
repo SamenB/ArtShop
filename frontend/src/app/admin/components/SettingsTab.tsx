@@ -147,7 +147,7 @@ export default function SettingsTab() {
                     value={settings.about_text || ""}
                     onChange={handleChange}
                     rows={6}
-                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-serif"
+                    className="w-full bg-white border border-zinc-300 rounded-md p-4 text-zinc-900 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none placeholder-zinc-400 font-serif"
                     placeholder="Enter short bio..."
                 />
             </div>
@@ -159,7 +159,7 @@ export default function SettingsTab() {
                     name="contact_email"
                     value={settings.contact_email || ""}
                     onChange={handleChange}
-                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
+                    className="w-full bg-white border border-zinc-300 rounded-md p-4 text-zinc-900 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none placeholder-zinc-400 font-sans"
                     placeholder="artist@example.com"
                 />
             </div>
@@ -171,7 +171,7 @@ export default function SettingsTab() {
                     name="social_link"
                     value={settings.social_link || ""}
                     onChange={handleChange}
-                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
+                    className="w-full bg-white border border-zinc-300 rounded-md p-4 text-zinc-900 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none placeholder-zinc-400 font-sans"
                     placeholder="@artshop_studio"
                 />
             </div>
@@ -183,7 +183,7 @@ export default function SettingsTab() {
                     value={settings.studio_address || ""}
                     onChange={handleChange}
                     rows={3}
-                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
+                    className="w-full bg-white border border-zinc-300 rounded-md p-4 text-zinc-900 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none placeholder-zinc-400 font-sans"
                     placeholder="Kiev, Ukraine&#10;By appointment only"
                 />
             </div>
@@ -195,7 +195,7 @@ export default function SettingsTab() {
                     name="global_print_price"
                     value={settings.global_print_price}
                     onChange={(e) => setSettings({ ...settings, global_print_price: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-[#1A1A1A] border border-white/10 rounded-sm p-4 text-[#F7F3EC] focus:border-white/30 focus:outline-none placeholder-zinc-700 font-sans"
+                    className="w-full bg-white border border-zinc-300 rounded-md p-4 text-zinc-900 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none placeholder-zinc-400 font-sans"
                     placeholder="150"
                 />
             </div>
@@ -204,7 +204,7 @@ export default function SettingsTab() {
                 {/* Artist Photo (Home Page) */}
                 <div>
                     <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Artist Photo (Home)</label>
-                    <div className="border border-white/10 border-dashed rounded-sm p-4 text-center relative group">
+                    <div className="border border-zinc-300 border-dashed rounded-md p-4 text-center relative group">
                         {settings.artist_home_photo_url && (
                             <button
                                 onClick={() => setSettings(prev => prev ? { ...prev, artist_home_photo_url: null } : null)}
@@ -216,7 +216,7 @@ export default function SettingsTab() {
                         {settings.artist_home_photo_url ? (
                             <img src={getImageUrl(settings.artist_home_photo_url)} alt="Artist Home" className="mx-auto mb-4 max-h-32 object-contain" />
                         ) : (
-                            <div className="h-32 bg-white/5 mb-4 flex items-center justify-center text-zinc-600 font-mono text-xs">No image</div>
+                            <div className="h-32 bg-zinc-50 mb-4 flex items-center justify-center text-zinc-400 font-mono text-xs">No image</div>
                         )}
                         <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_home_photo_url")} className="text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20" />
                     </div>
@@ -225,7 +225,7 @@ export default function SettingsTab() {
                 {/* Artist Photo (About Page) */}
                 <div>
                     <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Artist Photo (About)</label>
-                    <div className="border border-white/10 border-dashed rounded-sm p-4 text-center relative group">
+                    <div className="border border-zinc-300 border-dashed rounded-md p-4 text-center relative group">
                         {settings.artist_about_photo_url && (
                             <button
                                 onClick={() => setSettings(prev => prev ? { ...prev, artist_about_photo_url: null } : null)}
@@ -237,7 +237,7 @@ export default function SettingsTab() {
                         {settings.artist_about_photo_url ? (
                             <img src={getImageUrl(settings.artist_about_photo_url)} alt="Artist About" className="mx-auto mb-4 max-h-32 object-contain" />
                         ) : (
-                            <div className="h-32 bg-white/5 mb-4 flex items-center justify-center text-zinc-600 font-mono text-xs">No image</div>
+                            <div className="h-32 bg-zinc-50 mb-4 flex items-center justify-center text-zinc-400 font-mono text-xs">No image</div>
                         )}
                         <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_about_photo_url")} className="text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20" />
                     </div>
@@ -245,7 +245,7 @@ export default function SettingsTab() {
 
                 <div className="col-span-2">
                     <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Home Background Photo (Desktop & Mobile)</label>
-                    <div className="border border-white/10 border-dashed rounded-sm p-6 text-center">
+                    <div className="border border-zinc-300 border-dashed rounded-sm p-6 text-center">
                         <div className="flex justify-center gap-8 mb-6">
                             {/* Desktop Preview */}
                             <div className="flex flex-col items-center gap-2 relative group w-48">
@@ -258,10 +258,10 @@ export default function SettingsTab() {
                                         >
                                             Remove
                                         </button>
-                                        <img src={getImageUrl(settings.main_bg_desktop_url)} alt="Desktop BG" className="h-24 w-full object-cover border border-white/10" />
+                                        <img src={getImageUrl(settings.main_bg_desktop_url)} alt="Desktop BG" className="h-24 w-full object-cover border border-zinc-300" />
                                     </>
                                 ) : (
-                                    <div className="h-24 w-full bg-white/5 border border-white/10 flex items-center justify-center text-zinc-600 font-mono text-xs">None</div>
+                                    <div className="h-24 w-full bg-zinc-50 border border-zinc-300 flex items-center justify-center text-zinc-400 font-mono text-xs">None</div>
                                 )}
                             </div>
                             {/* Mobile Preview */}
@@ -275,15 +275,15 @@ export default function SettingsTab() {
                                         >
                                             Remove
                                         </button>
-                                        <img src={getImageUrl(settings.main_bg_mobile_url)} alt="Mobile BG" className="h-24 w-full object-cover border border-white/10" />
+                                        <img src={getImageUrl(settings.main_bg_mobile_url)} alt="Mobile BG" className="h-24 w-full object-cover border border-zinc-300" />
                                     </>
                                 ) : (
-                                    <div className="h-24 w-full bg-white/5 border border-white/10 flex items-center justify-center text-zinc-600 font-mono text-xs">None</div>
+                                    <div className="h-24 w-full bg-zinc-50 border border-zinc-300 flex items-center justify-center text-zinc-400 font-mono text-xs">None</div>
                                 )}
                             </div>
                         </div>
                         
-                        <label className="cursor-pointer inline-block bg-white/10 hover:bg-white/20 text-white font-mono text-xs uppercase tracking-widest px-6 py-3 rounded-full transition-colors">
+                        <label className="cursor-pointer inline-block bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-widest px-6 py-3 rounded-full transition-colors">
                             Upload & Crop Background Photo
                             <input type="file" accept="image/*" onChange={handleBgFileSelect} className="hidden" />
                         </label>
@@ -294,7 +294,7 @@ export default function SettingsTab() {
             <button 
                 onClick={handleSave} 
                 disabled={saving}
-                className="w-full bg-[#EAE5D9] text-[#111111] py-4 uppercase tracking-widest font-mono text-sm disabled:opacity-50 hover:bg-white transition-colors"
+                className="w-full bg-zinc-900 text-white rounded-md py-4 uppercase tracking-widest font-mono text-sm disabled:opacity-50 hover:bg-zinc-800 transition-colors"
             >
                 {saving ? "Saving..." : "Save Settings"}
             </button>

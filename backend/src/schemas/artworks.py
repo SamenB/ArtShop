@@ -20,7 +20,6 @@ class OriginalStatus(str, enum.Enum):
 class ArtworkAddRequest(BaseModel):
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
-    is_display_only: bool = Field(False, description="Is the artwork for display only")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus = Field(
         OriginalStatus.AVAILABLE,
@@ -35,8 +34,9 @@ class ArtworkAddRequest(BaseModel):
     width_in: float | None = Field(None, description="Width in inches")
     height_in: float | None = Field(None, description="Height in inches")
     depth_in: float | None = Field(None, description="Depth in inches")
-    prints_total: int = Field(27, description="Total number of prints in the edition")
-    prints_available: int = Field(27, description="Number of prints available for purchase")
+    has_prints: bool = Field(False, description="Whether prints are available for purchase")
+    orientation: str | None = Field(None, description="Orientation of the artwork")
+    base_print_price: int | None = Field(None, description="Base price for print")
     tags: list[int] = Field([], description="List of tag IDs")
     collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
@@ -47,7 +47,6 @@ class ArtworkAddRequest(BaseModel):
 class ArtworkAdd(BaseModel):
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
-    is_display_only: bool = Field(False, description="Is the artwork for display only")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus = Field(
         OriginalStatus.AVAILABLE,
@@ -62,8 +61,9 @@ class ArtworkAdd(BaseModel):
     width_in: float | None = Field(None)
     height_in: float | None = Field(None)
     depth_in: float | None = Field(None)
-    prints_total: int = Field(27, description="Total number of prints in the edition")
-    prints_available: int = Field(27, description="Number of prints available for purchase")
+    has_prints: bool = Field(False, description="Whether prints are available for purchase")
+    orientation: str | None = Field(None, description="Orientation of the artwork")
+    base_print_price: int | None = Field(None, description="Base price for print")
     collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
@@ -84,7 +84,6 @@ class ArtworkWithTags(Artwork):
 class ArtworkPatchRequest(BaseModel):
     title: str | None = Field(None, description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
-    is_display_only: bool | None = Field(None, description="Is the artwork for display only")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus | None = Field(
         None, description="Status of the original: available, sold, or not_for_sale"
@@ -98,10 +97,9 @@ class ArtworkPatchRequest(BaseModel):
     width_in: float | None = Field(None)
     height_in: float | None = Field(None)
     depth_in: float | None = Field(None)
-    prints_total: int | None = Field(None, description="Total number of prints in the edition")
-    prints_available: int | None = Field(
-        None, description="Number of prints available for purchase"
-    )
+    has_prints: bool | None = Field(None, description="Whether prints are available for purchase")
+    orientation: str | None = Field(None, description="Orientation of the artwork")
+    base_print_price: int | None = Field(None, description="Base price for print")
     tags: list[int] = Field([], description="List of tag IDs")
     collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
@@ -112,7 +110,6 @@ class ArtworkPatchRequest(BaseModel):
 class ArtworkPatch(BaseModel):
     title: str | None = Field(None, description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
-    is_display_only: bool | None = Field(None, description="Is the artwork for display only")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus | None = Field(
         None, description="Status of the original: available, sold, or not_for_sale"
@@ -126,10 +123,9 @@ class ArtworkPatch(BaseModel):
     width_in: float | None = Field(None)
     height_in: float | None = Field(None)
     depth_in: float | None = Field(None)
-    prints_total: int | None = Field(None, description="Total number of prints in the edition")
-    prints_available: int | None = Field(
-        None, description="Number of prints available for purchase"
-    )
+    has_prints: bool | None = Field(None, description="Whether prints are available for purchase")
+    orientation: str | None = Field(None, description="Orientation of the artwork")
+    base_print_price: int | None = Field(None, description="Base price for print")
     collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
@@ -141,14 +137,14 @@ class ArtworkAddBulk(BaseModel):
 
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
-    is_display_only: bool = Field(False, description="Is the artwork for display only")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus = Field(
         OriginalStatus.AVAILABLE,
         description="Status of the original: available, sold, or not_for_sale",
     )
-    prints_total: int = Field(27, description="Total number of prints in the edition")
-    prints_available: int = Field(27, description="Number of prints available for purchase")
+    has_prints: bool = Field(False, description="Whether prints are available for purchase")
+    orientation: str | None = Field(None, description="Orientation of the artwork")
+    base_print_price: int | None = Field(None, description="Base price for print")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )

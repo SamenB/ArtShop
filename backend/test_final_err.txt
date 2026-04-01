@@ -1,0 +1,159 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\semen\Desktop\Programing\ArtShop\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\semen\Desktop\Programing\ArtShop\backend
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.12.0, asyncio-1.3.0, dotenv-0.5.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 33 items
+
+tests/integration_tests/artworks/test_api.py::test_add_order PASSED      [  3%]
+tests/integration_tests/artworks/test_api.py::test_order_exceeds_artwork_quantity FAILED [  6%]
+tests/integration_tests/artworks/test_api.py::test_create_and_get_my_orders[1-artwork_ids0] PASSED [  9%]
+tests/integration_tests/artworks/test_api.py::test_create_and_get_my_orders[2-artwork_ids1] PASSED [ 12%]
+tests/integration_tests/artworks/test_api.py::test_create_and_get_my_orders[3-artwork_ids2] PASSED [ 15%]
+tests/integration_tests/artworks/test_db.py::test_create_order PASSED    [ 18%]
+tests/integration_tests/artworks/test_db.py::test_read_order PASSED      [ 21%]
+tests/integration_tests/artworks/test_db.py::test_update_order PASSED    [ 24%]
+tests/integration_tests/artworks/test_db.py::test_delete_order PASSED    [ 27%]
+tests/integration_tests/auth/test_api.py::test_auth_flow PASSED          [ 30%]
+tests/integration_tests/tags/test_api.py::test_add_tags PASSED           [ 33%]
+tests/integration_tests/tags/test_api.py::test_get_tags FAILED           [ 36%]
+tests/integration_tests/tags/test_db.py::test_add_tags PASSED            [ 39%]
+tests/integration_tests/tags/test_db.py::test_get_tags PASSED            [ 42%]
+tests/integration_tests/test_auth.py::test_encode_decode_access_token PASSED [ 45%]
+tests/unit_tests/repositories/test_mappers.py::test_artwork_mapper FAILED [ 48%]
+tests/unit_tests/repositories/test_mappers.py::test_order_mapper PASSED  [ 51%]
+tests/unit_tests/schemas/test_artworks.py::test_artwork_add_request_valid PASSED [ 54%]
+tests/unit_tests/schemas/test_artworks.py::test_artwork_add_request_defaults PASSED [ 57%]
+tests/unit_tests/schemas/test_artworks.py::test_artwork_add_request_missing_title PASSED [ 60%]
+tests/unit_tests/schemas/test_orders.py::test_order_item_valid PASSED    [ 63%]
+tests/unit_tests/schemas/test_orders.py::test_order_item_invalid_edition_type PASSED [ 66%]
+tests/unit_tests/schemas/test_orders.py::test_order_add_request_valid PASSED [ 69%]
+tests/unit_tests/services/test_artworks.py::test_get_artwork_by_id PASSED [ 72%]
+tests/unit_tests/services/test_artworks.py::test_create_artwork PASSED   [ 75%]
+tests/unit_tests/services/test_artworks.py::test_create_artwork_duplicate_fails PASSED [ 78%]
+tests/unit_tests/services/test_artworks.py::test_delete_artwork PASSED   [ 81%]
+tests/unit_tests/services/test_orders.py::test_create_order_original_sold_out_fails PASSED [ 84%]
+tests/unit_tests/services/test_orders.py::test_create_order_print_sold_out_fails PASSED [ 87%]
+tests/unit_tests/services/test_orders.py::test_create_order_original_success PASSED [ 90%]
+tests/unit_tests/services/test_orders.py::test_create_order_print_success PASSED [ 93%]
+tests/unit_tests/services/test_tags.py::test_create_tag PASSED           [ 96%]
+tests/unit_tests/test_auth.py::test_create_access_token PASSED           [100%]
+
+================================== FAILURES ===================================
+_____________________ test_order_exceeds_artwork_quantity _____________________
+tests\integration_tests\artworks\test_api.py:47: in test_order_exceeds_artwork_quantity
+    assert "sold out" in response2.json()["detail"].lower()
+E   AssertionError: assert 'sold out' in 'the original artwork is already sold'
+E    +  where 'the original artwork is already sold' = <built-in method lower of str object at 0x0000021481B80760>()
+E    +    where <built-in method lower of str object at 0x0000021481B80760> = 'The original artwork is already sold'.lower
+---------------------------- Captured stdout call -----------------------------
+2026-04-01 23:44:43 | DEBUG    | src.main:log_requests:71 | Request: POST http://test/orders Origin: None
+2026-04-01 23:44:43 | INFO     | src.services.orders:create_order:80 | Order created successfully: first_name='John' last_name='Doe' email='johndoe@example.com' phone='5551234' newsletter_opt_in=False discovery_source=None promo_code=None items=[OrderItem(artwork_id=3, edition_type=<EditionType.ORIGINAL: 'original'>, finish='none', size=None, price=1000, id=8, order_id=5)] user_id=4 total_price=1000 id=5 created_at=datetime.datetime(2026, 4, 1, 20, 44, 43, 607286)
+2026-04-01 23:44:43 | DEBUG    | src.main:log_requests:71 | Request: POST http://test/orders Origin: None
+________________________________ test_get_tags ________________________________
+tests\integration_tests\tags\test_api.py:13: in test_get_tags
+    tags = await ac.get("/tags")
+           ^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_client.py:1768: in get
+    return await self.request(
+venv\Lib\site-packages\httpx\_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_client.py:1629: in send
+    response = await self._send_handling_auth(
+venv\Lib\site-packages\httpx\_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+venv\Lib\site-packages\httpx\_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_transports\asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\fastapi\applications.py:1139: in __call__
+    await super().__call__(scope, receive, send)
+venv\Lib\site-packages\starlette\applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+venv\Lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+venv\Lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+venv\Lib\site-packages\starlette\middleware\base.py:191: in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\anaconda3\Lib\contextlib.py:158: in __exit__
+    self.gen.throw(value)
+venv\Lib\site-packages\starlette\_utils.py:85: in collapse_excgroups
+    raise exc
+venv\Lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\main.py:74: in log_requests
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+venv\Lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+venv\Lib\site-packages\starlette\middleware\cors.py:85: in __call__
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+venv\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+venv\Lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\starlette\routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+venv\Lib\site-packages\starlette\routing.py:736: in app
+    await route.handle(scope, receive, send)
+venv\Lib\site-packages\starlette\routing.py:290: in handle
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\fastapi\routing.py:120: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+venv\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+venv\Lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+venv\Lib\site-packages\fastapi\routing.py:106: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\fastapi\routing.py:430: in app
+    raw_response = await run_endpoint_function(
+venv\Lib\site-packages\fastapi\routing.py:316: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\api\tags.py:14: in get_tags
+    return await TagService(db).get_all_tags(category=category)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\services\tags.py:12: in get_all_tags
+    return await self.db.tags.get_all_filtered(category=category)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\repositories\tags.py:18: in get_all_filtered
+    return [self.mapper.map_to_domain_entity(m) for m in models]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'TagMapper' has no attribute 'map_to_domain_entity'
+---------------------------- Captured stdout call -----------------------------
+2026-04-01 23:44:46 | DEBUG    | src.main:log_requests:71 | Request: GET http://test/tags Origin: None
+_____________________________ test_artwork_mapper _____________________________
+tests\unit_tests\repositories\test_mappers.py:18: in test_artwork_mapper
+    schema = ArtworkMapper.map_to_schema(mock_artwork)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\repositories\mappers\base.py:15: in map_to_schema
+    return cls.schema.model_validate(model, from_attributes=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   pydantic_core._pydantic_core.ValidationError: 1 validation error for Artwork
+E   original_status
+E     Input should be 'available', 'sold', 'reserved', 'not_for_sale', 'on_exhibition', 'archived' or 'digital' [type=enum, input_value=None, input_type=NoneType]
+E       For further information visit https://errors.pydantic.dev/2.12/v/enum
+=========================== short test summary info ===========================
+FAILED tests/integration_tests/artworks/test_api.py::test_order_exceeds_artwork_quantity
+FAILED tests/integration_tests/tags/test_api.py::test_get_tags - AttributeErr...
+FAILED tests/unit_tests/repositories/test_mappers.py::test_artwork_mapper - p...
+======================== 3 failed, 30 passed in 3.61s =========================

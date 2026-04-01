@@ -18,7 +18,6 @@ class ArtworksOrm(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(String(1000000))
-    is_display_only: Mapped[bool] = mapped_column(default=False)
     original_price: Mapped[int | None] = mapped_column(default=None)
     original_status: Mapped[str] = mapped_column(
         String(20),
@@ -34,8 +33,9 @@ class ArtworksOrm(Base):
     width_in: Mapped[float | None] = mapped_column(default=None)
     height_in: Mapped[float | None] = mapped_column(default=None)
     depth_in: Mapped[float | None] = mapped_column(default=None)
-    prints_total: Mapped[int] = mapped_column(default=27)
-    prints_available: Mapped[int] = mapped_column(default=27)
+    has_prints: Mapped[bool] = mapped_column(default=False)
+    orientation: Mapped[str | None] = mapped_column(String(20), default=None)
+    base_print_price: Mapped[int | None] = mapped_column(default=None)
     images: Mapped[list[str | dict] | None] = mapped_column(JSON, nullable=True)
     collection_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("collections.id"), nullable=True
