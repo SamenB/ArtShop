@@ -10,10 +10,23 @@ interface SiteSettings {
     artist_about_photo_url: string | null;
     main_bg_desktop_url: string | null;
     main_bg_mobile_url: string | null;
+    cover_2_desktop_url: string | null;
+    cover_2_mobile_url: string | null;
+    cover_3_desktop_url: string | null;
+    cover_3_mobile_url: string | null;
     social_link: string | null;
     studio_address: string | null;
     global_print_price: number;
+    hero_ken_burns_enabled: boolean;
+    hero_slide_duration: number;
 }
+
+// Map cover slot index to settings field names
+const COVER_FIELDS: { desktop: keyof SiteSettings; mobile: keyof SiteSettings }[] = [
+    { desktop: "main_bg_desktop_url", mobile: "main_bg_mobile_url" },
+    { desktop: "cover_2_desktop_url", mobile: "cover_2_mobile_url" },
+    { desktop: "cover_3_desktop_url", mobile: "cover_3_mobile_url" },
+];
 
 export default function SettingsTab() {
     const [settings, setSettings] = useState<SiteSettings | null>(null);
@@ -23,6 +36,7 @@ export default function SettingsTab() {
     // Cropper State
     const [cropperOpen, setCropperOpen] = useState(false);
     const [cropperImageSrc, setCropperImageSrc] = useState("");
+    const [activeCoverSlot, setActiveCoverSlot] = useState<number>(0); // 0, 1, or 2
 
     useEffect(() => {
         const url = `${getApiUrl()}/settings`;
@@ -71,11 +85,12 @@ export default function SettingsTab() {
         }
     };
 
-    const handleBgFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleBgFileSelect = (e: React.ChangeEvent<HTMLInputElement>, coverIndex: number) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
             const imageUrl = URL.createObjectURL(file);
             setCropperImageSrc(imageUrl);
+            setActiveCoverSlot(coverIndex);
             setCropperOpen(true);
         }
         e.target.value = "";
@@ -83,9 +98,11 @@ export default function SettingsTab() {
 
     const handleSaveCrops = async (desktopBlob: Blob, mobileBlob: Blob) => {
         try {
+            const fields = COVER_FIELDS[activeCoverSlot];
+
             // Upload Desktop bg
             const desktopForm = new FormData();
-            desktopForm.append("file", desktopBlob, "desktop_bg.webp");
+            desktopForm.append("file", desktopBlob, `cover_${activeCoverSlot + 1}_desktop.webp`);
             const resDesktop = await fetch(`${getApiUrl()}/upload/image`, {
                 method: "POST", body: desktopForm, credentials: "include"
             });
@@ -93,7 +110,7 @@ export default function SettingsTab() {
 
             // Upload Mobile bg
             const mobileForm = new FormData();
-            mobileForm.append("file", mobileBlob, "mobile_bg.webp");
+            mobileForm.append("file", mobileBlob, `cover_${activeCoverSlot + 1}_mobile.webp`);
             const resMobile = await fetch(`${getApiUrl()}/upload/image`, {
                 method: "POST", body: mobileForm, credentials: "include"
             });
@@ -101,8 +118,8 @@ export default function SettingsTab() {
 
             setSettings(prev => prev ? { 
                 ...prev, 
-                main_bg_desktop_url: dData.url, 
-                main_bg_mobile_url: mData.url 
+                [fields.desktop]: dData.url, 
+                [fields.mobile]: mData.url 
             } : null);
             setCropperOpen(false);
             
@@ -112,6 +129,15 @@ export default function SettingsTab() {
             console.error(e);
             alert("Upload failed");
         }
+    };
+
+    const handleRemoveCover = (coverIndex: number) => {
+        const fields = COVER_FIELDS[coverIndex];
+        setSettings(prev => prev ? {
+            ...prev,
+            [fields.desktop]: null,
+            [fields.mobile]: null,
+        } : null);
     };
 
     const handleSave = async () => {
@@ -137,6 +163,17 @@ export default function SettingsTab() {
     };
 
     if (loading || !settings) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Loading settings...</div>;
+
+    // Determine which cover slots have images
+    const coverSlots = COVER_FIELDS.map((fields, idx) => ({
+        index: idx,
+        desktopUrl: settings[fields.desktop] as string | null,
+        mobileUrl: settings[fields.mobile] as string | null,
+        hasImage: !!(settings[fields.desktop] || settings[fields.mobile]),
+    }));
+
+    // Count how many covers are filled
+    const filledCount = coverSlots.filter(s => s.hasImage).length;
 
     return (
         <div className="space-y-8 max-w-2xl">
@@ -184,7 +221,7 @@ export default function SettingsTab() {
                     onChange={handleChange}
                     rows={3}
                     className="w-full bg-white border border-zinc-300 rounded-md p-4 text-zinc-900 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none placeholder-zinc-400 font-sans"
-                    placeholder="Kiev, Ukraine&#10;By appointment only"
+                    placeholder={"Kiev, Ukraine\nBy appointment only"}
                 />
             </div>
             
@@ -243,51 +280,120 @@ export default function SettingsTab() {
                     </div>
                 </div>
 
+                {/* ═══════════════════════════════════════
+                    HERO COVERS — up to 3 slides
+                    ═══════════════════════════════════════ */}
                 <div className="col-span-2">
-                    <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-2">Home Background Photo (Desktop & Mobile)</label>
-                    <div className="border border-zinc-300 border-dashed rounded-sm p-6 text-center">
-                        <div className="flex justify-center gap-8 mb-6">
-                            {/* Desktop Preview */}
-                            <div className="flex flex-col items-center gap-2 relative group w-48">
-                                <span className="text-xs font-mono text-zinc-500 uppercase">Desktop</span>
-                                {settings.main_bg_desktop_url ? (
-                                    <>
+                    <label className="block text-sm font-sans tracking-widest uppercase text-zinc-500 mb-1">Hero Slideshow Covers (up to 3)</label>
+                    <p className="text-xs text-zinc-400 font-mono mb-4">Upload 1–3 images. Each is cropped for desktop (16:9) and mobile (9:16). Multiple images create an auto-rotating slideshow.</p>
+                    
+                    <div className="space-y-4">
+                        {coverSlots.map((slot) => (
+                            <div key={slot.index} className="border border-zinc-300 border-dashed rounded-sm p-5">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest">
+                                        Cover {slot.index + 1}
+                                        {slot.index === 0 && !slot.hasImage && " (required)"}
+                                    </span>
+                                    {slot.hasImage && (
                                         <button
-                                            onClick={() => setSettings(prev => prev ? { ...prev, main_bg_desktop_url: null } : null)}
-                                            className="absolute top-8 right-2 bg-red-500/80 hover:bg-red-500 text-white text-[10px] uppercase font-mono tracking-widest rounded-sm px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => handleRemoveCover(slot.index)}
+                                            className="bg-red-500/80 hover:bg-red-500 text-white text-[10px] uppercase font-mono tracking-widest rounded-sm px-2 py-1 transition-colors"
                                         >
                                             Remove
                                         </button>
-                                        <img src={getImageUrl(settings.main_bg_desktop_url)} alt="Desktop BG" className="h-24 w-full object-cover border border-zinc-300" />
-                                    </>
+                                    )}
+                                </div>
+
+                                {slot.hasImage ? (
+                                    <div className="flex justify-center gap-6 mb-4">
+                                        {/* Desktop preview */}
+                                        <div className="flex flex-col items-center gap-1.5">
+                                            <span className="text-[10px] font-mono text-zinc-400 uppercase">Desktop</span>
+                                            {slot.desktopUrl ? (
+                                                <img src={getImageUrl(slot.desktopUrl)} alt={`Cover ${slot.index + 1} Desktop`} className="h-20 w-36 object-cover border border-zinc-300 rounded-sm" />
+                                            ) : (
+                                                <div className="h-20 w-36 bg-zinc-50 border border-zinc-300 flex items-center justify-center text-zinc-400 font-mono text-[10px] rounded-sm">None</div>
+                                            )}
+                                        </div>
+                                        {/* Mobile preview */}
+                                        <div className="flex flex-col items-center gap-1.5">
+                                            <span className="text-[10px] font-mono text-zinc-400 uppercase">Mobile</span>
+                                            {slot.mobileUrl ? (
+                                                <img src={getImageUrl(slot.mobileUrl)} alt={`Cover ${slot.index + 1} Mobile`} className="h-20 w-12 object-cover border border-zinc-300 rounded-sm" />
+                                            ) : (
+                                                <div className="h-20 w-12 bg-zinc-50 border border-zinc-300 flex items-center justify-center text-zinc-400 font-mono text-[10px] rounded-sm">—</div>
+                                            )}
+                                        </div>
+                                    </div>
                                 ) : (
-                                    <div className="h-24 w-full bg-zinc-50 border border-zinc-300 flex items-center justify-center text-zinc-400 font-mono text-xs">None</div>
+                                    /* Empty slot — only show upload if previous slot is filled or it's slot 0 */
+                                    (slot.index === 0 || coverSlots[slot.index - 1]?.hasImage) ? (
+                                        <div className="h-20 bg-zinc-50 border border-zinc-200 rounded-sm flex items-center justify-center text-zinc-400 font-mono text-xs mb-4">
+                                            No image
+                                        </div>
+                                    ) : (
+                                        <div className="h-20 bg-zinc-50/50 border border-zinc-100 rounded-sm flex items-center justify-center text-zinc-300 font-mono text-xs mb-4">
+                                            Upload cover {slot.index} first
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Upload button — shown if slot is empty and (it's first OR previous is filled) */}
+                                {(slot.index === 0 || coverSlots[slot.index - 1]?.hasImage) && (
+                                    <div className="text-center">
+                                        <label className="cursor-pointer inline-block bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-widest px-5 py-2.5 rounded-full transition-colors">
+                                            {slot.hasImage ? "Replace & Crop" : "Upload & Crop"}
+                                            <input type="file" accept="image/*" onChange={(e) => handleBgFileSelect(e, slot.index)} className="hidden" />
+                                        </label>
+                                    </div>
                                 )}
                             </div>
-                            {/* Mobile Preview */}
-                            <div className="flex flex-col items-center gap-2 relative group w-24">
-                                <span className="text-xs font-mono text-zinc-500 uppercase">Mobile</span>
-                                {settings.main_bg_mobile_url ? (
-                                    <>
-                                        <button
-                                            onClick={() => setSettings(prev => prev ? { ...prev, main_bg_mobile_url: null } : null)}
-                                            className="absolute top-8 right-1 bg-red-500/80 hover:bg-red-500 text-white text-[10px] uppercase font-mono tracking-widest rounded-sm px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            Remove
-                                        </button>
-                                        <img src={getImageUrl(settings.main_bg_mobile_url)} alt="Mobile BG" className="h-24 w-full object-cover border border-zinc-300" />
-                                    </>
-                                ) : (
-                                    <div className="h-24 w-full bg-zinc-50 border border-zinc-300 flex items-center justify-center text-zinc-400 font-mono text-xs">None</div>
-                                )}
+                        ))}
+                    </div>
+
+                    {filledCount > 1 && (
+                        <p className="text-xs text-zinc-400 font-mono mt-3 text-center">
+                            ✓ {filledCount} covers — slideshow will auto-rotate every {settings.hero_slide_duration}s
+                        </p>
+                    )}
+
+                    {/* Ken Burns motion toggle */}
+                    <label className="flex items-center gap-3 mt-4 p-3 bg-zinc-50 border border-zinc-200 rounded-md cursor-pointer hover:bg-zinc-100 transition-colors">
+                        <input
+                            type="checkbox"
+                            checked={settings.hero_ken_burns_enabled}
+                            onChange={(e) => setSettings(prev => prev ? { ...prev, hero_ken_burns_enabled: e.target.checked } : null)}
+                            className="w-4 h-4 accent-zinc-900 cursor-pointer"
+                        />
+                        <div>
+                            <span className="text-xs font-mono text-zinc-700 uppercase tracking-widest">Ken Burns Effect</span>
+                            <p className="text-[10px] text-zinc-400 font-mono mt-0.5">Enable subtle pan & zoom motion on hero covers</p>
+                        </div>
+                    </label>
+
+                    {/* Slideshow speed — only when multiple covers */}
+                    {filledCount > 1 && (
+                        <div className="mt-4 p-3 bg-zinc-50 border border-zinc-200 rounded-md">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-mono text-zinc-700 uppercase tracking-widest">Slide Duration</span>
+                                <span className="text-xs font-mono text-zinc-500">{settings.hero_slide_duration}s</span>
+                            </div>
+                            <input
+                                type="range"
+                                min={5}
+                                max={30}
+                                step={1}
+                                value={settings.hero_slide_duration}
+                                onChange={(e) => setSettings(prev => prev ? { ...prev, hero_slide_duration: parseInt(e.target.value) } : null)}
+                                className="w-full accent-zinc-900 cursor-pointer"
+                            />
+                            <div className="flex justify-between mt-1">
+                                <span className="text-[10px] font-mono text-zinc-400">5s (fast)</span>
+                                <span className="text-[10px] font-mono text-zinc-400">30s (slow)</span>
                             </div>
                         </div>
-                        
-                        <label className="cursor-pointer inline-block bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-widest px-6 py-3 rounded-full transition-colors">
-                            Upload & Crop Background Photo
-                            <input type="file" accept="image/*" onChange={handleBgFileSelect} className="hidden" />
-                        </label>
-                    </div>
+                    )}
                 </div>
             </div>
 

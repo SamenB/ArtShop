@@ -23,9 +23,9 @@ import ImagePreloader from "@/components/ImagePreloader";
 export const metadata: Metadata = {
   title: {
     // %s will be replaced by page-specific titles
-    // e.g. "Gallery | ArtShop" for the gallery page
-    template: "%s | ArtShop",
-    default: "ArtShop — Original Paintings & Fine Art Prints",
+    // e.g. "Gallery | Samen Bondarenko Gallery" for the gallery page
+    template: "%s | Samen Bondarenko Gallery",
+    default: "Samen Bondarenko Gallery — Original Paintings & Fine Art Prints",
   },
   description:
     "Discover and collect original paintings and fine art prints. Each piece is a unique window into a world of color and emotion.",
@@ -33,12 +33,12 @@ export const metadata: Metadata = {
   // Open Graph = metadata for social media previews (Facebook, Twitter, etc.)
   openGraph: {
     type: "website",
-    siteName: "ArtShop",
+    siteName: "Samen Bondarenko Gallery",
     locale: "en_US",
   },
   icons: {
-    icon: '/sb-icon.svg?v=3',
-    apple: '/sb-icon.svg?v=3',
+    icon: '/sb-icon.svg?v=4',
+    apple: '/sb-icon.svg?v=4',
   },
 };
 

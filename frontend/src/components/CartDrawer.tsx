@@ -3,6 +3,7 @@
 import { useCart } from "@/context/CartContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import Link from "next/link";
+import { artworkUrl } from "@/utils";
 import { useEffect } from "react";
 
 export default function CartDrawer() {
@@ -83,7 +84,7 @@ export default function CartDrawer() {
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
                                             <Link
-                                                href={`/gallery/${item.slug}`}
+                                                href={artworkUrl(item.slug, item.title)}
                                                 onClick={() => setIsCartOpen(false)}
                                                 style={{
                                                     fontFamily: "var(--font-serif)", fontSize: "1.1rem",

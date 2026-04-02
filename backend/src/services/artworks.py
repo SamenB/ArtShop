@@ -1,3 +1,4 @@
+import re
 from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -20,6 +21,26 @@ class ArtworkService(BaseService):
     async def get_artwork_by_id(self, artwork_id: int):
         artwork = await self.db.artworks.get_one(id=artwork_id)
         return artwork
+
+    async def get_artwork_by_slug(self, slug: str):
+        artwork = await self.db.artworks.get_one(slug=slug)
+        return artwork
+
+    async def generate_unique_slug(self, title: str) -> str:
+        base_slug = title.lower()
+        base_slug = re.sub(r'[^a-z0-9]+', '-', base_slug).strip('-')
+        if not base_slug:
+            base_slug = "artwork"
+            
+        slug = base_slug
+        counter = 1
+        while True:
+            existing = await self.db.artworks.get_one_or_none(slug=slug)
+            if not existing:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        return slug
 
     async def get_all_artworks(
         self,
@@ -70,6 +91,7 @@ class ArtworkService(BaseService):
 
             artwork_dict = artwork_data.model_dump()
             artwork_dict["collection_id"] = collection_id
+            artwork_dict["slug"] = await self.generate_unique_slug(artwork_data.title)
 
             artwork = await self.db.artworks.add(ArtworkAdd(**artwork_dict))
             artwork_tags = [
@@ -88,10 +110,20 @@ class ArtworkService(BaseService):
 
     async def update_artwork(self, artwork_id: int, artwork_data: ArtworkAddRequest):
         # Verify artwork exists
-        await self.db.artworks.get_one(id=artwork_id)
+        existing = await self.db.artworks.get_one(id=artwork_id)
 
         try:
-            await self.db.artworks.edit(ArtworkAdd(**artwork_data.model_dump()), id=artwork_id)
+            # Exclude images from PUT - they are managed separately via /images endpoint
+            artwork_dict = artwork_data.model_dump()
+            artwork_dict.pop("images", None)
+            # Exclude tags - handled separately via set_artwork_tags below
+            artwork_dict.pop("tags", None)
+            # Preserve existing slug — ArtworkAdd.slug defaults to None and would overwrite DB slug with NULL
+            artwork_dict.pop("slug", None)
+            artwork_dict["slug"] = existing.slug
+            # Preserve existing images
+            artwork_dict["images"] = existing.images
+            await self.db.artworks.edit(ArtworkAdd(**artwork_dict), id=artwork_id)
             await self.db.artwork_tags.set_artwork_tags(artwork_id, artwork_data.tags)
             await self.db.commit()
         except SQLAlchemyError:

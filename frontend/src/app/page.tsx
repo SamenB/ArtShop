@@ -2,24 +2,30 @@
 // Converted to Server Component for instant loading and SEO.
 
 import Link from "next/link";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, artworkUrl } from "@/utils";
+import HeroSlideshow from "@/components/HeroSlideshow";
+import HomeArtCard from "@/components/HomeArtCard";
 
 export const dynamic = "force-dynamic";
 
 // FEATURED_WORKS will be fetched from API
-type OriginalStatus = "available" | "sold" | "reserved";
+type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
 interface Artwork {
   id: number;
+  slug?: string;
   title: string;
   description: string;
   medium: string;
+  materials?: string;
   size: string;
+  orientation?: string;
   original_price: number;
   original_status: OriginalStatus;
+  has_prints?: boolean;
+  base_print_price?: number;
   images?: (string | { thumb: string; medium: string; original: string })[];
   // UI fallbacks
-  aspectRatio?: string;
   gradientFrom?: string;
   gradientTo?: string;
 }
@@ -73,38 +79,37 @@ export default async function Home() {
           overflow: "hidden",
         }}
       >
-        {/* Background */}
-        {settings?.main_bg_desktop_url || settings?.main_bg_mobile_url ? (
-          <picture>
-            {settings?.main_bg_mobile_url && (
-              <source media="(max-width: 768px)" srcSet={getImageUrl(settings.main_bg_mobile_url, 'medium')} />
-            )}
-            <img
-              src={getImageUrl(settings?.main_bg_desktop_url || settings?.main_bg_mobile_url, 'original')}
-              alt="Hero Background"
-              fetchPriority="high"
-              decoding="sync"
-              loading="eager"
+        {/* Background — Slideshow with Ken Burns + Crossfade */}
+        {(() => {
+          const coverSlots = [
+            { desktop: settings?.main_bg_desktop_url, mobile: settings?.main_bg_mobile_url },
+            { desktop: settings?.cover_2_desktop_url, mobile: settings?.cover_2_mobile_url },
+            { desktop: settings?.cover_3_desktop_url, mobile: settings?.cover_3_mobile_url },
+          ];
+          const covers = coverSlots
+            .filter(c => c.desktop || c.mobile)
+            .map(c => ({
+              desktopUrl: c.desktop ? getImageUrl(c.desktop, 'original') : '',
+              mobileUrl: c.mobile ? getImageUrl(c.mobile, 'medium') : '',
+            })) as { desktopUrl: string; mobileUrl: string }[];
+
+          return covers.length > 0 ? (
+            <HeroSlideshow
+              covers={covers}
+              kenBurnsEnabled={settings?.hero_ken_burns_enabled !== false}
+              slideDuration={settings?.hero_slide_duration || 15}
+            />
+          ) : (
+            <div
+              aria-hidden="true"
               style={{
                 position: "absolute",
                 inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
+                background: "linear-gradient(135deg, #0A1A1C 0%, #1A3638 40%, #254D4F 70%, #0A1A1C 100%)",
               }}
-              aria-hidden="true"
             />
-          </picture>
-        ) : (
-          <div
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "linear-gradient(135deg, #0A1A1C 0%, #1A3638 40%, #254D4F 70%, #0A1A1C 100%)",
-            }}
-          />
-        )}
+          );
+        })()}
         {/* Subtle texture overlay — adds depth */}
         <div
           aria-hidden="true"
@@ -322,115 +327,17 @@ export default async function Home() {
           </Link>
         </div>
 
-        {/* Artwork grid — 3 columns on desktop, 1 on mobile */}
+        {/* Artwork grid — always 3 in a row */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-            gap: "2rem",
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: "4rem 100px",
+            alignItems: "start",
           }}
         >
           {featuredWorks.map((work) => (
-            <Link
-              key={work.id}
-              href={`/gallery/${work.id}`}
-              style={{ textDecoration: "none", color: "inherit" }}
-            >
-              {/* Card (Clean style matching gallery) */}
-              <article
-                className="home-art-card"
-                style={{
-                  backgroundColor: "transparent",
-                  transition: "transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)",
-                  cursor: "pointer",
-                }}
-              >
-                {/* OUTER — shadow + lift */}
-                <div
-                  className="home-shadow-box"
-                  style={{
-                    width: "100%",
-                    aspectRatio: "4/5",
-                    borderRadius: "2px",
-                    boxShadow: "0 6px 24px rgba(26,26,24,0.18)",
-                    transition: "box-shadow 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)",
-                  }}
-                >
-                  {/* INNER — overflow hidden for scale effect */}
-                  <div style={{
-                    width: "100%", height: "100%",
-                    overflow: "hidden",
-                    borderRadius: "2px",
-                    position: "relative"
-                  }}>
-                    {/* The Image (Gradient) itself */}
-                    <div
-                      className="home-img-inner"
-                      style={{
-                        width: "100%", height: "100%",
-                        background: (work.images && work.images.length > 0)
-                          ? `url(${getImageUrl(work.images[0], 'medium')}) center/cover no-repeat`
-                          : `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})`,
-                        transition: "transform 0.5s cubic-bezier(0.165, 0.84, 0.44, 1)",
-                      }}
-                    />
-
-                    {/* Available / Sold badge */}
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: "1rem",
-                        right: "1.2rem",
-                        fontSize: "0.6rem",
-                        fontWeight: 300,
-                        letterSpacing: "0.15em",
-                        textTransform: "uppercase",
-                        fontFamily: "var(--font-sans)",
-                        color: "var(--color-cream)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px"
-                      }}
-                    >
-                      <span style={{
-                        display: "inline-block", width: "4px", height: "4px", borderRadius: "50%",
-                        backgroundColor: work.original_status === "available" ? "rgba(250,250,247,0.8)" : "currentColor",
-                        opacity: work.original_status === "available" ? 1 : 0.5
-                      }} />
-                      {work.original_status === "available" ? "Available" : work.original_status === "sold" ? "Sold" : "Reserved"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card info — Elegant Typography */}
-                <div style={{ paddingTop: "1rem" }}>
-                  <p
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "0.85rem",
-                      fontWeight: 300,
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      color: "var(--color-charcoal-mid)",
-                      marginBottom: "0.25rem",
-                    }}
-                  >
-                    {work.title}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "0.75rem",
-                      fontWeight: 300,
-                      color: "var(--color-muted)",
-                    }}
-                  >
-                    {work.medium} · {work.size}
-                  </p>
-                </div>
-              </article>
-
-            </Link>
+            <HomeArtCard key={work.id} work={work} zoneH={380} />
           ))}
         </div>
       </section>

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getApiUrl, getImageUrl } from "@/utils";
+import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
 
 interface ArtworkImage { thumb: string; medium: string; original: string; }
 type ImageEntry = string | ArtworkImage;
@@ -44,12 +45,14 @@ function ImageReorderGrid({
     onReorder,
     onRemove,
     onAddFiles,
+    onCropClick,
     maxItems = 10,
 }: {
     items: DragItem[];
     onReorder: (next: DragItem[]) => void;
     onRemove: (idx: number) => void;
     onAddFiles: (files: File[]) => void;
+    onCropClick?: (idx: number) => void;
     maxItems?: number;
 }) {
     const dragIdx = useRef<number | null>(null);
@@ -98,26 +101,39 @@ function ImageReorderGrid({
                         )}
                         {/* Remove button */}
                         <button
-                            onClick={() => onRemove(i)}
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(i); }}
                             style={{ position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "rgba(200,50,50,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+                            title="Remove"
                         >×</button>
+                        {/* Crop button (only for new uploads) */}
+                        {item.type === "new" && onCropClick && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); onCropClick(i); }}
+                                style={{ position: "absolute", bottom: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "rgba(50,150,250,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+                                title="Crop Image"
+                            >◩</button>
+                        )}
                     </div>
                 ))}
 
                 {/* Add more button */}
                 {items.length < maxItems && (
                     <button
-                        onClick={() => inputRef.current?.click()}
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); inputRef.current?.click(); }}
                         style={{ width: "100px", height: "100px", border: "1px dashed rgba(255,255,255,0.25)", borderRadius: "3px", backgroundColor: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)", fontSize: "2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.2s, color 0.2s" }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)"; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}
                     >+</button>
                 )}
                 <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: "none" }}
+                    onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
                     onChange={e => {
                         const files = Array.from(e.target.files || []).slice(0, maxItems - items.length);
-                        onAddFiles(files);
-                        e.target.value = "";
+                        if (files.length > 0) onAddFiles(files);
+                        (e.target as HTMLInputElement).value = ""; // Also clear here just in case
                     }}
                 />
             </div>
@@ -199,6 +215,9 @@ export default function ArtworksTab() {
 
     // Image drag-and-drop state
     const [imageItems, setImageItems] = useState<DragItem[]>([]);
+    
+    // Cropper state
+    const [cropImageIndex, setCropImageIndex] = useState<number | null>(null);
 
     const defaultForm = {
         title: "",
@@ -239,7 +258,6 @@ export default function ArtworksTab() {
 
     useEffect(() => { fetchData(); }, []);
 
-    // ── Image helpers ─────────────────────────────────────────────────────────
     const addFiles = (files: File[]) => {
         const newItems: DragItem[] = files.map(f => ({
             type: "new", url: URL.createObjectURL(f), file: f,
@@ -248,6 +266,21 @@ export default function ArtworksTab() {
     };
 
     const removeImage = (idx: number) => setImageItems(prev => prev.filter((_, i) => i !== idx));
+
+    const handleSaveCrop = async (croppedBlob: Blob) => {
+        if (cropImageIndex === null) return;
+        const newFile = new File([croppedBlob], `cropped-${Date.now()}.webp`, { type: "image/webp" });
+        setImageItems(prev => {
+            const next = [...prev];
+            next[cropImageIndex] = {
+                type: "new",
+                url: URL.createObjectURL(newFile),
+                file: newFile,
+            };
+            return next;
+        });
+        setCropImageIndex(null);
+    };
 
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleCreate = async (e: React.FormEvent) => {
@@ -267,6 +300,23 @@ export default function ArtworksTab() {
         // Conditionally nullify unused prices based on status toggles
         if (payload.original_status !== "available") payload.original_price = null;
         if (!payload.has_prints) payload.base_print_price = null;
+        
+        // Nullify dimensions if digital or empty
+        if (payload.original_status === "digital") {
+            payload.width_cm = null;
+            payload.height_cm = null;
+            payload.width_in = null;
+            payload.height_in = null;
+        } else {
+            if (!payload.width_cm || payload.width_cm === "") {
+                payload.width_cm = null;
+                payload.width_in = null;
+            }
+            if (!payload.height_cm || payload.height_cm === "") {
+                payload.height_cm = null;
+                payload.height_in = null;
+            }
+        }
 
         const method = editingId ? "PUT" : "POST";
         const url = editingId ? `${apiUrl}/artworks/${editingId}` : `${apiUrl}/artworks`;
@@ -286,27 +336,27 @@ export default function ArtworksTab() {
             const data = await res.json();
             const targetId = editingId || data.data?.id;
 
-            // 1. Upload new files
+            // Step 1 (edit only): Save current state of existing images (removes + reordering).
+            // This MUST happen BEFORE uploading new files, so Celery reads the correct base list.
+            if (editingId) {
+                const existingOrdered = imageItems
+                    .filter(it => it.type === "existing")
+                    .map(it => it.existingData!);
+                // Always PATCH to apply removals/reordering (even if empty — that means all were removed)
+                await fetch(`${apiUrl}/artworks/${editingId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ images: existingOrdered }),
+                    credentials: "include",
+                });
+            }
+
+            // Step 2: Upload new files. Celery will read the PATCH-updated DB and append to it.
             const newFiles = imageItems.filter(it => it.type === "new" && it.file).map(it => it.file!);
             if (newFiles.length > 0 && targetId) {
                 const fd = new FormData();
                 newFiles.forEach(f => fd.append("files", f));
                 await fetch(`${apiUrl}/artworks/${targetId}/images`, { method: "POST", body: fd, credentials: "include" });
-            }
-
-            // 2. If editing & images were reordered, save order
-            if (editingId) {
-                const existingOrdered = imageItems
-                    .filter(it => it.type === "existing")
-                    .map(it => it.existingData!);
-                if (existingOrdered.length > 0) {
-                    await fetch(`${apiUrl}/artworks/${editingId}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ images: existingOrdered }),
-                        credentials: "include",
-                    });
-                }
             }
 
             alert(`Artwork ${editingId ? "updated" : "created"}! Images processing in background.`);
@@ -463,19 +513,21 @@ export default function ArtworksTab() {
                     </div>
 
                     {/* ── Dimensions ── */}
-                    <div>
-                        <FormSection title="Dimensions (cm)" />
-                        <div className="grid grid-cols-2 gap-6 mt-4">
-                            <div>
-                                <FieldLabel text="Width" valid={!!formData.width_cm} />
-                                <input type="number" step="0.1" value={formData.width_cm} onChange={e => setFormData({ ...formData, width_cm: e.target.value })} className={inp} />
-                            </div>
-                            <div>
-                                <FieldLabel text="Height" valid={!!formData.height_cm} />
-                                <input type="number" step="0.1" value={formData.height_cm} onChange={e => setFormData({ ...formData, height_cm: e.target.value })} className={inp} />
+                    {formData.original_status !== "digital" && (
+                        <div>
+                            <FormSection title="Dimensions (cm)" />
+                            <div className="grid grid-cols-2 gap-6 mt-4">
+                                <div>
+                                    <FieldLabel text="Width" valid={!!formData.width_cm} />
+                                    <input type="number" step="0.1" value={formData.width_cm} onChange={e => setFormData({ ...formData, width_cm: e.target.value })} className={inp} />
+                                </div>
+                                <div>
+                                    <FieldLabel text="Height" valid={!!formData.height_cm} />
+                                    <input type="number" step="0.1" value={formData.height_cm} onChange={e => setFormData({ ...formData, height_cm: e.target.value })} className={inp} />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* ── Description ── */}
                     <div>
@@ -503,6 +555,7 @@ export default function ArtworksTab() {
                             onReorder={setImageItems}
                             onRemove={removeImage}
                             onAddFiles={addFiles}
+                            onCropClick={(idx) => setCropImageIndex(idx)}
                             maxItems={10}
                         />
                     </div>
@@ -512,6 +565,13 @@ export default function ArtworksTab() {
                     </button>
                 </form>
             )}
+
+            <SimpleArtworkCropperModal
+                isOpen={cropImageIndex !== null}
+                imageSrc={cropImageIndex !== null && imageItems[cropImageIndex]?.url ? imageItems[cropImageIndex].url : ""}
+                onClose={() => setCropImageIndex(null)}
+                onSaveCrop={handleSaveCrop}
+            />
 
             {/* Artwork grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">

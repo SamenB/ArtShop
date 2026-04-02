@@ -14,9 +14,11 @@ type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_e
 // ARTWORKS will be fetched from API
 interface Artwork {
     id: number;
+    slug?: string;
     title: string;
     description: string;
     medium: string;
+    materials?: string;
     size: string;
     original_price: number;
     original_status: OriginalStatus;
@@ -24,9 +26,12 @@ interface Artwork {
     orientation?: string;
     base_print_price?: number;
     collection_id?: number;
+    width_cm?: number;
+    height_cm?: number;
+    width_in?: number;
+    height_in?: number;
     images?: (string | { thumb: string; medium: string; original: string })[];
     // UI fallbacks
-    aspectRatio?: string;
     gradientFrom?: string;
     gradientTo?: string;
 }
@@ -60,69 +65,106 @@ const sortWorks = (works: Artwork[], key: SortKey) => {
 
 
 
-// ── ART CARD ─────────────────────────────────────────────────────────────────
-// width: 100% fills the grid column.
-// aspectRatio on the image div → height determined by painting's proportions.
-// Hover: image container lifts + shadow, inner gradient zooms.
-// Text sits naturally below — no overflow, no clipping.
-function ArtCard({ work, onClick }: { work: Artwork; onClick: () => void }) {
-    return (
-        <button onClick={onClick} className="art-card"
-            style={{
-                display: "flex", flexDirection: "column", cursor: "pointer", width: "100%",
-                background: "none", border: "none", margin: 0,
-                textAlign: "left", pointerEvents: "auto",
-                padding: 0,
-            }}>
+// ── IMAGE ZONE HEIGHT per grid mode ──────────────────────────────────────────────
+const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
-            <div className="art-card-container" style={{
-                width: "100%",
-                aspectRatio: work.aspectRatio || "4/5",
-                borderRadius: "2px",
-                overflow: "hidden",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-                transition: "transform 0.3s ease, box-shadow 0.3s ease",
-            }}>
-                <div className="art-card-inner" style={{
-                    width: "100%", height: "100%",
-                    backgroundColor: "#ffffff",
-                    backgroundImage: work.images?.[0] 
-                        ? `url(${getImageUrl(work.images[0], 'original')})` 
-                        : `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    position: "relative",
-                    transition: "transform 0.5s ease",
-                }}>
-                </div>
+// ── Status labels + colours ────────────────────────────────────────────────────
+const STATUS: Record<string, { label: string; color: string }> = {
+    sold:          { label: "SOLD",          color: "#C0392B" },
+    reserved:      { label: "RESERVED",      color: "#D4A017" },
+    not_for_sale:  { label: "Not for Sale",  color: "#999"    },
+    on_exhibition: { label: "On Exhibition", color: "#2980B9" },
+    archived:      { label: "Archived",      color: "#7f8c8d" },
+    digital:       { label: "Digital Only",  color: "#8E44AD" },
+};
+
+// ── ART CARD ─────────────────────────────────────────────────────────────────
+function ArtCard({ work, onClick, zoneH }: { work: Artwork; onClick: () => void; zoneH: number }) {
+    const ori = (work.orientation || "vertical").toLowerCase();
+    const isHorizontal = ori === "horizontal";
+    const isSquare     = ori === "square";
+    const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") || "" : "";
+    const materialLabel = work.materials || work.medium || "Painting";
+    const st = STATUS[work.original_status];
+
+    /* ref-based text alignment to painting’s left edge */
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [textPad, setTextPad] = useState(0);
+    const recalc = useCallback(() => {
+        const c = containerRef.current;
+        if (!c) return;
+        const img = c.querySelector("img");
+        if (!img || !img.complete || !img.naturalWidth) return;
+        setTextPad(Math.max(0, (c.clientWidth - img.clientWidth) / 2));
+    }, []);
+    useEffect(() => { recalc(); window.addEventListener("resize", recalc); return () => window.removeEventListener("resize", recalc); }, [recalc]);
+    // Recalc when zone height changes (grid mode switch)
+    useEffect(() => { requestAnimationFrame(recalc); }, [zoneH, recalc]);
+
+    return (
+        <button
+            onClick={onClick}
+            className="art-card"
+            style={{
+                display: "flex", flexDirection: "column",
+                cursor: "pointer", width: "100%",
+                background: "none", border: "none", margin: 0,
+                textAlign: "left", pointerEvents: "auto", padding: 0,
+            }}
+        >
+            <div
+                ref={containerRef}
+                className="art-card-container"
+                style={{
+                    width: "100%",
+                    height: `${zoneH}px`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                }}
+            >
+                {imgSrc ? (
+                    <img
+                        src={imgSrc}
+                        alt={work.title}
+                        className="art-card-inner"
+                        onLoad={recalc}
+                        style={{
+                            display: "block",
+                            maxWidth:  isHorizontal || isSquare ? "78%" : "80%",
+                            maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
+                            width: "auto", height: "auto",
+                            borderRadius: "1px",
+                            alignSelf: "center",
+                            flexShrink: 0,
+                            boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+                        }}
+                    />
+                ) : (
+                    <div className="art-card-inner" style={{
+                        width:  isHorizontal || isSquare ? "78%" : "55%",
+                        height: isHorizontal ? "55%" : "85%",
+                        backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
+                        borderRadius: "1px",
+                        alignSelf: "center",
+                        flexShrink: 0,
+                        boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
+                    }} />
+                )}
             </div>
 
-            {/* Compact metadata — IBM Plex Mono typewriter style */}
-            {/* Fixed-height text — painting centers align across the row */}
-            <div style={{ paddingTop: "1rem", height: "6.5rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+            {/* Title only — aligned to painting's left vertical edge */}
+            <div style={{ paddingTop: "0.7rem", paddingLeft: `${textPad}px`, flexShrink: 0 }}>
                 <p style={{
-                    fontFamily: "var(--font-serif)", fontSize: "1.1rem",
+                    fontFamily: "var(--font-serif)", fontSize: "1.05rem",
                     fontWeight: 400, fontStyle: "italic",
-                    color: "var(--color-charcoal)", marginBottom: "0",
+                    color: "#666", margin: 0,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    lineHeight: 1.35, paddingBottom: "0.15rem"
+                    lineHeight: 1.35,
                 }}>{work.title}</p>
-                <p style={{
-                    fontFamily: "var(--font-mono)", fontSize: "0.75rem",
-                    fontWeight: 300, letterSpacing: "0.02em", lineHeight: 1.35,
-                    color: "var(--color-muted)",
-                }}>
-                    {(work.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m, wd, h) => `${m} | ${Math.round(Number(wd) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`)} · {work.medium}
-                    {work.original_status === "available" && <span style={{ color: "var(--color-available)", marginLeft: "0.4rem" }}>●</span>}
-                    {work.original_status === "sold" && <span style={{ color: "var(--color-sold)", marginLeft: "0.4rem" }}>●</span>}
-                    {work.original_status === "reserved" && <span style={{ color: "#C4963A", marginLeft: "0.4rem" }}>●</span>}
-                    {work.original_status === "not_for_sale" && <span style={{ color: "var(--color-muted)", marginLeft: "0.4rem", fontStyle: "italic", fontSize: "0.65rem" }}>Not for Sale</span>}
-                    {work.original_status === "on_exhibition" && <span style={{ color: "#5A7AB5", marginLeft: "0.4rem", fontStyle: "italic", fontSize: "0.65rem" }}>On Exhibition</span>}
-                    {work.original_status === "digital" && <span style={{ color: "#9B7AE8", marginLeft: "0.4rem" }}>●</span>}
-                </p>
             </div>
         </button>
-
     );
 }
 
@@ -159,7 +201,6 @@ export default function GalleryPage() {
             }
             const items = rawData.map((item: any, idx: number) => ({
                 ...item,
-                aspectRatio: "4/5", // Default
                 gradientFrom: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][0],
                 gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1]
             }));
@@ -274,9 +315,9 @@ export default function GalleryPage() {
             if (gridMode === "2") return "repeat(2, 1fr)";
             if (gridMode === "3") return "repeat(3, 1fr)";
         }
-        if (gridMode === "1") return "repeat(auto-fill, minmax(350px, 1fr))";
-        if (gridMode === "2") return "repeat(auto-fill, minmax(240px, 1fr))";
-        return "repeat(auto-fill, minmax(175px, 1fr))";
+        if (gridMode === "1") return "repeat(auto-fill, minmax(460px, 1fr))";
+        if (gridMode === "2") return "repeat(auto-fill, minmax(340px, 1fr))";
+        return "repeat(auto-fill, minmax(220px, 1fr))";
     };
 
     const getGap = () => {
@@ -285,9 +326,9 @@ export default function GalleryPage() {
             if (gridMode === "2") return "1rem";
             if (gridMode === "3") return "0.5rem";
         }
-        if (gridMode === "1") return "4rem 180px";
-        if (gridMode === "2") return "3rem 120px";
-        return "2rem 90px";
+        if (gridMode === "1") return "5rem 140px";
+        if (gridMode === "2") return "4rem 100px";
+        return "2.5rem 70px";
     };
 
     return (
@@ -467,17 +508,17 @@ export default function GalleryPage() {
                             </div>
 
                             <div style={{ display: "grid", gridTemplateRows: isCollapsed ? "0fr" : "1fr", transition: "grid-template-rows 0.4s ease-out" }}>
-                                <div style={{ overflow: "hidden" }}>
+                                <div style={{ overflow: "hidden", padding: "0 40px 50px 40px", margin: "0 -40px -50px -40px" }}>
                                     <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 0.5rem 2rem" : "2rem 2.5rem 3rem" }}>
                                         <div className={`art-grid`} style={{
                                             display: "grid",
                                             gridTemplateColumns: getColumns(),
                                             justifyContent: "start",
                                             gap: getGap(),
-                                            alignItems: "center",
+                                            alignItems: "start",
                                         }}>
                                             {works.map((work, i) => (
-                                                <ArtCard key={work.id} work={work} onClick={() => setLightbox({ works, index: i })} />
+                                                <ArtCard key={work.id} work={work} onClick={() => setLightbox({ works, index: i })} zoneH={IMAGE_ZONE[gridMode] || 380} />
                                             ))}
                                         </div>
                                     </div>

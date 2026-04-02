@@ -46,3 +46,15 @@ export const getImageUrl = (
     if (!path.startsWith("/")) return path;
     return `${getApiUrl(serverHost)}${path}`;
 };
+
+/** Convert a title to a URL-safe slug */
+export const slugify = (text: string): string =>
+    text.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+/** Generate the canonical artwork URL: /artwork/{slug} */
+export const artworkUrl = (slugOrId: string | number): string =>
+    `/artwork/${slugOrId}`;
+

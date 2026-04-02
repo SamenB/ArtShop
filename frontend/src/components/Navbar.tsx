@@ -261,7 +261,7 @@ export default function Navbar() {
                     style={{
                         width: "100%",
                         padding: isMobile ? "0 1.25rem" : "0 clamp(2.5rem, 0.79rem + 2.68vw, 8rem)",
-                        height: isMobile ? "70px" : "clamp(70px, 47px + 2.23vw, 130px)",
+                        height: isMobile ? "63px" : "clamp(63px, 42px + 2vw, 117px)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
@@ -278,7 +278,7 @@ export default function Navbar() {
                                     height={200}
                                     priority
                                     style={{
-                                        height: isMobile ? "52px" : "clamp(52px, 36px + 1.6vw, 95px)",
+                                        height: isMobile ? "49px" : "clamp(49px, 34px + 1.5vw, 90px)",
                                         width: "auto",
                                         objectFit: "contain",
                                         display: "block",
@@ -461,7 +461,7 @@ export default function Navbar() {
                 onClick={() => setMenuOpen(false)}
                 style={{
                     position: "fixed",
-                    top: "70px", left: 0, right: 0, bottom: 0,
+                    top: "63px", left: 0, right: 0, bottom: 0,
                     backgroundColor: "rgba(26,26,24,0.3)",
                     backdropFilter: "blur(6px)",
                     WebkitBackdropFilter: "blur(6px)",
@@ -472,10 +472,10 @@ export default function Navbar() {
                 }}
             />
             {/* Drawer */}
-            <div
+<div
                 style={{
                     position: "fixed",
-                    top: "70px", right: 0, bottom: 0,
+                    top: "63px", right: 0, bottom: 0,
                     width: "68%", maxWidth: "300px",
                     zIndex: 99,
                     backgroundColor: "#F7F6F3",
@@ -706,8 +706,8 @@ export default function Navbar() {
                 className="navbar-spacer-bg"
             />
             <style dangerouslySetInnerHTML={{__html: `
-                .navbar-spacer-bg { height: clamp(70px, 47px + 2.23vw, 130px); }
-                @media (max-width: 880px) { .navbar-spacer-bg { height: 70px; } }
+                .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); }
+                @media (max-width: 880px) { .navbar-spacer-bg { height: 63px; } }
             `}} />
         </>
     );

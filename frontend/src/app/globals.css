@@ -175,15 +175,6 @@ h3 {
 
 /* Art grid — mobile override for edge-to-edge single column or 3-col dense */
 @media (max-width: 600px) {
-  .art-grid:not(.dense) {
-    grid-template-columns: 1fr !important;
-    gap: 3rem 0 !important;
-  }
-
-  .art-grid.dense {
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 1.5rem 0.5rem !important;
-  }
 
   /* Fixed height text block ensures grid correctly aligns images by center regardless of text wrapping */
   .art-grid.dense .art-card {
@@ -213,27 +204,76 @@ h3 {
 }
 
 .art-card-container {
-  /* Быстрый и резкий переход (0.15s вместо 0.30s) для кропа и тени */
-  transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  /* Средняя (золотое сечение) градиентная тень: 40% непрозрачности */
-  box-shadow: 0 0 7px 2px rgba(28, 25, 22, 0.4);
-  /* ФИКС СУБПИКСЕЛЬНЫХ БЕЛЫХ ПОЛОС: задаем черный фон и исправляем рендеринг */
-  background-color: #1c1916;
-  outline: 1px solid transparent;
-  backface-visibility: hidden;
+  /* Shadow applied via inline style to bypass Tailwind v4 PostCSS filter transformation */
+  transition: filter 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  background-color: transparent;
+}
+
+/* Mobile proportional bounds — eliminating large gaps between image and description */
+@media (max-width: 768px) {
+  /* Let text scale proportionally with the width of the card's column */
+  .art-card {
+    container-type: inline-size;
+  }
+  
+  .art-card-container {
+    height: auto !important; /* Immediately shrink-wraps height to the image without forced square space */
+    aspect-ratio: auto !important; 
+    margin-bottom: 0.25rem;
+  }
+  
+  .art-card-inner {
+    /* Allow it to reach full width natively, constraining height to prevent extreme verticals */
+    max-width: 100% !important;
+    max-height: 55vh !important;
+  }
+  
+  /* Scale the title perfectly depending on column width */
+  .art-card p:first-child {
+    font-size: clamp(0.6rem, 8cqi, 1rem) !important;
+  }
+}
+
+.art-card-inner {
+  /* Transform + box-shadow transitions for hover lift effect */
+  transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              box-shadow 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ─────────────────────────────────────────────
+   Unified card shadow — used across gallery, shop, artwork page
+   Apply via className="card-shadow" or boxShadow: "var(--shadow-card)"
+───────────────────────────────────────────── */
+:root {
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-card-deep: none;
+  --shadow-thumb: none;
+  --shadow-panel: none;
+}
+
+.card-shadow {
+  box-shadow: none;
+  transition: transform 0.2s ease;
+}
+.card-shadow:hover {
+  box-shadow: none;
 }
 
 /* Hover + active — only on real pointer devices (mouse/trackpad).
    On touch: :active fires on ANY finger contact incl. scroll start → causes jerk. */
 @media (hover: hover) and (pointer: fine) {
-  .art-card:hover .art-card-container {
-    transform: scale(1.02);
+  /* Scale the painting on hover */
+  .art-card:hover .art-card-inner {
+    transform: scale(1.03);
+    box-shadow: 4px 18px 40px rgba(28,25,22,0.90), 0 4px 10px rgba(28,25,22,0.50) !important;
   }
-  .art-card:active .art-card-container {
+  .art-card:active .art-card-inner {
     transform: scale(0.98);
-    box-shadow: 0 0 5px 1px rgba(28, 25, 22, 0.7);
+    box-shadow: 1px 5px 15px rgba(28,25,22,0.80), 0 1px 5px rgba(28,25,22,0.44) !important;
   }
 }
+
 
 /* ─────────────────────────────────────────────
    Home Page specific hover states (Replaces JS onMouseEnter)
@@ -279,7 +319,7 @@ h3 {
   transform: scale(1);
 }
 .home-art-card .home-shadow-box {
-  box-shadow: 0 6px 24px rgba(26,26,24,0.18);
+  box-shadow: none;
 }
 
 /* Home page art card hover — pointer devices only */
@@ -291,6 +331,60 @@ h3 {
     transform: scale(1.02);
   }
   .home-art-card:hover .home-shadow-box {
-    box-shadow: 0 28px 64px rgba(26,26,24,0.32);
+    box-shadow: none;
   }
+}
+
+/* ─────────────────────────────────────────────
+   Filter sidebar hover states
+   NOTE: NOT behind (hover: hover) — iPad is classified as hover:none
+   even with Apple Pencil. Instead we use plain :hover which Safari
+   correctly triggers for Apple Pencil proximity (iPadOS 16.4+)
+   AND (any-hover: hover) which matches if *any* device supports hover.
+───────────────────────────────────────────── */
+
+/* Filter checkbox row */
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.35rem 0.2rem;
+  user-select: none;
+  border-radius: 4px;
+  transition: background-color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-item:hover {
+  background-color: rgba(26,26,24,0.04);
+}
+.filter-item:hover .filter-item-box {
+  border-color: rgba(26,26,24,0.5) !important;
+}
+.filter-item:hover .filter-item-text {
+  color: #3a3a38 !important;
+}
+
+/* Filter section header button */
+.filter-section-btn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0.9rem 0 0.6rem;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-section-btn:hover {
+  background-color: rgba(26,26,24,0.025);
+}
+.filter-section-btn:hover .filter-section-title {
+  color: #000 !important;
+}
+.filter-section-btn:hover .filter-section-arrow path {
+  stroke: #888;
 }

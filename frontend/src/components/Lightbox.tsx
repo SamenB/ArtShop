@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
-import { getImageUrl } from "@/utils";
+import { getImageUrl, artworkUrl } from "@/utils";
 
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
 interface Artwork {
     id: number;
+    slug?: string;
     title: string;
     medium: string;
     size: string;
@@ -54,7 +55,7 @@ export default function Lightbox({
     // refs for gesture tracking
     const dragRef  = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
     const pinchRef = useRef<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
-    const swipeRef = useRef<number | null>(null);   // 1-finger swipe on outer wrapper
+    const swipeRef = useRef<{x: number, y: number} | null>(null);   // 1-finger swipe on outer wrapper
     const tapRef   = useRef<number>(0);             // double-tap timing
     const imgRef   = useRef<HTMLDivElement>(null);
 
@@ -89,10 +90,10 @@ export default function Lightbox({
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
             if (e.key === "Escape")      onClose();
-            if (e.key === "ArrowLeft")   prevWork();
-            if (e.key === "ArrowRight")  nextWork();
-            if (e.key === "ArrowUp")     prevImage();
-            if (e.key === "ArrowDown")   nextImage();
+            if (e.key === "ArrowUp")     prevWork();
+            if (e.key === "ArrowDown")   nextWork();
+            if (e.key === "ArrowLeft")   prevImage();
+            if (e.key === "ArrowRight")  nextImage();
         };
         window.addEventListener("keydown", h);
         return () => window.removeEventListener("keydown", h);
@@ -127,16 +128,20 @@ export default function Lightbox({
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <div
-            // ── Outer: backdrop + 1-finger swipe navigation ──────────────────
+            // ── Outer: backdrop (mostly to catch outside clicks) ──────────────────
             onTouchStart={e => {
-                if (e.touches.length === 1) swipeRef.current = e.touches[0].clientX;
-                else swipeRef.current = null; // 2-finger → pinch, no swipe
+                if (e.touches.length === 1 && zoom === 1) swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
             }}
             onTouchEnd={e => {
                 if (swipeRef.current === null || zoom > 1) return;
-                const d = swipeRef.current - e.changedTouches[0].clientX;
-                if (d > 48) nextWork();
-                else if (d < -48) prevWork();
+                const dx = swipeRef.current.x - e.changedTouches[0].clientX;
+                const dy = swipeRef.current.y - e.changedTouches[0].clientY;
+                if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 48) {
+                    onClose();
+                } else {
+                    if (dx > 48) nextImage();
+                    else if (dx < -48) prevImage();
+                }
                 swipeRef.current = null;
             }}
             style={{
@@ -194,13 +199,15 @@ export default function Lightbox({
                         };
                         dragRef.current = null;
                     } else if (e.touches.length === 1) {
-                        // ── Single finger: pan (when zoomed) OR double-tap ──
+                        // ── Single finger: pan (when zoomed) OR swipe OR double-tap ──
                         pinchRef.current = null;
                         if (zoom > 1) {
                             dragRef.current = {
                                 sx: e.touches[0].clientX, sy: e.touches[0].clientY,
                                 px: pan.x, py: pan.y,
                             };
+                        } else {
+                            swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; // capture inner swipe!
                         }
 
                         // Double-tap detection
@@ -236,6 +243,17 @@ export default function Lightbox({
                 onTouchEnd={e => {
                     if (e.touches.length < 2) pinchRef.current = null;
                     if (e.touches.length < 1) dragRef.current  = null;
+                    if (swipeRef.current !== null && zoom === 1 && e.changedTouches.length === 1) {
+                        const dx = swipeRef.current.x - e.changedTouches[0].clientX;
+                        const dy = swipeRef.current.y - e.changedTouches[0].clientY;
+                        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 48) {
+                            onClose();
+                        } else {
+                            if (dx > 48) nextImage();
+                            else if (dx < -48) prevImage();
+                        }
+                    }
+                    swipeRef.current = null;
                 }}
 
                 onClick={e => e.stopPropagation()}
@@ -257,6 +275,48 @@ export default function Lightbox({
                     WebkitUserSelect: "none",
                 }}
             />
+
+            {/* ── Visual Left/Right navigation for items ── */}
+            {w.images && w.images.length > 1 && zoom === 1 && (
+                <>
+                    <button
+                        className="hidden md:flex items-center justify-center"
+                        onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                        style={{
+                            position: "absolute", left: "1.5rem", top: "50%", transform: "translateY(-50%)", zIndex: 20,
+                            width: "72px", height: "72px", 
+                            background: "rgba(255,255,255,0.05)", border: "none", borderRadius: "50%", backdropFilter: "blur(4px)",
+                            cursor: "pointer", color: "#ffffff",
+                            filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.15))",
+                            transition: "background 0.2s, transform 0.2s"
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.transform = "translateY(-50%) scale(1)"; }}
+                        onMouseDown={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(0.9)"; }}
+                        onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; }}
+                    >
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <button
+                        className="hidden md:flex items-center justify-center"
+                        onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                        style={{
+                            position: "absolute", right: "1.5rem", top: "50%", transform: "translateY(-50%)", zIndex: 20,
+                            width: "72px", height: "72px", 
+                            background: "rgba(255,255,255,0.05)", border: "none", borderRadius: "50%", backdropFilter: "blur(4px)",
+                            cursor: "pointer", color: "#ffffff",
+                            filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.15))",
+                            transition: "background 0.2s, transform 0.2s"
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.transform = "translateY(-50%) scale(1)"; }}
+                        onMouseDown={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(0.9)"; }}
+                        onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; }}
+                    >
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
+                </>
+            )}
 
             {/* ── TOP BAR: counter + close ───────────────────────────────── */}
             <div style={{
@@ -390,9 +450,9 @@ export default function Lightbox({
                             {w.original_status === "digital"   && <span style={{ marginLeft: "0.5rem", color: "#B89AEE" }}>● Digital</span>}
                         </p>
                     </div>
-                    {window.location.pathname !== `/gallery/${w.id}` && (
+                    {window.location.pathname !== artworkUrl(w.slug || w.id) && (
                         <Link
-                            href={`/gallery/${w.id}`}
+                            href={artworkUrl(w.slug || w.id)}
                             onClick={onClose}
                             style={{
                                 pointerEvents: "auto",

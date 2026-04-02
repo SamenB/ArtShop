@@ -5,15 +5,17 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, artworkUrl } from "@/utils";
 
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
 interface Product {
     id: number;
+    slug?: string;
     title: string;
     description: string;
     medium: string;
+    materials?: string;
     size: string;
     original_price: number;
     original_status: OriginalStatus;
@@ -80,68 +82,144 @@ function sortProducts(products: Product[], key: SortKey, globalPrintPrice: numbe
     return c;
 }
 
-// ── ProductCard ───────────────────────────────────────────────────────────────
-function ProductCard({ product }: { product: Product }) {
+// ── IMAGE ZONE HEIGHT per grid mode ──────────────────────────────────────────
+const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
+
+// ── Status labels + colours ──────────────────────────────────────────────────
+const STATUS: Record<string, { label: string; color: string }> = {
+    sold:          { label: "SOLD",          color: "#C0392B" },
+    reserved:      { label: "RESERVED",      color: "#D4A017" },
+    not_for_sale:  { label: "Not for Sale",  color: "#999"    },
+    on_exhibition: { label: "On Exhibition", color: "#2980B9" },
+    archived:      { label: "Archived",      color: "#7f8c8d" },
+    digital:       { label: "Digital Only",  color: "#8E44AD" },
+};
+
+// ── ProductCard ─────────────────────────────────────────────────────────────────
+function ProductCard({ product, zoneH }: { product: Product; zoneH: number }) {
     const { convertPrice, units } = usePreferences();
+    const ori = (product.orientation || "vertical").toLowerCase();
+    const isHorizontal = ori === "horizontal";
+    const isSquare     = ori === "square";
+    const imgSrc = product.images?.[0] ? getImageUrl(product.images[0], "original") || "" : "";
+    const materialLabel = product.materials || product.medium || "Painting";
+    const st = STATUS[product.original_status];
+
+    /* ── ref-based text alignment to painting's left edge ── */
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [textPad, setTextPad] = useState(0);
+    const recalc = useCallback(() => {
+        const c = containerRef.current;
+        if (!c) return;
+        const img = c.querySelector("img");
+        if (!img || !img.complete || !img.naturalWidth) return;
+        setTextPad(Math.max(0, (c.clientWidth - img.clientWidth) / 2));
+    }, []);
+    useEffect(() => { recalc(); window.addEventListener("resize", recalc); return () => window.removeEventListener("resize", recalc); }, [recalc]);
+    // Recalc when zone height changes (grid mode switch) — image resizes, need new offset
+    useEffect(() => { requestAnimationFrame(recalc); }, [zoneH, recalc]);
+
     const sizeStr = useMemo(() => {
         const w = units === "in" ? product.width_in : product.width_cm;
         const h = units === "in" ? product.height_in : product.height_cm;
-        if (w && h) return `${w} × ${h} ${units}`;
-        // Fallback to old string replacement if numbers are missing
+        if (w && h) return `${w} x ${h} ${units}`;
         return (product.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m: string, w: string, h: string) => {
-            if (units === "cm") return `${Math.round(Number(w) * 2.54)} × ${Math.round(Number(h) * 2.54)} cm`;
+            if (units === "cm") return `${Math.round(Number(w) * 2.54)} x ${Math.round(Number(h) * 2.54)} cm`;
             return m;
         });
     }, [product, units]);
 
     return (
         <div className="art-card" style={{ display: "flex", flexDirection: "column", width: "100%", padding: 0 }}>
-            <Link href={`/gallery/${product.id}`} style={{ textDecoration: "none", display: "block", width: "100%" }}>
-                <div className="art-card-container" style={{ width: "100%", aspectRatio: product.aspectRatio, borderRadius: "2px", overflow: "hidden" }}>
-                    <div className="art-card-inner" style={{
-                        width: "100%", height: "100%", backgroundColor: "#ffffff",
-                        backgroundImage: product.images && product.images.length > 0
-                            ? `url(${getImageUrl(product.images[0], "original")})`
-                            : `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
-                        backgroundSize: "cover", backgroundPosition: "center",
-                    }} />
+            <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%" }}>
+                <div
+                    ref={containerRef}
+                    className="art-card-container"
+                    style={{
+                        width: "100%",
+                        height: `${zoneH}px`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                    }}
+                >
+                    {imgSrc ? (
+                        <img
+                            src={imgSrc}
+                            alt={product.title}
+                            className="art-card-inner"
+                            onLoad={recalc}
+                            style={{
+                                display: "block",
+                                maxWidth:  isHorizontal || isSquare ? "78%" : "80%",
+                                maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
+                                width: "auto", height: "auto",
+                                borderRadius: "1px",
+                                alignSelf: "center",
+                                flexShrink: 0,
+                                boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+                            }}
+                        />
+                    ) : (
+                        <div className="art-card-inner" style={{
+                            width:  isHorizontal || isSquare ? "78%" : "55%",
+                            height: isHorizontal ? "55%" : "85%",
+                            backgroundImage: `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
+                            borderRadius: "1px",
+                            alignSelf: "center",
+                            flexShrink: 0,
+                            boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
+                        }} />
+                    )}
                 </div>
             </Link>
-            <div style={{ paddingTop: "0.75rem", height: "5.5rem", display: "flex", flexDirection: "column", gap: "0.1rem" }}>
-                <p style={{ fontFamily: "var(--font-serif)", fontSize: "1.05rem", fontWeight: 500, fontStyle: "italic", color: "#555", marginBottom: "0.1rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.35, paddingBottom: "0.15rem" }}>
+            {/* Text — aligned to painting's left vertical edge */}
+            <div style={{ paddingTop: "0.7rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column", gap: "0.08rem" }}>
+                <p style={{ fontFamily: "var(--font-serif)", fontSize: "1.05rem", fontWeight: 400, fontStyle: "italic", color: "#666", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.35 }}>
                     {product.title}
                 </p>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 400, color: "#aaa", letterSpacing: "0.01em", marginBottom: "0.05rem", lineHeight: 1.3 }}>
+                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.76rem", fontWeight: 300, color: "#bbb", lineHeight: 1.4, margin: 0 }}>
                     {sizeStr}
                 </p>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 400, color: "#888", lineHeight: 1.4 }}>
-                    Original {product.medium}
-                    {product.original_status === "available" && <> — <span style={{ color: "#555", fontWeight: 600 }}>{convertPrice(product.original_price)}</span></>}
-                    {product.original_status === "sold" && <> — <span style={{ color: "#D48A8A", fontWeight: 600 }}>SOLD</span></>}
-                    {product.original_status === "reserved" && <> — <span style={{ color: "#C8B478", fontWeight: 600 }}>RESERVED</span></>}
-                    {product.original_status === "not_for_sale" && <> — <span style={{ color: "#b0b0b0", fontStyle: "italic" }}>Not for Sale</span></>}
-                    {product.original_status === "on_exhibition" && <> — <span style={{ color: "#8AACC8", fontStyle: "italic" }}>On Exhibition</span></>}
-                    {product.original_status === "digital" && <> — <span style={{ color: "#B8A0D8", fontWeight: 600 }}>Digital</span></>}
+                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.76rem", fontWeight: 300, color: "#aaa", lineHeight: 1.5, margin: 0 }}>
+                    Original {materialLabel}
+                    {product.original_status === "available" && <>{" "}<span style={{ fontWeight: 400, color: "#777" }}>{convertPrice(product.original_price)}</span></>}
+                    {st && <>{" "}- <span style={{ fontWeight: 600, color: st.color, opacity: 0.75 }}>{st.label}</span></>}
                 </p>
+                {product.has_prints && product.base_print_price && (
+                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.76rem", fontWeight: 300, color: "#bbb", lineHeight: 1.5, margin: 0 }}>
+                        Prints starting at <span style={{ fontWeight: 400, color: "#999" }}>{convertPrice(product.base_print_price)}</span>
+                    </p>
+                )}
             </div>
         </div>
     );
 }
 
+
 // ── FilterCheckbox ────────────────────────────────────────────────────────────
 function FilterCheckbox({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
     return (
-        <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", cursor: "pointer", padding: "0.3rem 0", userSelect: "none" }}>
-            <span style={{
-                width: "14px", height: "14px", flexShrink: 0,
-                border: `1.5px solid ${active ? "#1a1a18" : "rgba(26,26,24,0.25)"}`,
-                borderRadius: "2px", backgroundColor: active ? "#1a1a18" : "transparent",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "background 0.15s, border-color 0.15s",
-            }}>
+        // CSS .filter-item:hover handled in globals.css — works for Apple Pencil,
+        // mouse, and touch. No JS state needed.
+        <label className="filter-item">
+            <span
+                className="filter-item-box"
+                style={{
+                    width: "15px", height: "15px", flexShrink: 0,
+                    border: `1.5px solid ${active ? "#1a1a18" : "rgba(26,26,24,0.3)"}`,
+                    borderRadius: "3px", backgroundColor: active ? "#1a1a18" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "background 0.15s, border-color 0.15s",
+                }}
+            >
                 {active && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
             </span>
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.78rem", fontWeight: active ? 500 : 300, color: active ? "#1a1a18" : "#7a7a78", transition: "color 0.15s", lineHeight: 1.4 }}>
+            <span
+                className="filter-item-text"
+                style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", fontWeight: active ? 500 : 400, color: active ? "#1a1a18" : "#6a6a68", transition: "color 0.15s", lineHeight: 1.45 }}
+            >
                 {label}
             </span>
             <input type="checkbox" checked={active} onChange={onClick} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} />
@@ -154,9 +232,12 @@ function SidebarSection({ title, children, defaultOpen = true }: { title: string
     const [open, setOpen] = useState(defaultOpen);
     return (
         <div style={{ borderBottom: "1px solid rgba(26,26,24,0.09)" }}>
-            <button onClick={() => setOpen(!open)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "0.85rem 0 0.55rem", cursor: "pointer" }}>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: "#1a1a18" }}>{title}</span>
-                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ transition: "transform 0.22s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
+            <button
+                onClick={() => setOpen(!open)}
+                className="filter-section-btn"
+            >
+                <span className="filter-section-title" style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.13em", textTransform: "uppercase", color: "#1a1a18" }}>{title}</span>
+                <svg className="filter-section-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ transition: "transform 0.22s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
                     <path d="M1 1L5 5L9 1" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
@@ -172,8 +253,8 @@ function SidebarSection({ title, children, defaultOpen = true }: { title: string
 }
 
 // ── DualRangeSlider ───────────────────────────────────────────────────────────
-// FIX: all mutable values are stored in refs so the mousemove listener
-// is subscribed ONCE (empty deps []) and never reads stale closures.
+// Uses Pointer Events API + setPointerCapture for unified mouse / touch / pen
+// support. Works correctly on desktop and iPad (including Apple Pencil).
 const THUMB_R = 9;
 
 function DualRangeSlider({
@@ -187,14 +268,12 @@ function DualRangeSlider({
     const trackRef = useRef<HTMLDivElement>(null);
     const dragging = useRef<"min" | "max" | null>(null);
 
-    // Refs so event listener closure never goes stale
+    // Refs so pointer callbacks never read stale closures
     const rMin = useRef(valueMin);
     const rMax = useRef(valueMax);
     const rGMin = useRef(globalMin);
     const rGMax = useRef(globalMax);
     const rOnChange = useRef(onChange);
-
-    // Keep refs in sync every render
     rMin.current = valueMin;
     rMax.current = valueMax;
     rGMin.current = globalMin;
@@ -206,109 +285,113 @@ function DualRangeSlider({
         const usable = rect.width - 2 * THUMB_R;
         const p = Math.max(0, Math.min(1, (clientX - rect.left - THUMB_R) / usable));
         return Math.round(rGMin.current + p * (rGMax.current - rGMin.current));
-    }, []); // stable: uses refs only
+    }, []);
 
-    // Subscribe ONCE — refs give us always-current values
-    useEffect(() => {
-        const onMove = (e: MouseEvent | TouchEvent) => {
-            if (!dragging.current || !trackRef.current) return;
-            const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-            const val = valFromClientX(clientX);
-            const vMin = rMin.current;
-            const vMax = rMax.current;
-            const gMin = rGMin.current;
-            const gMax = rGMax.current;
-            if (dragging.current === "min")
-                rOnChange.current(Math.max(gMin, Math.min(val, vMax - 1)), vMax);
-            else
-                rOnChange.current(vMin, Math.max(Math.min(val, gMax), vMin + 1));
-        };
-        const onUp = () => { dragging.current = null; };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("touchmove", onMove, { passive: true });
-        window.addEventListener("mouseup", onUp);
-        window.addEventListener("touchend", onUp);
-        return () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("touchmove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            window.removeEventListener("touchend", onUp);
-        };
-    }, []); // empty — intentional
+    // ── Local input state — free typing; filter applied on blur / Enter ────────
+    const [localMin, setLocalMin] = useState(valueMin);
+    const [localMax, setLocalMax] = useState(valueMax);
+    const minFocused = useRef(false);
+    const maxFocused = useRef(false);
+    useEffect(() => { if (!minFocused.current) setLocalMin(valueMin); }, [valueMin]);
+    useEffect(() => { if (!maxFocused.current) setLocalMax(valueMax); }, [valueMax]);
+    const applyMin = useCallback((raw: number) => {
+        const v = Math.max(rGMin.current, Math.min(raw, rMax.current - 1));
+        setLocalMin(v); rOnChange.current(v, rMax.current);
+    }, []);
+    const applyMax = useCallback((raw: number) => {
+        const v = Math.max(Math.min(raw, rGMax.current), rMin.current + 1);
+        setLocalMax(v); rOnChange.current(rMin.current, v);
+    }, []);
+
+    // ── Pointer capture: track captures itself — thumb-to-track capture ────────
+    // is unreliable in Safari. Thumbs are pointer-events:none (visual only).
+    const handleTrackPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const val = valFromClientX(e.clientX);
+        const which = Math.abs(val - rMin.current) <= Math.abs(val - rMax.current) ? "min" : "max";
+        dragging.current = which;
+        e.currentTarget.setPointerCapture(e.pointerId); // always valid: same element
+        if (which === "min") rOnChange.current(Math.max(rGMin.current, Math.min(val, rMax.current - 1)), rMax.current);
+        else rOnChange.current(rMin.current, Math.max(Math.min(val, rGMax.current), rMin.current + 1));
+    }, [valFromClientX]);
+
+    const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (!dragging.current) return;
+        e.preventDefault();
+        const val = valFromClientX(e.clientX);
+        if (dragging.current === "min")
+            rOnChange.current(Math.max(rGMin.current, Math.min(val, rMax.current - 1)), rMax.current);
+        else
+            rOnChange.current(rMin.current, Math.max(Math.min(val, rGMax.current), rMin.current + 1));
+    }, [valFromClientX]);
+
+    const handlePointerUp = useCallback(() => { dragging.current = null; }, []);
 
     const range = globalMax - globalMin || 1;
     const pct = (v: number) => Math.max(0, Math.min(100, ((v - globalMin) / range) * 100));
     const isActive = valueMin > globalMin || valueMax < globalMax;
 
-    const thumbStyle = (left: string): React.CSSProperties => ({
+    const thumbBase: React.CSSProperties = {
         position: "absolute", top: "50%",
         width: `${THUMB_R * 2}px`, height: `${THUMB_R * 2}px`,
-        left,
         backgroundColor: "#1a1a18", borderRadius: "50%",
-        border: "2px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+        border: "2px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,0.28)",
         transform: "translate(-50%, -50%)",
-        cursor: "grab", touchAction: "none", userSelect: "none", zIndex: 2,
-    });
+        pointerEvents: "none", userSelect: "none", zIndex: 2, // visual only
+    };
     const leftOf = (v: number) =>
         `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${pct(v) / 100})`;
-
-    const clampedOnTrackDown = (clientX: number) => {
-        const val = valFromClientX(clientX);
-        const vMin = rMin.current; const vMax = rMax.current;
-        const gMin = rGMin.current; const gMax = rGMax.current;
-        const which = Math.abs(val - vMin) <= Math.abs(val - vMax) ? "min" : "max";
-        dragging.current = which;
-        if (which === "min") rOnChange.current(Math.max(gMin, Math.min(val, vMax - 1)), vMax);
-        else rOnChange.current(vMin, Math.max(Math.min(val, gMax), vMin + 1));
-    };
 
     return (
         <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "#666" }}>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.09em", textTransform: "uppercase", color: "#555" }}>
                     {label}
                 </span>
-                {isActive && <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.58rem", color: "#999" }}>{valueMin}–{valueMax} {unit}</span>}
+                {isActive && <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "#888" }}>{valueMin}–{valueMax} {unit}</span>}
             </div>
-            {/* Track padded so thumbs never escape */}
+            {/* Track — single pointer-capture target for the whole slider */}
             <div
                 ref={trackRef}
-                style={{ position: "relative", height: "20px", padding: `0 ${THUMB_R}px`, boxSizing: "border-box", cursor: "pointer", marginBottom: "8px" }}
-                onMouseDown={e => { if (trackRef.current) clampedOnTrackDown(e.clientX); }}
-                onTouchStart={e => {
-                    const val = valFromClientX(e.touches[0].clientX);
-                    dragging.current = Math.abs(val - rMin.current) <= Math.abs(val - rMax.current) ? "min" : "max";
-                }}
+                style={{ position: "relative", height: "28px", padding: `0 ${THUMB_R}px`, boxSizing: "border-box", cursor: "pointer", marginBottom: "8px", touchAction: "none", userSelect: "none" }}
+                onPointerDown={handleTrackPointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
             >
                 {/* bg track */}
-                <div style={{ position: "absolute", top: "50%", left: `${THUMB_R}px`, right: `${THUMB_R}px`, height: "3px", backgroundColor: "rgba(26,26,24,0.1)", borderRadius: "2px", transform: "translateY(-50%)" }} />
+                <div style={{ position: "absolute", top: "50%", left: `${THUMB_R}px`, right: `${THUMB_R}px`, height: "3px", backgroundColor: "rgba(26,26,24,0.1)", borderRadius: "2px", transform: "translateY(-50%)", pointerEvents: "none" }} />
                 {/* active fill */}
                 <div style={{ position: "absolute", top: "50%", left: leftOf(valueMin), right: `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${(100 - pct(valueMax)) / 100})`, height: "3px", backgroundColor: "#1a1a18", borderRadius: "2px", transform: "translateY(-50%)", pointerEvents: "none" }} />
-                {/* thumbs */}
-                <div style={thumbStyle(leftOf(valueMin))}
-                    onMouseDown={e => { e.stopPropagation(); dragging.current = "min"; }}
-                    onTouchStart={e => { e.stopPropagation(); dragging.current = "min"; }}
-                />
-                <div style={thumbStyle(leftOf(valueMax))}
-                    onMouseDown={e => { e.stopPropagation(); dragging.current = "max"; }}
-                    onTouchStart={e => { e.stopPropagation(); dragging.current = "max"; }}
-                />
+                {/* thumbs — visual only, track handles all pointer interaction */}
+                <div style={{ ...thumbBase, left: leftOf(valueMin) }} />
+                <div style={{ ...thumbBase, left: leftOf(valueMax) }} />
             </div>
-            {/* number inputs */}
+            {/* Inputs: localMin/localMax so user types freely; applied on blur or Enter */}
             <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.55rem", color: "#bbb", marginBottom: "2px" }}>Min ({unit})</div>
-                    <input type="number" value={valueMin} min={globalMin} max={valueMax - 1}
-                        onChange={e => onChange(Math.max(globalMin, Math.min(Number(e.target.value), valueMax - 1)), valueMax)}
-                        style={{ width: "100%", border: "1px solid rgba(26,26,24,0.18)", borderRadius: "3px", padding: "3px 5px", fontFamily: "var(--font-sans)", fontSize: "0.7rem", outline: "none", color: "#1a1a18" }}
+                    <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", color: "#bbb", marginBottom: "2px" }}>Min ({unit})</div>
+                    <input
+                        type="number"
+                        value={localMin}
+                        onChange={e => setLocalMin(Number(e.target.value))}
+                        onFocus={() => { minFocused.current = true; }}
+                        onBlur={() => { minFocused.current = false; applyMin(localMin); }}
+                        onKeyDown={e => { if (e.key === "Enter") { applyMin(localMin); (e.target as HTMLInputElement).blur(); } }}
+                        style={{ width: "100%", border: "1px solid rgba(26,26,24,0.18)", borderRadius: "3px", padding: "4px 5px", fontFamily: "var(--font-sans)", fontSize: "0.75rem", outline: "none", color: "#1a1a18" }}
                     />
                 </div>
-                <span style={{ color: "#ddd", fontSize: "0.7rem", marginTop: "12px" }}>–</span>
+                <span style={{ color: "#ddd", fontSize: "0.7rem", marginTop: "14px" }}>–</span>
                 <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.55rem", color: "#bbb", marginBottom: "2px" }}>Max ({unit})</div>
-                    <input type="number" value={valueMax} min={valueMin + 1} max={globalMax}
-                        onChange={e => onChange(valueMin, Math.max(Math.min(Number(e.target.value), globalMax), valueMin + 1))}
-                        style={{ width: "100%", border: "1px solid rgba(26,26,24,0.18)", borderRadius: "3px", padding: "3px 5px", fontFamily: "var(--font-sans)", fontSize: "0.7rem", outline: "none", color: "#1a1a18" }}
+                    <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", color: "#bbb", marginBottom: "2px" }}>Max ({unit})</div>
+                    <input
+                        type="number"
+                        value={localMax}
+                        onChange={e => setLocalMax(Number(e.target.value))}
+                        onFocus={() => { maxFocused.current = true; }}
+                        onBlur={() => { maxFocused.current = false; applyMax(localMax); }}
+                        onKeyDown={e => { if (e.key === "Enter") { applyMax(localMax); (e.target as HTMLInputElement).blur(); } }}
+                        style={{ width: "100%", border: "1px solid rgba(26,26,24,0.18)", borderRadius: "3px", padding: "4px 5px", fontFamily: "var(--font-sans)", fontSize: "0.75rem", outline: "none", color: "#1a1a18" }}
                     />
                 </div>
             </div>
@@ -334,15 +417,21 @@ function PriceRangeSection({ min, max, onChange }: { min: number; max: number; o
 
     return (
         <div style={{ borderBottom: "1px solid rgba(26,26,24,0.09)" }}>
-            <button onClick={() => setOpen(!open)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "0.85rem 0 0.55rem", cursor: "pointer" }}>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: "#1a1a18" }}>Price</span>
-                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ transition: "transform 0.22s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
+            <button
+                onClick={() => setOpen(!open)}
+                className="filter-section-btn"
+            >
+                <span className="filter-section-title" style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.13em", textTransform: "uppercase", color: "#1a1a18" }}>Price</span>
+                <svg className="filter-section-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ transition: "transform 0.22s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
                     <path d="M1 1L5 5L9 1" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </button>
             <div style={{ display: "grid", gridTemplateRows: open ? "1fr" : "0fr", transition: "grid-template-rows 0.22s ease" }}>
                 <div style={{ overflow: "hidden" }}>
                     <div style={{ paddingBottom: "0.85rem", display: "flex", flexDirection: "column", gap: "0.05rem" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", backgroundColor: "rgba(26,26,24,0.05)", border: "1px solid rgba(26,26,24,0.1)", borderRadius: "4px", padding: "0.3rem 0.55rem", marginBottom: "0.55rem" }}>
+                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.68rem", fontWeight: 400, color: "#555", fontStyle: "italic", letterSpacing: "0.01em" }}>Prices apply to originals only</span>
+                        </div>
                         {presets.map(p => (
                             <FilterCheckbox
                                 key={p.label}
@@ -416,7 +505,6 @@ export default function ShopPage() {
             if (Array.isArray(rawData)) {
                 const items = rawData.map((item: any, idx: number) => ({
                     ...item,
-                    aspectRatio: "4/5",
                     gradientFrom: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][0],
                     gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1],
                 }));
@@ -466,20 +554,17 @@ export default function ShopPage() {
         return (p[`${measure}_cm` as keyof Product] as number) ?? 0;
     }, [units]);
 
-    const [prevUnits, setPrevUnits] = useState(units);
+    // When units change, reset dimension filters to full range — avoids
+    // rounding-induced mismatches that would filter out everything.
+    const prevUnitsRef = useRef(units);
     useEffect(() => {
-        if (prevUnits !== units) {
-            const factor = units === "in" ? 0.393701 : 1 / 0.393701;
-            
-            // Convert current filters only if they aren't default full range
-            if (widthMin > 0) setWidthMin(Math.round(widthMin * factor));
-            if (widthMax > 0 && widthMax < 9999) setWidthMax(Math.round(widthMax * factor));
-            if (heightMin > 0) setHeightMin(Math.round(heightMin * factor));
-            if (heightMax > 0 && heightMax < 9999) setHeightMax(Math.round(heightMax * factor));
-
-            setPrevUnits(units);
+        if (prevUnitsRef.current !== units) {
+            prevUnitsRef.current = units;
+            // wGlobalMin/Max will recalculate via useMemo; reset sliders
+            setWidthMin(0); setWidthMax(0);
+            setHeightMin(0); setHeightMax(0);
         }
-    }, [units, prevUnits, widthMin, widthMax, heightMin, heightMax]);
+    }, [units]);
 
     // ── Compute dimension bounds from data ──────────────────────────────────
     const wGlobalMin = useMemo(() => {
@@ -608,13 +693,13 @@ export default function ShopPage() {
             if (gridMode === "2") return "repeat(2, 1fr)";
             return "repeat(3, 1fr)";
         }
-        if (gridMode === "1") return "repeat(auto-fill, minmax(350px, 1fr))";
-        if (gridMode === "2") return "repeat(auto-fill, minmax(240px, 1fr))";
-        return "repeat(auto-fill, minmax(175px, 1fr))";
+        if (gridMode === "1") return "repeat(auto-fill, minmax(460px, 1fr))";
+        if (gridMode === "2") return "repeat(auto-fill, minmax(340px, 1fr))";
+        return "repeat(auto-fill, minmax(220px, 1fr))";
     };
     const getGap = () => {
         if (isMobile) { if (gridMode === "1") return "2rem"; if (gridMode === "2") return "1rem"; return "0.5rem"; }
-        if (gridMode === "1") return "4rem 180px"; if (gridMode === "2") return "3rem 120px"; return "2rem 90px";
+        if (gridMode === "1") return "5rem 140px"; if (gridMode === "2") return "4rem 100px"; return "2.5rem 70px";
     };
 
     // ── 7-section filter panel ──────────────────────────────────────────────
@@ -787,8 +872,8 @@ export default function ShopPage() {
                     {error && <div style={{ padding: "5rem 1rem", textAlign: "center", fontFamily: "var(--font-sans)", color: "#C87070" }}>{error}</div>}
 
                     {!loading && !error && (filtered.length > 0 ? (
-                        <div className="art-grid" style={{ display: "grid", gridTemplateColumns: getColumns(), justifyContent: "start", gap: getGap(), alignItems: "center" }}>
-                            {displayed.map(p => <ProductCard key={p.id} product={p} />)}
+                        <div className="art-grid" style={{ display: "grid", gridTemplateColumns: getColumns(), justifyContent: "start", gap: getGap(), alignItems: "start" }}>
+                            {displayed.map(p => <ProductCard key={p.id} product={p} zoneH={IMAGE_ZONE[gridMode] || 380} />)}
                         </div>
                     ) : (
                         <div style={{ textAlign: "center", padding: "5rem 1rem" }}>

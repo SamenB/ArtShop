@@ -25,7 +25,8 @@ backend/temp/*
 !backend/temp/.gitkeep
 backend/logs/*
 !backend/logs/.gitkeep
-
+docs/*
+!docs/.gitkeep
 # Dev notes
 backend/src/utils/halping_commands.txt
 

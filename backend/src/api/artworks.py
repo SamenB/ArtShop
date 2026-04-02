@@ -43,10 +43,12 @@ async def get_artworks(
     )
 
 
-@router.get("/{artwork_id}")
-async def get_artwork(artwork_id: int, db: DBDep):
+@router.get("/{artwork_id_or_slug}")
+async def get_artwork(artwork_id_or_slug: str, db: DBDep):
     try:
-        return await ArtworkService(db).get_artwork_by_id(artwork_id)
+        if artwork_id_or_slug.isdigit():
+            return await ArtworkService(db).get_artwork_by_id(int(artwork_id_or_slug))
+        return await ArtworkService(db).get_artwork_by_slug(artwork_id_or_slug)
     except ObjectNotFoundException:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -113,8 +115,9 @@ async def upload_artwork_images(
 ):
     os.makedirs("temp", exist_ok=True)
     temp_paths = []
-    for file in files:
-        temp_path = f"temp/art_{artwork_id}_{file.filename}"
+    for idx, file in enumerate(files):
+        # Use idx to prevent collisions when the same filename is uploaded twice
+        temp_path = f"temp/art_{artwork_id}_{idx}_{file.filename}"
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         temp_paths.append(temp_path)

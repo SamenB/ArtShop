@@ -1,6 +1,7 @@
 import enum
+import re
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.schemas.tags import Tag
 
@@ -35,7 +36,7 @@ class ArtworkAddRequest(BaseModel):
     height_in: float | None = Field(None, description="Height in inches")
     depth_in: float | None = Field(None, description="Depth in inches")
     has_prints: bool = Field(False, description="Whether prints are available for purchase")
-    orientation: str | None = Field(None, description="Orientation of the artwork")
+    orientation: str = Field(..., description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
     tags: list[int] = Field([], description="List of tag IDs")
     collection_id: int | None = Field(None, description="ID of the collection")
@@ -46,6 +47,7 @@ class ArtworkAddRequest(BaseModel):
 
 class ArtworkAdd(BaseModel):
     title: str = Field(..., description="Title of the artwork")
+    slug: str | None = Field(None, description="Unique slug for the artwork")
     description: str | None = Field(None, description="Description of the artwork")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus = Field(
@@ -62,7 +64,7 @@ class ArtworkAdd(BaseModel):
     height_in: float | None = Field(None)
     depth_in: float | None = Field(None)
     has_prints: bool = Field(False, description="Whether prints are available for purchase")
-    orientation: str | None = Field(None, description="Orientation of the artwork")
+    orientation: str = Field(..., description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
     collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
@@ -72,6 +74,14 @@ class ArtworkAdd(BaseModel):
 
 class Artwork(ArtworkAdd):
     id: int = Field(..., description="ID of the artwork")
+    slug: str | None = Field(None, description="Unique slug for the artwork")
+
+    @model_validator(mode="after")
+    def ensure_slug(self) -> "Artwork":
+        """Back-fill slug from title for legacy rows that were saved without one."""
+        if not self.slug and self.title:
+            self.slug = re.sub(r"[^a-z0-9]+", "-", self.title.lower()).strip("-")
+        return self
 
 
 class ArtworkWithTags(Artwork):
@@ -109,6 +119,7 @@ class ArtworkPatchRequest(BaseModel):
 
 class ArtworkPatch(BaseModel):
     title: str | None = Field(None, description="Title of the artwork")
+    slug: str | None = Field(None, description="Unique slug for the artwork")
     description: str | None = Field(None, description="Description of the artwork")
     original_price: int | None = Field(None, description="Price of the original artwork")
     original_status: OriginalStatus | None = Field(
@@ -143,7 +154,7 @@ class ArtworkAddBulk(BaseModel):
         description="Status of the original: available, sold, or not_for_sale",
     )
     has_prints: bool = Field(False, description="Whether prints are available for purchase")
-    orientation: str | None = Field(None, description="Orientation of the artwork")
+    orientation: str = Field(..., description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."

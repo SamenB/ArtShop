@@ -29,6 +29,8 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
     output_dir.mkdir(parents=True, exist_ok=True)
 
     final_paths = []
+    import time
+    upload_ts = int(time.time())  # unique per batch — prevents collision with existing files
 
     try:
         for idx, temp_file_path in enumerate(temp_paths):
@@ -46,7 +48,8 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
                 elif img.mode != "RGB":
                     img = img.convert("RGB")
 
-                prefix = f"{model_type}_{model_id}_{idx}"
+                # timestamp+idx ensures globally unique filename — never overwrites existing
+                prefix = f"{model_type}_{model_id}_{upload_ts}_{idx}"
 
                 # 1. Original (High Quality)
                 original_name = f"{prefix}_original.webp"
@@ -74,15 +77,22 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
 
             file_path.unlink(missing_ok=True)
 
-        async def update_db():
+        async def update_db(the_final_paths: list):
             async with new_session_null_pool() as session:
+                from sqlalchemy import select
                 orm_model = ArtworksOrm
-                stmt = update(orm_model).where(orm_model.id == model_id).values(images=final_paths)
+                result = await session.execute(
+                    select(orm_model.images).where(orm_model.id == model_id)
+                )
+                row = result.scalar_one_or_none()
+                existing_images = list(row) if row else []
+                merged_images = existing_images + the_final_paths
+                stmt = update(orm_model).where(orm_model.id == model_id).values(images=merged_images)
                 await session.execute(stmt)
                 await session.commit()
 
         if final_paths:
-            run_async(update_db())
+            run_async(update_db(final_paths))
 
         logger.info(
             "Images processed for {} id={}: paths={}",

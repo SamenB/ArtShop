@@ -35,7 +35,7 @@ export default function ProfilePage() {
     const { user, loading } = useUser();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<"orders" | "likes" | "admin">("orders");
-    const [adminSubTab, setAdminSubTab] = useState<"settings" | "artworks" | "labels" | "orders">("settings");
+    const [adminSubTab, setAdminSubTab] = useState<"artworks" | "settings" | "labels" | "orders">("artworks");
     const [orders, setOrders] = useState<Order[]>([]);
     const [likes, setLikes] = useState<Artwork[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
@@ -43,6 +43,8 @@ export default function ProfilePage() {
     useEffect(() => {
         if (!loading && !user) {
             router.push("/");
+        } else if (user?.is_admin) {
+            setActiveTab("admin");
         }
     }, [user, loading, router]);
 
@@ -163,7 +165,7 @@ export default function ProfilePage() {
                         {activeTab === "admin" && user.is_admin && (
                             <div className="mt-4 border border-white/5 rounded-2xl bg-black/40 p-6 lg:p-10 shadow-2xl">
                                 <div className="flex gap-4 mb-8 border-b border-white/10 overflow-x-auto pb-4">
-                                    {(["settings", "artworks", "labels", "orders"] as const).map((tab) => (
+                                    {(["artworks", "settings", "labels", "orders"] as const).map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setAdminSubTab(tab)}
@@ -175,8 +177,8 @@ export default function ProfilePage() {
                                     ))}
                                 </div>
                                 <div className="min-h-[500px]">
-                                    {adminSubTab === "settings" && <SettingsTab />}
                                     {adminSubTab === "artworks" && <ArtworksTab />}
+                                    {adminSubTab === "settings" && <SettingsTab />}
                                     {adminSubTab === "labels" && <LabelsTab />}
                                     {adminSubTab === "orders" && <OrdersTab />}
                                 </div>
