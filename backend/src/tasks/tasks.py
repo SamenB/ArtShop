@@ -30,6 +30,7 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
 
     final_paths = []
     import time
+
     upload_ts = int(time.time())  # unique per batch — prevents collision with existing files
 
     try:
@@ -80,6 +81,7 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
         async def update_db(the_final_paths: list):
             async with new_session_null_pool() as session:
                 from sqlalchemy import select
+
                 orm_model = ArtworksOrm
                 result = await session.execute(
                     select(orm_model.images).where(orm_model.id == model_id)
@@ -87,7 +89,9 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
                 row = result.scalar_one_or_none()
                 existing_images = list(row) if row else []
                 merged_images = existing_images + the_final_paths
-                stmt = update(orm_model).where(orm_model.id == model_id).values(images=merged_images)
+                stmt = (
+                    update(orm_model).where(orm_model.id == model_id).values(images=merged_images)
+                )
                 await session.execute(stmt)
                 await session.commit()
 

@@ -27,7 +27,9 @@ class SiteSettingsOrm(Base):
     cover_3_mobile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Hero slideshow options
-    hero_ken_burns_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    hero_ken_burns_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
     hero_slide_duration: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
 
     # Financials

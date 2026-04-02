@@ -1,4 +1,5 @@
 import re
+
 from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -28,10 +29,10 @@ class ArtworkService(BaseService):
 
     async def generate_unique_slug(self, title: str) -> str:
         base_slug = title.lower()
-        base_slug = re.sub(r'[^a-z0-9]+', '-', base_slug).strip('-')
+        base_slug = re.sub(r"[^a-z0-9]+", "-", base_slug).strip("-")
         if not base_slug:
             base_slug = "artwork"
-            
+
         slug = base_slug
         counter = 1
         while True:
