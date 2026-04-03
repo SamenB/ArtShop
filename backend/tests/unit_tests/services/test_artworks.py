@@ -42,7 +42,12 @@ async def test_create_artwork(artwork_service):
     artwork_service.db.artworks.add.return_value = mock_artwork
 
     # Create Mock Data
-    data = {"title": "A new painting", "description": "...", "orientation": "Vertical", "tags": [1, 2]}
+    data = {
+        "title": "A new painting",
+        "description": "...",
+        "orientation": "Vertical",
+        "tags": [1, 2],
+    }
     artwork_data = ArtworkAddRequest(**data)
 
     result = await artwork_service.create_artwork(artwork_data)
