@@ -76,6 +76,37 @@ export default function ArtworkDetailPage() {
     const swipeRef = useRef<number | null>(null);
     const hasTouch = useRef(false);
 
+    // Box aspect-ratio: derived from the FIRST image's natural pixel dimensions
+    const [imgAspect, setImgAspect] = useState<string | null>(null);
+    const aspectLockedRef = useRef(false);
+    const primaryImgRef = useRef<HTMLImageElement>(null);
+
+    useEffect(() => {
+        aspectLockedRef.current = false;
+        setImgAspect(null);
+    }, [work?.id]);
+
+    useEffect(() => {
+        if (selectedImageIndex === 0 && primaryImgRef.current?.complete) {
+            const { naturalWidth, naturalHeight } = primaryImgRef.current;
+            if (naturalWidth > 0 && naturalHeight > 0 && !aspectLockedRef.current) {
+                aspectLockedRef.current = true;
+                setImgAspect(`${naturalWidth} / ${naturalHeight}`);
+            }
+        }
+    }, [selectedImageIndex, work?.id]);
+
+    const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        if (selectedImageIndex !== 0) return;
+        if (aspectLockedRef.current) return;
+        
+        aspectLockedRef.current = true;
+        const { naturalWidth, naturalHeight } = e.currentTarget;
+        if (naturalWidth > 0 && naturalHeight > 0) {
+            setImgAspect(`${naturalWidth} / ${naturalHeight}`);
+        }
+    };
+
     // Amazon style zoom state
     const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
     const [isZooming, setIsZooming] = useState(false);
@@ -130,180 +161,170 @@ export default function ArtworkDetailPage() {
             {images.length > 0 && (
                 <link rel="preload" as="image" href={getImageUrl(images[selectedImageIndex], 'original')} />
             )}
-            <Link href="/shop" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontFamily: "var(--font-sans)", fontSize: "0.75rem", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", textDecoration: "none", marginBottom: "2rem" }}>← Back to Shop</Link>
-
+            {/* ── Desktop: [LEFT 50% = image-viewer] [RIGHT 50% = purchase] ── */}
+            {/* ── Mobile: single column ──────────────────────────────────── */}
+            <style>{`
+                .artwork-img-col { display: flex; flex-direction: column; position: relative; }
+                @media (min-width: 768px) {
+                    .artwork-img-col {
+                        position: sticky;
+                        top: 100px;
+                        height: calc(100vh - 120px);
+                    }
+                }
+            `}</style>
             <div className={`grid grid-cols-1 items-start gap-12 lg:gap-16 ${work.orientation === "horizontal" ? "md:grid-cols-2" : "md:grid-cols-[1.25fr_1fr]"}`}>
-                {/* ── Left: Image column ── */}
-                <div className="relative md:sticky md:top-[100px]" style={{ display: "flex", flexDirection: "column" }}>
-                    {/* Main image container */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%" }}>
 
-                        {/* Gallery layout: Arrows + Image Wrapper */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", position: "relative" }}>
-                            
-                            {/* Left Arrow (Outside) — Hidden on mobile! */}
-                            {images.length > 1 && (
-                                <button
-                                    className="hidden md:flex items-center justify-center"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
-                                    }}
-                                    style={{
-                                        position: "absolute", left: "-1.5rem", top: "50%", transform: "translateY(-50%)",
-                                        width: "72px", height: "72px", 
-                                        background: "transparent", border: "none", zIndex: 10,
-                                        cursor: "pointer", color: "var(--color-charcoal)",
-                                        filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.15))",
-                                        transition: "transform 0.2s, color 0.2s"
-                                    }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; e.currentTarget.style.color = "var(--color-active)"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1)"; e.currentTarget.style.color = "var(--color-charcoal)"; }}
-                                    onMouseDown={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(0.9)"; }}
-                                    onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; }}
-                                >
-                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                </button>
-                            )}
+                {/* LEFT CELL (50%): image viewer  */}
+                <div className="artwork-img-col">
+                    {/* ── Header row: [← Back to Shop] ......... [View full size →] ── */}
+                    <div className="mt-6 md:mt-0" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem", flexShrink: 0 }}>
+                        <Link
+                            href="/shop"
+                            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontFamily: "var(--font-sans)", fontSize: "0.72rem", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", textDecoration: "none", whiteSpace: "nowrap", transition: "color 0.2s" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            Back to Shop
+                        </Link>
 
-                            {/* Image container aligned to center, but holds right-aligned View Full Size button */}
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", maxWidth: "100%" }}>
-                                {/* Subtle View Full Size button — perfectly right aligned to image */}
-                                <button
-                                    onClick={() => setFullSizeOpen(true)}
-                                    style={{
-                                        display: "inline-flex", alignItems: "center", gap: "0.35rem",
-                                        background: "rgba(250, 250, 250, 0.6)", 
-                                        color: "var(--color-muted)",
-                                        border: "1px solid rgba(100, 116, 139, 0.15)", borderRadius: "12px",
-                                        padding: "0.25rem 0.6rem",
-                                        marginBottom: "0.6rem",
-                                        cursor: "pointer",
-                                        fontFamily: "var(--font-sans)", fontSize: "0.65rem",
-                                        fontWeight: 600, letterSpacing: "0.05em",
-                                        textTransform: "uppercase", 
-                                        animation: "subtlePulse 3s infinite ease-in-out",
-                                        transition: "background 0.2s, color 0.2s",
-                                        backdropFilter: "blur(4px)",
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(250, 250, 250, 0.9)"; e.currentTarget.style.color = "var(--color-charcoal)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = "rgba(250, 250, 250, 0.6)"; e.currentTarget.style.color = "var(--color-muted)"; }}
-                                >
-                                    <svg width="10" height="10" viewBox="0 0 14 14" fill="none"><path d="M9 1h4v4M5 13H1V9M13 1L8 6M1 13l5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                    View full size
-                                </button>
+                        {/* View Full Size */}
+                        <button
+                            onClick={() => setFullSizeOpen(true)}
+                            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "rgba(250,250,250,0.6)", color: "var(--color-muted)", border: "1px solid rgba(100,116,139,0.15)", borderRadius: "12px", padding: "0.25rem 0.6rem", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", animation: "subtlePulse 3s infinite ease-in-out", transition: "background 0.2s, color 0.2s", backdropFilter: "blur(4px)" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = "rgba(250,250,250,0.9)"; e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "rgba(250,250,250,0.6)"; e.currentTarget.style.color = "var(--color-muted)"; }}
+                        >
+                            <svg width="10" height="10" viewBox="0 0 14 14" fill="none"><path d="M9 1h4v4M5 13H1V9M13 1L8 6M1 13l5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            View full size
+                        </button>
+                    </div>
 
-                                {/* Wrapper with hidden overflow for Amazon zoom */}
-                                <div 
-                                    style={{ display: "inline-block", position: "relative", maxWidth: "100%", overflow: "hidden", borderRadius: "4px", boxShadow: "var(--shadow-card-deep)" }}
-                                    onPointerEnter={e => { if (!hasTouch.current && e.pointerType === "mouse" && window.innerWidth > 768) setIsZooming(true); }}
-                                    onPointerLeave={e => { if (!hasTouch.current && e.pointerType === "mouse") setIsZooming(false); }}
-                                    onPointerMove={handlePointerMove}
-                                    onClick={() => {
-                                        setIsZooming(false);
-                                        setFullSizeOpen(true);
-                                    }}
-                                    onTouchStart={e => {
-                                        hasTouch.current = true;
-                                        setIsZooming(false);
-                                        swipeRef.current = e.touches[0].clientX;
-                                    }}
-                                    onTouchEnd={e => {
-                                        if (swipeRef.current === null) return;
-                                        const d = swipeRef.current - e.changedTouches[0].clientX;
-                                        if (d > 48 && images.length > 1) setSelectedImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
-                                        else if (d < -48 && images.length > 1) setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
-                                        swipeRef.current = null;
-                                    }}
-                                >
+                    {/* ── Image area: fills viewport height minus header-row and thumbnails ── */}
+                    <div className="artwork-img-area" style={{ display: "flex", position: "relative", alignItems: "center", justifyContent: "center", width: "100%", flex: 1, minHeight: 0 }}>
+
+                        {/* ── THE STABLE IMAGE BOX ──────────────────────────────────────────── */}
+                        <div
+                            className="w-full h-auto md:w-auto md:h-full z-10"
+                            style={{
+                                aspectRatio: imgAspect ?? (work.orientation === "horizontal" ? "4/3" : "3/4"),
+                                maxWidth: "100%",
+                                position: "relative",
+                                overflow: "hidden",
+                                borderRadius: "4px",
+                                boxShadow: "var(--shadow-card-deep)",
+                                cursor: "crosshair",
+                            }}
+                            onPointerEnter={e => { if (!hasTouch.current && e.pointerType === "mouse" && window.innerWidth > 768) setIsZooming(true); }}
+                            onPointerLeave={e => { if (!hasTouch.current && e.pointerType === "mouse") setIsZooming(false); }}
+                            onPointerMove={handlePointerMove}
+                            onClick={() => { setIsZooming(false); setFullSizeOpen(true); }}
+                            onTouchStart={e => { hasTouch.current = true; setIsZooming(false); swipeRef.current = e.touches[0].clientX; }}
+                            onTouchEnd={e => {
+                                if (swipeRef.current === null) return;
+                                const d = swipeRef.current - e.changedTouches[0].clientX;
+                                if (d > 48 && images.length > 1) setSelectedImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+                                else if (d < -48 && images.length > 1) setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+                                swipeRef.current = null;
+                            }}
+                        >
+                            {/* ── THE SLIDER TRACK ── */}
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: "2rem",
+                                    width: "100%",
+                                    height: "100%",
+                                    transition: isZooming ? "none" : "transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)",
+                                    transform: `translateX(calc(-${selectedImageIndex * 100}% - ${selectedImageIndex * 2}rem))`,
+                                }}
+                            >
                                 {images.length > 0 ? (
-                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img
-                                        src={getImageUrl(images[selectedImageIndex], 'original')}
-                                        alt={work.title}
-                                        style={{
-                                            display: "block",
-                                            width: "auto",
-                                            height: "auto",
-                                            maxWidth: "100%",
-                                            maxHeight: work.orientation === "horizontal" ? "70vh" : (work.orientation === "vertical" ? "90vh" : "80vh"),
-                                            cursor: "crosshair",
-                                            transform: isZooming ? "scale(2.5)" : "scale(1)",
-                                            transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
-                                            transition: isZooming ? "none" : "transform 0.3s ease",
-                                        }}
-                                    />
+                                    images.map((img, idx) => (
+                                        <div
+                                            key={idx}
+                                            style={{
+                                                flex: "0 0 100%",
+                                                width: "100%",
+                                                height: "100%",
+                                                position: "relative",
+                                            }}
+                                        >
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                ref={idx === 0 ? primaryImgRef : undefined}
+                                                src={getImageUrl(img, 'original')}
+                                                alt={work.title}
+                                                loading={idx === 0 ? "eager" : "lazy"}
+                                                onLoad={idx === 0 ? handleImgLoad : undefined}
+                                                style={{
+                                                    position: "absolute", inset: 0,
+                                                    width: "100%", height: "100%",
+                                                    objectFit: "contain",
+                                                    transform: isZooming && selectedImageIndex === idx ? "scale(2.5)" : "scale(1)",
+                                                    transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
+                                                    transition: isZooming ? "none" : "transform 0.3s ease",
+                                                }}
+                                            />
+                                        </div>
+                                    ))
                                 ) : (
-                                    <div
-                                        style={{
-                                            maxWidth: "100%",
-                                            maxHeight: work.orientation === "horizontal" ? "70vh" : (work.orientation === "vertical" ? "90vh" : "80vh"),
-                                            height: work.orientation === "horizontal" ? "70vh" : (work.orientation === "vertical" ? "90vh" : "80vh"),
-                                            aspectRatio: work.aspect_ratio || "4/5",
-                                            background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})`,
-                                            cursor: "crosshair",
-                                            transform: isZooming ? "scale(2.5)" : "scale(1)",
-                                            transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
-                                            transition: isZooming ? "none" : "transform 0.3s ease",
-                                        }}
-                                    />
+                                    <div style={{ flex: "0 0 100%", width: "100%", height: "100%", background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})` }} />
                                 )}
-                                </div>
                             </div>
-
-                            {/* Right Arrow (Outside) — Hidden on mobile! */}
-                            {images.length > 1 && (
-                                <button
-                                    className="hidden md:flex items-center justify-center"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
-                                    }}
-                                    style={{
-                                        position: "absolute", right: "-1.5rem", top: "50%", transform: "translateY(-50%)",
-                                        width: "72px", height: "72px",
-                                        background: "transparent", border: "none", zIndex: 10,
-                                        cursor: "pointer", color: "var(--color-charcoal)",
-                                        filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.15))",
-                                        transition: "transform 0.2s, color 0.2s"
-                                    }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; e.currentTarget.style.color = "var(--color-active)"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1)"; e.currentTarget.style.color = "var(--color-charcoal)"; }}
-                                    onMouseDown={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(0.9)"; }}
-                                    onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-50%) scale(1.15)"; }}
-                                >
-                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                </button>
-                            )}
                         </div>
-                    </div>
 
-                    {/* Controls container (Thumbnails) */}
-                    <div style={{ marginTop: "1rem", width: "100%", overflowX: "auto", display: "flex", justifyContent: "center", paddingBottom: "12px", scrollbarWidth: "thin", scrollbarColor: "var(--color-border) transparent" }}>
-                        {images.length > 1 && (
-                            <div style={{ display: "inline-flex", gap: "0.75rem", justifyContent: "center", marginTop: "0.5rem", minWidth: "min-content" }}>
-                                {images.map((img, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => setSelectedImageIndex(idx)}
-                                        style={{
-                                            width: "70px", height: "70px", padding: 0, flexShrink: 0,
-                                            border: selectedImageIndex === idx ? "2px solid var(--color-charcoal)" : "2px solid transparent",
-                                            backgroundImage: `url(${getImageUrl(img, 'thumb')})`,
-                                            backgroundSize: "cover", backgroundPosition: "center",
-                                            cursor: "pointer", borderRadius: "4px",
-                                            opacity: selectedImageIndex === idx ? 1 : 0.65,
-                                            boxShadow: "var(--shadow-thumb)",
-                                            transition: "opacity 0.2s, box-shadow 0.2s",
-                                        }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "var(--shadow-card)"; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = "var(--shadow-thumb)"; }}
-                                    />
-                                ))}
+                    </div>{/* end .artwork-img-area */}
+
+                    {/* Thumbnails strip */}
+                    {images.length > 1 && (
+                        <div style={{ flexShrink: 0, marginTop: "0.75rem", width: "100%", overflowX: "auto", display: "flex", justifyContent: "center", alignItems: "center", paddingBottom: "4px", scrollbarWidth: "thin", scrollbarColor: "var(--color-border) transparent" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", justifyContent: "center", paddingTop: "0.5rem", minWidth: "min-content" }}>
+                                {images.map((img, idx) => {
+                                    const isActive = selectedImageIndex === idx;
+                                    return (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setSelectedImageIndex(idx)}
+                                            style={{
+                                                width: "70px",
+                                                height: "70px",
+                                                padding: 0,
+                                                flexShrink: 0,
+                                                /* Active thumb pushes siblings via margin — same size, no scale */
+                                                margin: isActive ? "0 10px" : "0",
+                                                border: isActive
+                                                    ? "2px solid var(--color-charcoal)"
+                                                    : "2px solid transparent",
+                                                backgroundImage: `url(${getImageUrl(img, 'thumb')})`,
+                                                backgroundSize: "cover",
+                                                backgroundPosition: "center",
+                                                cursor: "pointer",
+                                                borderRadius: "4px",
+                                                opacity: isActive ? 1 : 0.55,
+                                                boxShadow: isActive ? "var(--shadow-card-deep)" : "var(--shadow-thumb)",
+                                                transition: "margin 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+                                            }}
+                                            onMouseEnter={e => {
+                                                if (!isActive) {
+                                                    (e.currentTarget as HTMLButtonElement).style.opacity = "0.85";
+                                                    (e.currentTarget as HTMLButtonElement).style.boxShadow = "var(--shadow-card)";
+                                                }
+                                            }}
+                                            onMouseLeave={e => {
+                                                if (!isActive) {
+                                                    (e.currentTarget as HTMLButtonElement).style.opacity = "0.55";
+                                                    (e.currentTarget as HTMLButtonElement).style.boxShadow = "var(--shadow-thumb)";
+                                                }
+                                            }}
+                                        />
+                                    );
+                                })}
                             </div>
-                        )}
-                    </div>
-                </div>
+                        </div>
+                    )}
+                </div>{/* end .artwork-img-col / left cell */}
 
                 {/* ── Right: Purchase panel ── */}
                 <div>

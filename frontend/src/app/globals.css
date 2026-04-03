@@ -211,23 +211,25 @@ h3 {
 
 /* Mobile proportional bounds — eliminating large gaps between image and description */
 @media (max-width: 768px) {
+
   /* Let text scale proportionally with the width of the card's column */
   .art-card {
     container-type: inline-size;
   }
-  
+
   .art-card-container {
-    height: auto !important; /* Immediately shrink-wraps height to the image without forced square space */
-    aspect-ratio: auto !important; 
+    height: auto !important;
+    /* Immediately shrink-wraps height to the image without forced square space */
+    aspect-ratio: auto !important;
     margin-bottom: 0.25rem;
   }
-  
+
   .art-card-inner {
     /* Allow it to reach full width natively, constraining height to prevent extreme verticals */
     max-width: 100% !important;
     max-height: 55vh !important;
   }
-  
+
   /* Scale the title perfectly depending on column width */
   .art-card p:first-child {
     font-size: clamp(0.6rem, 8cqi, 1rem) !important;
@@ -237,7 +239,7 @@ h3 {
 .art-card-inner {
   /* Transform + box-shadow transitions for hover lift effect */
   transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              box-shadow 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 /* ─────────────────────────────────────────────
@@ -256,6 +258,7 @@ h3 {
   box-shadow: none;
   transition: transform 0.2s ease;
 }
+
 .card-shadow:hover {
   box-shadow: none;
 }
@@ -263,14 +266,16 @@ h3 {
 /* Hover + active — only on real pointer devices (mouse/trackpad).
    On touch: :active fires on ANY finger contact incl. scroll start → causes jerk. */
 @media (hover: hover) and (pointer: fine) {
+
   /* Scale the painting on hover */
   .art-card:hover .art-card-inner {
     transform: scale(1.03);
-    box-shadow: 4px 18px 40px rgba(28,25,22,0.90), 0 4px 10px rgba(28,25,22,0.50) !important;
+    box-shadow: 4px 18px 40px rgba(28, 25, 22, 0.90), 0 4px 10px rgba(28, 25, 22, 0.50) !important;
   }
+
   .art-card:active .art-card-inner {
     transform: scale(0.98);
-    box-shadow: 1px 5px 15px rgba(28,25,22,0.80), 0 1px 5px rgba(28,25,22,0.44) !important;
+    box-shadow: 1px 5px 15px rgba(28, 25, 22, 0.80), 0 1px 5px rgba(28, 25, 22, 0.44) !important;
   }
 }
 
@@ -280,25 +285,28 @@ h3 {
 ───────────────────────────────────────────── */
 .hero-link {
   color: var(--color-cream);
-  border-color: rgba(250,250,247,0.4);
+  border-color: rgba(250, 250, 247, 0.4);
 }
+
 .hero-link:hover {
   border-color: var(--color-cream);
 }
 
 .hero-shop-link {
-  color: rgba(250,250,247,0.6);
+  color: rgba(250, 250, 247, 0.6);
   border-color: transparent;
 }
+
 .hero-shop-link:hover {
   color: var(--color-cream);
-  border-color: rgba(250,250,247,0.2);
+  border-color: rgba(250, 250, 247, 0.2);
 }
 
 .home-section-link {
   color: var(--color-charcoal-mid);
   border-color: var(--color-border-dark);
 }
+
 .home-section-link:hover {
   color: var(--color-accent);
   border-color: var(--color-accent);
@@ -306,8 +314,9 @@ h3 {
 
 .home-about-link {
   color: var(--color-charcoal);
-  border-color: rgba(26,26,24,0.4);
+  border-color: rgba(26, 26, 24, 0.4);
 }
+
 .home-about-link:hover {
   border-color: var(--color-charcoal);
 }
@@ -315,9 +324,11 @@ h3 {
 .home-art-card {
   transform: translateY(0);
 }
+
 .home-art-card .home-img-inner {
   transform: scale(1);
 }
+
 .home-art-card .home-shadow-box {
   box-shadow: none;
 }
@@ -327,9 +338,11 @@ h3 {
   .home-art-card:hover {
     transform: translateY(-6px);
   }
+
   .home-art-card:hover .home-img-inner {
     transform: scale(1.02);
   }
+
   .home-art-card:hover .home-shadow-box {
     box-shadow: none;
   }
@@ -355,12 +368,15 @@ h3 {
   transition: background-color 0.12s ease;
   -webkit-tap-highlight-color: transparent;
 }
+
 .filter-item:hover {
-  background-color: rgba(26,26,24,0.04);
+  background-color: rgba(26, 26, 24, 0.04);
 }
+
 .filter-item:hover .filter-item-box {
-  border-color: rgba(26,26,24,0.5) !important;
+  border-color: rgba(26, 26, 24, 0.5) !important;
 }
+
 .filter-item:hover .filter-item-text {
   color: #3a3a38 !important;
 }
@@ -379,12 +395,15 @@ h3 {
   transition: background-color 0.12s ease;
   -webkit-tap-highlight-color: transparent;
 }
+
 .filter-section-btn:hover {
-  background-color: rgba(26,26,24,0.025);
+  background-color: rgba(26, 26, 24, 0.025);
 }
+
 .filter-section-btn:hover .filter-section-title {
   color: #000 !important;
 }
+
 .filter-section-btn:hover .filter-section-arrow path {
   stroke: #888;
 }

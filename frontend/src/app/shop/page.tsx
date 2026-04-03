@@ -87,12 +87,12 @@ const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
 // ── Status labels + colours ──────────────────────────────────────────────────
 const STATUS: Record<string, { label: string; color: string }> = {
-    sold:          { label: "SOLD",          color: "#C0392B" },
-    reserved:      { label: "RESERVED",      color: "#D4A017" },
-    not_for_sale:  { label: "Not for Sale",  color: "#999"    },
+    sold: { label: "SOLD", color: "#C0392B" },
+    reserved: { label: "RESERVED", color: "#D4A017" },
+    not_for_sale: { label: "Not for Sale", color: "#999" },
     on_exhibition: { label: "On Exhibition", color: "#2980B9" },
-    archived:      { label: "Archived",      color: "#7f8c8d" },
-    digital:       { label: "Digital Only",  color: "#8E44AD" },
+    archived: { label: "Archived", color: "#7f8c8d" },
+    digital: { label: "Digital Only", color: "#8E44AD" },
 };
 
 // ── ProductCard ─────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ function ProductCard({ product, zoneH }: { product: Product; zoneH: number }) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
-    const isSquare     = ori === "square";
+    const isSquare = ori === "square";
     const imgSrc = product.images?.[0] ? getImageUrl(product.images[0], "original") || "" : "";
     const materialLabel = product.materials || product.medium || "Painting";
     const st = STATUS[product.original_status];
@@ -152,7 +152,7 @@ function ProductCard({ product, zoneH }: { product: Product; zoneH: number }) {
                             onLoad={recalc}
                             style={{
                                 display: "block",
-                                maxWidth:  isHorizontal || isSquare ? "78%" : "80%",
+                                maxWidth: isHorizontal || isSquare ? "78%" : "80%",
                                 maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
                                 width: "auto", height: "auto",
                                 borderRadius: "1px",
@@ -163,7 +163,7 @@ function ProductCard({ product, zoneH }: { product: Product; zoneH: number }) {
                         />
                     ) : (
                         <div className="art-card-inner" style={{
-                            width:  isHorizontal || isSquare ? "78%" : "55%",
+                            width: isHorizontal || isSquare ? "78%" : "55%",
                             height: isHorizontal ? "55%" : "85%",
                             backgroundImage: `linear-gradient(160deg, ${product.gradientFrom} 0%, ${product.gradientTo} 100%)`,
                             borderRadius: "1px",

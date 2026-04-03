@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "add_slide_duration"
-down_revision: Union[str, Sequence[str], None] = "hero_slideshow_covers"
+down_revision: Union[str, Sequence[str], None] = "add_ken_burns_flag"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
