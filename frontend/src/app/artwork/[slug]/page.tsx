@@ -74,6 +74,7 @@ export default function ArtworkDetailPage() {
     const [fullSizeOpen, setFullSizeOpen] = useState(false);
     const [purchaseType, setPurchaseType] = useState<"original" | "print">("original");
     const [finish, setFinish] = useState<"Rolled" | "Framed">("Rolled");
+    const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
 
     const swipeRef = useRef<number | null>(null);
     const hasTouch = useRef(false);
@@ -143,6 +144,18 @@ export default function ArtworkDetailPage() {
             .finally(() => setLoading(false));
     }, [slug]);
 
+    // Fetch all artwork slugs for prev/next navigation
+    useEffect(() => {
+        fetch(`${getApiUrl()}/artworks?limit=500&fields=slug`)
+            .then(res => res.json())
+            .then(data => {
+                const items = data.data || data.items || data || [];
+                const slugs = items.map((a: { slug: string }) => a.slug).filter(Boolean);
+                setAllSlugs(slugs);
+            })
+            .catch(() => {});
+    }, []);
+
     useEffect(() => {
         if (fullSizeOpen) {
             document.body.style.overflow = "hidden";
@@ -155,6 +168,11 @@ export default function ArtworkDetailPage() {
 
     const images = work.images || [];
     const currentPrintPrice = Math.round(globalPrintPrice * selectedPrint.multiplier);
+
+    // Compute prev/next slugs
+    const currentSlugIdx = allSlugs.indexOf(slug);
+    const prevSlug = currentSlugIdx > 0 ? allSlugs[currentSlugIdx - 1] : null;
+    const nextSlug = currentSlugIdx !== -1 && currentSlugIdx < allSlugs.length - 1 ? allSlugs[currentSlugIdx + 1] : null;
 
     // Dynamic metrics to align elements with the current image's edges
     const activeImageMetrics = (function () {
@@ -208,7 +226,7 @@ export default function ArtworkDetailPage() {
                     position: relative;
                     width: 100vw;
                     margin-left: calc(-50vw + 50%);
-                    margin-top: 3rem; /* Dropped down on mobile */
+                    margin-top: 2rem; /* Dropped down on mobile */
                     display: flex;
                     flex-direction: column; /* Flawless natural flow for thumbnails on mobile */
                     align-items: center;
@@ -229,13 +247,17 @@ export default function ArtworkDetailPage() {
                     .artwork-img-col {
                         top: 10px;
                         height: calc(100vh - 40px);
+                        pointer-events: none; /* Prevent invisible overflow from blocking nav bar clicks */
+                    }
+                    .artwork-img-col * {
+                        pointer-events: auto; /* Re-enable clicks for all actual interactive children */
                     }
                     .artwork-img-area {
                         margin-left: 0;
                         margin-right: 0;
-                        margin-top: 3rem; /* Dropped down below BACK TO SHOP */
+                        margin-top: -1rem; /* Lifted up significantly */
                         width: 100%;
-                        height: calc(100% - 3rem); /* Compensate for the 3rem drop */
+                        height: calc(100% + 1rem); /* Space recovered */
                         align-items: flex-start;
                         flex: 1;
                     }
@@ -247,51 +269,142 @@ export default function ArtworkDetailPage() {
                     }
                 }
             `}</style>
+
+                {/* ── GALLERY NAV ── */}
+                <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0",
+                    marginBottom: "2rem",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "0.72rem",
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    position: "relative",
+                    zIndex: 50,
+                }}>
+                    <div style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        background: "#fff",
+                        borderRadius: "40px",
+                        boxShadow: "0 2px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05)",
+                        padding: "0 0.25rem",
+                        gap: "0",
+                    }}>
+                    {/* Next — LEFT */}
+                    {nextSlug ? (
+                        <Link
+                            href={`/artwork/${nextSlug}`}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                padding: "0.65rem 1.4rem",
+                                color: "var(--color-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                                whiteSpace: "nowrap",
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
+                        >
+                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="7,1 1,7 7,13" />
+                            </svg>
+                            Next
+                        </Link>
+                    ) : (
+                        <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            padding: "0.65rem 1.4rem",
+                            color: "var(--color-border)",
+                            opacity: 0.35,
+                            whiteSpace: "nowrap",
+                            cursor: "default",
+                        }}>
+                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="7,1 1,7 7,13" />
+                            </svg>
+                            Next
+                        </span>
+                    )}
+
+                    {/* Divider */}
+                    <span style={{ width: "1px", height: "16px", background: "var(--color-border)", opacity: 0.5, flexShrink: 0 }} />
+
+                    {/* Center: All Works */}
+                    <Link
+                        href="/shop"
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "0.65rem 1.6rem",
+                            color: "var(--color-muted)",
+                            textDecoration: "none",
+                            transition: "color 0.2s",
+                            whiteSpace: "nowrap",
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
+                    >
+                        All Works
+                    </Link>
+
+                    {/* Divider */}
+                    <span style={{ width: "1px", height: "16px", background: "var(--color-border)", opacity: 0.5, flexShrink: 0 }} />
+
+                    {/* Prev — RIGHT */}
+                    {prevSlug ? (
+                        <Link
+                            href={`/artwork/${prevSlug}`}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                padding: "0.65rem 1.4rem",
+                                color: "var(--color-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                                whiteSpace: "nowrap",
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
+                        >
+                            Prev
+                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="1,1 7,7 1,13" />
+                            </svg>
+                        </Link>
+                    ) : (
+                        <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            padding: "0.65rem 1.4rem",
+                            color: "var(--color-border)",
+                            opacity: 0.35,
+                            whiteSpace: "nowrap",
+                            cursor: "default",
+                        }}>
+                            Prev
+                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="1,1 7,7 1,13" />
+                            </svg>
+                        </span>
+                    )}
+                    </div>
+                </div>
+
+
+
                 <div className={`grid grid-cols-1 items-start gap-12 lg:gap-16 ${work.orientation === "horizontal" ? "md:grid-cols-2" : "md:grid-cols-[1.25fr_1fr]"}`}>
 
                     {/* LEFT CELL (50%): image viewer  */}
                     <div className="artwork-img-col">
-                        {/* ── Header row: [← Back to Shop] ── */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexShrink: 0 }}>
-                            <Link
-                                href="/shop"
-                                style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontFamily: "var(--font-sans)", fontSize: "0.72rem", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", textDecoration: "none", whiteSpace: "nowrap", transition: "color 0.2s" }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
-                            >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: "translateY(0.5px)" }}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-                                Back to Shop
-                            </Link>
-
-                            {/* Mobile: Fullscreen button inline with Back to Shop */}
-                            {layoutMetrics.winW < 768 && (
-                                <button
-                                    onClick={() => setFullSizeOpen(true)}
-                                    style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "0.45rem",
-                                        background: "rgba(255,255,255,0.4)",
-                                        color: "var(--color-muted)",
-                                        border: "1px solid rgba(0,0,0,0.06)",
-                                        borderRadius: "20px",
-                                        padding: "0.3rem 0.7rem",
-                                        cursor: "pointer",
-                                        fontFamily: "var(--font-sans)",
-                                        fontSize: "0.6rem",
-                                        fontWeight: 600,
-                                        letterSpacing: "0.05em",
-                                        textTransform: "uppercase",
-                                        backdropFilter: "blur(4px)"
-                                    }}
-                                >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
-                                    </svg>
-                                    Fullscreen
-                                </button>
-                            )}
-                        </div>
 
                         {/* ── Image area: fills viewport height minus header-row ── */}
                         <div className="artwork-img-area">
@@ -304,12 +417,10 @@ export default function ArtworkDetailPage() {
                                         className="w-full z-10"
                                         style={{
                                             position: "relative",
-                                            /* Expand overflow clip area VERTICALLY ONLY so adjacent slides are correctly hidden */
-                                            marginTop: "-60px",
-                                            marginBottom: "-60px",
-                                            paddingTop: "60px",
-                                            paddingBottom: "60px",
-                                            width: "100%",
+                                            /* Expand overflow clip: 60px vertically for deep shadow, 30px horizontally (safely less than 32px gap) */
+                                            margin: "-60px -30px",
+                                            padding: "60px 30px",
+                                            width: "calc(100% + 60px)",
                                             height: layoutMetrics.winW < 768 ? "auto" : "calc(100% + 120px)",
                                             overflow: "hidden",
                                         }}
@@ -322,131 +433,129 @@ export default function ArtworkDetailPage() {
                                             swipeRef.current = null;
                                         }}
                                     >
-                                    {/* ── THE SLIDER TRACK ── */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            gap: "2rem",
-                                            width: "100%",
-                                            height: layoutMetrics.winW < 768 ? "auto" : "100%",
-                                            transition: isZooming ? "none" : "transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)",
-                                            transform: `translateX(calc(-${selectedImageIndex * 100}% - ${selectedImageIndex * 2}rem))`,
-                                        }}
-                                    >
-                                        {images.length > 0 ? (
-                                            images.map((img, idx) => {
-                                                // Bulletproof aspect ratio fallback even if image onLoad completely fails due to browser cache
-                                                let fallbackAspect: number | undefined = undefined;
-                                                if (idx === 0) {
-                                                    if (work.width_cm && work.height_cm) {
-                                                        fallbackAspect = work.width_cm / work.height_cm;
-                                                    } else if (work.orientation) {
-                                                        fallbackAspect = work.orientation === "horizontal" ? 1.5 : work.orientation === "vertical" ? 0.75 : 1;
-                                                    }
-                                                } else {
-                                                    fallbackAspect = 1; // reasonable default for thumbnails/detail shots before load
-                                                }
-
-                                                const aspect = imageAspectRatios[idx] || fallbackAspect;
-
-                                                // Compute explicit pixel boundaries exactly to completely bypass buggy cross-browser flexbox algorithms.
-                                                // This perfectly guarantees both PC boundary tracking mapping for zoom and Mobile 95vw precision rules!
-                                                let explicitDimensions: React.CSSProperties = { margin: "auto" };
-
-                                                if (aspect && layoutMetrics.boxW > 0 && layoutMetrics.winW > 0) {
-                                                    const isMobile = layoutMetrics.winW < 768;
-
-                                                    if (isMobile) {
-                                                        // Mobile: Uncaged 95vw stretch! Absolutely no maxH constraints!
-                                                        const renderW = layoutMetrics.boxW * 0.95;
-                                                        const renderH = renderW / aspect;
-                                                        explicitDimensions = {
-                                                            width: `${renderW}px`,
-                                                            height: `${renderH}px`,
-                                                            margin: "0 auto",
-                                                        };
-                                                    } else if (layoutMetrics.boxH > 0) {
-                                                        // PC Desktop: Make horizontal images larger, vertical ones slightly smaller
-                                                        // By reducing horizontal margins and increasing vertical ones
-                                                        const maxW = layoutMetrics.boxW - 60;
-                                                        const maxH = layoutMetrics.boxH - 240;
-
-                                                        let renderW = maxW;
-                                                        let renderH = renderW / aspect;
-
-                                                        if (renderH > maxH) {
-                                                            renderH = maxH;
-                                                            renderW = renderH * aspect;
+                                        {/* ── THE SLIDER TRACK ── */}
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                gap: "8rem", /* Massive 128px gap ensures adjacent 45px shadows cannot reach the 30px expanded viewing boundary */
+                                                width: "100%",
+                                                height: layoutMetrics.winW < 768 ? "auto" : "100%",
+                                                transition: isZooming ? "none" : "transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)",
+                                                transform: `translateX(calc(-${selectedImageIndex * 100}% - ${selectedImageIndex * 8}rem))`,
+                                            }}
+                                        >
+                                            {images.length > 0 ? (
+                                                images.map((img, idx) => {
+                                                    // Bulletproof aspect ratio fallback even if image onLoad completely fails due to browser cache
+                                                    let fallbackAspect: number | undefined = undefined;
+                                                    if (idx === 0) {
+                                                        if (work.width_cm && work.height_cm) {
+                                                            fallbackAspect = work.width_cm / work.height_cm;
+                                                        } else if (work.orientation) {
+                                                            fallbackAspect = work.orientation === "horizontal" ? 1.5 : work.orientation === "vertical" ? 0.75 : 1;
                                                         }
-
-                                                        explicitDimensions = {
-                                                            width: `${renderW}px`,
-                                                            height: `${renderH}px`,
-                                                            margin: "0 auto",
-                                                        };
+                                                    } else {
+                                                        fallbackAspect = 1; // reasonable default for thumbnails/detail shots before load
                                                     }
-                                                }
 
-                                                return (
-                                                    <div
-                                                        key={idx}
-                                                        style={{
-                                                            flex: "0 0 100%",
-                                                            width: "100%",
-                                                            height: layoutMetrics.winW < 768 ? "auto" : "100%",
-                                                            display: "flex",
-                                                            alignItems: "flex-start", // Anchors the fully scaled image to the very top ceiling instead of floating middle
-                                                            justifyContent: "center",
-                                                        }}
-                                                    >
+                                                    const aspect = imageAspectRatios[idx] || fallbackAspect;
+
+                                                    // Compute explicit pixel boundaries exactly to completely bypass buggy cross-browser flexbox algorithms.
+                                                    // This perfectly guarantees both PC boundary tracking mapping for zoom and Mobile 95vw precision rules!
+                                                    let explicitDimensions: React.CSSProperties = { margin: "auto" };
+
+                                                    if (aspect && layoutMetrics.boxW > 0 && layoutMetrics.winW > 0) {
+                                                        const isMobile = layoutMetrics.winW < 768;
+
+                                                        if (isMobile) {
+                                                            // Mobile: Uncaged 95vw stretch! Absolutely no maxH constraints!
+                                                            const renderW = layoutMetrics.boxW * 0.95;
+                                                            const renderH = renderW / aspect;
+                                                            explicitDimensions = {
+                                                                width: `${renderW}px`,
+                                                                height: `${renderH}px`,
+                                                                margin: "0 auto",
+                                                            };
+                                                        } else if (layoutMetrics.boxH > 0) {
+                                                            const maxW = layoutMetrics.boxW - 45;
+                                                            const maxH = layoutMetrics.boxH - 200;
+
+                                                            let renderW = maxW;
+                                                            let renderH = renderW / aspect;
+
+                                                            if (renderH > maxH) {
+                                                                renderH = maxH;
+                                                                renderW = renderH * aspect;
+                                                            }
+
+                                                            explicitDimensions = {
+                                                                width: `${renderW}px`,
+                                                                height: `${renderH}px`,
+                                                                margin: "0 auto",
+                                                            };
+                                                        }
+                                                    }
+
+                                                    return (
                                                         <div
-                                                            className="artwork-frame"
-                                                            ref={el => { imgRefs.current[idx] = el; }}
-                                                            onPointerEnter={e => { if (!hasTouch.current && e.pointerType === "mouse" && window.innerWidth > 768) setIsZooming(true); }}
-                                                            onPointerLeave={e => { if (!hasTouch.current && e.pointerType === "mouse") setIsZooming(false); }}
-                                                            onPointerMove={handlePointerMove}
-                                                            onClick={() => { setIsZooming(false); setFullSizeOpen(true); }}
+                                                            key={idx}
                                                             style={{
+                                                                flex: "0 0 100%",
+                                                                width: "100%",
+                                                                height: layoutMetrics.winW < 768 ? "auto" : "100%",
                                                                 display: "flex",
-                                                                position: "relative",
-                                                                overflow: "hidden",
-                                                                borderRadius: "4px",
-                                                                boxShadow: "var(--shadow-card-deep)",
-                                                                cursor: "crosshair",
-                                                                ...explicitDimensions
+                                                                alignItems: "flex-start", // Anchors the fully scaled image to the very top ceiling instead of floating middle
+                                                                justifyContent: "center",
                                                             }}
                                                         >
-                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                            <img
-                                                                src={getImageUrl(img, 'original')}
-                                                                alt={work.title}
-                                                                loading={idx === 0 ? "eager" : "lazy"}
-                                                                onLoad={(e) => handleImgLoad(idx, e)}
-                                                                ref={el => {
-                                                                    if (el && el.complete && el.naturalWidth > 0 && !imageAspectRatios[idx]) {
-                                                                        handleImgLoad(idx, { currentTarget: el } as any);
-                                                                    }
-                                                                }}
+                                                            <div
+                                                                className="artwork-frame"
+                                                                ref={el => { imgRefs.current[idx] = el; }}
+                                                                onPointerEnter={e => { if (!hasTouch.current && e.pointerType === "mouse" && window.innerWidth > 768) setIsZooming(true); }}
+                                                                onPointerLeave={e => { if (!hasTouch.current && e.pointerType === "mouse") setIsZooming(false); }}
+                                                                onPointerMove={handlePointerMove}
+                                                                onClick={() => { setIsZooming(false); setFullSizeOpen(true); }}
                                                                 style={{
-                                                                    maxWidth: "100%",
-                                                                    maxHeight: "100%",
-                                                                    width: explicitDimensions.width ? "100%" : "auto",
-                                                                    height: explicitDimensions.height ? "100%" : "auto",
-                                                                    objectFit: "contain",
-                                                                    transform: isZooming && selectedImageIndex === idx ? "scale(2.5)" : "scale(1)",
-                                                                    transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
-                                                                    transition: isZooming ? "none" : "transform 0.3s ease",
+                                                                    display: "flex",
+                                                                    position: "relative",
+                                                                    overflow: "hidden",
+                                                                    borderRadius: "4px",
+                                                                    boxShadow: "var(--shadow-card-deep)",
+                                                                    cursor: "crosshair",
+                                                                    ...explicitDimensions
                                                                 }}
-                                                            />
+                                                            >
+                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                <img
+                                                                    src={getImageUrl(img, 'original')}
+                                                                    alt={work.title}
+                                                                    loading={idx === 0 ? "eager" : "lazy"}
+                                                                    onLoad={(e) => handleImgLoad(idx, e)}
+                                                                    ref={el => {
+                                                                        if (el && el.complete && el.naturalWidth > 0 && !imageAspectRatios[idx]) {
+                                                                            handleImgLoad(idx, { currentTarget: el } as any);
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        maxWidth: "100%",
+                                                                        maxHeight: "100%",
+                                                                        width: explicitDimensions.width ? "100%" : "auto",
+                                                                        height: explicitDimensions.height ? "100%" : "auto",
+                                                                        objectFit: "contain",
+                                                                        transform: isZooming && selectedImageIndex === idx ? "scale(2.5)" : "scale(1)",
+                                                                        transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
+                                                                        transition: isZooming ? "none" : "transform 0.3s ease",
+                                                                    }}
+                                                                />
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })
-                                        ) : (
-                                            <div style={{ flex: "0 0 100%", width: "100%", height: "100%", background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})` }} />
-                                        )}
+                                                    );
+                                                })
+                                            ) : (
+                                                <div style={{ flex: "0 0 100%", width: "100%", height: "100%", background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})` }} />
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
 
                                     {/* Full Size button - anchored exactly inside the bottom-right corner of the active frame */}
                                     <button
@@ -568,8 +677,8 @@ export default function ArtworkDetailPage() {
                     </div>{/* end .artwork-img-col / left cell */}
 
                     {/* ── Right: Purchase panel ── */}
-                    <div style={{ paddingTop: layoutMetrics.winW >= 768 ? "8rem" : "0", paddingBottom: "6rem" }}>
-                        <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.6rem, 5vw, 3.8rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem" }}>{work.title}</h1>
+                    <div style={{ paddingTop: layoutMetrics.winW >= 768 ? "3rem" : "0", paddingBottom: "6rem" }}>
+                        <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.6rem, 5vw, 3.8rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
 
                         <div style={{ position: "relative", marginTop: "1rem" }}>
                             <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", marginLeft: "1rem" }}>
