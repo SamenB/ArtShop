@@ -208,6 +208,7 @@ export default function ArtworkDetailPage() {
                     position: relative;
                     width: 100vw;
                     margin-left: calc(-50vw + 50%);
+                    margin-top: 3rem; /* Dropped down on mobile */
                     display: flex;
                     flex-direction: column; /* Flawless natural flow for thumbnails on mobile */
                     align-items: center;
@@ -232,14 +233,14 @@ export default function ArtworkDetailPage() {
                     .artwork-img-area {
                         margin-left: 0;
                         margin-right: 0;
+                        margin-top: 3rem; /* Dropped down below BACK TO SHOP */
                         width: 100%;
-                        height: 100%;
+                        height: calc(100% - 3rem); /* Compensate for the 3rem drop */
                         align-items: flex-start;
                         flex: 1;
                     }
                     .artwork-frame {
-                        max-width: calc(100% - 60px);
-                        max-height: calc(100% - 80px);
+                        /* max-width and max-height removed because explicitDimensions completely controls safe bounds in JS pixel-perfectly */
                     }
                     .artwork-slider-wrap {
                         height: calc(100% - 130px);
