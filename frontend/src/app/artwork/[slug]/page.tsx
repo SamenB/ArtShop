@@ -165,7 +165,7 @@ export default function ArtworkDetailPage() {
                 100% { box-shadow: 0 0 0 0 rgba(100, 116, 139, 0); border-color: rgba(100, 116, 139, 0.2); }
             }
         `}</style>
-        <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0.5rem 2rem 6rem" }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "1.5rem 2rem 6rem" }}>
             {images.length > 0 && (
                 <link rel="preload" as="image" href={getImageUrl(images[selectedImageIndex], 'original')} />
             )}
@@ -318,9 +318,10 @@ export default function ArtworkDetailPage() {
                                                         margin: "0 auto",
                                                     };
                                                 } else if (layoutMetrics.boxH > 0) {
-                                                    // PC Desktop: Strict, significantly smaller boundaries within the slider-wrap boxH to fit laptop views
-                                                    const maxW = layoutMetrics.boxW - 100;
-                                                    const maxH = layoutMetrics.boxH - 160;
+                                                    // PC Desktop: Make horizontal images larger, vertical ones slightly smaller
+                                                    // By reducing horizontal margins and increasing vertical ones
+                                                    const maxW = layoutMetrics.boxW - 40;
+                                                    const maxH = layoutMetrics.boxH - 240;
                                                     
                                                     let renderW = maxW;
                                                     let renderH = renderW / aspect;
