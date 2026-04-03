@@ -1,11 +1,21 @@
 /* ─────────────────────────────────────────────
    Google Fonts — DM Serif Display + Cormorant Garamond + IBM Plex Mono + Inter
-   DM Serif    = elegant editorial serif, Le Labo feel
-   Cormorant   = label-style condensed for collection titles
+   DM Serif      = elegant editorial serif, Le Labo feel
+   Cormorant     = label-style condensed for collection titles
    IBM Plex Mono = typewriter label text (sizes, prices, metadata)
-   Inter       = clean sans-serif for body
+   Inter         = clean sans-serif for body
+   Licorice      = premium calligraphic script for artwork titles (self-hosted)
 ───────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&family=Inter:wght@300;400;500;600&display=swap');
+
+/* Licorice — self-hosted for guaranteed rendering */
+@font-face {
+  font-family: 'Licorice';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Licorice-Regular.ttf') format('truetype');
+}
 
 @import "tailwindcss";
 
@@ -46,6 +56,8 @@
   /* body copy */
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
   /* typewriter labels — Le Labo printed form style */
+  --font-artwork-title: 'Licorice', cursive;
+  /* premium calligraphic script — artwork page titles */
 
   --spacing-section: 6rem;
 }
