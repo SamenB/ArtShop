@@ -299,30 +299,29 @@ export default function ArtworkDetailPage() {
                             <div className="artwork-slider-wrap">
 
                                 {/* ── THE MAX SPACE IMAGE BOX ──────────────────────────────────────────── */}
-                                <div
-                                    ref={boxRef}
-                                    className="w-full z-10"
-                                    style={{
-                                        position: layoutMetrics.winW < 768 ? "relative" : "absolute",
-                                        inset: layoutMetrics.winW < 768 ? "auto" : 0,
-                                        height: layoutMetrics.winW < 768 ? "auto" : "100%",
-                                        /* Classic shadow-reveal trick: expand the clip zone vertically so shadows render,
-                                           then pull it back with negative margins so layout stays intact */
-                                        overflow: "hidden",
-                                        marginTop: "-50px",
-                                        paddingTop: "50px",
-                                        marginBottom: "-50px",
-                                        paddingBottom: "50px",
-                                    }}
-                                    onTouchStart={e => { hasTouch.current = true; setIsZooming(false); swipeRef.current = e.touches[0].clientX; }}
-                                    onTouchEnd={e => {
-                                        if (swipeRef.current === null) return;
-                                        const d = swipeRef.current - e.changedTouches[0].clientX;
-                                        if (d > 48 && images.length > 1) setSelectedImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
-                                        else if (d < -48 && images.length > 1) setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
-                                        swipeRef.current = null;
-                                    }}
-                                >
+                                <div ref={boxRef} style={{ width: "100%", height: layoutMetrics.winW < 768 ? "auto" : "100%", position: layoutMetrics.winW < 768 ? "relative" : "absolute", inset: layoutMetrics.winW < 768 ? "auto" : 0 }}>
+                                    <div
+                                        className="w-full z-10"
+                                        style={{
+                                            position: "relative",
+                                            /* Expand overflow clip area VERTICALLY ONLY so adjacent slides are correctly hidden */
+                                            marginTop: "-60px",
+                                            marginBottom: "-60px",
+                                            paddingTop: "60px",
+                                            paddingBottom: "60px",
+                                            width: "100%",
+                                            height: layoutMetrics.winW < 768 ? "auto" : "calc(100% + 120px)",
+                                            overflow: "hidden",
+                                        }}
+                                        onTouchStart={e => { hasTouch.current = true; setIsZooming(false); swipeRef.current = e.touches[0].clientX; }}
+                                        onTouchEnd={e => {
+                                            if (swipeRef.current === null) return;
+                                            const d = swipeRef.current - e.changedTouches[0].clientX;
+                                            if (d > 48 && images.length > 1) setSelectedImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+                                            else if (d < -48 && images.length > 1) setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+                                            swipeRef.current = null;
+                                        }}
+                                    >
                                     {/* ── THE SLIDER TRACK ── */}
                                     <div
                                         style={{
@@ -369,7 +368,7 @@ export default function ArtworkDetailPage() {
                                                     } else if (layoutMetrics.boxH > 0) {
                                                         // PC Desktop: Make horizontal images larger, vertical ones slightly smaller
                                                         // By reducing horizontal margins and increasing vertical ones
-                                                        const maxW = layoutMetrics.boxW - 40;
+                                                        const maxW = layoutMetrics.boxW - 60;
                                                         const maxH = layoutMetrics.boxH - 240;
 
                                                         let renderW = maxW;
@@ -447,6 +446,7 @@ export default function ArtworkDetailPage() {
                                             <div style={{ flex: "0 0 100%", width: "100%", height: "100%", background: `linear-gradient(135deg, ${work.gradientFrom}, ${work.gradientTo})` }} />
                                         )}
                                     </div>
+                                </div>
 
                                     {/* Full Size button - anchored exactly inside the bottom-right corner of the active frame */}
                                     <button
@@ -505,13 +505,16 @@ export default function ArtworkDetailPage() {
                                             marginTop: layoutMetrics.winW < 768 ? "1.5rem" : "0",
                                             width: "100%",
                                             overflowX: "auto",
-                                            overflowY: "visible", /* allow vertical shadow to show */
+                                            overflowY: "hidden",
                                             display: "flex",
                                             justifyContent: "center",
                                             alignItems: "center",
-                                            padding: "12px 0 20px", /* top/bottom padding gives box-shadows room to breathe */
-                                            scrollbarWidth: "thin",
-                                            scrollbarColor: "var(--color-border) transparent",
+                                            /* Massive vertical shadow clearance */
+                                            paddingTop: "40px",
+                                            transform: "translateY(-40px)", /* Counteract the padding visual shift perfectly without breaking flex margins */
+                                            paddingBottom: "50px",
+                                            marginBottom: "-50px", /* Pull layout back from bottom */
+                                            scrollbarWidth: "none",
                                             transition: "top 0.4s cubic-bezier(0.25, 1, 0.5, 1)",
                                             zIndex: 20
                                         }}>
