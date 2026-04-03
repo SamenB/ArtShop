@@ -186,8 +186,10 @@ export default function ArtworkDetailPage() {
             return { w, h: w / aspect };
         }
 
+        const isVertical = aspect < 1;
+        const thumbReserve = isVertical ? 280 : 200;
         const maxW = layoutMetrics.boxW - 40;
-        const maxH = layoutMetrics.boxH - 240;
+        const maxH = layoutMetrics.boxH - thumbReserve;
         let rW = maxW;
         let rH = rW / aspect;
         if (rH > maxH) {
@@ -477,8 +479,11 @@ export default function ArtworkDetailPage() {
                                                                 margin: "0 auto",
                                                             };
                                                         } else if (layoutMetrics.boxH > 0) {
+                                                            const isVertical = aspect < 1;
+                                                            // Vertical paintings need more headroom below for thumbnails (130px strip + nav margin + shadow)
+                                                            const thumbReserve = isVertical ? 280 : 200;
                                                             const maxW = layoutMetrics.boxW - 45;
-                                                            const maxH = layoutMetrics.boxH - 200;
+                                                            const maxH = layoutMetrics.boxH - thumbReserve;
 
                                                             let renderW = maxW;
                                                             let renderH = renderW / aspect;
