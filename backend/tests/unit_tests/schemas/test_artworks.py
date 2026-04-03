@@ -20,12 +20,12 @@ def test_artwork_add_request_valid():
 
 
 def test_artwork_add_request_defaults():
-    data = {"title": "Minimalist"}
+    data = {"title": "Minimalist", "orientation": "Vertical"}
     artwork = ArtworkAddRequest(**data)
     assert artwork.title == "Minimalist"
     assert artwork.has_prints is False
     assert artwork.base_print_price is None
-    assert artwork.orientation is None
+    assert artwork.orientation == "Vertical"
     assert artwork.tags == []
 
 

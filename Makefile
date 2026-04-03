@@ -52,4 +52,8 @@ migrate-gen:
 
 # Run tests
 test:
-	cd backend && $(ACTIVATE) && pytest
+	cd backend && $(ACTIVATE) && pytest -v
+
+# Run Ruff linter and formatter
+lint:
+	cd backend && $(ACTIVATE) && ruff check --fix . && ruff format .
