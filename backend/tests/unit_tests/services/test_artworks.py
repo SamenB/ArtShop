@@ -10,6 +10,7 @@ from src.services.artworks import ArtworkService
 class MockDBManager:
     def __init__(self):
         self.artworks = AsyncMock()
+        self.artworks.get_one_or_none.return_value = None
         self.artwork_tags = AsyncMock()
         self.collections = AsyncMock()
         self.commit = AsyncMock()
