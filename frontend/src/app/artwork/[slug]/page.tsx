@@ -306,8 +306,13 @@ export default function ArtworkDetailPage() {
                                         position: layoutMetrics.winW < 768 ? "relative" : "absolute",
                                         inset: layoutMetrics.winW < 768 ? "auto" : 0,
                                         height: layoutMetrics.winW < 768 ? "auto" : "100%",
+                                        /* Classic shadow-reveal trick: expand the clip zone vertically so shadows render,
+                                           then pull it back with negative margins so layout stays intact */
                                         overflow: "hidden",
-                                        borderRadius: "4px",
+                                        marginTop: "-50px",
+                                        paddingTop: "50px",
+                                        marginBottom: "-50px",
+                                        paddingBottom: "50px",
                                     }}
                                     onTouchStart={e => { hasTouch.current = true; setIsZooming(false); swipeRef.current = e.touches[0].clientX; }}
                                     onTouchEnd={e => {
@@ -500,10 +505,11 @@ export default function ArtworkDetailPage() {
                                             marginTop: layoutMetrics.winW < 768 ? "1.5rem" : "0",
                                             width: "100%",
                                             overflowX: "auto",
+                                            overflowY: "visible", /* allow vertical shadow to show */
                                             display: "flex",
                                             justifyContent: "center",
                                             alignItems: "center",
-                                            paddingBottom: "4px",
+                                            padding: "12px 0 20px", /* top/bottom padding gives box-shadows room to breathe */
                                             scrollbarWidth: "thin",
                                             scrollbarColor: "var(--color-border) transparent",
                                             transition: "top 0.4s cubic-bezier(0.25, 1, 0.5, 1)",
