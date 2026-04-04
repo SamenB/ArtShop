@@ -202,7 +202,7 @@ export default function ArtworkDetailPage() {
     const viewFullSizeTopOffset = activeImageMetrics.h + 5;
 
     return (
-        <div className="overflow-x-hidden w-full">
+        <div className="w-full relative" style={{ maxWidth: "100%", overflowX: "clip" }}>
             <style>{`
             @keyframes subtlePulse {
                 0% { box-shadow: 0 0 0 0 rgba(100, 116, 139, 0.15); border-color: rgba(100, 116, 139, 0.2); }
@@ -226,8 +226,8 @@ export default function ArtworkDetailPage() {
                 .artwork-img-area {
                     flex: unset;
                     position: relative;
-                    width: 100vw;
-                    margin-left: calc(-50vw + 50%);
+                    width: calc(100% + 4rem); /* Safe breakout that respects scrollbars unlike 100vw */
+                    margin-left: -2rem;       /* Cancel out parent's 2rem horizontal padding */
                     margin-top: 2rem; /* Dropped down on mobile */
                     display: flex;
                     flex-direction: column; /* Flawless natural flow for thumbnails on mobile */
@@ -640,20 +640,20 @@ export default function ArtworkDetailPage() {
                                                         key={idx}
                                                         onClick={() => setSelectedImageIndex(idx)}
                                                         style={{
-                                                            width: "70px",
                                                             height: "70px",
+                                                            width: "auto",         /* Width follows image natural proportions */
                                                             padding: 0,
                                                             flexShrink: 0,
-                                                            /* Active thumb pushes siblings via margin — same size, no scale */
                                                             margin: isActive ? "0 10px" : "0",
                                                             border: isActive
                                                                 ? "2px solid var(--color-charcoal)"
                                                                 : "2px solid transparent",
-                                                            backgroundImage: `url(${getImageUrl(img, 'thumb')})`,
-                                                            backgroundSize: "cover",
-                                                            backgroundPosition: "center",
                                                             cursor: "pointer",
                                                             borderRadius: "4px",
+                                                            overflow: "hidden",
+                                                            outline: "none",
+                                                            background: "none",
+                                                            display: "block",
                                                             opacity: isActive ? 1 : 0.55,
                                                             boxShadow: isActive ? "var(--shadow-card-deep)" : "var(--shadow-thumb)",
                                                             transition: "margin 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
@@ -670,7 +670,18 @@ export default function ArtworkDetailPage() {
                                                                 (e.currentTarget as HTMLButtonElement).style.boxShadow = "var(--shadow-thumb)";
                                                             }
                                                         }}
-                                                    />
+                                                    >
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img
+                                                            src={getImageUrl(img, 'thumb')}
+                                                            alt=""
+                                                            style={{
+                                                                height: "100%",
+                                                                width: "auto",     /* Let image keep natural aspect ratio */
+                                                                display: "block",
+                                                            }}
+                                                        />
+                                                    </button>
                                                 );
                                             })}
                                         </div>

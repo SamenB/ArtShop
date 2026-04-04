@@ -332,7 +332,7 @@ export default function GalleryPage() {
     };
 
     return (
-        <>
+        <div style={{ overflowX: "clip", maxWidth: "100vw", width: "100%" }}>
             {lightbox && <Lightbox works={lightbox.works as any} startWorkIndex={lightbox.index} onClose={() => setLightbox(null)} />}
             <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 1rem 2rem 1rem" : "1.5rem 2.5rem 2rem" }}>
                 {/* Sort bar */}
@@ -535,6 +535,6 @@ export default function GalleryPage() {
                     <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", fontFamily: "var(--font-sans)" }}>Loading more...</span>
                 </div>
             )}
-        </>
+        </div>
     );
 }
