@@ -850,30 +850,28 @@ export default function ShopPage() {
             {/* Layout */}
             <div style={{ display: "flex", gap: "0", alignItems: "flex-start" }}>
                 {/* Desktop sidebar — 240px to fit price inputs comfortably */}
-                {!isMobile && (
-                    <aside style={{ width: "240px", minWidth: "240px", flexShrink: 0, paddingLeft: "2.5rem", paddingRight: "1.5rem", paddingTop: "1rem", borderRight: "1px solid rgba(26,26,24,0.07)" }}>
-                        {/* Always reserve space → no layout shift when Clear all appears */}
-                        <button
-                            onClick={clearAll}
-                            disabled={afc === 0}
-                            style={{
-                                fontFamily: "var(--font-sans)", fontSize: "0.58rem", fontWeight: 400,
-                                letterSpacing: "0.1em", textTransform: "uppercase",
-                                color: afc > 0 ? "#888" : "transparent",
-                                background: "none", border: "none",
-                                cursor: afc > 0 ? "pointer" : "default",
-                                padding: "0 0 0.6rem", display: "block",
-                                transition: "color 0.18s",
-                                pointerEvents: afc === 0 ? "none" : "auto",
-                                textDecoration: "underline",
-                                textUnderlineOffset: "2px",
-                            }}
-                            onMouseEnter={e => { if (afc > 0) e.currentTarget.style.color = "#1a1a18"; }}
-                            onMouseLeave={e => { if (afc > 0) e.currentTarget.style.color = "#888"; }}
-                        >Clear all</button>
-                        {filtersJSX}
-                    </aside>
-                )}
+                <aside className="shop-desktop-sidebar" style={{ width: "240px", minWidth: "240px", flexShrink: 0, paddingLeft: "2.5rem", paddingRight: "1.5rem", paddingTop: "1rem", borderRight: "1px solid rgba(26,26,24,0.07)" }}>
+                    {/* Always reserve space → no layout shift when Clear all appears */}
+                    <button
+                        onClick={clearAll}
+                        disabled={afc === 0}
+                        style={{
+                            fontFamily: "var(--font-sans)", fontSize: "0.58rem", fontWeight: 400,
+                            letterSpacing: "0.1em", textTransform: "uppercase",
+                            color: afc > 0 ? "#888" : "transparent",
+                            background: "none", border: "none",
+                            cursor: afc > 0 ? "pointer" : "default",
+                            padding: "0 0 0.6rem", display: "block",
+                            transition: "color 0.18s",
+                            pointerEvents: afc === 0 ? "none" : "auto",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "2px",
+                        }}
+                        onMouseEnter={e => { if (afc > 0) e.currentTarget.style.color = "#1a1a18"; }}
+                        onMouseLeave={e => { if (afc > 0) e.currentTarget.style.color = "#888"; }}
+                    >Clear all</button>
+                    {filtersJSX}
+                </aside>
 
                 {/* Main content */}
                 <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "1rem 1rem 6rem 1rem" : "1rem 2.5rem 6rem 2rem" }}>
@@ -889,7 +887,7 @@ export default function ShopPage() {
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1rem", flexShrink: 0 }}>
                             {/* Grid toggles */}
-                            <div style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
+                            <div className="grid-toggle-wrapper" style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
                                 {(["1", "2", "3"] as const).map(mode => (
                                     <button key={mode} onClick={() => handleSetGridMode(mode)} title={`${mode} in a row`}
                                         style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4px 8px", backgroundColor: gridMode === mode ? "#ffffff" : "transparent", color: gridMode === mode ? "var(--color-charcoal)" : "var(--color-muted)", border: "none", borderRadius: "4px", boxShadow: gridMode === mode ? "0 1px 3px rgba(0,0,0,0.1)" : "none", cursor: "pointer", transition: "all 0.2s" }}>

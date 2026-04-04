@@ -187,6 +187,48 @@ h3 {
   animation: shimmer 1.5s infinite linear;
 }
 
+/* Subtle single-run shimmer across an element (e.g. grid mode toggle buttons) */
+@keyframes sweep-shine {
+  0% {
+    transform: translateX(-150%) skewX(-25deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(200%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+.grid-toggle-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.grid-toggle-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-150%) skewX(-25deg);
+  pointer-events: none;
+  animation: sweep-shine 1.6s cubic-bezier(0.4, 0.0, 0.2, 1) 0.7s forwards;
+  z-index: 10;
+}
+
 /* Art grid — mobile override for edge-to-edge single column or 3-col dense */
 @media (max-width: 600px) {
 
@@ -410,4 +452,11 @@ h3 {
 
 .filter-section-btn:hover .filter-section-arrow path {
   stroke: #888;
+}
+
+/* Hide desktop sidebars on mobile to prevent hydration flashes on initial load/refresh */
+@media (max-width: 1023px) {
+  .shop-desktop-sidebar {
+    display: none !important;
+  }
 }
