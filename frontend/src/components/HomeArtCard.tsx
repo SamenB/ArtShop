@@ -25,16 +25,21 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
   const isSquare = ori === "square";
   const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") : "";
 
-  /* ref-based text alignment to painting’s left edge */
   const containerRef = useRef<HTMLDivElement>(null);
   const [textPad, setTextPad] = useState(0);
+  const [emptyBottom, setEmptyBottom] = useState(0);
 
   const recalc = useCallback(() => {
     const c = containerRef.current;
     if (!c) return;
-    const img = c.querySelector("img");
-    if (!img || !img.complete || !img.naturalWidth) return;
-    setTextPad(Math.max(0, (c.clientWidth - img.clientWidth) / 2));
+    const inner = c.querySelector(".art-card-inner") as HTMLElement;
+    if (!inner) return;
+    if (inner.tagName === "IMG") {
+      const img = inner as HTMLImageElement;
+      if (!img.complete || !img.naturalWidth) return;
+    }
+    setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
+    setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
   }, []);
 
   useEffect(() => {
@@ -108,6 +113,7 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
       {/* Title & Status — aligned to painting's left vertical edge */}
       <div
         style={{
+          marginTop: `-${emptyBottom}px`,
           paddingTop: "0.7rem",
           paddingLeft: `${textPad}px`,
           flexShrink: 0,

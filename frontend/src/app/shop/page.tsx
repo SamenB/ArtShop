@@ -109,12 +109,18 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
     /* ── ref-based text alignment to painting's left edge ── */
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
+    const [emptyBottom, setEmptyBottom] = useState(0);
     const recalc = useCallback(() => {
         const c = containerRef.current;
         if (!c) return;
-        const img = c.querySelector("img");
-        if (!img || !img.complete || !img.naturalWidth) return;
-        setTextPad(Math.max(0, (c.clientWidth - img.clientWidth) / 2));
+        const inner = c.querySelector(".art-card-inner") as HTMLElement;
+        if (!inner) return;
+        if (inner.tagName === "IMG") {
+            const img = inner as HTMLImageElement;
+            if (!img.complete || !img.naturalWidth) return;
+        }
+        setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
+        setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
     }, []);
     useEffect(() => { recalc(); window.addEventListener("resize", recalc); return () => window.removeEventListener("resize", recalc); }, [recalc]);
     // Recalc when zone height changes (grid mode switch) — image resizes, need new offset
@@ -178,6 +184,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
             {/* Standard Info — aligned to painting's left vertical edge */}
             {(gridMode !== "3" || !isMobile) && (
                 <div style={{
+                    marginTop: `-${emptyBottom}px`,
                     paddingTop: gridMode === "3" ? "0.5rem" : "0.7rem",
                     paddingLeft: `${textPad}px`,
                     display: "flex",

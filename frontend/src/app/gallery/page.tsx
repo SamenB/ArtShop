@@ -95,15 +95,20 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
     const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") || "" : "";
     const st = STATUS[work.original_status];
 
-    /* ref-based text alignment to painting’s left edge */
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
+    const [emptyBottom, setEmptyBottom] = useState(0);
     const recalc = useCallback(() => {
         const c = containerRef.current;
         if (!c) return;
-        const img = c.querySelector("img");
-        if (!img || !img.complete || !img.naturalWidth) return;
-        setTextPad(Math.max(0, (c.clientWidth - img.clientWidth) / 2));
+        const inner = c.querySelector(".art-card-inner") as HTMLElement;
+        if (!inner) return;
+        if (inner.tagName === "IMG") {
+            const img = inner as HTMLImageElement;
+            if (!img.complete || !img.naturalWidth) return;
+        }
+        setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
+        setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
     }, []);
     useEffect(() => { recalc(); window.addEventListener("resize", recalc); return () => window.removeEventListener("resize", recalc); }, [recalc]);
     // Recalc when zone height changes (grid mode switch)
@@ -165,6 +170,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
             {/* Standard Title & Status — aligned to painting's left vertical edge */}
             {gridMode !== "3" && (
                 <div style={{
+                    marginTop: `-${emptyBottom}px`,
                     paddingTop: "0.7rem",
                     paddingLeft: `${textPad}px`,
                     flexShrink: 0,
@@ -194,7 +200,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
 
             {/* Minimal Info for Compact Mobile Grid (3-column) — Status Only */}
             {gridMode === "3" && isMobile && (
-                <div style={{ paddingTop: "0.2rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column" }}>
+                <div style={{ marginTop: `-${emptyBottom}px`, paddingTop: "0.2rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column" }}>
                     {st && (
                         <p style={{
                             fontFamily: "var(--font-sans)", fontSize: "0.6rem",
