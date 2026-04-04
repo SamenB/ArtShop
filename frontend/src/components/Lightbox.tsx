@@ -10,6 +10,7 @@ interface Artwork {
     medium: string;
     size: string;
     original_status: string;
+    description?: string;
     images?: (string | { thumb: string; medium: string; original: string })[];
     gradientFrom?: string;
     gradientTo?: string;
@@ -108,13 +109,24 @@ export default function Lightbox({
         return () => { document.body.style.overflow = ""; };
     }, []);
 
-    // ── Prevent passive touchmove for pinch ──────────────────────────────────
+    // ── Prevent passive touchmove and background wheel scroll ───────────────
     useEffect(() => {
         const el = imgRef.current;
         if (!el) return;
-        const prevent = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
-        el.addEventListener("touchmove", prevent, { passive: false });
-        return () => el.removeEventListener("touchmove", prevent);
+        const preventTouch = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
+        el.addEventListener("touchmove", preventTouch, { passive: false });
+
+        const preventWheel = (e: WheelEvent) => {
+            if (!(e.target as HTMLElement).closest('.lb-details')) {
+                e.preventDefault();
+            }
+        };
+        document.addEventListener("wheel", preventWheel, { passive: false });
+
+        return () => {
+            el.removeEventListener("touchmove", preventTouch);
+            document.removeEventListener("wheel", preventWheel);
+        };
     }, []);
 
     // ── Double-tap / double-click ─────────────────────────────────────────────
@@ -132,6 +144,7 @@ export default function Lightbox({
 
     return (
         <div
+            className="lb-root"
             style={{
                 position: "fixed", inset: 0, zIndex: 2000,
                 // Blur backdrop — show the blurred page behind
@@ -140,7 +153,6 @@ export default function Lightbox({
                 WebkitBackdropFilter: "blur(22px)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 overflow: "hidden",
-                touchAction: "none",
             }}
             // Outer layer swipe (fallback)
             onTouchStart={e => {
@@ -181,6 +193,7 @@ export default function Lightbox({
             {/* ── Image ──────────────────────────────────────────────────────── */}
             <div
                 ref={imgRef}
+                className="lb-image-container"
                 // Wheel zoom (desktop)
                 onWheel={e => {
                     e.stopPropagation();
@@ -272,10 +285,12 @@ export default function Lightbox({
                     transition: pinchRef.current || dragRef.current ? "none" : "transform 0.12s ease",
                     userSelect: "none",
                     WebkitUserSelect: "none",
+                    touchAction: "none",
                 }}
             >
                 {images[imageIdx] ? (
                     <img
+                        className="lb-image"
                         src={getImageUrl(images[imageIdx], "original")}
                         alt={w.title}
                         draggable={false}
@@ -295,6 +310,63 @@ export default function Lightbox({
                         background: `linear-gradient(160deg, ${w.gradientFrom} 0%, ${w.gradientTo} 100%)`,
                         boxShadow: "0 40px 90px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.12)",
                     }} />
+                )}
+            </div>
+
+            {/* ── Artwork Details (Bottom Scrollable) ────────────────────────── */}
+            <div
+                className="lb-details"
+                onPointerDown={e => e.stopPropagation()}
+                onWheel={e => e.stopPropagation()}
+                onTouchStart={e => e.stopPropagation()}
+                onTouchMove={e => e.stopPropagation()}
+                onTouchEnd={e => e.stopPropagation()}
+                style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    maxHeight: "35vh",
+                    overflowY: "auto",
+                    padding: "0 1.5rem 2.5rem",
+                    zIndex: 26,
+                    background: "transparent",
+                    opacity: zoom > 1 ? 0 : 1,
+                    transition: "opacity 0.2s ease",
+                    pointerEvents: "auto",
+                    touchAction: "pan-y",
+                    WebkitOverflowScrolling: "touch",
+                    overscrollBehavior: "contain",
+                    display: "flex",
+                    flexDirection: "column",
+                }}
+            >
+                <div style={{
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontSize: "0.8rem",
+                    color: "rgba(20,20,18,0.9)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginBottom: "0.75rem",
+                    textShadow: "0 2px 10px rgba(255,255,255,0.8)",
+                    fontWeight: 500,
+                }}>
+                    {w.size && <span>{w.size}</span>}
+                    {w.size && w.original_status && <span style={{ margin: "0 10px", opacity: 0.5 }}>|</span>}
+                    {w.original_status && <span>{w.original_status.replace(/_/g, ' ')}</span>}
+                </div>
+                {w.description && (
+                    <div style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: "0.95rem",
+                        lineHeight: 1.6,
+                        color: "rgba(20,20,18,0.85)",
+                        textShadow: "0 2px 10px rgba(255,255,255,0.8)",
+                        maxWidth: "800px",
+                        whiteSpace: "pre-wrap",
+                    }}>
+                        {w.description}
+                    </div>
                 )}
             </div>
 
@@ -401,14 +473,32 @@ export default function Lightbox({
                 }
                 @media (min-width: 768px) {
                     .lb-header {
-                        top: 2.5rem;
-                        left: 2.5rem;
+                        top: 2.5rem !important;
+                        left: 2.5rem !important;
                         right: auto;
                         justify-content: flex-start;
+                        width: 320px;
+                        padding: 0 !important;
                     }
                     .lb-title {
                         font-size: 2.4rem;
                     }
+                    .lb-details {
+                        position: absolute !important;
+                        left: 2.5rem !important;
+                        right: auto !important;
+                        bottom: 2.5rem !important;
+                        width: 320px !important;
+                        padding: 0 !important;
+                        max-height: calc(100vh - 150px) !important;
+                    }
+                }
+                .lb-details::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .lb-details::-webkit-scrollbar-thumb {
+                    background: rgba(20,20,18,0.2);
+                    border-radius: 4px;
                 }
             `}</style>
         </div>
