@@ -75,9 +75,9 @@ export default function ArtworkDetailPage() {
     const [purchaseType, setPurchaseType] = useState<"original" | "print">("original");
     const [finish, setFinish] = useState<"Rolled" | "Framed">("Rolled");
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
-    
+
     // Toggle these to switch designs easily
-    const mobileThumbsRound = true; 
+    const mobileThumbsRound = true;
 
 
     const swipeRef = useRef<number | null>(null);
@@ -656,7 +656,7 @@ export default function ArtworkDetailPage() {
                                                             padding: 0,
                                                             flexShrink: 0,
                                                             margin: isActive ? (layoutMetrics.winW < 768 ? "0 4px" : "0 10px") : "0",
-                                                            border: layoutMetrics.winW < 768 
+                                                            border: layoutMetrics.winW < 768
                                                                 ? (isActive ? "2px solid #fff" : "2px solid transparent")
                                                                 : (isActive ? "2px solid var(--color-charcoal)" : "2px solid transparent"),
                                                             cursor: "pointer",

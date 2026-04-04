@@ -266,7 +266,7 @@ export default async function Home() {
           ════════════════════════════════════════ */}
       <section
         style={{
-          padding: "6rem 2rem",
+          padding: "clamp(3rem, 10vh, 6rem) 2rem",
           maxWidth: "1280px",
           margin: "0 auto",
         }}
@@ -309,7 +309,7 @@ export default async function Home() {
             </h2>
           </div>
           <Link
-            href="/gallery"
+            href="/shop"
             className="home-section-link"
             style={{
               fontFamily: "var(--font-sans)",
@@ -327,18 +327,56 @@ export default async function Home() {
           </Link>
         </div>
 
-        {/* Artwork grid — always 3 in a row */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: "4rem 100px",
-            alignItems: "start",
-          }}
-        >
+        {/* Artwork grid — desktop: 3 in a row, mobile: horizontal scroll with peek */ /*
+             We use a dedicated class here to manage the mobile layout transition. 
+             "1.5 - 2 items" means we need a flex-basis around 65-70%.
+          */}
+        <style>{`
+          .recent-paintings-scroll {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 4rem 100px;
+            align-items: start;
+          }
+          @media (max-width: 768px) {
+            .recent-paintings-scroll {
+              display: flex !important;
+              overflow-x: auto !important;
+              scroll-snap-type: x mandatory !important;
+              margin-left: -2rem !important;
+              margin-right: -2rem !important;
+              /* Increased top padding (1rem) for vertical shadows and kept bottom tight */
+              padding: 1rem 0 0.75rem 0 !important; 
+              gap: 1rem !important;
+              scrollbar-width: none !important;
+              align-items: center !important;
+              scroll-padding: 0 2rem !important; /* Ensures snap respects the 2rem gutter */
+            }
+            .recent-paintings-scroll::-webkit-scrollbar {
+              display: none !important;
+            }
+            .recent-paintings-item {
+              flex: 0 0 72% !important; /* Stable size for 1.5 - 2 items peek */
+              scroll-snap-align: start !important;
+            }
+            .recent-paintings-spacer {
+              flex: 0 0 2rem !important;
+              width: 2rem !important;
+            }
+          }
+        `}</style>
+        <div className="recent-paintings-scroll">
+          {/* Start Spacer for mobile edge-to-edge bleeding with correct gutter */}
+          <div className="recent-paintings-spacer" aria-hidden="true" />
+          
           {featuredWorks.map((work) => (
-            <HomeArtCard key={work.id} work={work} zoneH={380} />
+            <div key={work.id} className="recent-paintings-item">
+              <HomeArtCard work={work} zoneH={360} />
+            </div>
           ))}
+
+          {/* End Spacer to allow last item to be centered/aligned properly */}
+          <div className="recent-paintings-spacer" aria-hidden="true" />
         </div>
       </section>
 
