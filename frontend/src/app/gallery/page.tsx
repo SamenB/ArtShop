@@ -552,15 +552,16 @@ export default function GalleryPage() {
                             </div>
 
                             <div style={{ display: "block" }}>
-                                <div style={{ overflow: "hidden", padding: "0 20px 30px 20px", margin: "0 -20px -30px -20px" }}>
+                                <div style={{ overflow: "hidden", padding: "0 0 30px 0", margin: "0" }}>
                                     <div style={{
-                                         maxWidth: "1600px", 
-                                         margin: "0 auto", 
-                                         padding: isMobile ? "1rem 0.5rem" : "1.5rem 2.5rem",
+                                         width: "100%", 
+                                         padding: isMobile ? "1rem 1.25rem" : "1.5rem 0",
                                          backgroundColor: "rgba(26, 26, 24, 0.04)",
-                                         borderRadius: "8px"
                                     }}>
                                         <div className={`art-grid`} style={{
+                                            maxWidth: "1600px",
+                                            margin: "0 auto",
+                                            padding: isMobile ? "0" : "0 2.5rem",
                                             display: "grid",
                                             gridTemplateColumns: getColumns(),
                                             justifyContent: "start",
