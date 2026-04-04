@@ -567,12 +567,19 @@ export default function ShopPage() {
 
     // ── Grid mode persist ───────────────────────────────────────────────────
     useEffect(() => {
-        const saved = localStorage.getItem("artshop_gridMode") as "1" | "2" | "3" | null;
-        if (saved === "1" || saved === "2" || saved === "3") setGridMode(saved);
+        const saved = sessionStorage.getItem("artshop_shop_gridMode") as "1" | "2" | "3" | null;
+        if (saved === "1" || saved === "2" || saved === "3") {
+            setGridMode(saved);
+        } else {
+            // Default: "1" (krupniy) on mobile, "2" (middle) on PC
+            const isMob = window.innerWidth < 1024;
+            setGridMode(isMob ? "1" : "2");
+        }
     }, []);
+
     const handleSetGridMode = (val: "1" | "2" | "3") => {
         setGridMode(val);
-        localStorage.setItem("artshop_gridMode", val);
+        sessionStorage.setItem("artshop_shop_gridMode", val);
     };
 
     // ── Available years from data ───────────────────────────────────────────

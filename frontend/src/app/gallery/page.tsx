@@ -293,17 +293,19 @@ export default function GalleryPage() {
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
     useEffect(() => {
-        const saved = localStorage.getItem("artshop_gridMode") as "1" | "2" | "3" | null;
+        const saved = sessionStorage.getItem("artshop_gallery_gridMode") as "1" | "2" | "3" | null;
         if (saved === "1" || saved === "2" || saved === "3") {
             setGridMode(saved);
         } else {
-            setGridMode("2");
+            // Default: "3" (melkiy) on mobile, "2" (middle) on PC
+            const isMob = window.innerWidth < 768;
+            setGridMode(isMob ? "3" : "2");
         }
     }, []);
 
     const handleSetGridMode = (val: "1" | "2" | "3") => {
         setGridMode(val);
-        localStorage.setItem("artshop_gridMode", val);
+        sessionStorage.setItem("artshop_gallery_gridMode", val);
     };
 
     useEffect(() => {
