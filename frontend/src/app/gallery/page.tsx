@@ -437,10 +437,9 @@ export default function GalleryPage() {
             <div style={{ display: "flex", flexDirection: "column" }}>
                 {sorted.map(({ name, id, bg, works, totalInGroup }, idx) => {
                     const isCollapsed = !!collapsed[name];
-                    const bgStyle = bg ? `linear-gradient(180deg, ${bg}40 0%, ${bg}15 12rem, rgba(0,0,0,0) 100%)` : `linear-gradient(180deg, rgba(17, 17, 17, 0.08) 0%, rgba(17, 17, 17, 0.03) 12rem, rgba(17, 17, 17, 0) 100%)`;
 
                     return (
-                        <section key={name} style={{ paddingBottom: "4rem", marginBottom: 0, background: bgStyle }}>
+                        <section key={name} style={{ paddingBottom: "2rem", marginBottom: 0 }}>
                             {/* Collection header — full width bar */}
                             <div style={{ width: "100%" }}>
                                 <div
@@ -454,15 +453,14 @@ export default function GalleryPage() {
                                         background: "none", border: "none", cursor: "pointer", textAlign: "left",
                                     }}
                                 >
-                                    <div style={{ display: "flex", alignItems: "baseline", gap: "1rem" }}>
+                                    <div style={{ display: "flex", alignItems: "baseline", gap: "1rem", flexShrink: 0 }}>
                                         <h2 style={{
-                                            fontFamily: "var(--font-display)",
-                                            fontSize: "clamp(1.2rem, 3vw, 1.7rem)",
+                                            fontFamily: "var(--font-artwork-title)",
+                                            fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
                                             fontWeight: 400,
                                             fontStyle: "normal",
-                                            letterSpacing: "0.06em",
-                                            textTransform: "uppercase",
                                             color: "var(--color-charcoal)",
+                                            lineHeight: 1.2,
                                         }}>{name}</h2>
                                         <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: 300, color: "var(--color-muted)", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: "10px" }}>
                                             {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
@@ -493,9 +491,13 @@ export default function GalleryPage() {
                                             )}
                                         </span>
                                     </div>
+
+                                    {/* Thin connecting line spanning the flexible center area */}
+                                    <div style={{ flexGrow: 1, minWidth: "20px", height: "1.5px", background: "rgba(17, 17, 17, 0.16)", margin: "0 1.5rem", position: "relative", top: "4px" }} />
+
                                     {/* Bold SVG chevron — clear and solid */}
                                     <svg
-                                        width="20" height="12" viewBox="0 0 20 12" fill="none"
+                                        width="16" height="10" viewBox="0 0 20 12" fill="none"
                                         style={{
                                             flexShrink: 0,
                                             transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
@@ -507,7 +509,7 @@ export default function GalleryPage() {
                                 </div>
                             </div>
 
-                            <div style={{ display: "grid", gridTemplateRows: isCollapsed ? "0fr" : "1fr", transition: "grid-template-rows 0.4s ease-out" }}>
+                            <div style={{ display: "grid", gridTemplateRows: isCollapsed ? "0fr" : "1fr", transition: "grid-template-rows 0.4s ease-out, opacity 0.3s ease", opacity: isCollapsed ? 0 : 1, pointerEvents: isCollapsed ? "none" : "auto" }}>
                                 <div style={{ overflow: "hidden", padding: "0 40px 50px 40px", margin: "0 -40px -50px -40px" }}>
                                     <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 0.5rem 2rem" : "2rem 2.5rem 3rem" }}>
                                         <div className={`art-grid`} style={{

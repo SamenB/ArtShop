@@ -176,7 +176,7 @@ export default function ArtworkDetailPage() {
 
     // Dynamic metrics to align elements with the current image's edges
     const activeImageMetrics = (function () {
-        if (!layoutMetrics.boxW || !layoutMetrics.boxH) return { w: 0, h: 0 };
+        if (!layoutMetrics.boxW || (layoutMetrics.winW >= 768 && !layoutMetrics.boxH)) return { w: 0, h: 0 };
         const idx = selectedImageIndex;
         const fallbackAspect = work.width_cm && work.height_cm ? work.width_cm / work.height_cm : (work.orientation === "horizontal" ? 1.5 : 0.75);
         const aspect = imageAspectRatios[idx] || fallbackAspect;
@@ -278,7 +278,7 @@ export default function ArtworkDetailPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "0",
-                    marginBottom: "2rem",
+                    marginBottom: layoutMetrics.winW < 768 ? "1rem" : "2rem",
                     fontFamily: "var(--font-sans)",
                     fontSize: "0.72rem",
                     letterSpacing: "0.14em",
@@ -401,7 +401,10 @@ export default function ArtworkDetailPage() {
                     </div>
                 </div>
 
-
+                {/* Mobile Title above the image */}
+                <div style={{ display: layoutMetrics.winW < 768 ? "block" : "none", marginBottom: "0.5rem", textAlign: "left" }}>
+                    <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
+                </div>
 
                 <div className={`grid grid-cols-1 items-start gap-12 lg:gap-16 ${work.orientation === "horizontal" ? "md:grid-cols-2" : "md:grid-cols-[1.25fr_1fr]"}`}>
 
@@ -423,8 +426,12 @@ export default function ArtworkDetailPage() {
                                             margin: "-60px -30px",
                                             padding: "60px 30px",
                                             width: "calc(100% + 60px)",
-                                            height: layoutMetrics.winW < 768 ? "auto" : "calc(100% + 120px)",
+                                            height: layoutMetrics.winW < 768 ? `calc(${activeImageMetrics.h}px + 120px + 32px + 24px)` : "calc(100% + 120px)",
+                                            transition: "height 0.4s cubic-bezier(0.25, 1, 0.5, 1)",
                                             overflow: "hidden",
+                                            /* Feather edge masks to smoothly dissolve sliding shadows instead of hard clipping */
+                                            WebkitMaskImage: "linear-gradient(to right, transparent 0px, black 15px, black calc(100% - 15px), transparent 100%)",
+                                            maskImage: "linear-gradient(to right, transparent 0px, black 15px, black calc(100% - 15px), transparent 100%)",
                                         }}
                                         onTouchStart={e => { hasTouch.current = true; setIsZooming(false); swipeRef.current = e.touches[0].clientX; }}
                                         onTouchEnd={e => {
@@ -441,7 +448,7 @@ export default function ArtworkDetailPage() {
                                                 display: "flex",
                                                 gap: "8rem", /* Massive 128px gap ensures adjacent 45px shadows cannot reach the 30px expanded viewing boundary */
                                                 width: "100%",
-                                                height: layoutMetrics.winW < 768 ? "auto" : "100%",
+                                                height: "100%",
                                                 transition: isZooming ? "none" : "transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)",
                                                 transform: `translateX(calc(-${selectedImageIndex * 100}% - ${selectedImageIndex * 8}rem))`,
                                             }}
@@ -610,29 +617,29 @@ export default function ArtworkDetailPage() {
                                     </button>
                                 </div>
 
-                                {/* Thumbnails strip - tracked exactly 30px beneath the top-aligned photo lower-border on PC, gracefully flowed on Mobile! */}
+                                {/* Thumbnails strip - strictly anchoring below the active image dynamically */}
                                 {images.length > 1 && (
                                     <div
                                         style={{
-                                            position: layoutMetrics.winW < 768 ? "relative" : "absolute",
+                                            position: "absolute",
+                                            bottom: layoutMetrics.winW < 768 ? "4px" : "auto",
                                             top: layoutMetrics.winW < 768 ? "auto" : `calc(${layoutMetrics.imgH}px + 2rem)`,
-                                            marginTop: layoutMetrics.winW < 768 ? "1.5rem" : "0",
+                                            marginTop: 0,
                                             width: "100%",
                                             overflowX: "auto",
                                             overflowY: "hidden",
                                             display: "flex",
                                             justifyContent: "center",
                                             alignItems: "center",
-                                            /* Massive vertical shadow clearance */
-                                            paddingTop: "40px",
-                                            transform: "translateY(-40px)", /* Counteract the padding visual shift perfectly without breaking flex margins */
-                                            paddingBottom: "50px",
-                                            marginBottom: "-50px", /* Pull layout back from bottom */
+                                            paddingTop: layoutMetrics.winW < 768 ? "0px" : "40px",
+                                            transform: layoutMetrics.winW < 768 ? "none" : "translateY(-40px)",
+                                            paddingBottom: layoutMetrics.winW < 768 ? "0px" : "50px",
+                                            marginBottom: layoutMetrics.winW < 768 ? "0" : "-50px",
                                             scrollbarWidth: "none",
                                             transition: "top 0.4s cubic-bezier(0.25, 1, 0.5, 1)",
                                             zIndex: 20
                                         }}>
-                                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", justifyContent: "center", paddingTop: "0.5rem", minWidth: "min-content" }}>
+                                        <div style={{ display: "inline-flex", alignItems: "center", gap: layoutMetrics.winW < 768 ? "0.25rem" : "0.5rem", justifyContent: "center", paddingTop: "0.5rem", minWidth: "min-content" }}>
                                             {images.map((img, idx) => {
                                                 const isActive = selectedImageIndex === idx;
                                                 return (
@@ -640,11 +647,11 @@ export default function ArtworkDetailPage() {
                                                         key={idx}
                                                         onClick={() => setSelectedImageIndex(idx)}
                                                         style={{
-                                                            height: "70px",
-                                                            width: "auto",         /* Width follows image natural proportions */
+                                                            height: layoutMetrics.winW < 768 ? "24px" : "70px",
+                                                            width: "auto",
                                                             padding: 0,
                                                             flexShrink: 0,
-                                                            margin: isActive ? "0 10px" : "0",
+                                                            margin: isActive ? (layoutMetrics.winW < 768 ? "0 4px" : "0 10px") : "0",
                                                             border: isActive
                                                                 ? "2px solid var(--color-charcoal)"
                                                                 : "2px solid transparent",
@@ -655,7 +662,7 @@ export default function ArtworkDetailPage() {
                                                             background: "none",
                                                             display: "block",
                                                             opacity: isActive ? 1 : 0.55,
-                                                            boxShadow: isActive ? "var(--shadow-card-deep)" : "var(--shadow-thumb)",
+                                                            boxShadow: isActive ? (layoutMetrics.winW < 768 ? "0 2px 6px rgba(0,0,0,0.15)" : "var(--shadow-card-deep)") : (layoutMetrics.winW < 768 ? "0 1px 3px rgba(0,0,0,0.08)" : "var(--shadow-thumb)"),
                                                             transition: "margin 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
                                                         }}
                                                         onMouseEnter={e => {
@@ -693,8 +700,8 @@ export default function ArtworkDetailPage() {
                     </div>{/* end .artwork-img-col / left cell */}
 
                     {/* ── Right: Purchase panel ── */}
-                    <div style={{ paddingTop: layoutMetrics.winW >= 768 ? "3rem" : "0", paddingBottom: "6rem" }}>
-                        <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.6rem, 5vw, 3.8rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
+                    <div style={{ marginTop: layoutMetrics.winW >= 768 ? "-1rem" : "0", paddingBottom: "6rem" }}>
+                        <h1 style={{ display: layoutMetrics.winW < 768 ? "none" : "block", fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
 
                         <div style={{ position: "relative", marginTop: "1rem" }}>
                             <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", marginLeft: "1rem" }}>
