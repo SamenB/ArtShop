@@ -195,23 +195,6 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                         {product.title}
                     </p>
 
-                    {!isMobile && product.description && (
-                        <p style={{
-                            fontFamily: "var(--font-sans)",
-                            fontSize: gridMode === "1" ? "0.82rem" : gridMode === "2" ? "0.74rem" : "0.68rem",
-                            fontWeight: 300, color: "#888",
-                            lineHeight: 1.5,
-                            margin: gridMode === "3" ? "0.1rem 0 0.2rem" : "0.15rem 0 0.35rem",
-                            display: "-webkit-box",
-                            WebkitLineClamp: gridMode === "1" ? 3 : gridMode === "2" ? 2 : 1,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: "92%"
-                        }}>
-                            {product.description}
-                        </p>
-                    )}
 
                     <p style={{
                         fontFamily: "var(--font-sans)",
@@ -240,21 +223,6 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                 </div>
             )}
 
-            {/* Minimal Info for Compact Mobile Grid (3-column) — Status Only */}
-            {gridMode === "3" && isMobile && (
-                <div style={{ paddingTop: "0.2rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column" }}>
-                    {st && (
-                        <p style={{
-                            fontFamily: "var(--font-sans)", fontSize: "0.6rem",
-                            fontWeight: 700, color: st.color, opacity: 0.9,
-                            margin: 0, letterSpacing: "0.03em",
-                            lineHeight: 1,
-                        }}>
-                            {st.label}
-                        </p>
-                    )}
-                </div>
-            )}
         </div>
     );
 }

@@ -338,6 +338,9 @@ export default async function Home() {
             gap: 4rem 100px;
             align-items: start;
           }
+          .recent-paintings-spacer {
+            display: none;
+          }
           @media (max-width: 768px) {
             .recent-paintings-scroll {
               display: flex !important;
@@ -360,6 +363,7 @@ export default async function Home() {
               scroll-snap-align: start !important;
             }
             .recent-paintings-spacer {
+              display: block !important;
               flex: 0 0 2rem !important;
               width: 2rem !important;
             }
