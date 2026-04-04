@@ -36,21 +36,21 @@ export default function Lightbox({
     startImageIndex?: number;
     onClose: () => void;
 }) {
-    const [wIdx, setWIdx]       = useState(startWorkIndex);
+    const [wIdx, setWIdx] = useState(startWorkIndex);
     const [imageIdx, setImageIdx] = useState(startImageIndex);
     const w = works[wIdx];
     const images = w.images || [];
 
     // ── Zoom / Pan ────────────────────────────────────────────────────────────
-    const [zoom, setZoom]     = useState(1);
+    const [zoom, setZoom] = useState(1);
     const [origin, setOrigin] = useState({ x: 50, y: 50 });
-    const [pan, setPan]       = useState({ x: 0, y: 0 });
+    const [pan, setPan] = useState({ x: 0, y: 0 });
 
-    const dragRef  = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+    const dragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
     const pinchRef = useRef<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
     const swipeRef = useRef<{ x: number; y: number } | null>(null);
-    const tapRef   = useRef<number>(0);
-    const imgRef   = useRef<HTMLDivElement>(null);
+    const tapRef = useRef<number>(0);
+    const imgRef = useRef<HTMLDivElement>(null);
 
     // Reset zoom on image/work change
     useEffect(() => {
@@ -86,8 +86,8 @@ export default function Lightbox({
     // ── Keyboard ──────────────────────────────────────────────────────────────
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
-            if (e.key === "Escape")     onClose();
-            if (e.key === "ArrowLeft")  prevImage();
+            if (e.key === "Escape") onClose();
+            if (e.key === "ArrowLeft") prevImage();
             if (e.key === "ArrowRight") nextImage();
         };
         window.addEventListener("keydown", h);
@@ -276,7 +276,7 @@ export default function Lightbox({
                 }}
             >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/>
+                    <line x1="1" y1="1" x2="11" y2="11" /><line x1="11" y1="1" x2="1" y2="11" />
                 </svg>
             </button>
 
@@ -304,7 +304,7 @@ export default function Lightbox({
                         onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.82)"; e.currentTarget.style.transform = "translateY(-50%) scale(1.08)"; }}
                         onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.18)"; e.currentTarget.style.transform = "translateY(-50%) scale(1)"; }}
                     >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
                     </button>
                     <button
                         onClick={e => { e.stopPropagation(); nextImage(); }}
@@ -327,7 +327,7 @@ export default function Lightbox({
                         onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.82)"; e.currentTarget.style.transform = "translateY(-50%) scale(1.08)"; }}
                         onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.18)"; e.currentTarget.style.transform = "translateY(-50%) scale(1)"; }}
                     >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
                     </button>
                 </>
             )}

@@ -75,6 +75,10 @@ export default function ArtworkDetailPage() {
     const [purchaseType, setPurchaseType] = useState<"original" | "print">("original");
     const [finish, setFinish] = useState<"Rolled" | "Framed">("Rolled");
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
+    
+    // Toggle these to switch designs easily
+    const mobileThumbsRound = true; 
+
 
     const swipeRef = useRef<number | null>(null);
     const hasTouch = useRef(false);
@@ -153,7 +157,7 @@ export default function ArtworkDetailPage() {
                 const slugs = items.map((a: { slug: string }) => a.slug).filter(Boolean);
                 setAllSlugs(slugs);
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -295,15 +299,56 @@ export default function ArtworkDetailPage() {
                         padding: "0 0.25rem",
                         gap: "0",
                     }}>
-                    {/* Next — LEFT */}
-                    {nextSlug ? (
-                        <Link
-                            href={`/artwork/${nextSlug}`}
-                            style={{
+                        {/* Next — LEFT */}
+                        {nextSlug ? (
+                            <Link
+                                href={`/artwork/${nextSlug}`}
+                                style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    padding: "0.65rem 1.4rem",
+                                    color: "var(--color-muted)",
+                                    textDecoration: "none",
+                                    transition: "color 0.2s",
+                                    whiteSpace: "nowrap",
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
+                            >
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="7,1 1,7 7,13" />
+                                </svg>
+                                Next
+                            </Link>
+                        ) : (
+                            <span style={{
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "0.5rem",
                                 padding: "0.65rem 1.4rem",
+                                color: "var(--color-border)",
+                                opacity: 0.35,
+                                whiteSpace: "nowrap",
+                                cursor: "default",
+                            }}>
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="7,1 1,7 7,13" />
+                                </svg>
+                                Next
+                            </span>
+                        )}
+
+                        {/* Divider */}
+                        <span style={{ width: "1px", height: "16px", background: "var(--color-border)", opacity: 0.5, flexShrink: 0 }} />
+
+                        {/* Center: All Works */}
+                        <Link
+                            href="/shop"
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "0.65rem 1.6rem",
                                 color: "var(--color-muted)",
                                 textDecoration: "none",
                                 transition: "color 0.2s",
@@ -312,92 +357,51 @@ export default function ArtworkDetailPage() {
                             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
                         >
-                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="7,1 1,7 7,13" />
-                            </svg>
-                            Next
+                            All Works
                         </Link>
-                    ) : (
-                        <span style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            padding: "0.65rem 1.4rem",
-                            color: "var(--color-border)",
-                            opacity: 0.35,
-                            whiteSpace: "nowrap",
-                            cursor: "default",
-                        }}>
-                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="7,1 1,7 7,13" />
-                            </svg>
-                            Next
-                        </span>
-                    )}
 
-                    {/* Divider */}
-                    <span style={{ width: "1px", height: "16px", background: "var(--color-border)", opacity: 0.5, flexShrink: 0 }} />
+                        {/* Divider */}
+                        <span style={{ width: "1px", height: "16px", background: "var(--color-border)", opacity: 0.5, flexShrink: 0 }} />
 
-                    {/* Center: All Works */}
-                    <Link
-                        href="/shop"
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "0.65rem 1.6rem",
-                            color: "var(--color-muted)",
-                            textDecoration: "none",
-                            transition: "color 0.2s",
-                            whiteSpace: "nowrap",
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
-                    >
-                        All Works
-                    </Link>
-
-                    {/* Divider */}
-                    <span style={{ width: "1px", height: "16px", background: "var(--color-border)", opacity: 0.5, flexShrink: 0 }} />
-
-                    {/* Prev — RIGHT */}
-                    {prevSlug ? (
-                        <Link
-                            href={`/artwork/${prevSlug}`}
-                            style={{
+                        {/* Prev — RIGHT */}
+                        {prevSlug ? (
+                            <Link
+                                href={`/artwork/${prevSlug}`}
+                                style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    padding: "0.65rem 1.4rem",
+                                    color: "var(--color-muted)",
+                                    textDecoration: "none",
+                                    transition: "color 0.2s",
+                                    whiteSpace: "nowrap",
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
+                            >
+                                Prev
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="1,1 7,7 1,13" />
+                                </svg>
+                            </Link>
+                        ) : (
+                            <span style={{
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "0.5rem",
                                 padding: "0.65rem 1.4rem",
-                                color: "var(--color-muted)",
-                                textDecoration: "none",
-                                transition: "color 0.2s",
+                                color: "var(--color-border)",
+                                opacity: 0.35,
                                 whiteSpace: "nowrap",
-                            }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
-                        >
-                            Prev
-                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="1,1 7,7 1,13" />
-                            </svg>
-                        </Link>
-                    ) : (
-                        <span style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            padding: "0.65rem 1.4rem",
-                            color: "var(--color-border)",
-                            opacity: 0.35,
-                            whiteSpace: "nowrap",
-                            cursor: "default",
-                        }}>
-                            Prev
-                            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="1,1 7,7 1,13" />
-                            </svg>
-                        </span>
-                    )}
+                                cursor: "default",
+                            }}>
+                                Prev
+                                <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="1,1 7,7 1,13" />
+                                </svg>
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -648,15 +652,15 @@ export default function ArtworkDetailPage() {
                                                         onClick={() => setSelectedImageIndex(idx)}
                                                         style={{
                                                             height: layoutMetrics.winW < 768 ? "24px" : "70px",
-                                                            width: "auto",
+                                                            width: layoutMetrics.winW < 768 ? (mobileThumbsRound ? "24px" : "auto") : "auto",
                                                             padding: 0,
                                                             flexShrink: 0,
                                                             margin: isActive ? (layoutMetrics.winW < 768 ? "0 4px" : "0 10px") : "0",
-                                                            border: isActive
-                                                                ? "2px solid var(--color-charcoal)"
-                                                                : "2px solid transparent",
+                                                            border: layoutMetrics.winW < 768 
+                                                                ? (isActive ? "2px solid #fff" : "2px solid transparent")
+                                                                : (isActive ? "2px solid var(--color-charcoal)" : "2px solid transparent"),
                                                             cursor: "pointer",
-                                                            borderRadius: "4px",
+                                                            borderRadius: layoutMetrics.winW < 768 && mobileThumbsRound ? "50%" : "4px",
                                                             overflow: "hidden",
                                                             outline: "none",
                                                             background: "none",
@@ -684,8 +688,9 @@ export default function ArtworkDetailPage() {
                                                             alt=""
                                                             style={{
                                                                 height: "100%",
-                                                                width: "auto",     /* Let image keep natural aspect ratio */
+                                                                width: layoutMetrics.winW < 768 && mobileThumbsRound ? "100%" : "auto",
                                                                 display: "block",
+                                                                objectFit: layoutMetrics.winW < 768 && mobileThumbsRound ? "cover" : "initial"
                                                             }}
                                                         />
                                                     </button>
