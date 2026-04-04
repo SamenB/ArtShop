@@ -210,7 +210,6 @@ export default function GalleryPage() {
     const [allCollections, setAllCollections] = useState<CollectionData[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortKey, setSortKey] = useState<SortKey>("default");
-    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
     const [lightbox, setLightbox] = useState<{ works: Artwork[]; index: number } | null>(null);
     const [cols, setCols] = useState(3);
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
@@ -381,9 +380,9 @@ export default function GalleryPage() {
             if (gridMode === "2") return "1rem";
             if (gridMode === "3") return "0.5rem";
         }
-        if (gridMode === "1") return "5rem 140px";
-        if (gridMode === "2") return "4rem 100px";
-        return "2.5rem 70px";
+        if (gridMode === "1") return "4rem 100px";
+        if (gridMode === "2") return "3rem 80px";
+        return "2rem 50px";
     };
 
     return (
@@ -491,21 +490,16 @@ export default function GalleryPage() {
             {/* Collections */}
             <div style={{ display: "flex", flexDirection: "column" }}>
                 {sorted.map(({ name, id, bg, works, totalInGroup }, idx) => {
-                    const isCollapsed = !!collapsed[name];
-
                     return (
-                        <section key={name} style={{ paddingBottom: "2rem", marginBottom: 0 }}>
+                        <section key={name} style={{ paddingBottom: "1.5rem", marginBottom: 0 }}>
                             {/* Collection header — full width bar */}
                             <div style={{ width: "100%" }}>
                                     <div
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => setCollapsed(p => ({ ...p, [name]: !p[name] }))}
                                         style={{
                                             maxWidth: "1600px", margin: "0 auto",
                                             width: "100%", display: "flex", alignItems: "center",
-                                            justifyContent: "space-between", padding: isMobile ? "1.5rem 1.25rem" : "2rem 2.5rem",
-                                            background: "none", border: "none", cursor: "pointer", textAlign: "center",
+                                            justifyContent: "space-between", padding: isMobile ? "0.5rem 1.25rem 0.5rem" : "0.5rem 2.5rem 1rem",
+                                            background: "none", border: "none", textAlign: "center",
                                         }}
                                     >
                                         {/* Spacer to balance the chevron on the right for true centering */}
@@ -552,22 +546,20 @@ export default function GalleryPage() {
                                         </div>
 
                                         <div style={{ width: "20px", display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-                                            <svg
-                                                width="16" height="10" viewBox="0 0 20 12" fill="none"
-                                                style={{
-                                                    transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                                                    transition: "transform 0.3s ease",
-                                                }}
-                                            >
-                                                <path d="M2 2L10 10L18 2" stroke="var(--color-charcoal-mid)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                            </svg>
+                                            {/* Removed Chevron */}
                                         </div>
                                     </div>
                             </div>
 
-                            <div style={{ display: "grid", gridTemplateRows: isCollapsed ? "0fr" : "1fr", transition: "grid-template-rows 0.4s ease-out, opacity 0.3s ease", opacity: isCollapsed ? 0 : 1, pointerEvents: isCollapsed ? "none" : "auto" }}>
-                                <div style={{ overflow: "hidden", padding: "0 40px 50px 40px", margin: "0 -40px -50px -40px" }}>
-                                    <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 0.5rem 2rem" : "2rem 2.5rem 3rem" }}>
+                            <div style={{ display: "block" }}>
+                                <div style={{ overflow: "hidden", padding: "0 20px 30px 20px", margin: "0 -20px -30px -20px" }}>
+                                    <div style={{
+                                         maxWidth: "1600px", 
+                                         margin: "0 auto", 
+                                         padding: isMobile ? "1rem 0.5rem" : "1.5rem 2.5rem",
+                                         backgroundColor: "rgba(26, 26, 24, 0.04)",
+                                         borderRadius: "8px"
+                                    }}>
                                         <div className={`art-grid`} style={{
                                             display: "grid",
                                             gridTemplateColumns: getColumns(),
