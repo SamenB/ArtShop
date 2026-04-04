@@ -4,6 +4,16 @@ import React, { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { artworkUrl, getImageUrl } from "@/utils";
 
+const STATUS: Record<string, { label: string; color: string }> = {
+  available: { label: "AVAILABLE", color: "#6DB87E" },
+  sold: { label: "SOLD", color: "#C0392B" },
+  reserved: { label: "RESERVED", color: "#D4A017" },
+  not_for_sale: { label: "NOT FOR SALE", color: "#999" },
+  on_exhibition: { label: "ON EXHIBITION", color: "#2980B9" },
+  archived: { label: "ARCHIVED", color: "#7f8c8d" },
+  digital: { label: "DIGITAL", color: "#8E44AD" },
+};
+
 interface Props {
   work: any;
   zoneH?: number;
@@ -95,19 +105,22 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
         )}
       </div>
 
-      {/* Title only — aligned to painting's left vertical edge */}
+      {/* Title & Status — aligned to painting's left vertical edge */}
       <div
         style={{
           paddingTop: "0.7rem",
           paddingLeft: `${textPad}px`,
           flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.15rem"
         }}
       >
         <p
           style={{
             fontFamily: "var(--font-serif)",
             fontSize: "1.05rem",
-            fontWeight: 400,
+            fontWeight: 500,
             fontStyle: "italic",
             color: "#666",
             margin: 0,
@@ -118,6 +131,20 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
           }}
         >
           {work.title}
+        </p>
+        <p style={{
+          fontFamily: "var(--font-sans)",
+          fontSize: "0.76rem",
+          fontWeight: 300,
+          color: "#aaa",
+          margin: 0,
+          lineHeight: 1.4,
+          letterSpacing: "0.01em",
+        }}>
+          Original
+          {work.original_status && STATUS[work.original_status] && (
+            <> — <span style={{ fontWeight: 700, color: STATUS[work.original_status].color, opacity: 0.9, letterSpacing: "0.03em" }}>{STATUS[work.original_status].label}</span></>
+          )}
         </p>
       </div>
     </Link>

@@ -70,21 +70,29 @@ const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
 // ── Status labels + colours ────────────────────────────────────────────────────
 const STATUS: Record<string, { label: string; color: string }> = {
-    sold:          { label: "SOLD",          color: "#C0392B" },
-    reserved:      { label: "RESERVED",      color: "#D4A017" },
-    not_for_sale:  { label: "Not for Sale",  color: "#999"    },
-    on_exhibition: { label: "On Exhibition", color: "#2980B9" },
-    archived:      { label: "Archived",      color: "#7f8c8d" },
-    digital:       { label: "Digital Only",  color: "#8E44AD" },
+    available: { label: "AVAILABLE", color: "#6DB87E" },
+    sold: { label: "SOLD", color: "#C0392B" },
+    reserved: { label: "RESERVED", color: "#D4A017" },
+    not_for_sale: { label: "NOT FOR SALE", color: "#999" },
+    on_exhibition: { label: "ON EXHIBITION", color: "#2980B9" },
+    archived: { label: "ARCHIVED", color: "#7f8c8d" },
+    digital: { label: "DIGITAL", color: "#8E44AD" },
 };
 
 // ── ART CARD ─────────────────────────────────────────────────────────────────
-function ArtCard({ work, onClick, zoneH }: { work: Artwork; onClick: () => void; zoneH: number }) {
+interface ArtCardProps {
+    work: Artwork;
+    onClick: () => void;
+    zoneH: number;
+    gridMode: string;
+    isMobile: boolean;
+}
+
+function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
     const ori = (work.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
-    const isSquare     = ori === "square";
+    const isSquare = ori === "square";
     const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") || "" : "";
-    const materialLabel = work.materials || work.medium || "Painting";
     const st = STATUS[work.original_status];
 
     /* ref-based text alignment to painting’s left edge */
@@ -132,7 +140,7 @@ function ArtCard({ work, onClick, zoneH }: { work: Artwork; onClick: () => void;
                         onLoad={recalc}
                         style={{
                             display: "block",
-                            maxWidth:  isHorizontal || isSquare ? "78%" : "80%",
+                            maxWidth: isHorizontal || isSquare ? "78%" : "80%",
                             maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
                             width: "auto", height: "auto",
                             borderRadius: "1px",
@@ -143,7 +151,7 @@ function ArtCard({ work, onClick, zoneH }: { work: Artwork; onClick: () => void;
                     />
                 ) : (
                     <div className="art-card-inner" style={{
-                        width:  isHorizontal || isSquare ? "78%" : "55%",
+                        width: isHorizontal || isSquare ? "78%" : "55%",
                         height: isHorizontal ? "55%" : "85%",
                         backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
                         borderRadius: "1px",
@@ -154,16 +162,51 @@ function ArtCard({ work, onClick, zoneH }: { work: Artwork; onClick: () => void;
                 )}
             </div>
 
-            {/* Title only — aligned to painting's left vertical edge */}
-            <div style={{ paddingTop: "0.7rem", paddingLeft: `${textPad}px`, flexShrink: 0 }}>
-                <p style={{
-                    fontFamily: "var(--font-serif)", fontSize: "1.05rem",
-                    fontWeight: 400, fontStyle: "italic",
-                    color: "#666", margin: 0,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    lineHeight: 1.35,
-                }}>{work.title}</p>
-            </div>
+            {/* Standard Title & Status — aligned to painting's left vertical edge */}
+            {gridMode !== "3" && (
+                <div style={{
+                    paddingTop: "0.7rem",
+                    paddingLeft: `${textPad}px`,
+                    flexShrink: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.1rem"
+                }}>
+                    <p style={{
+                        fontFamily: "var(--font-serif)",
+                        fontSize: gridMode === "1" ? "1.05rem" : "0.98rem",
+                        fontWeight: 400, fontStyle: "italic",
+                        color: "#666", margin: 0,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        lineHeight: 1.35,
+                    }}>{work.title}</p>
+                    <p style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: gridMode === "1" ? "0.76rem" : "0.72rem",
+                        fontWeight: 300, color: "#aaa", margin: 0,
+                        lineHeight: 1.4,
+                    }}>
+                        Original
+                        {st && <> — <span style={{ fontWeight: 600, color: st.color, opacity: 0.85, letterSpacing: "0.02em" }}>{st.label}</span></>}
+                    </p>
+                </div>
+            )}
+
+            {/* Minimal Info for Compact Mobile Grid (3-column) — Status Only */}
+            {gridMode === "3" && isMobile && (
+                <div style={{ paddingTop: "0.2rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column" }}>
+                    {st && (
+                        <p style={{
+                            fontFamily: "var(--font-sans)", fontSize: "0.6rem",
+                            fontWeight: 700, color: st.color, opacity: 0.9,
+                            margin: 0, letterSpacing: "0.03em",
+                            lineHeight: 1,
+                        }}>
+                            {st.label}
+                        </p>
+                    )}
+                </div>
+            )}
         </button>
     );
 }
@@ -186,43 +229,58 @@ export default function GalleryPage() {
 
     const [error, setError] = useState<string | null>(null);
 
+    // ── Scroll to top on mount ──
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            window.scrollTo({ top: 0, behavior: "instant" });
+        }
+    }, []);
+
+    // ── Responsive ──
+    useEffect(() => {
+        const update = () => setIsMobile(window.innerWidth < 1024);
+        update();
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+    }, []);
+
     useEffect(() => {
         Promise.all([
             fetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json()),
             fetch(`${getApiUrl()}/collections`).then(res => res.json())
         ])
-        .then(([artworksData, collectionsData]) => {
-            const rawData = artworksData.items || artworksData.data || artworksData;
-            if (!Array.isArray(rawData)) {
-                console.error("Expected array but got:", artworksData);
-                setError("Failed to load gallery. Please try again later.");
-                setLoading(false);
-                return;
-            }
-            const items = rawData.map((item: any, idx: number) => ({
-                ...item,
-                gradientFrom: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][0],
-                gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1]
-            }));
-            setAllArtworks(items);
+            .then(([artworksData, collectionsData]) => {
+                const rawData = artworksData.items || artworksData.data || artworksData;
+                if (!Array.isArray(rawData)) {
+                    console.error("Expected array but got:", artworksData);
+                    setError("Failed to load gallery. Please try again later.");
+                    setLoading(false);
+                    return;
+                }
+                const items = rawData.map((item: any, idx: number) => ({
+                    ...item,
+                    gradientFrom: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][0],
+                    gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1]
+                }));
+                setAllArtworks(items);
 
-            const cData = collectionsData.items || collectionsData.data || collectionsData;
-            if (Array.isArray(cData)) {
-                setAllCollections(cData);
-            }
-            
-            setLoading(false);
-        })
-        .catch(err => {
-            console.error(err);
-            setError("A network error occurred.");
-            setLoading(false);
-        });
+                const cData = collectionsData.items || collectionsData.data || collectionsData;
+                if (Array.isArray(cData)) {
+                    setAllCollections(cData);
+                }
+
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setError("A network error occurred.");
+                setLoading(false);
+            });
     }, []);
 
     const collectionsMap = useMemo(() => {
-        return allArtworks.reduce<Record<string, { id?: number, bg?: string, works: Artwork[] }>>((acc, a) => { 
-            let collectionName = "Original Paintings"; 
+        return allArtworks.reduce<Record<string, { id?: number, bg?: string, works: Artwork[] }>>((acc, a) => {
+            let collectionName = "Original Paintings";
             let collId: number | undefined;
             let bgStr: string | undefined;
 
@@ -236,8 +294,8 @@ export default function GalleryPage() {
             }
 
             if (!acc[collectionName]) acc[collectionName] = { id: collId, bg: bgStr, works: [] };
-            acc[collectionName].works.push(a); 
-            return acc; 
+            acc[collectionName].works.push(a);
+            return acc;
         }, {});
     }, [allArtworks, allCollections]);
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
@@ -270,7 +328,7 @@ export default function GalleryPage() {
     const sorted = useMemo(() => {
         // First group and sort all works
         const groups = Object.entries(collectionsMap).map(([name, data]) => ({ name, id: data.id, bg: data.bg, works: sortWorks(data.works, sortKey) }));
-        
+
         // Then limit the total number of works displayed across all groups to `visibleCount`
         let remaining = visibleCount;
         return groups.map(g => {
@@ -466,14 +524,14 @@ export default function GalleryPage() {
                                             {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
                                             {user?.is_admin && id && (
                                                 <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
-                                                    <input 
-                                                        type="color" 
-                                                        value={bg || "#404040"} 
-                                                        onChange={(e) => handleColorChange(id, e.target.value)} 
-                                                        style={{ 
-                                                            width: "24px", height: "24px", padding: "0", border: "1px solid #ccc", 
-                                                            borderRadius: "4px", cursor: "pointer", background: "none" 
-                                                        }} 
+                                                    <input
+                                                        type="color"
+                                                        value={bg || "#404040"}
+                                                        onChange={(e) => handleColorChange(id, e.target.value)}
+                                                        style={{
+                                                            width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
+                                                            borderRadius: "4px", cursor: "pointer", background: "none"
+                                                        }}
                                                         title="Pick Collection Background Color"
                                                     />
                                                     <button
@@ -520,7 +578,14 @@ export default function GalleryPage() {
                                             alignItems: "start",
                                         }}>
                                             {works.map((work, i) => (
-                                                <ArtCard key={work.id} work={work} onClick={() => setLightbox({ works, index: i })} zoneH={IMAGE_ZONE[gridMode] || 380} />
+                                                <ArtCard
+                                                    key={work.id}
+                                                    work={work}
+                                                    onClick={() => setLightbox({ works, index: i })}
+                                                    zoneH={IMAGE_ZONE[gridMode] || 380}
+                                                    gridMode={gridMode}
+                                                    isMobile={isMobile}
+                                                />
                                             ))}
                                         </div>
                                     </div>
@@ -530,7 +595,7 @@ export default function GalleryPage() {
                     );
                 })}
             </div>
-            
+
             {/* Infinite Scroll target marker */}
             {visibleCount < allArtworks.length && (
                 <div ref={loadMoreRef} style={{ height: "40px", paddingBottom: "4rem", display: "flex", justifyContent: "center" }}>

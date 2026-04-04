@@ -195,25 +195,9 @@ h3 {
     height: auto !important;
   }
 
-  .art-grid.dense .art-card>div:last-child {
-    padding-top: 0.4rem !important;
-    height: 4.8rem !important;
-    min-height: 4.8rem !important;
-    max-height: 4.8rem !important;
-    flex: 0 0 4.8rem !important;
-    overflow: hidden !important;
-  }
-
   .art-grid.dense .art-card p:first-child {
-    font-size: 0.8rem !important;
-    line-height: 1.35 !important;
     padding-bottom: 0.15rem !important;
     /* Prevents italic descenders from getting cropped by overflow: hidden */
-  }
-
-  .art-grid.dense .art-card p:nth-child(n+2) {
-    font-size: 0.55rem !important;
-    line-height: 1.2 !important;
   }
 }
 
@@ -234,7 +218,8 @@ h3 {
   .art-card-container {
     height: auto !important;
     aspect-ratio: auto !important;
-    margin-bottom: 0.1rem; /* Tightest possible gap between image and text */
+    margin-bottom: 0.1rem;
+    /* Tightest possible gap between image and text */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -249,13 +234,9 @@ h3 {
   .art-grid {
     /* Align whole cards by their vertical center in the row */
     /* This ensures images are on the same axis even if they have different heights */
-    align-items: center !important; 
-    row-gap: 1.5rem !important; /* Reduced vertical gap between rows */
-  }
-
-  /* Scale the title perfectly depending on column width */
-  .art-card p:first-child {
-    font-size: clamp(0.6rem, 8cqi, 1rem) !important;
+    align-items: center !important;
+    row-gap: 1.5rem !important;
+    /* Reduced vertical gap between rows */
   }
 }
 

@@ -368,7 +368,7 @@ export default async function Home() {
         <div className="recent-paintings-scroll">
           {/* Start Spacer for mobile edge-to-edge bleeding with correct gutter */}
           <div className="recent-paintings-spacer" aria-hidden="true" />
-          
+
           {featuredWorks.map((work) => (
             <div key={work.id} className="recent-paintings-item">
               <HomeArtCard work={work} zoneH={360} />

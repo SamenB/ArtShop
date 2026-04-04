@@ -229,7 +229,7 @@ export default function Navbar() {
     }, []);
 
     useEffect(() => {
-        const onResize = () => setIsMobile(window.innerWidth < 880); // Tighter breakpoint ~50px from logo
+        const onResize = () => setIsMobile(window.innerWidth < 768); 
         onResize();
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
@@ -698,6 +698,11 @@ export default function Navbar() {
                 When the user scrolls, this spacer scrolls UP and away, revealing the 
                 page content under the semi-transparent Navbar.
             */}
+            {/* 
+                SPACER / TRACKING BACKGROUND
+                This behaves as normal document flow. It pushes the page content down 
+                so it doesn't hide behind the fixed navbar on load.
+            */}
             <div 
                 style={{ 
                     width: "100%",
@@ -707,7 +712,7 @@ export default function Navbar() {
             />
             <style dangerouslySetInnerHTML={{__html: `
                 .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); }
-                @media (max-width: 880px) { .navbar-spacer-bg { height: 63px; } }
+                @media (max-width: 768px) { .navbar-spacer-bg { height: 63px; } }
             `}} />
         </>
     );

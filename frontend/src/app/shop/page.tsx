@@ -87,16 +87,17 @@ const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
 // ── Status labels + colours ──────────────────────────────────────────────────
 const STATUS: Record<string, { label: string; color: string }> = {
+    available: { label: "AVAILABLE", color: "#6DB87E" },
     sold: { label: "SOLD", color: "#C0392B" },
     reserved: { label: "RESERVED", color: "#D4A017" },
-    not_for_sale: { label: "Not for Sale", color: "#999" },
-    on_exhibition: { label: "On Exhibition", color: "#2980B9" },
-    archived: { label: "Archived", color: "#7f8c8d" },
-    digital: { label: "Digital Only", color: "#8E44AD" },
+    not_for_sale: { label: "NOT FOR SALE", color: "#999" },
+    on_exhibition: { label: "ON EXHIBITION", color: "#2980B9" },
+    archived: { label: "ARCHIVED", color: "#7f8c8d" },
+    digital: { label: "DIGITAL", color: "#8E44AD" },
 };
 
 // ── ProductCard ─────────────────────────────────────────────────────────────────
-function ProductCard({ product, zoneH }: { product: Product; zoneH: number }) {
+function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product; zoneH: number; gridMode: string; isMobile: boolean }) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
@@ -174,25 +175,86 @@ function ProductCard({ product, zoneH }: { product: Product; zoneH: number }) {
                     )}
                 </div>
             </Link>
-            {/* Text — aligned to painting's left vertical edge */}
-            <div style={{ paddingTop: "0.7rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column", gap: "0.08rem" }}>
-                <p style={{ fontFamily: "var(--font-serif)", fontSize: "1.05rem", fontWeight: 400, fontStyle: "italic", color: "#666", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.35 }}>
-                    {product.title}
-                </p>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.76rem", fontWeight: 300, color: "#bbb", lineHeight: 1.4, margin: 0 }}>
-                    {sizeStr}
-                </p>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.76rem", fontWeight: 300, color: "#aaa", lineHeight: 1.5, margin: 0 }}>
-                    Original {materialLabel}
-                    {product.original_status === "available" && <>{" "}<span style={{ fontWeight: 400, color: "#777" }}>{convertPrice(product.original_price)}</span></>}
-                    {st && <>{" "}- <span style={{ fontWeight: 600, color: st.color, opacity: 0.75 }}>{st.label}</span></>}
-                </p>
-                {product.has_prints && product.base_print_price && (
-                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.76rem", fontWeight: 300, color: "#bbb", lineHeight: 1.5, margin: 0 }}>
-                        Prints starting at <span style={{ fontWeight: 400, color: "#999" }}>{convertPrice(product.base_print_price)}</span>
+            {/* Standard Info — aligned to painting's left vertical edge */}
+            {(gridMode !== "3" || !isMobile) && (
+                <div style={{
+                    paddingTop: gridMode === "3" ? "0.5rem" : "0.7rem",
+                    paddingLeft: `${textPad}px`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.1rem"
+                }}>
+                    <p style={{
+                        fontFamily: "var(--font-serif)",
+                        fontSize: gridMode === "1" ? "1.05rem" : gridMode === "2" ? "0.98rem" : "0.86rem",
+                        fontWeight: 400, fontStyle: "italic",
+                        color: "#666", margin: 0,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        lineHeight: 1.35
+                    }}>
+                        {product.title}
                     </p>
-                )}
-            </div>
+
+                    {!isMobile && product.description && (
+                        <p style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: gridMode === "1" ? "0.82rem" : gridMode === "2" ? "0.74rem" : "0.68rem",
+                            fontWeight: 300, color: "#888",
+                            lineHeight: 1.5,
+                            margin: gridMode === "3" ? "0.1rem 0 0.2rem" : "0.15rem 0 0.35rem",
+                            display: "-webkit-box",
+                            WebkitLineClamp: gridMode === "1" ? 3 : gridMode === "2" ? 2 : 1,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: "92%"
+                        }}>
+                            {product.description}
+                        </p>
+                    )}
+
+                    <p style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: gridMode === "1" ? "0.76rem" : gridMode === "2" ? "0.72rem" : "0.65rem",
+                        fontWeight: 300, color: "#bbb", lineHeight: 1.4, margin: 0
+                    }}>
+                        {sizeStr}
+                    </p>
+                    <p style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: gridMode === "1" ? "0.76rem" : gridMode === "2" ? "0.72rem" : "0.65rem",
+                        fontWeight: 300, color: "#aaa", lineHeight: 1.5, margin: 0
+                    }}>
+                        Original
+                        {st && <> — <span style={{ fontWeight: 600, color: st.color, opacity: 0.85, letterSpacing: "0.02em" }}>{st.label}</span></>}
+                    </p>
+                    {product.has_prints && product.base_print_price && (
+                        <p style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: gridMode === "1" ? "0.76rem" : gridMode === "2" ? "0.72rem" : "0.65rem",
+                            fontWeight: 300, color: "#bbb", lineHeight: 1.5, margin: 0
+                        }}>
+                            Prints starting at <span style={{ fontWeight: 400, color: "#999" }}>{convertPrice(product.base_print_price)}</span>
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Minimal Info for Compact Mobile Grid (3-column) — Status Only */}
+            {gridMode === "3" && isMobile && (
+                <div style={{ paddingTop: "0.2rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column" }}>
+                    {st && (
+                        <p style={{
+                            fontFamily: "var(--font-sans)", fontSize: "0.6rem",
+                            fontWeight: 700, color: st.color, opacity: 0.9,
+                            margin: 0, letterSpacing: "0.03em",
+                            lineHeight: 1,
+                        }}>
+                            {st.label}
+                        </p>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -522,7 +584,7 @@ export default function ShopPage() {
 
     // ── Responsive ──────────────────────────────────────────────────────────
     useEffect(() => {
-        const update = () => setIsMobile(window.innerWidth < 768);
+        const update = () => setIsMobile(window.innerWidth < 1024);
         update();
         window.addEventListener("resize", update);
         return () => window.removeEventListener("resize", update);
@@ -781,6 +843,12 @@ export default function ShopPage() {
         </>
     );
 
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            window.scrollTo({ top: 0, behavior: "instant" });
+        }
+    }, []);
+
     return (
         <div style={{ backgroundColor: "#ffffff", color: "var(--color-charcoal)", minHeight: "100vh" }}>
             {/* Mobile filter drawer backdrop */}
@@ -873,7 +941,7 @@ export default function ShopPage() {
 
                     {!loading && !error && (filtered.length > 0 ? (
                         <div className="art-grid" style={{ display: "grid", gridTemplateColumns: getColumns(), justifyContent: "start", gap: getGap(), alignItems: "start" }}>
-                            {displayed.map(p => <ProductCard key={p.id} product={p} zoneH={IMAGE_ZONE[gridMode] || 380} />)}
+                            {displayed.map(p => <ProductCard key={p.id} product={p} zoneH={IMAGE_ZONE[gridMode] || 380} gridMode={gridMode} isMobile={isMobile} />)}
                         </div>
                     ) : (
                         <div style={{ textAlign: "center", padding: "5rem 1rem" }}>

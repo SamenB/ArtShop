@@ -52,13 +52,13 @@ const PRINT_SIZES = [
 ];
 
 const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string } | null> = {
-    available: { label: "Available", bg: "#6DB87E" },
-    sold: { label: "Sold", bg: "#D48A8A" },
-    reserved: { label: "Reserved", bg: "#C8B478" },
-    not_for_sale: { label: "Not for Sale", bg: "#b0b0b0" },
-    on_exhibition: { label: "On Exhibition", bg: "#8AACC8" },
+    available: { label: "AVAILABLE", bg: "#6DB87E" },
+    sold: { label: "SOLD", bg: "#D48A8A" },
+    reserved: { label: "RESERVED", bg: "#C8B478" },
+    not_for_sale: { label: "NOT FOR SALE", bg: "#b0b0b0" },
+    on_exhibition: { label: "ON EXHIBITION", bg: "#8AACC8" },
     archived: null,
-    digital: { label: "Digital", bg: "#B8A0D8" },
+    digital: { label: "DIGITAL", bg: "#B8A0D8" },
 };
 
 export default function ArtworkDetailPage() {
