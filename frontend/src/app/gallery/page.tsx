@@ -292,20 +292,23 @@ export default function GalleryPage() {
     }, [allArtworks, allCollections]);
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
+    // ── Grid mode persist (Separate for Mobile & PC) ─────────────────────────
     useEffect(() => {
-        const saved = sessionStorage.getItem("artshop_gallery_gridMode") as "1" | "2" | "3" | null;
+        const mob = window.innerWidth < 768;
+        const storageKey = mob ? "artshop_gallery_gridMode_mobile" : "artshop_gallery_gridMode_pc";
+        const saved = sessionStorage.getItem(storageKey) as "1" | "2" | "3" | null;
         if (saved === "1" || saved === "2" || saved === "3") {
             setGridMode(saved);
         } else {
             // Default: "3" (melkiy) on mobile, "2" (middle) on PC
-            const isMob = window.innerWidth < 768;
-            setGridMode(isMob ? "3" : "2");
+            setGridMode(mob ? "3" : "2");
         }
-    }, []);
+    }, [isMobile]);
 
     const handleSetGridMode = (val: "1" | "2" | "3") => {
         setGridMode(val);
-        sessionStorage.setItem("artshop_gallery_gridMode", val);
+        const storageKey = isMobile ? "artshop_gallery_gridMode_mobile" : "artshop_gallery_gridMode_pc";
+        sessionStorage.setItem(storageKey, val);
     };
 
     useEffect(() => {
@@ -494,71 +497,72 @@ export default function GalleryPage() {
                         <section key={name} style={{ paddingBottom: "2rem", marginBottom: 0 }}>
                             {/* Collection header — full width bar */}
                             <div style={{ width: "100%" }}>
-                                <div
-                                    role="button"
-                                    tabIndex={0}
-                                    onClick={() => setCollapsed(p => ({ ...p, [name]: !p[name] }))}
-                                    style={{
-                                        maxWidth: "1600px", margin: "0 auto",
-                                        width: "100%", display: "flex", alignItems: "center",
-                                        justifyContent: "space-between", padding: isMobile ? "1rem 1.25rem" : "1.25rem 2.5rem",
-                                        background: "none", border: "none", cursor: "pointer", textAlign: "left",
-                                    }}
-                                >
-                                    <div style={{ display: "flex", alignItems: "baseline", gap: "1rem", flexShrink: 0 }}>
-                                        <h2 style={{
-                                            fontFamily: "var(--font-artwork-title)",
-                                            fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
-                                            fontWeight: 400,
-                                            fontStyle: "normal",
-                                            color: "var(--color-charcoal)",
-                                            lineHeight: 1.2,
-                                        }}>{name}</h2>
-                                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: 300, color: "var(--color-muted)", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: "10px" }}>
-                                            {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
-                                            {user?.is_admin && id && (
-                                                <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
-                                                    <input
-                                                        type="color"
-                                                        value={bg || "#404040"}
-                                                        onChange={(e) => handleColorChange(id, e.target.value)}
-                                                        style={{
-                                                            width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
-                                                            borderRadius: "4px", cursor: "pointer", background: "none"
-                                                        }}
-                                                        title="Pick Collection Background Color"
-                                                    />
-                                                    <button
-                                                        onClick={() => handleColorChange(id, null)}
-                                                        style={{
-                                                            fontFamily: "var(--font-sans)", fontSize: "0.65rem", padding: "3px 6px",
-                                                            border: "1px solid rgba(26,26,24,0.2)", borderRadius: "4px", background: "transparent",
-                                                            cursor: "pointer", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em"
-                                                        }}
-                                                        title="Reset to default (approx 25% grey gradient)"
-                                                    >
-                                                        Reset
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </span>
-                                    </div>
-
-                                    {/* Thin connecting line spanning the flexible center area */}
-                                    <div style={{ flexGrow: 1, minWidth: "20px", height: "1.5px", background: "rgba(17, 17, 17, 0.16)", margin: "0 1.5rem", position: "relative", top: "4px" }} />
-
-                                    {/* Bold SVG chevron — clear and solid */}
-                                    <svg
-                                        width="16" height="10" viewBox="0 0 20 12" fill="none"
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => setCollapsed(p => ({ ...p, [name]: !p[name] }))}
                                         style={{
-                                            flexShrink: 0,
-                                            transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                                            transition: "transform 0.3s ease",
+                                            maxWidth: "1600px", margin: "0 auto",
+                                            width: "100%", display: "flex", alignItems: "center",
+                                            justifyContent: "space-between", padding: isMobile ? "1.5rem 1.25rem" : "2rem 2.5rem",
+                                            background: "none", border: "none", cursor: "pointer", textAlign: "center",
                                         }}
                                     >
-                                        <path d="M2 2L10 10L18 2" stroke="var(--color-charcoal-mid)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
+                                        {/* Spacer to balance the chevron on the right for true centering */}
+                                        <div style={{ width: "20px", flexShrink: 0 }} aria-hidden="true" />
+
+                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", flexGrow: 1 }}>
+                                            <h2 style={{
+                                                fontFamily: "var(--font-artwork-title)",
+                                                fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
+                                                fontWeight: 400,
+                                                fontStyle: "normal",
+                                                color: "var(--color-charcoal)",
+                                                lineHeight: 1.1,
+                                                margin: 0,
+                                            }}>{name}</h2>
+                                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: 300, color: "var(--color-muted)", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: "10px", justifyContent: "center" }}>
+                                                {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
+                                                {user?.is_admin && id && (
+                                                    <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
+                                                        <input
+                                                            type="color"
+                                                            value={bg || "#404040"}
+                                                            onChange={(e) => handleColorChange(id, e.target.value)}
+                                                            style={{
+                                                                width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
+                                                                borderRadius: "4px", cursor: "pointer", background: "none"
+                                                            }}
+                                                            title="Pick Collection Background Color"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleColorChange(id, null)}
+                                                            style={{
+                                                                fontFamily: "var(--font-sans)", fontSize: "0.65rem", padding: "3px 6px",
+                                                                border: "1px solid rgba(26,26,24,0.2)", borderRadius: "4px", background: "transparent",
+                                                                cursor: "pointer", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em"
+                                                            }}
+                                                            title="Reset to default (approx 25% grey gradient)"
+                                                        >
+                                                            Reset
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </span>
+                                        </div>
+
+                                        <div style={{ width: "20px", display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
+                                            <svg
+                                                width="16" height="10" viewBox="0 0 20 12" fill="none"
+                                                style={{
+                                                    transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                                                    transition: "transform 0.3s ease",
+                                                }}
+                                            >
+                                                <path d="M2 2L10 10L18 2" stroke="var(--color-charcoal-mid)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
                             </div>
 
                             <div style={{ display: "grid", gridTemplateRows: isCollapsed ? "0fr" : "1fr", transition: "grid-template-rows 0.4s ease-out, opacity 0.3s ease", opacity: isCollapsed ? 0 : 1, pointerEvents: isCollapsed ? "none" : "auto" }}>

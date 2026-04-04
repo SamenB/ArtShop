@@ -565,21 +565,23 @@ export default function ShopPage() {
         return () => window.removeEventListener("resize", update);
     }, []);
 
-    // ── Grid mode persist ───────────────────────────────────────────────────
+    // ── Grid mode persist (Separate for Mobile & PC) ─────────────────────────
     useEffect(() => {
-        const saved = sessionStorage.getItem("artshop_shop_gridMode") as "1" | "2" | "3" | null;
+        const mob = window.innerWidth < 1024;
+        const storageKey = mob ? "artshop_shop_gridMode_mobile" : "artshop_shop_gridMode_pc";
+        const saved = sessionStorage.getItem(storageKey) as "1" | "2" | "3" | null;
         if (saved === "1" || saved === "2" || saved === "3") {
             setGridMode(saved);
         } else {
             // Default: "1" (krupniy) on mobile, "2" (middle) on PC
-            const isMob = window.innerWidth < 1024;
-            setGridMode(isMob ? "1" : "2");
+            setGridMode(mob ? "1" : "2");
         }
-    }, []);
+    }, [isMobile]);
 
     const handleSetGridMode = (val: "1" | "2" | "3") => {
         setGridMode(val);
-        sessionStorage.setItem("artshop_shop_gridMode", val);
+        const storageKey = isMobile ? "artshop_shop_gridMode_mobile" : "artshop_shop_gridMode_pc";
+        sessionStorage.setItem(storageKey, val);
     };
 
     // ── Available years from data ───────────────────────────────────────────
