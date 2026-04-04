@@ -198,21 +198,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                 </div>
             )}
 
-            {/* Minimal Info for Compact Mobile Grid (3-column) — Status Only */}
-            {gridMode === "3" && isMobile && (
-                <div style={{ marginTop: `-${emptyBottom}px`, paddingTop: "0.2rem", paddingLeft: `${textPad}px`, display: "flex", flexDirection: "column" }}>
-                    {st && (
-                        <p style={{
-                            fontFamily: "var(--font-sans)", fontSize: "0.6rem",
-                            fontWeight: 700, color: st.color, opacity: 0.9,
-                            margin: 0, letterSpacing: "0.03em",
-                            lineHeight: 1,
-                        }}>
-                            {st.label}
-                        </p>
-                    )}
-                </div>
-            )}
+            {/* Minimal Info for Compact Mobile Grid (3-column) — Hidden as per request */}
         </button>
     );
 }
