@@ -402,7 +402,7 @@ export default function ArtworkDetailPage() {
                 </div>
 
                 {/* Mobile Title above the image */}
-                <div style={{ display: layoutMetrics.winW < 768 ? "block" : "none", marginBottom: "0.5rem", textAlign: "left" }}>
+                <div style={{ display: layoutMetrics.winW < 768 ? "block" : "none", marginBottom: "0.5rem", marginTop: layoutMetrics.winW < 768 ? "0.5rem" : "0", textAlign: "left" }}>
                     <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                 </div>
 
@@ -412,7 +412,7 @@ export default function ArtworkDetailPage() {
                     <div className="artwork-img-col">
 
                         {/* ── Image area: fills viewport height minus header-row ── */}
-                        <div className="artwork-img-area">
+                        <div className="artwork-img-area" style={{ marginTop: layoutMetrics.winW < 768 ? "-0.5rem" : "0" }}>
                             {/* Wrapper that leaves 130px safely at the bottom for thumbnails on PC, but just flows dynamically on Mobile */}
                             <div className="artwork-slider-wrap">
 
@@ -700,7 +700,7 @@ export default function ArtworkDetailPage() {
                     </div>{/* end .artwork-img-col / left cell */}
 
                     {/* ── Right: Purchase panel ── */}
-                    <div style={{ marginTop: layoutMetrics.winW >= 768 ? "-1rem" : "0", paddingBottom: "6rem" }}>
+                    <div style={{ marginTop: layoutMetrics.winW >= 768 ? "-1rem" : "0", paddingBottom: layoutMetrics.winW < 768 ? "1rem" : "6rem" }}>
                         <h1 style={{ display: layoutMetrics.winW < 768 ? "none" : "block", fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
 
                         <div style={{ position: "relative", marginTop: "1rem" }}>
@@ -771,7 +771,7 @@ export default function ArtworkDetailPage() {
                 </div>
 
                 {/* ── Artwork details section ── */}
-                <div style={{ marginTop: "6rem", borderTop: "1px solid var(--color-border)", paddingTop: "4rem" }}>
+                <div style={{ marginTop: layoutMetrics.winW < 768 ? "1.5rem" : "6rem", borderTop: "1px solid var(--color-border)", paddingTop: layoutMetrics.winW < 768 ? "2rem" : "4rem" }}>
                     <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", fontStyle: "italic", marginBottom: "3rem", textAlign: "center" }}>Artwork Details</h2>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "4rem" }}>
                         <div>
