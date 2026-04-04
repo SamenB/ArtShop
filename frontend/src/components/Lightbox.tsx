@@ -73,26 +73,34 @@ export default function Lightbox({
     }, []);
 
     // ── Navigation ────────────────────────────────────────────────────────────
-    const prevImage = useCallback(() => {
-        if (images.length > 1) setImageIdx(i => (i - 1 + images.length) % images.length);
-        else setWIdx(i => (i - 1 + works.length) % works.length);
-    }, [images.length, works.length]);
+    const handlePrev = useCallback(() => {
+        if (works.length > 1) {
+            setWIdx(i => (i - 1 + works.length) % works.length);
+            setImageIdx(0);
+        } else if (images.length > 1) {
+            setImageIdx(i => (i - 1 + images.length) % images.length);
+        }
+    }, [works.length, images.length]);
 
-    const nextImage = useCallback(() => {
-        if (images.length > 1) setImageIdx(i => (i + 1) % images.length);
-        else setWIdx(i => (i + 1) % works.length);
-    }, [images.length, works.length]);
+    const handleNext = useCallback(() => {
+        if (works.length > 1) {
+            setWIdx(i => (i + 1) % works.length);
+            setImageIdx(0);
+        } else if (images.length > 1) {
+            setImageIdx(i => (i + 1) % images.length);
+        }
+    }, [works.length, images.length]);
 
     // ── Keyboard ──────────────────────────────────────────────────────────────
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
             if (e.key === "Escape") onClose();
-            if (e.key === "ArrowLeft") prevImage();
-            if (e.key === "ArrowRight") nextImage();
+            if (e.key === "ArrowLeft") handlePrev();
+            if (e.key === "ArrowRight") handleNext();
         };
         window.addEventListener("keydown", h);
         return () => window.removeEventListener("keydown", h);
-    }, [onClose, prevImage, nextImage]);
+    }, [onClose, handlePrev, handleNext]);
 
     // ── Lock body scroll ──────────────────────────────────────────────────────
     useEffect(() => {
@@ -127,7 +135,7 @@ export default function Lightbox({
             style={{
                 position: "fixed", inset: 0, zIndex: 2000,
                 // Blur backdrop — show the blurred page behind
-                backgroundColor: "rgba(240, 238, 235, 0.55)",
+                backgroundColor: "rgba(252, 252, 252, 0.75)",
                 backdropFilter: "blur(22px)",
                 WebkitBackdropFilter: "blur(22px)",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -143,12 +151,33 @@ export default function Lightbox({
                 if (!swipeRef.current || zoom > 1) return;
                 const dx = swipeRef.current.x - e.changedTouches[0].clientX;
                 const dy = swipeRef.current.y - e.changedTouches[0].clientY;
+                // Swipe up or down to exit
                 if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 60) onClose();
-                else if (dx > 48) nextImage();
-                else if (dx < -48) prevImage();
+                else if (dx > 48) handleNext();
+                else if (dx < -48) handlePrev();
                 swipeRef.current = null;
             }}
         >
+            {/* ── Top Header ─────────────────────────────────────────────────── */}
+            <div 
+                className="lb-header"
+                style={{
+                    opacity: zoom > 1 ? 0 : 1,
+                    transition: "opacity 0.2s ease",
+                }}
+            >
+                <h2 className="lb-title" style={{
+                    fontFamily: "var(--font-artwork-title)",
+                    fontStyle: "normal",
+                    fontWeight: 400,
+                    color: "rgba(20,20,18,0.9)",
+                    margin: 0,
+                    textShadow: "0 2px 10px rgba(255,255,255,0.8)",
+                }}>
+                    {w.title}
+                </h2>
+            </div>
+
             {/* ── Image ──────────────────────────────────────────────────────── */}
             <div
                 ref={imgRef}
@@ -225,9 +254,10 @@ export default function Lightbox({
                     if (swipeRef.current !== null && zoom === 1 && e.changedTouches.length === 1) {
                         const dx = swipeRef.current.x - e.changedTouches[0].clientX;
                         const dy = swipeRef.current.y - e.changedTouches[0].clientY;
+                        // Swipe up or down to exit
                         if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 60) onClose();
-                        else if (dx > 48) nextImage();
-                        else if (dx < -48) prevImage();
+                        else if (dx > 48) handleNext();
+                        else if (dx < -48) handlePrev();
                         swipeRef.current = null;
                     }
                 }}
@@ -235,12 +265,7 @@ export default function Lightbox({
                 style={{
                     width: "100vw",
                     height: "100vh",
-                    backgroundImage: images[imageIdx]
-                        ? `url(${getImageUrl(images[imageIdx], "original")})`
-                        : `linear-gradient(160deg, ${w.gradientFrom} 0%, ${w.gradientTo} 100%)`,
-                    backgroundSize: "contain",
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "center",
+                    display: "flex", alignItems: "center", justifyContent: "center",
                     cursor: zoom > 1 ? (dragRef.current ? "grabbing" : "grab") : "default",
                     transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
                     transformOrigin: `${origin.x}% ${origin.y}%`,
@@ -248,7 +273,30 @@ export default function Lightbox({
                     userSelect: "none",
                     WebkitUserSelect: "none",
                 }}
-            />
+            >
+                {images[imageIdx] ? (
+                    <img
+                        src={getImageUrl(images[imageIdx], "original")}
+                        alt={w.title}
+                        draggable={false}
+                        style={{
+                            maxWidth: "94vw",
+                            maxHeight: "94vh",
+                            objectFit: "contain",
+                            boxShadow: "0 40px 90px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.12)",
+                            backgroundColor: "#fff",
+                            display: "block",
+                        }}
+                    />
+                ) : (
+                    <div style={{
+                        width: "94vw", height: "94vh",
+                        maxWidth: "800px", maxHeight: "800px",
+                        background: `linear-gradient(160deg, ${w.gradientFrom} 0%, ${w.gradientTo} 100%)`,
+                        boxShadow: "0 40px 90px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.12)",
+                    }} />
+                )}
+            </div>
 
             {/* ── Close button (only UI element) ─────────────────────────────── */}
             <button
@@ -284,7 +332,7 @@ export default function Lightbox({
             {canNav && (
                 <>
                     <button
-                        onClick={e => { e.stopPropagation(); prevImage(); }}
+                        onClick={e => { e.stopPropagation(); handlePrev(); }}
                         style={{
                             position: "absolute", left: "1.25rem", top: "50%",
                             transform: "translateY(-50%)", zIndex: 25,
@@ -307,7 +355,7 @@ export default function Lightbox({
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
                     </button>
                     <button
-                        onClick={e => { e.stopPropagation(); nextImage(); }}
+                        onClick={e => { e.stopPropagation(); handleNext(); }}
                         style={{
                             position: "absolute", right: "1.25rem", top: "50%",
                             transform: "translateY(-50%)", zIndex: 25,
@@ -336,6 +384,31 @@ export default function Lightbox({
             <style>{`
                 @media (hover: hover) and (pointer: fine) {
                     .lb-arrow { display: flex !important; }
+                }
+                .lb-header {
+                    position: absolute;
+                    top: 2.5rem;
+                    left: 0;
+                    right: 0;
+                    z-index: 25;
+                    padding: 0 1.5rem;
+                    display: flex;
+                    justify-content: center;
+                    pointer-events: none;
+                }
+                .lb-title {
+                    font-size: min(9vw, 2.4rem);
+                }
+                @media (min-width: 768px) {
+                    .lb-header {
+                        top: 2.5rem;
+                        left: 2.5rem;
+                        right: auto;
+                        justify-content: flex-start;
+                    }
+                    .lb-title {
+                        font-size: 2.4rem;
+                    }
                 }
             `}</style>
         </div>
