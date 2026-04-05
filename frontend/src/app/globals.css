@@ -73,7 +73,7 @@
 
 html {
   scroll-behavior: smooth;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -85,7 +85,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ─────────────────────────────────────────────
@@ -277,8 +277,6 @@ h3 {
     /* Align whole cards by their vertical center in the row */
     /* This ensures images are on the same axis even if they have different heights */
     align-items: center !important;
-    row-gap: 1.5rem !important;
-    /* Reduced vertical gap between rows */
   }
 }
 
@@ -406,7 +404,7 @@ h3 {
 .filter-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.45rem;
   cursor: pointer;
   padding: 0.35rem 0.2rem;
   user-select: none;
@@ -455,8 +453,48 @@ h3 {
 }
 
 /* Hide desktop sidebars on mobile to prevent hydration flashes on initial load/refresh */
+/* Hide desktop sidebars on mobile to prevent hydration flashes on initial load/refresh */
 @media (max-width: 1023px) {
   .shop-desktop-sidebar {
     display: none !important;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Premium Magnetic Scroll Animation (Scroll-Driven)
+   Mobile Only, no opacity fading.
+───────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  @keyframes magnetic-pull {
+    0% {
+      transform: translateY(60px) scale(0.96);
+    }
+    25% {
+      transform: translateY(45px) scale(0.98); /* Subtle tension phase */
+    }
+    100% {
+      transform: translateY(0) scale(1); /* Acceleration into place */
+    }
+  }
+
+  .magnetic-scroll {
+    /* Fallback for completely unsupported browsers */
+    transform: translateY(0);
+  }
+
+  @supports (animation-timeline: view()) {
+    .magnetic-scroll {
+      /* Map animation strictly to the scroll offset */
+      animation: magnetic-pull linear both;
+      animation-timeline: view();
+      /* Starts slightly after entering viewport, finishes when it covers 35% from bottom */
+      animation-range: entry 0% cover 22%;
+    }
+    
+    .magnetic-scroll-header {
+      animation: magnetic-pull linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 15%;
+    }
   }
 }

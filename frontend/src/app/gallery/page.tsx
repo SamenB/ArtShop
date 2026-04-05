@@ -117,7 +117,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
     return (
         <button
             onClick={onClick}
-            className="art-card"
+            className="art-card magnetic-scroll"
             style={{
                 display: "flex", flexDirection: "column",
                 cursor: "pointer", width: "100%",
@@ -129,6 +129,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                 ref={containerRef}
                 className="art-card-container"
                 style={{
+                    position: "relative",
                     width: "100%",
                     height: `${zoneH}px`,
                     display: "flex",
@@ -137,6 +138,38 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                     flexShrink: 0,
                 }}
             >
+                {/* Title below image — centered in a shadowed box, attached strictly to the painting edge */}
+                {gridMode !== "3" && (
+                    <div style={{
+                        position: "absolute",
+                        bottom: `${emptyBottom}px`,
+                        left: "50%",
+                        transform: `translateX(-50%) translateY(calc(100% + ${isMobile ? "0.4rem" : "0.6rem"}))`,
+                        maxWidth: `max(10px, calc(100% - ${textPad * 2}px))`, // Use max to prevent negative bounds before image loads
+                        pointerEvents: "none",
+                        padding: isMobile ? "0.15rem 0.5rem" : "0.2rem 0.7rem",
+                        backgroundColor: "transparent",
+                        textAlign: "center",
+                        zIndex: 2,
+                    }}>
+                        <p style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: isMobile ? (gridMode === "1" ? "0.85rem" : "0.78rem") : (gridMode === "1" ? "0.90rem" : "0.85rem"),
+                            fontWeight: 400,
+                            fontStyle: "italic",
+                            letterSpacing: "0.01em",
+                            color: "#666",
+                            margin: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            lineHeight: 1.2,
+                        }}>
+                            {work.title}
+                        </p>
+                    </div>
+                )}
+
                 {imgSrc ? (
                     <img
                         src={imgSrc}
@@ -166,39 +199,6 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                     }} />
                 )}
             </div>
-
-            {/* Standard Title & Status — aligned to painting's left vertical edge */}
-            {gridMode !== "3" && (
-                <div style={{
-                    marginTop: `-${emptyBottom}px`,
-                    paddingTop: "0.7rem",
-                    paddingLeft: `${textPad}px`,
-                    flexShrink: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.05rem"
-                }}>
-                    <p style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.98rem" : "0.92rem",
-                        fontWeight: 400, fontStyle: "italic", letterSpacing: "0.015em",
-                        color: "#666", margin: 0,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        lineHeight: 1.25,
-                    }}>{work.title}</p>
-                    <p style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.72rem" : "0.68rem",
-                        fontWeight: 300, color: "#aaa", margin: 0,
-                        lineHeight: 1.35,
-                    }}>
-                        Original
-                        {st && <> — <span style={{ fontWeight: 600, color: st.color, opacity: 0.85, letterSpacing: "0.02em" }}>{st.label}</span></>}
-                    </p>
-                </div>
-            )}
-
-            {/* Minimal Info for Compact Mobile Grid (3-column) — Hidden as per request */}
         </button>
     );
 }
@@ -493,7 +493,7 @@ export default function GalleryPage() {
                     return (
                         <section key={name} style={{ paddingBottom: "1.5rem", marginBottom: 0 }}>
                             {/* Collection header — full width bar */}
-                            <div style={{ width: "100%" }}>
+                            <div className="magnetic-scroll-header" style={{ width: "100%" }}>
                                     <div
                                         style={{
                                             maxWidth: "1600px", margin: "0 auto",
@@ -553,9 +553,9 @@ export default function GalleryPage() {
 
                             <div style={{ display: "block" }}>
                                 <div style={{ overflow: "hidden", padding: "0 0 30px 0", margin: "0" }}>
-                                    <div style={{
+                                    <div className="magnetic-scroll" style={{
                                          width: "100%", 
-                                         padding: isMobile ? "1rem 1.25rem" : "1.5rem 0",
+                                         padding: isMobile ? "1rem 1.25rem 2rem" : "1.5rem 0 3.5rem",
                                          backgroundColor: "rgba(26, 26, 24, 0.04)",
                                     }}>
                                         <div className={`art-grid`} style={{

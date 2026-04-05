@@ -137,7 +137,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
     }, [product, units]);
 
     return (
-        <div className="art-card" style={{ display: "flex", flexDirection: "column", width: "100%", padding: 0 }}>
+        <div className="art-card magnetic-scroll" style={{ display: "flex", flexDirection: "column", width: "100%", padding: 0 }}>
             <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%" }}>
                 <div
                     ref={containerRef}
@@ -236,7 +236,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
 
 
 // ── FilterCheckbox ────────────────────────────────────────────────────────────
-function FilterCheckbox({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterCheckbox({ label, active, onClick, isMobile }: { label: string; active: boolean; onClick: () => void; isMobile?: boolean }) {
     return (
         // CSS .filter-item:hover handled in globals.css — works for Apple Pencil,
         // mouse, and touch. No JS state needed.
@@ -255,7 +255,14 @@ function FilterCheckbox({ label, active, onClick }: { label: string; active: boo
             </span>
             <span
                 className="filter-item-text"
-                style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", fontWeight: active ? 500 : 400, color: active ? "#1a1a18" : "#6a6a68", transition: "color 0.15s", lineHeight: 1.45 }}
+                style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "0.85rem",
+                    fontWeight: isMobile ? (active ? 500 : 400) : (active ? 600 : 500),
+                    color: active ? "#1a1a18" : "#6a6a68",
+                    transition: "color 0.15s",
+                    lineHeight: 1.45
+                }}
             >
                 {label}
             </span>
@@ -265,7 +272,7 @@ function FilterCheckbox({ label, active, onClick }: { label: string; active: boo
 }
 
 // ── SidebarSection ────────────────────────────────────────────────────────────
-function SidebarSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+function SidebarSection({ title, children, defaultOpen = true, isMobile }: { title: string; children: React.ReactNode; defaultOpen?: boolean; isMobile?: boolean }) {
     const [open, setOpen] = useState(defaultOpen);
     return (
         <div style={{ borderBottom: "1px solid rgba(26,26,24,0.09)" }}>
@@ -273,7 +280,14 @@ function SidebarSection({ title, children, defaultOpen = true }: { title: string
                 onClick={() => setOpen(!open)}
                 className="filter-section-btn"
             >
-                <span className="filter-section-title" style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.13em", textTransform: "uppercase", color: "#1a1a18" }}>{title}</span>
+                <span className="filter-section-title" style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "0.7rem",
+                    fontWeight: isMobile ? 600 : 750,
+                    letterSpacing: "0.13em",
+                    textTransform: "uppercase",
+                    color: "#1a1a18"
+                }}>{title}</span>
                 <svg className="filter-section-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ transition: "transform 0.22s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
                     <path d="M1 1L5 5L9 1" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -437,7 +451,7 @@ function DualRangeSlider({
 }
 
 // ── PriceRangeSection ─────────────────────────────────────────────────────────
-function PriceRangeSection({ min, max, onChange }: { min: number; max: number; onChange: (min: number, max: number) => void }) {
+function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max: number; onChange: (min: number, max: number) => void; isMobile?: boolean }) {
     const [open, setOpen] = useState(false);
     const [localMin, setLocalMin] = useState(min);
     const [localMax, setLocalMax] = useState(max);
@@ -458,7 +472,14 @@ function PriceRangeSection({ min, max, onChange }: { min: number; max: number; o
                 onClick={() => setOpen(!open)}
                 className="filter-section-btn"
             >
-                <span className="filter-section-title" style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.13em", textTransform: "uppercase", color: "#1a1a18" }}>Price</span>
+                <span className="filter-section-title" style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "0.7rem",
+                    fontWeight: isMobile ? 600 : 750,
+                    letterSpacing: "0.13em",
+                    textTransform: "uppercase",
+                    color: "#1a1a18"
+                }}>Price</span>
                 <svg className="filter-section-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ transition: "transform 0.22s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)", flexShrink: 0 }}>
                     <path d="M1 1L5 5L9 1" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -475,6 +496,7 @@ function PriceRangeSection({ min, max, onChange }: { min: number; max: number; o
                                 label={p.label}
                                 active={localMin === p.min && localMax === p.max}
                                 onClick={() => { setLocalMin(p.min); setLocalMax(p.max); onChange(p.min, p.max); }}
+                                isMobile={isMobile}
                             />
                         ))}
                         {/* Custom range */}
@@ -652,8 +674,7 @@ export default function ShopPage() {
         // Price
         if (priceMin > 0 || priceMax < 999999) {
             list = list.filter(p => {
-                const price = p.original_price || globalPrintPrice;
-                return price >= priceMin && price <= priceMax;
+                return p.original_status === "available" && p.original_price && p.original_price >= priceMin && p.original_price <= priceMax;
             });
         }
 
@@ -744,7 +765,7 @@ export default function ShopPage() {
         return "repeat(auto-fill, minmax(220px, 1fr))";
     };
     const getGap = () => {
-        if (isMobile) { if (gridMode === "1") return "4.5rem"; if (gridMode === "2") return "1rem"; return "0.5rem"; }
+        if (isMobile) { if (gridMode === "1") return "2.25rem"; if (gridMode === "2") return "1rem"; return "0.5rem"; }
         if (gridMode === "1") return "5rem 140px"; if (gridMode === "2") return "4rem 100px"; return "2.5rem 70px";
     };
 
@@ -752,16 +773,16 @@ export default function ShopPage() {
     const filtersJSX = (
         <>
             {/* 1. Category */}
-            <SidebarSection title="Category" defaultOpen={false}>
-                <FilterCheckbox label="Available Originals" active={categoryFilter.includes("originals")} onClick={() => toggleStr(setCategoryFilter, "originals")} />
-                <FilterCheckbox label="Prints Available" active={categoryFilter.includes("prints")} onClick={() => toggleStr(setCategoryFilter, "prints")} />
+            <SidebarSection title="Category" defaultOpen={false} isMobile={isMobile}>
+                <FilterCheckbox label="Available Originals" active={categoryFilter.includes("originals")} onClick={() => toggleStr(setCategoryFilter, "originals")} isMobile={isMobile} />
+                <FilterCheckbox label="Prints Available" active={categoryFilter.includes("prints")} onClick={() => toggleStr(setCategoryFilter, "prints")} isMobile={isMobile} />
             </SidebarSection>
 
             {/* 2. Price */}
-            <PriceRangeSection min={priceMin} max={priceMax} onChange={(mn, mx) => { setPriceMin(mn); setPriceMax(mx); }} />
+            <PriceRangeSection min={priceMin} max={priceMax} onChange={(mn, mx) => { setPriceMin(mn); setPriceMax(mx); }} isMobile={isMobile} />
 
             {/* 3. Size — Width & Height sliders */}
-            <SidebarSection title="Size" defaultOpen={false}>
+            <SidebarSection title="Size" defaultOpen={false} isMobile={isMobile}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", alignItems: "center" }}>
                     <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>({units})</span>
                 </div>
@@ -792,34 +813,34 @@ export default function ShopPage() {
             </SidebarSection>
 
             {/* 4. Year */}
-            <SidebarSection title="Year" defaultOpen={false}>
+            <SidebarSection title="Year" defaultOpen={false} isMobile={isMobile}>
                 {availableYears.length > 0 ? availableYears.map(y => (
-                    <FilterCheckbox key={y} label={String(y)} active={activeYears.includes(y)} onClick={() => toggleNum(setActiveYears, y)} />
+                    <FilterCheckbox key={y} label={String(y)} active={activeYears.includes(y)} onClick={() => toggleNum(setActiveYears, y)} isMobile={isMobile} />
                 )) : (
                     <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#bbb", fontStyle: "italic" }}>No year data yet</span>
                 )}
             </SidebarSection>
 
             {/* 5. Orientation */}
-            <SidebarSection title="Orientation" defaultOpen={false}>
-                <FilterCheckbox label="Horizontal" active={activeOrientations.includes("horizontal")} onClick={() => toggleStr(setActiveOrientations, "horizontal")} />
-                <FilterCheckbox label="Vertical" active={activeOrientations.includes("vertical")} onClick={() => toggleStr(setActiveOrientations, "vertical")} />
-                <FilterCheckbox label="Square" active={activeOrientations.includes("square")} onClick={() => toggleStr(setActiveOrientations, "square")} />
+            <SidebarSection title="Orientation" defaultOpen={false} isMobile={isMobile}>
+                <FilterCheckbox label="Horizontal" active={activeOrientations.includes("horizontal")} onClick={() => toggleStr(setActiveOrientations, "horizontal")} isMobile={isMobile} />
+                <FilterCheckbox label="Vertical" active={activeOrientations.includes("vertical")} onClick={() => toggleStr(setActiveOrientations, "vertical")} isMobile={isMobile} />
+                <FilterCheckbox label="Square" active={activeOrientations.includes("square")} onClick={() => toggleStr(setActiveOrientations, "square")} isMobile={isMobile} />
             </SidebarSection>
 
             {/* 6. Collections */}
             {collections.length > 0 && (
-                <SidebarSection title="Collections" defaultOpen={false}>
+                <SidebarSection title="Collections" defaultOpen={false} isMobile={isMobile}>
                     {collections.map(c => (
-                        <FilterCheckbox key={c.id} label={c.title} active={activeCollections.includes(c.id)} onClick={() => toggleNum(setActiveCollections, c.id)} />
+                        <FilterCheckbox key={c.id} label={c.title} active={activeCollections.includes(c.id)} onClick={() => toggleNum(setActiveCollections, c.id)} isMobile={isMobile} />
                     ))}
                 </SidebarSection>
             )}
 
             {/* 7. Medium */}
-            <SidebarSection title="Medium" defaultOpen={false}>
+            <SidebarSection title="Medium" defaultOpen={false} isMobile={isMobile}>
                 {mediumTags.length > 0 ? mediumTags.map(t => (
-                    <FilterCheckbox key={t.id} label={t.title} active={activeMediums.includes(t.id)} onClick={() => toggleNum(setActiveMediums, t.id)} />
+                    <FilterCheckbox key={t.id} label={t.title} active={activeMediums.includes(t.id)} onClick={() => toggleNum(setActiveMediums, t.id)} isMobile={isMobile} />
                 )) : (
                     <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#bbb", fontStyle: "italic" }}>Add medium tags in dashboard → Labels &amp; Tags</span>
                 )}
@@ -859,7 +880,7 @@ export default function ShopPage() {
             {/* Layout */}
             <div style={{ display: "flex", gap: "0", alignItems: "flex-start" }}>
                 {/* Desktop sidebar — 240px to fit price inputs comfortably */}
-                <aside className="shop-desktop-sidebar" style={{ width: "240px", minWidth: "240px", flexShrink: 0, paddingLeft: "2.5rem", paddingRight: "1.5rem", paddingTop: "1rem", borderRight: "1px solid rgba(26,26,24,0.07)" }}>
+                <aside className="shop-desktop-sidebar" style={{ width: "240px", minWidth: "240px", flexShrink: 0, paddingLeft: "1.25rem", paddingRight: "1.5rem", paddingTop: "1.25rem", borderRight: "1px solid rgba(26,26,24,0.07)" }}>
                     {/* Always reserve space → no layout shift when Clear all appears */}
                     <button
                         onClick={clearAll}
