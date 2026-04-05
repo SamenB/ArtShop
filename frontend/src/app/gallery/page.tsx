@@ -176,21 +176,21 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                     flexShrink: 0,
                     display: "flex",
                     flexDirection: "column",
-                    gap: "0.1rem"
+                    gap: "0.05rem"
                 }}>
                     <p style={{
-                        fontFamily: "var(--font-serif)",
-                        fontSize: gridMode === "1" ? "1.05rem" : "0.98rem",
-                        fontWeight: 400, fontStyle: "italic",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: gridMode === "1" ? "0.98rem" : "0.92rem",
+                        fontWeight: 400, fontStyle: "italic", letterSpacing: "0.015em",
                         color: "#666", margin: 0,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        lineHeight: 1.35,
+                        lineHeight: 1.25,
                     }}>{work.title}</p>
                     <p style={{
                         fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.76rem" : "0.72rem",
+                        fontSize: gridMode === "1" ? "0.72rem" : "0.68rem",
                         fontWeight: 300, color: "#aaa", margin: 0,
-                        lineHeight: 1.4,
+                        lineHeight: 1.35,
                     }}>
                         Original
                         {st && <> — <span style={{ fontWeight: 600, color: st.color, opacity: 0.85, letterSpacing: "0.02em" }}>{st.label}</span></>}
@@ -376,7 +376,7 @@ export default function GalleryPage() {
 
     const getGap = () => {
         if (isMobile) {
-            if (gridMode === "1") return "2rem";
+            if (gridMode === "1") return "3.2rem";
             if (gridMode === "2") return "1rem";
             if (gridMode === "3") return "0.5rem";
         }

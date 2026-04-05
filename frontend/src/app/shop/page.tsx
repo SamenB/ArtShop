@@ -189,15 +189,15 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     paddingLeft: `${textPad}px`,
                     display: "flex",
                     flexDirection: "column",
-                    gap: "0.1rem"
+                    gap: "0rem"
                 }}>
                     <p style={{
-                        fontFamily: "var(--font-serif)",
-                        fontSize: gridMode === "1" ? "1.05rem" : gridMode === "2" ? "0.98rem" : "0.86rem",
-                        fontWeight: 400, fontStyle: "italic",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: gridMode === "1" ? "0.90rem" : gridMode === "2" ? "0.85rem" : "0.78rem",
+                        fontWeight: 400, fontStyle: "italic", letterSpacing: "0.01em",
                         color: "#666", margin: 0,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        lineHeight: 1.35
+                        lineHeight: 1.2
                     }}>
                         {product.title}
                     </p>
@@ -205,15 +205,15 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
 
                     <p style={{
                         fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.76rem" : gridMode === "2" ? "0.72rem" : "0.65rem",
-                        fontWeight: 300, color: "#bbb", lineHeight: 1.4, margin: 0
+                        fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                        fontWeight: 300, color: "#bbb", lineHeight: 1.2, margin: 0
                     }}>
                         {sizeStr}
                     </p>
                     <p style={{
                         fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.76rem" : gridMode === "2" ? "0.72rem" : "0.65rem",
-                        fontWeight: 300, color: "#aaa", lineHeight: 1.5, margin: 0
+                        fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                        fontWeight: 300, color: "#aaa", lineHeight: 1.2, margin: 0
                     }}>
                         Original
                         {st && <> — <span style={{ fontWeight: 600, color: st.color, opacity: 0.85, letterSpacing: "0.02em" }}>{st.label}</span></>}
@@ -221,8 +221,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     {product.has_prints && product.base_print_price && (
                         <p style={{
                             fontFamily: "var(--font-sans)",
-                            fontSize: gridMode === "1" ? "0.76rem" : gridMode === "2" ? "0.72rem" : "0.65rem",
-                            fontWeight: 300, color: "#bbb", lineHeight: 1.5, margin: 0
+                            fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                            fontWeight: 300, color: "#bbb", lineHeight: 1.2, margin: 0
                         }}>
                             Prints starting at <span style={{ fontWeight: 400, color: "#999" }}>{convertPrice(product.base_print_price)}</span>
                         </p>
@@ -744,7 +744,7 @@ export default function ShopPage() {
         return "repeat(auto-fill, minmax(220px, 1fr))";
     };
     const getGap = () => {
-        if (isMobile) { if (gridMode === "1") return "2rem"; if (gridMode === "2") return "1rem"; return "0.5rem"; }
+        if (isMobile) { if (gridMode === "1") return "4.5rem"; if (gridMode === "2") return "1rem"; return "0.5rem"; }
         if (gridMode === "1") return "5rem 140px"; if (gridMode === "2") return "4rem 100px"; return "2.5rem 70px";
     };
 
