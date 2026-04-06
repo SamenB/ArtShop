@@ -1,18 +1,29 @@
 "use client";
+
+/**
+ * Collections Management Tab.
+ * Allows administrators to create and delete collections used to group artworks.
+ */
+
 import { useState, useEffect } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
+/** Represents a collection entity. */
 interface Collection {
     id: number;
     title: string;
 }
 
+/**
+ * Main component for the Collections tab in the admin dashboard.
+ */
 export default function CollectionsTab() {
     const [collections, setCollections] = useState<Collection[]>([]);
     const [loading, setLoading] = useState(true);
     const [newTitle, setNewTitle] = useState("");
     const [saving, setSaving] = useState(false);
 
+    /** Fetches the latest list of collections from the API. */
     const fetchCollections = async () => {
         try {
             const res = await apiFetch(`${getApiUrl()}/collections`);
@@ -31,6 +42,7 @@ export default function CollectionsTab() {
         fetchCollections();
     }, []);
 
+    /** Handles the submission of a new collection. */
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTitle.trim()) return;
@@ -58,6 +70,7 @@ export default function CollectionsTab() {
         }
     };
 
+    /** Removes a specific collection by its ID. */
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this collection? Note: Artworks in this collection will remain but their collection reference might be broken.")) return;
         try {
@@ -85,7 +98,7 @@ export default function CollectionsTab() {
                     type="text" 
                     value={newTitle} 
                     onChange={e => setNewTitle(e.target.value)} 
-                    placeholder="New Collection Title (e.g. Scetches, Nature)" 
+                    placeholder="New Collection Title (e.g. Sketches, Nature)" 
                     className="flex-1 bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white"
                 />
                 <button 

@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Homepage Artwork Display Card.
+ * Renders an abstract container that dynamically frames artwork based on its physical properties (orientation, gradient).
+ */
+
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { artworkUrl, getImageUrl } from "@/utils";

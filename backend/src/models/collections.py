@@ -1,3 +1,6 @@
+"""
+SQLAlchemy database model for artwork collections.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -12,11 +15,17 @@ if TYPE_CHECKING:
 
 
 class CollectionsOrm(Base):
+    """
+    Represents a group of artworks (e.g., 'Nature', 'Abstract').
+    Used for categorizing artworks and applying visual styles (bg_color) on the frontend.
+    """
     __tablename__ = "collections"
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     title: Mapped[str] = mapped_column(String(100), unique=True)
     bg_color: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Relationships
     artworks: Mapped[list["ArtworksOrm"]] = relationship(back_populates="collection")
 
     def __str__(self):

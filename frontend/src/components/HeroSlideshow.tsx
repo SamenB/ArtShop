@@ -2,20 +2,22 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
+/** Defines the source structure for responsive slideshow layers. */
 interface CoverSlide {
   desktopUrl: string;
   mobileUrl: string;
 }
 
+/** Configures the pacing and visual effects for the Hero Slideshow. */
 interface HeroSlideshowProps {
   covers: CoverSlide[];
   kenBurnsEnabled?: boolean;
-  slideDuration?: number; // seconds
+  slideDuration?: number; // duration in seconds
 }
 
-/*
- * Ken Burns directions — subtle, cinematic camera movements.
- * Each slide gets a different motion to keep the experience varied.
+/**
+ * Precomputed Ken Burns cinematic directions.
+ * Each progression gets a slightly different focal vector to prevent visual fatigue.
  */
 const KEN_BURNS_PRESETS = [
   { from: "scale(1.0) translate(0%, 0%)",          to: "scale(1.08) translate(-1%, -0.3%)" },
@@ -25,31 +27,29 @@ const KEN_BURNS_PRESETS = [
   { from: "scale(1.0) translate(0%, 0%)",          to: "scale(1.06) translate(0%, -0.5%)" },
 ];
 
-const CROSSFADE_DURATION = 2000;    // 2s crossfade
-const INITIAL_FADE_DURATION = 500;  // 500ms — fast initial appearance
-const KEN_BURNS_DURATION = 22000;   // 22s — very slow, cinematic
+const CROSSFADE_DURATION = 2000;    
+const INITIAL_FADE_DURATION = 500;  
+const KEN_BURNS_DURATION = 22000;   
 
 /**
- * Dual-layer slideshow: Layer A and Layer B alternate.
- * One layer is always fully visible while the other fades in on top.
- * When fade completes, the bottom layer updates its image (invisible, behind the top).
- * This eliminates any white flash between transitions.
+ * Dual-layer cinematic slideshow component.
+ * Maintains Layer A and Layer B alternating visibility to perform seamless, flash-free image crossfades.
  */
 export default function HeroSlideshow({
   covers,
   kenBurnsEnabled = true,
   slideDuration = 15,
 }: HeroSlideshowProps) {
-  // Track which slide index each layer shows
+  // Track which slide index each rendering layer is currently projecting
   const [layerA, setLayerA] = useState(0);
   const [layerB, setLayerB] = useState(1 % covers.length);
-  // Which layer is currently on top (visible): "A" or "B"
+  // Identifies the dominant (top) layer: "A" or "B"
   const [activeLayer, setActiveLayer] = useState<"A" | "B">("A");
-  // Whether we're in the middle of a crossfade
+  // Represents crossfade animation state execution
   const [fading, setFading] = useState(false);
-  // Initial page-load fade
+  // Determines if initial hydration has completed to start fade-in
   const [mounted, setMounted] = useState(false);
-  // Animation key counter to restart Ken Burns on each new slide
+  // Animation instance keys to reset Ken Burns vectors smoothly
   const [animKeyA, setAnimKeyA] = useState(0);
   const [animKeyB, setAnimKeyB] = useState(1);
 
@@ -57,20 +57,19 @@ export default function HeroSlideshow({
   const slideMs = slideDuration * 1000;
   const isSingle = covers.length <= 1;
 
-  // Trigger initial fade-in
+  /** Triggers the introductory fade-in right after component hydration. */
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
+  /** Manages buffer swapping. Pushes the next asset into the inactive layer, then fades it in. */
   const advance = useCallback(() => {
     if (isSingle) return;
 
     if (activeLayer === "A") {
-      // A is visible. Load next image into B, then fade B in.
       const nextIdx = (layerA + 1) % covers.length;
       setLayerB(nextIdx);
       setAnimKeyB(prev => prev + 1);
-      // Small delay for the image src to update before fading
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setFading(true);
@@ -78,7 +77,6 @@ export default function HeroSlideshow({
         });
       });
     } else {
-      // B is visible. Load next image into A, then fade A in.
       const nextIdx = (layerB + 1) % covers.length;
       setLayerA(nextIdx);
       setAnimKeyA(prev => prev + 1);
@@ -91,14 +89,14 @@ export default function HeroSlideshow({
     }
   }, [activeLayer, layerA, layerB, covers.length, isSingle]);
 
-  // After crossfade completes, reset fading flag
+  /** Resets fading state following a successful crossfade transition duration. */
   useEffect(() => {
     if (!fading) return;
     const t = setTimeout(() => setFading(false), CROSSFADE_DURATION);
     return () => clearTimeout(t);
   }, [fading, activeLayer]);
 
-  // Auto-advance timer
+  /** Mounts the autonomic advance timer. */
   useEffect(() => {
     if (isSingle) return;
     timerRef.current = setTimeout(advance, slideMs);
@@ -107,6 +105,7 @@ export default function HeroSlideshow({
     };
   }, [activeLayer, fading, advance, slideMs, isSingle]);
 
+  /** Function generator constructing standard image nodes for given configuration layers. */
   const renderLayer = (
     slideIndex: number,
     isOnTop: boolean,
@@ -184,7 +183,7 @@ export default function HeroSlideshow({
         `}</style>
       )}
 
-      {/* Wrapper with initial fade-in */}
+      {/* Main component constraint enforcing standard transition entry. */}
       <div
         style={{
           position: "absolute",
@@ -193,11 +192,10 @@ export default function HeroSlideshow({
           transition: `opacity ${INITIAL_FADE_DURATION}ms ease-out`,
         }}
       >
-        {/* Layer A (bottom when B is active, top when A is active) */}
         {renderLayer(layerA, isAOnTop, animKeyA)}
-        {/* Layer B */}
         {renderLayer(layerB, !isAOnTop, animKeyB)}
       </div>
     </>
   );
 }
+

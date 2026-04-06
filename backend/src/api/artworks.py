@@ -1,3 +1,7 @@
+"""
+API endpoints for managing artworks.
+Includes CRUD operations, bulk creation, and image uploading.
+"""
 import os
 import shutil
 
@@ -28,6 +32,9 @@ async def get_artworks(
     orientation: str | None = Query(None),  # horizontal | vertical | square
     size_category: str | None = Query(None),  # small | medium | large
 ):
+    """
+    Retrieves a list of artworks with optional filtering and pagination.
+    """
     return await ArtworkService(db).get_all_artworks(
         limit=limit,
         offset=offset,
@@ -45,6 +52,9 @@ async def get_artworks(
 
 @router.get("/{artwork_id_or_slug}")
 async def get_artwork(artwork_id_or_slug: str, db: DBDep):
+    """
+    Retrieves a single artwork by its numeric ID or unique slug.
+    """
     try:
         if artwork_id_or_slug.isdigit():
             return await ArtworkService(db).get_artwork_by_id(int(artwork_id_or_slug))
@@ -72,6 +82,9 @@ async def create_artwork(
         },
     ),
 ):
+    """
+    Creates a new artwork in the database. Requires admin privileges.
+    """
     artwork = await ArtworkService(db).create_artwork(artwork_data)
     return {"status": "OK", "data": artwork}
 
@@ -83,6 +96,9 @@ async def update_artwork(
     db: DBDep,
     artwork_data: ArtworkAddRequest = Body(),
 ):
+    """
+    Updates an entire artwork record by its ID. Requires admin privileges.
+    """
     await ArtworkService(db).update_artwork(artwork_id, artwork_data)
     return {"status": "OK"}
 
@@ -105,6 +121,9 @@ async def patch_artwork(
         },
     ),
 ):
+    """
+    Partially updates an artwork record by its ID. Requires admin privileges.
+    """
     await ArtworkService(db).update_artwork_partially(artwork_id, artwork_data)
     return {"status": "OK"}
 
@@ -113,6 +132,10 @@ async def patch_artwork(
 async def upload_artwork_images(
     artwork_id: int, admin_id: AdminDep, files: list[UploadFile] = File(...)
 ):
+    """
+    Uploads multiple images for a specific artwork.
+    Images are saved to a temporary directory and then processed asynchronously via Celery.
+    """
     os.makedirs("temp", exist_ok=True)
     temp_paths = []
     for idx, file in enumerate(files):
@@ -128,6 +151,9 @@ async def upload_artwork_images(
 
 @router.delete("/{artwork_id}")
 async def delete_artwork(artwork_id: int, admin_id: AdminDep, db: DBDep):
+    """
+    Deletes an artwork record from the database by its ID. Requires admin privileges.
+    """
     await ArtworkService(db).delete_artwork(artwork_id)
     return {"status": "OK"}
 
@@ -136,5 +162,8 @@ async def delete_artwork(artwork_id: int, admin_id: AdminDep, db: DBDep):
 async def create_artworks_bulk(
     admin_id: AdminDep, db: DBDep, artworks_data: list[ArtworkAddBulk] = Body()
 ):
+    """
+    Creates multiple artworks in a single request. Requires admin privileges.
+    """
     count = await ArtworkService(db).create_artworks_bulk(artworks_data)
     return {"status": "OK", "count": count}

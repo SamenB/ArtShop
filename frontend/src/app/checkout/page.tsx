@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * Checkout Process View.
+ * Handles user contact collection, cart summarization, promo codes (specifically for prints),
+ * and dispatches the final purchase request to the backend. Includes Google OAuth for quick pre-filling.
+ */
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
@@ -8,6 +14,9 @@ import { GoogleLogin } from "@react-oauth/google";
 import { useUser } from "@/context/UserContext";
 import { getApiUrl, apiFetch } from "@/utils";
 
+/**
+ * Main Checkout component. orchestrates form logic, validation, and submission.
+ */
 export default function CheckoutPage() {
     const { items, cartTotal, clearCart } = useCart();
     const { convertPrice } = usePreferences();
@@ -28,7 +37,7 @@ export default function CheckoutPage() {
     const [promoApplied, setPromoApplied] = useState(false);
     const [promoMessage, setPromoMessage] = useState({ text: "", isError: false });
 
-    // Pre-fill if user is logged in
+    /** Pre-files form attributes safely if the user context is authenticated. */
     useEffect(() => {
         if (user) {
             const [first, ...rest] = (user.username || "").split(" ");
@@ -41,6 +50,7 @@ export default function CheckoutPage() {
         }
     }, [user, user?.username, user?.email]);
 
+    /** Authenticates a guest via Google, triggering a pre-fill refresh upon success. */
     const handleGoogleSuccess = async (credentialResponse: any) => {
         try {
             const res = await fetch(`${getApiUrl()}/auth/google`, {
@@ -57,11 +67,13 @@ export default function CheckoutPage() {
         }
     };
 
+    /** Synchronizes form inputs. */
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    /** Validates and applies applicable discount codes sequentially. */
     const applyPromo = () => {
         if (formData.promoCode.toUpperCase() === "ART10") {
             setPromoApplied(true);
@@ -71,11 +83,12 @@ export default function CheckoutPage() {
         }
     };
 
-    // Calculate totals according to rules: 10% off only on prints
+    /** Calculate mathematical totals applying constraints (e.g. 10% discount targets fine art prints only) */
     const printTotal = items.filter(i => i.type === "print").reduce((sum, i) => sum + (i.price * i.quantity), 0);
     const discountAmount = promoApplied ? Math.round(printTotal * 0.1) : 0;
     const currentTotal = cartTotal - discountAmount;
 
+    /** Dispatches the final standardized payload to the generic orders endpoint. */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -91,7 +104,7 @@ export default function CheckoutPage() {
                 promo_code: promoApplied ? formData.promoCode : null,
                 total_price: currentTotal,
                 items: items.map(item => ({
-                    artwork_id: 1, // Placeholder
+                    artwork_id: 1, // Placeholder assumption; robust implementations extract artwork_id securely.
                     edition_type: item.type,
                     finish: item.finish,
                     size: item.size,
@@ -165,7 +178,7 @@ export default function CheckoutPage() {
                             <div style={{ display: "flex", justifyContent: "center" }}>
                                 <GoogleLogin
                                     onSuccess={handleGoogleSuccess}
-                                    onError={() => console.log('Login Failed')}
+                                    onError={() => console.log("Login Failed")}
                                     theme="outline"
                                     size="large"
                                     text="signin_with"
@@ -261,7 +274,7 @@ export default function CheckoutPage() {
                                     <div key={item.id} style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start" }}>
                                         <div style={{ width: "80px", height: "80px", borderRadius: "4px", background: `linear-gradient(160deg, ${item.imageGradientFrom} 0%, ${item.imageGradientTo} 100%)`, flexShrink: 0 }} />
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                            <div style={{ display: "flex", justifyItems: "space-between", alignItems: "flex-start" }}>
                                                 <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.1rem", fontStyle: "italic", margin: 0 }}>{item.title}</h3>
                                                 {isDiscounted && (
                                                     <span style={{ 

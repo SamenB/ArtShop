@@ -1,16 +1,22 @@
 "use client";
 
+/**
+ * Slide-out Interface for Cart Operations.
+ * Manages rapid shopping bag interactions persistently mapping to central Context APIs.
+ */
+
 import { useCart } from "@/context/CartContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import Link from "next/link";
 import { artworkUrl } from "@/utils";
 import { useEffect } from "react";
 
+/** Global Cart Drawer floating over the active DOM. Utilizes simple CSS animations. */
 export default function CartDrawer() {
     const { items, isCartOpen, setIsCartOpen, removeItem, updateQuantity, cartTotal } = useCart();
     const { convertPrice } = usePreferences();
 
-    // Lock body scroll when drawer is open
+    /** Actively locks global body scroll interactions while the drawer remains overlayed. */
     useEffect(() => {
         if (isCartOpen) {
             document.body.style.overflow = "hidden";
@@ -84,7 +90,7 @@ export default function CartDrawer() {
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
                                             <Link
-                                                href={artworkUrl(item.slug, item.title)}
+                                                href={artworkUrl(item.slug || String(item.id))}
                                                 onClick={() => setIsCartOpen(false)}
                                                 style={{
                                                     fontFamily: "var(--font-serif)", fontSize: "1.1rem",
@@ -165,3 +171,4 @@ export default function CartDrawer() {
         </>
     );
 }
+

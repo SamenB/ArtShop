@@ -1,14 +1,25 @@
 "use client";
+
+/**
+ * Dedicated Tags Management Interface.
+ * Allows administrators to strictly manage taxonomy, creating or deleting categories that define filtering contexts.
+ */
+
 import { useState, useEffect } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
+/** Represents a metadata tag for filtering and classification. */
 interface Tag { id: number; title: string; category?: string | null; }
 
+/** Predefined categories used to color-code and organize metadata tags. */
 const CATEGORIES = [
     { value: "general", label: "General", color: "#6B7280" },
     { value: "medium",  label: "Medium (material)",  color: "#8B7CF6" },
 ];
 
+/**
+ * Main component providing CRUD operations for individual tags.
+ */
 export default function TagsTab() {
     const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
@@ -16,16 +27,21 @@ export default function TagsTab() {
     const [newCategory, setNewCategory] = useState<string>("general");
     const [saving, setSaving] = useState(false);
 
+    /** Loads tags from the API and populates the local state array. */
     const fetchTags = async () => {
         try {
             const res = await apiFetch(`${getApiUrl()}/tags`);
             if (res.ok) setTags(await res.json());
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => { fetchTags(); }, []);
 
+    /** Submits a newly defined tag string to the remote database under the chosen category. */
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTitle.trim()) return;
@@ -36,23 +52,38 @@ export default function TagsTab() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: newTitle, category: newCategory }),
             });
-            if (res.ok) { setNewTitle(""); fetchTags(); }
-            else { const err = await res.json(); alert(err.detail || "Failed to create tag"); }
-        } catch (e: any) { alert(`Failed: ${e.message}`); }
-        finally { setSaving(false); }
+            if (res.ok) {
+                setNewTitle("");
+                fetchTags();
+            } else {
+                const err = await res.json();
+                alert(err.detail || "Failed to create tag");
+            }
+        } catch (e: any) {
+            alert(`Failed: ${e.message}`);
+        } finally {
+            setSaving(false);
+        }
     };
 
+    /** Removes a specific tag permanently, alerting the admin to the cascading UI effects. */
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this tag? Artworks using it will simply lose the tag.")) return;
         const res = await apiFetch(`${getApiUrl()}/tags/${id}`, { method: "DELETE" });
-        if (res.ok) setTags(tags.filter(t => t.id !== id));
-        else alert("Delete failed");
+        if (res.ok) {
+            setTags(tags.filter(t => t.id !== id));
+        } else {
+            alert("Delete failed");
+        }
     };
 
+    /** Maps all available tags into chunks segregated by their configured `category` strings. */
     const tagsByCategory = CATEGORIES.map(cat => ({
         ...cat,
         items: tags.filter(t => t.category === cat.value),
     }));
+
+    /** Filters out tags that lack a mapped standard classification. */
     const uncategorised = tags.filter(t => !t.category || !CATEGORIES.find(c => c.value === t.category));
 
     if (loading) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Loading tags...</div>;
@@ -61,7 +92,6 @@ export default function TagsTab() {
         <div className="max-w-4xl space-y-8">
             <h2 className="text-2xl font-serif italic mb-6">Manage Tags</h2>
 
-            {/* Create form */}
             <form onSubmit={handleCreate} className="flex gap-3 flex-wrap">
                 <input
                     type="text"
@@ -82,7 +112,6 @@ export default function TagsTab() {
                 </button>
             </form>
 
-            {/* Tags by category */}
             {tagsByCategory.map(cat => cat.items.length > 0 && (
                 <div key={cat.value}>
                     <div className="flex items-center gap-3 mb-3">
@@ -104,7 +133,6 @@ export default function TagsTab() {
                 </div>
             ))}
 
-            {/* Uncategorised / legacy */}
             {uncategorised.length > 0 && (
                 <div>
                     <div className="flex items-center gap-3 mb-3">
@@ -123,7 +151,7 @@ export default function TagsTab() {
             )}
 
             {tags.length === 0 && (
-                <p className="text-zinc-600 font-mono text-sm italic">No tags yet. Create a "Medium" tag like "Oil on canvas" or "Charcoal" to use in shop filters.</p>
+                <p className="text-zinc-600 font-mono text-sm italic">No tags yet. Create a &quot;Medium&quot; tag like &quot;Oil on canvas&quot; or &quot;Charcoal&quot; to use in shop filters.</p>
             )}
         </div>
     );

@@ -1,6 +1,11 @@
 "use client";
-// Gallery — CSS Grid, each painting fills column width at its natural aspect-ratio.
-// Equal column widths. Height per row = tallest item. Works like Erin Hanson reference.
+
+/**
+ * Gallery module for the ArtShop.
+ * Implements a sophisticated CSS Grid exhibition layout where artworks are 
+ * grouped by collection and fill columns at their natural aspect ratios.
+ * Supports infinite scrolling, dynamic grid density switching, and collection-based filtering.
+ */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
@@ -9,9 +14,10 @@ import Lightbox from "@/components/Lightbox";
 import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 import { useUser } from "@/context/UserContext";
 
+/** Exhaustive list of physical and digital availability states for an artwork. */
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
-// ARTWORKS will be fetched from API
+/** Detailed artwork data representing a catalog entry. */
 interface Artwork {
     id: number;
     slug?: string;
@@ -31,11 +37,16 @@ interface Artwork {
     width_in?: number;
     height_in?: number;
     images?: (string | { thumb: string; medium: string; original: string })[];
-    // UI fallbacks
+    /** UI fallback gradient start color. */
     gradientFrom?: string;
+    /** UI fallback gradient end color. */
     gradientTo?: string;
 }
 
+/** 
+ * Predefined aesthetic color pairs for artwork card backgrounds.
+ * Used when specific image gradients are not provided.
+ */
 const DEFAULT_GRADIENTS = [
     ["#6A9FB5", "#3A6E85"],
     ["#2A5F7A", "#1A3A55"],
@@ -44,18 +55,28 @@ const DEFAULT_GRADIENTS = [
     ["#D4905A", "#8A5030"],
 ];
 
+/** Collection metadata for grouping artworks. */
 interface CollectionData {
     id: number;
     title: string;
     bg_color?: string;
 }
 
+/** Supported sorting strategies for the gallery exhibition. */
 type SortKey = "default" | "year" | "title" | "available";
+
+/** Human-readable labels for the sort selector. */
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-    { key: "default", label: "Collection" }, { key: "year", label: "Newest" },
-    { key: "title", label: "Title A–Z" }, { key: "available", label: "Available" },
+    { key: "default", label: "Collection" }, 
+    { key: "year", label: "Newest" },
+    { key: "title", label: "Title A–Z" }, 
+    { key: "available", label: "Available" },
 ];
-const sortWorks = (works: Artwork[], key: SortKey) => {
+
+/**
+ * Pure utility function to sort an array of artworks based on the specified key.
+ */
+const sortWorks = (works: Artwork[], key: SortKey): Artwork[] => {
     const c = [...works];
     if (key === "year") c.sort((a, b) => b.id - a.id);
     if (key === "title") c.sort((a, b) => a.title.localeCompare(b.title));
@@ -63,12 +84,10 @@ const sortWorks = (works: Artwork[], key: SortKey) => {
     return c;
 };
 
-
-
-// ── IMAGE ZONE HEIGHT per grid mode ──────────────────────────────────────────────
+/** Image viewing area heights mapped to the grid density mode. */
 const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
-// ── Status labels + colours ────────────────────────────────────────────────────
+/** Visual styling and labeling for artwork status indicators. */
 const STATUS: Record<string, { label: string; color: string }> = {
     available: { label: "AVAILABLE", color: "#6DB87E" },
     sold: { label: "SOLD", color: "#C0392B" },
@@ -79,7 +98,7 @@ const STATUS: Record<string, { label: string; color: string }> = {
     digital: { label: "DIGITAL", color: "#8E44AD" },
 };
 
-// ── ART CARD ─────────────────────────────────────────────────────────────────
+/** Properties for the individual artwork exhibition card. */
 interface ArtCardProps {
     work: Artwork;
     onClick: () => void;
@@ -88,6 +107,10 @@ interface ArtCardProps {
     isMobile: boolean;
 }
 
+/**
+ * Individual gallery card component.
+ * Dynamically calculates padding and positioning to anchor title boxes strictly to image edges.
+ */
 function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
     const ori = (work.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
@@ -98,6 +121,11 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
+
+    /**
+     * Recalculates visual offsets to ensure the floating title title box 
+     * aligns perfectly with the rendered image's variable aspect ratio.
+     */
     const recalc = useCallback(() => {
         const c = containerRef.current;
         if (!c) return;
@@ -110,9 +138,17 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
         setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
     }, []);
-    useEffect(() => { recalc(); window.addEventListener("resize", recalc); return () => window.removeEventListener("resize", recalc); }, [recalc]);
-    // Recalc when zone height changes (grid mode switch)
-    useEffect(() => { requestAnimationFrame(recalc); }, [zoneH, recalc]);
+
+    useEffect(() => { 
+        recalc(); 
+        window.addEventListener("resize", recalc); 
+        return () => window.removeEventListener("resize", recalc); 
+    }, [recalc]);
+
+    // Recalculate whenever the viewing zone height changes (e.g., density toggle).
+    useEffect(() => { 
+        requestAnimationFrame(recalc); 
+    }, [zoneH, recalc]);
 
     return (
         <button
@@ -138,14 +174,14 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                     flexShrink: 0,
                 }}
             >
-                {/* Title below image — centered in a shadowed box, attached strictly to the painting edge */}
+                {/* Floating title box: Centered and attached strictly to the bottom edge of the artwork. */}
                 {gridMode !== "3" && (
                     <div style={{
                         position: "absolute",
                         bottom: `${emptyBottom}px`,
                         left: "50%",
                         transform: `translateX(-50%) translateY(calc(100% + ${isMobile ? "0.4rem" : "0.6rem"}))`,
-                        maxWidth: `max(10px, calc(100% - ${textPad * 2}px))`, // Use max to prevent negative bounds before image loads
+                        maxWidth: `max(10px, calc(100% - ${textPad * 2}px))`,
                         pointerEvents: "none",
                         padding: isMobile ? "0.15rem 0.5rem" : "0.2rem 0.7rem",
                         backgroundColor: "transparent",
@@ -188,6 +224,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
                         }}
                     />
                 ) : (
+                    // Placeholder for works without attached imagery.
                     <div className="art-card-inner" style={{
                         width: isHorizontal || isSquare ? "78%" : "55%",
                         height: isHorizontal ? "55%" : "85%",
@@ -203,7 +240,11 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
     );
 }
 
-// ── MAIN PAGE ─────────────────────────────────────────────────────────────────
+/**
+ * Main Gallery exhibition page.
+ * Manages fetching of all artworks and collections, sorting state, 
+ * persistent layout preferences, and infinite scroll pagination.
+ */
 export default function GalleryPage() {
     const { user } = useUser();
     const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
@@ -220,14 +261,14 @@ export default function GalleryPage() {
 
     const [error, setError] = useState<string | null>(null);
 
-    // ── Scroll to top on mount ──
+    // Initial page load: Reset scroll to ensure consistent exhibition entry.
     useEffect(() => {
         if (typeof window !== "undefined") {
             window.scrollTo({ top: 0, behavior: "instant" });
         }
     }, []);
 
-    // ── Responsive ──
+    // Initialize layout state based on device capability.
     useEffect(() => {
         const update = () => setIsMobile(window.innerWidth < 1024);
         update();
@@ -235,6 +276,7 @@ export default function GalleryPage() {
         return () => window.removeEventListener("resize", update);
     }, []);
 
+    // Primary data fetch: Artworks and Collections.
     useEffect(() => {
         Promise.all([
             apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json()),
@@ -243,8 +285,7 @@ export default function GalleryPage() {
             .then(([artworksData, collectionsData]) => {
                 const rawData = artworksData.items || artworksData.data || artworksData;
                 if (!Array.isArray(rawData)) {
-                    console.error("Expected array but got:", artworksData);
-                    setError("Failed to load gallery. Please try again later.");
+                    setError("Unable to initialize gallery structure.");
                     setLoading(false);
                     return;
                 }
@@ -263,12 +304,16 @@ export default function GalleryPage() {
                 setLoading(false);
             })
             .catch(err => {
-                console.error(err);
-                setError("A network error occurred.");
+                console.error("Gallery data initialization failed:", err);
+                setError("Exhibition data temporarily unavailable.");
                 setLoading(false);
             });
     }, []);
 
+    /** 
+     * Derived state: Groups artworks by their parent collections to create 
+     * a logically grouped exhibition experience.
+     */
     const collectionsMap = useMemo(() => {
         return allArtworks.reduce<Record<string, { id?: number, bg?: string, works: Artwork[] }>>((acc, a) => {
             let collectionName = "Original Paintings";
@@ -289,9 +334,10 @@ export default function GalleryPage() {
             return acc;
         }, {});
     }, [allArtworks, allCollections]);
+
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
-    // ── Grid mode persist (Separate for Mobile & PC) ─────────────────────────
+    // Grid mode persistence: Differentiates between Mobile and Desktop aspect ratios.
     useEffect(() => {
         const mob = window.innerWidth < 768;
         const storageKey = mob ? "artshop_gallery_gridMode_mobile" : "artshop_gallery_gridMode_pc";
@@ -299,11 +345,12 @@ export default function GalleryPage() {
         if (saved === "1" || saved === "2" || saved === "3") {
             setGridMode(saved);
         } else {
-            // Default: "3" (melkiy) on mobile, "2" (middle) on PC
+            // Default: Dense grid on mobile, comfortable middle-ground on desktop.
             setGridMode(mob ? "3" : "2");
         }
     }, [isMobile]);
 
+    /** Updates grid density and persists the choice to session storage. */
     const handleSetGridMode = (val: "1" | "2" | "3") => {
         setGridMode(val);
         const storageKey = isMobile ? "artshop_gallery_gridMode_mobile" : "artshop_gallery_gridMode_pc";
@@ -321,11 +368,18 @@ export default function GalleryPage() {
         return () => window.removeEventListener("resize", update);
     }, []);
 
+    /** 
+     * Derived state: Merges collections, applies sorting, and enforces 
+     * pagination limits for the infinite scroll experience.
+     */
     const sorted = useMemo(() => {
-        // First group and sort all works
-        const groups = Object.entries(collectionsMap).map(([name, data]) => ({ name, id: data.id, bg: data.bg, works: sortWorks(data.works, sortKey) }));
+        const groups = Object.entries(collectionsMap).map(([name, data]) => ({ 
+            name, 
+            id: data.id, 
+            bg: data.bg, 
+            works: sortWorks(data.works, sortKey) 
+        }));
 
-        // Then limit the total number of works displayed across all groups to `visibleCount`
         let remaining = visibleCount;
         return groups.map(g => {
             if (remaining <= 0) return { name: g.name, id: g.id, bg: g.bg, works: [], totalInGroup: g.works.length };
@@ -335,33 +389,35 @@ export default function GalleryPage() {
         }).filter(g => g.works.length > 0);
     }, [sortKey, visibleCount, collectionsMap]);
 
+    /** Admin utility: Updates a collection's atmospheric background color. */
     const handleColorChange = async (colId: number, color: string | null) => {
         try {
             const res = await apiFetch(`${getApiUrl()}/collections/${colId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bg_color: color }),
-        });
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bg_color: color }),
+            });
             if (res.ok) {
                 setAllCollections(prev => prev.map(c => c.id === colId ? { ...c, bg_color: color || undefined } : c));
             }
         } catch (e) {
-            console.error("Failed to update bg_color", e);
+            console.error("Administrative update failed:", e);
         }
     };
 
-    // Ensure visible count is at least enough to fill the screen if we switch to dense grid
+    // Ensure visible count reacts elegantly to grid density changes.
     useEffect(() => {
         setVisibleCount(prev => Math.max(prev, itemsPerPage));
     }, [itemsPerPage]);
 
-    // Infinite scroll trigger
+    // Infinite scroll logic: Increments the display quota as the user reaches the end of the lists.
     useEffect(() => {
         if (inView && visibleCount < allArtworks.length) {
             setVisibleCount(prev => prev + itemsPerPage);
         }
     }, [inView, allArtworks.length, visibleCount, itemsPerPage]);
 
+    /** Returns dynamic CSS column definitions based on current grid intensity. */
     const getColumns = () => {
         if (isMobile) {
             if (gridMode === "1") return "1fr";
@@ -373,6 +429,7 @@ export default function GalleryPage() {
         return "repeat(auto-fill, minmax(220px, 1fr))";
     };
 
+    /** Returns dynamic CSS gap spacing based on current grid intensity and device. */
     const getGap = () => {
         if (isMobile) {
             if (gridMode === "1") return "3.2rem";
@@ -388,7 +445,7 @@ export default function GalleryPage() {
         <div style={{ overflowX: "clip", maxWidth: "100vw", width: "100%" }}>
             {lightbox && <Lightbox works={lightbox.works as any} startWorkIndex={lightbox.index} onClose={() => setLightbox(null)} />}
             <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 1rem 2rem 1rem" : "1.5rem 2.5rem 2rem" }}>
-                {/* Sort bar */}
+                {/* Control Bar: Sorting and Layout density toggles. */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? "0.75rem" : "1rem", flexWrap: isMobile ? "nowrap" : "wrap", overflowX: isMobile ? "auto" : "visible", paddingBottom: isMobile ? "5px" : 0, scrollbarWidth: "none" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                         <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>Sort</span>
@@ -413,13 +470,14 @@ export default function GalleryPage() {
                             <span style={{ position: "absolute", right: "0.8rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.65rem", color: "var(--color-charcoal)", fontWeight: 300 }}>∨</span>
                         </div>
                     </div>
+                    
                     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1.5rem", flexShrink: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                             <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>View</span>
                             <div className="grid-toggle-wrapper" style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
                                 <button
                                     onClick={() => handleSetGridMode("1")}
-                                    title="1 in a row"
+                                    title="Exhibition View"
                                     style={{
                                         display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                                         padding: "4px 8px",
@@ -436,7 +494,7 @@ export default function GalleryPage() {
                                 </button>
                                 <button
                                     onClick={() => handleSetGridMode("2")}
-                                    title="2 in a row"
+                                    title="Standard View"
                                     style={{
                                         display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                                         padding: "4px 8px",
@@ -456,7 +514,7 @@ export default function GalleryPage() {
                                 </button>
                                 <button
                                     onClick={() => handleSetGridMode("3")}
-                                    title="3 in a row"
+                                    title="Dense View"
                                     style={{
                                         display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                                         padding: "4px 8px",
@@ -486,12 +544,12 @@ export default function GalleryPage() {
                 </div>
             </div>
 
-            {/* Collections */}
+            {/* Rendered Exhibition Sections grouped by Collection. */}
             <div style={{ display: "flex", flexDirection: "column" }}>
                 {sorted.map(({ name, id, bg, works, totalInGroup }, idx) => {
                     return (
                         <section key={name} style={{ paddingBottom: "1.5rem", marginBottom: 0 }}>
-                            {/* Collection header — full width bar */}
+                            {/* Visual hierarchy header: True centered collection title. */}
                             <div className="magnetic-scroll-header" style={{ width: "100%" }}>
                                     <div
                                         style={{
@@ -501,7 +559,7 @@ export default function GalleryPage() {
                                             background: "none", border: "none", textAlign: "center",
                                         }}
                                     >
-                                        {/* Spacer to balance the chevron on the right for true centering */}
+                                        {/* Pure structural balance spacer. */}
                                         <div style={{ width: "20px", flexShrink: 0 }} aria-hidden="true" />
 
                                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", flexGrow: 1 }}>
@@ -526,7 +584,7 @@ export default function GalleryPage() {
                                                                 width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
                                                                 borderRadius: "4px", cursor: "pointer", background: "none"
                                                             }}
-                                                            title="Pick Collection Background Color"
+                                                            title="Pick Collection Atmosphere Color"
                                                         />
                                                         <button
                                                             onClick={() => handleColorChange(id, null)}
@@ -535,7 +593,7 @@ export default function GalleryPage() {
                                                                 border: "1px solid rgba(26,26,24,0.2)", borderRadius: "4px", background: "transparent",
                                                                 cursor: "pointer", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em"
                                                             }}
-                                                            title="Reset to default (approx 25% grey gradient)"
+                                                            title="Revert to Atmospheric Default"
                                                         >
                                                             Reset
                                                         </button>
@@ -545,7 +603,7 @@ export default function GalleryPage() {
                                         </div>
 
                                         <div style={{ width: "20px", display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-                                            {/* Removed Chevron */}
+                                            {/* Decorative slot. */}
                                         </div>
                                     </div>
                             </div>
@@ -586,10 +644,10 @@ export default function GalleryPage() {
                 })}
             </div>
 
-            {/* Infinite Scroll target marker */}
+            {/* Infinite Scroll target marker. */}
             {visibleCount < allArtworks.length && (
                 <div ref={loadMoreRef} style={{ height: "40px", paddingBottom: "4rem", display: "flex", justifyContent: "center" }}>
-                    <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", fontFamily: "var(--font-sans)" }}>Loading more...</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", fontFamily: "var(--font-sans)" }}>Curating more works...</span>
                 </div>
             )}
         </div>

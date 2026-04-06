@@ -1,3 +1,7 @@
+"""
+API endpoints for managing global site settings.
+Provides functionality to retrieve and update configurations like contact info, prices, and slideshow parameters.
+"""
 from fastapi import APIRouter
 
 from src.api.dependencies import AdminDep, DBDep
@@ -9,6 +13,10 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 
 @router.get("", response_model=SiteSettingsResponse)
 async def get_settings(db: DBDep):
+    """
+    Retrieves the global site settings. 
+    Initializes default settings if none exist.
+    """
     settings_obj = await db.session.get(SiteSettingsOrm, 1)
     if not settings_obj:
         settings_obj = SiteSettingsOrm(id=1)
@@ -19,6 +27,9 @@ async def get_settings(db: DBDep):
 
 @router.put("", response_model=SiteSettingsResponse)
 async def update_settings(data: SiteSettingsUpdate, admin_id: AdminDep, db: DBDep):
+    """
+    Updates the global site settings. Requires admin privileges.
+    """
     settings_obj = await db.session.get(SiteSettingsOrm, 1)
     if not settings_obj:
         settings_obj = SiteSettingsOrm(id=1)

@@ -1,8 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
 
+/**
+ * Orders Management Tab.
+ * Allows administrators to view the history of recent orders and manually update their payment statuses.
+ */
+
+import { useState, useEffect } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
+/** Represents a customer order record. */
 interface Order {
     id: number;
     email: string;
@@ -11,10 +17,14 @@ interface Order {
     created_at: string;
 }
 
+/**
+ * Main component for the Orders tab in the admin dashboard.
+ */
 export default function OrdersTab() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
+    /** Fetches the latest list of orders from the API backend. */
     const fetchOrders = async () => {
         try {
             const res = await apiFetch(`${getApiUrl()}/orders`);
@@ -33,6 +43,7 @@ export default function OrdersTab() {
         fetchOrders();
     }, []);
 
+    /** Updates the status of an existing order manually. */
     const updateStatus = async (id: number, newStatus: string) => {
         try {
             const res = await apiFetch(`${getApiUrl()}/orders/${id}/status`, {

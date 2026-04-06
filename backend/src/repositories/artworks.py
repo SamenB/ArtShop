@@ -1,3 +1,7 @@
+"""
+Repository for managing artwork data access.
+Extends BaseRepository to provide specialized filtering and eager loading of tags.
+"""
 from sqlalchemy import and_, select
 from sqlalchemy.orm import joinedload
 
@@ -10,6 +14,10 @@ from src.schemas.artworks import ArtworkWithTags
 
 
 class ArtworksRepository(BaseRepository):
+    """
+    Handles complex queries for artworks, including multi-criteria filtering and pagination.
+    Uses ArtworkMapper for data transformation.
+    """
     model = ArtworksOrm
     mapper = ArtworkMapper
 
@@ -27,6 +35,11 @@ class ArtworksRepository(BaseRepository):
         orientation: str | None = None,
         size_category: str | None = None,
     ):
+        """
+        Retrieves a list of available artworks based on various filters.
+        Filters include title (fuzzy), tags, collection, production year, price range, 
+        aspect ratio (orientation), and surface area (size category).
+        """
         artworks_ids_to_get = available_artwork_ids()
 
         query = (
@@ -118,6 +131,10 @@ class ArtworksRepository(BaseRepository):
         ]
 
     async def get_one_or_none(self, **filter_by):
+        """
+        Retrieves a single artwork by its fields or returns None if not found.
+        Eagerly loads associated tags.
+        """
         query = select(self.model).options(joinedload(self.model.tags)).filter_by(**filter_by)
         result = await self.session.execute(query)
         model = result.unique().scalars().one_or_none()

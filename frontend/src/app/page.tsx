@@ -1,5 +1,8 @@
-// page.tsx — the HOME PAGE ("/")
-// Converted to Server Component for instant loading and SEO.
+/**
+ * Homepage component for the ArtShop.
+ * A server component that fetches featured artworks and site settings 
+ * to render a dynamic landing page with a hero slideshow and recent works.
+ */
 
 import Link from "next/link";
 import { getApiUrl, getImageUrl, artworkUrl } from "@/utils";
@@ -8,9 +11,10 @@ import HomeArtCard from "@/components/HomeArtCard";
 
 export const dynamic = "force-dynamic";
 
-// FEATURED_WORKS will be fetched from API
+/** Exhaustive list of physical and digital availability states for an artwork. */
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
+/** Data structure for an individual artwork as received from the API. */
 interface Artwork {
   id: number;
   slug?: string;
@@ -25,13 +29,18 @@ interface Artwork {
   has_prints?: boolean;
   base_print_price?: number;
   images?: (string | { thumb: string; medium: string; original: string })[];
-  // UI fallbacks
+  /** Optional background gradient for UI cards (computed on-the-fly). */
   gradientFrom?: string;
+  /** Optional background gradient for UI cards (computed on-the-fly). */
   gradientTo?: string;
 }
 
 type FeaturedWork = Artwork;
 
+/** 
+ * Predefined aesthetic color pairs for artwork card backgrounds.
+ * Used when specific image gradients are not provided.
+ */
 const DEFAULT_GRADIENTS = [
   ["#6A9FB5", "#3A6E85"],
   ["#2A5F7A", "#1A3A55"],
@@ -40,16 +49,21 @@ const DEFAULT_GRADIENTS = [
   ["#D4905A", "#8A5030"],
 ];
 
-// Fetch directly inside the Async Server Component
+/**
+ * The main landing page component.
+ * Performs parallel data fetching for application settings and featured works.
+ */
 export default async function Home() {
 
   let settings: any = null;
   let featuredWorks: FeaturedWork[] = [];
 
+  // Fetch global site settings (branding, cover images, layout preferences).
   const settingsRes = await fetch(`${getApiUrl()}/settings`, { next: { revalidate: 60 } });
   if (!settingsRes.ok) throw new Error(`Failed to fetch settings: ${settingsRes.status}`);
   settings = await settingsRes.json();
 
+  // Fetch the latest 3 artworks for the 'Recent Paintings' section.
   const worksRes = await fetch(`${getApiUrl()}/artworks?limit=3`, { next: { revalidate: 60 } });
   if (!worksRes.ok) throw new Error(`Failed to fetch artworks: ${worksRes.status}`);
 
@@ -63,10 +77,10 @@ export default async function Home() {
 
   return (
     <>
-      {/* ════════════════════════════════════════
+      {/* 
           HERO SECTION
-          Full-screen, text centered over image.
-          ════════════════════════════════════════ */}
+          High-impact introduction with a full-screen slideshow and primary CTAs.
+      */}
       <section
         style={{
           minHeight: "100svh",
@@ -75,11 +89,11 @@ export default async function Home() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-start",
-          paddingTop: "clamp(115px, 18vh, 195px)", // Pushed even higher!
+          paddingTop: "clamp(115px, 18vh, 195px)",
           overflow: "hidden",
         }}
       >
-        {/* Background — Slideshow with Ken Burns + Crossfade */}
+        {/* Dynamic Background Slideshow based on administrative settings. */}
         {(() => {
           const coverSlots = [
             { desktop: settings?.main_bg_desktop_url, mobile: settings?.main_bg_mobile_url },
@@ -100,6 +114,7 @@ export default async function Home() {
               slideDuration={settings?.hero_slide_duration || 15}
             />
           ) : (
+            // Fallback gradient if no cover images are configured.
             <div
               aria-hidden="true"
               style={{
@@ -110,7 +125,8 @@ export default async function Home() {
             />
           );
         })()}
-        {/* Subtle texture overlay — adds depth */}
+        
+        {/* Subtle radial overlay for enhanced text legibility. */}
         <div
           aria-hidden="true"
           style={{
@@ -120,22 +136,20 @@ export default async function Home() {
           }}
         />
 
-        {/* Main Content Wrapper (Text + Buttons) */}
+        {/* Hero content overlay: Messaging and navigation links. */}
         <div
           style={{
             position: "relative",
-            zIndex: 2, // Above the tracking dark panel and image
+            zIndex: 2,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: "clamp(1.5rem, 3vh, 2.5rem)", // Tightly grouped
+            gap: "clamp(1.5rem, 3vh, 2.5rem)",
             width: "100%",
             padding: "0 2rem",
           }}
         >
-          {/* Text Block */}
           <div style={{ textAlign: "center", maxWidth: "900px" }}>
-            {/* Eyebrow label — serif, bright, beautiful */}
             <div className="animate-fade-up" style={{ marginBottom: "0.5rem", animationDelay: "0.15s", animationFillMode: "forwards" }}>
               <p
                 style={{
@@ -153,9 +167,6 @@ export default async function Home() {
               </p>
             </div>
 
-
-
-            {/* Subtitle — dimmer, smaller */}
             <div className="animate-fade-up" style={{ maxWidth: "600px", margin: "1rem auto 0", animationDelay: "0.3s", animationFillMode: "forwards" }}>
               <p
                 style={{
@@ -172,10 +183,8 @@ export default async function Home() {
                 Each piece is a story waiting to hang on your wall.
               </p>
             </div>
-
           </div>
 
-          {/* CTA Buttons */}
           <div
             className="animate-fade-up"
             style={{
@@ -186,21 +195,22 @@ export default async function Home() {
               animationFillMode: "forwards",
               whiteSpace: "nowrap",
             }}
-          >  <Link
-            href="/gallery"
-            className="hero-link"
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "0.75rem",
-              fontWeight: 400,
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              textDecoration: "none",
-              borderBottom: "1px solid",
-              paddingBottom: "4px",
-              transition: "color 0.2s ease, border-color 0.2s ease",
-            }}
           >
+            <Link
+              href="/gallery"
+              className="hero-link"
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.75rem",
+                fontWeight: 400,
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                textDecoration: "none",
+                borderBottom: "1px solid",
+                paddingBottom: "4px",
+                transition: "color 0.2s ease, border-color 0.2s ease",
+              }}
+            >
               Explore Gallery
             </Link>
             <Link
@@ -223,7 +233,7 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* Scroll indicator — animated bouncing arrow at bottom */}
+        {/* Animated scroll affordance. */}
         <div
           style={{
             position: "absolute",
@@ -242,7 +252,6 @@ export default async function Home() {
           }}
         >
           <span>Scroll</span>
-          {/* Simple CSS bouncing arrow */}
           <span
             style={{
               display: "block",
@@ -261,9 +270,10 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ════════════════════════════════════════
+      {/* 
           FEATURED WORKS SECTION
-          ════════════════════════════════════════ */}
+          Showcases a curated selection of the most recent artworks.
+      */}
       <section
         style={{
           padding: "clamp(3rem, 10vh, 6rem) 2rem",
@@ -271,7 +281,6 @@ export default async function Home() {
           margin: "0 auto",
         }}
       >
-        {/* Section header */}
         <div
           style={{
             display: "flex",
@@ -327,10 +336,6 @@ export default async function Home() {
           </Link>
         </div>
 
-        {/* Artwork grid — desktop: 3 in a row, mobile: horizontal scroll with peek */ /*
-             We use a dedicated class here to manage the mobile layout transition. 
-             "1.5 - 2 items" means we need a flex-basis around 65-70%.
-          */}
         <style>{`
           .recent-paintings-scroll {
             display: grid;
@@ -348,18 +353,17 @@ export default async function Home() {
               scroll-snap-type: x mandatory !important;
               margin-left: -2rem !important;
               margin-right: -2rem !important;
-              /* Increased top padding (1rem) for vertical shadows and kept bottom tight */
               padding: 1rem 0 0.75rem 0 !important; 
               gap: 1rem !important;
               scrollbar-width: none !important;
               align-items: center !important;
-              scroll-padding: 0 2rem !important; /* Ensures snap respects the 2rem gutter */
+              scroll-padding: 0 2rem !important;
             }
             .recent-paintings-scroll::-webkit-scrollbar {
               display: none !important;
             }
             .recent-paintings-item {
-              flex: 0 0 72% !important; /* Stable size for 1.5 - 2 items peek */
+              flex: 0 0 72% !important;
               scroll-snap-align: start !important;
             }
             .recent-paintings-spacer {
@@ -370,7 +374,7 @@ export default async function Home() {
           }
         `}</style>
         <div className="recent-paintings-scroll">
-          {/* Start Spacer for mobile edge-to-edge bleeding with correct gutter */}
+          {/* Start Spacer for mobile horizontal scrolling behavior. */}
           <div className="recent-paintings-spacer" aria-hidden="true" />
 
           {featuredWorks.map((work) => (
@@ -379,18 +383,19 @@ export default async function Home() {
             </div>
           ))}
 
-          {/* End Spacer to allow last item to be centered/aligned properly */}
+          {/* End Spacer for mobile horizontal scrolling behavior. */}
           <div className="recent-paintings-spacer" aria-hidden="true" />
         </div>
       </section>
 
-      {/* ════════════════════════════════════════
+      {/* 
           ABOUT PREVIEW SECTION
-          ════════════════════════════════════════ */}
+          Brief artistic introduction and biography link.
+      */}
       <section
         style={{
           borderTop: "1px solid rgba(26,26,24,0.06)",
-          backgroundColor: "var(--color-cream)", // Светлый фон
+          backgroundColor: "var(--color-cream)", // Light theme background.
           padding: "8rem 2rem",
         }}
       >
@@ -404,7 +409,7 @@ export default async function Home() {
             alignItems: "center",
           }}
         >
-          {/* Artist image placeholder */}
+          {/* Visual anchor: Artist portrait or studio placeholder. */}
           <div
             style={{
               aspectRatio: "3 / 4",
@@ -421,11 +426,11 @@ export default async function Home() {
             }}
           >
             {settings?.artist_home_photo_url ? (
-              <img src={getImageUrl(settings.artist_home_photo_url, 'original')} alt="Artist" className="w-full h-full object-cover" />
+              <img src={getImageUrl(settings.artist_home_photo_url, 'original')} alt="Samen Bondarenko" className="w-full h-full object-cover" />
             ) : "Artist Photo"}
           </div>
 
-          {/* Text content */}
+          {/* Narrative content block. */}
           <div>
             <p
               style={{
@@ -489,9 +494,10 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ════════════════════════════════════════
+      {/* 
           QUOTE SECTION
-          ════════════════════════════════════════ */}
+          Philosophical anchor point.
+      */}
       <section
         style={{
           padding: "6rem 2rem",

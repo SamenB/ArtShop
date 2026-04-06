@@ -1,11 +1,26 @@
 "use client";
+
+/**
+ * Artworks Management Tab.
+ * Provides comprehensive CRUD operations for the art catalog.
+ * Features:
+ * - Drag-and-drop image reordering.
+ * - Multi-image upload with background processing (Celery).
+ * - Inline image cropping for new uploads.
+ * - Advanced metadata tagging (medium, collection, status).
+ */
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
 
+/** Details for a processed image variant. */
 interface ArtworkImage { thumb: string; medium: string; original: string; }
+
+/** Union type for image representations: simple path or structured object. */
 type ImageEntry = string | ArtworkImage;
 
+/** core artwork entity used in the administrative dashboard. */
 interface Artwork {
     id: number;
     title: string;
@@ -19,9 +34,13 @@ interface Artwork {
     tags?: { id: number; title: string; category?: string }[];
 }
 
+/** Structural collection metadata. */
 interface Collection { id: number; title: string; }
+
+/** Generic tag metadata (Medium, Technique, etc.). */
 interface Tag { id: number; title: string; category?: string; }
 
+/** Standard availability and classification states for artworks. */
 const STATUS_OPTIONS = [
     { value: "available", label: "Available" },
     { value: "sold", label: "Sold" },
@@ -32,14 +51,21 @@ const STATUS_OPTIONS = [
     { value: "digital", label: "Digital" },
 ];
 
-// ── Drag-and-drop image grid ──────────────────────────────────────────────────
+/** 
+ * Virtual representation of an image in the upload/edit queue.
+ * Tracks whether the image is already persisted or pending upload.
+ */
 interface DragItem {
     type: "existing" | "new";
-    url: string;           // preview URL (existing = resolved, new = object URL)
+    url: string;           // Preview URL (fully resolved for existing; object URL for new).
     existingData?: ImageEntry;
     file?: File;
 }
 
+/**
+ * Interactive grid for managing artwork photos.
+ * Implements native HTML5 drag-and-drop for intuitive reordering.
+ */
 function ImageReorderGrid({
     items,
     onReorder,
@@ -87,26 +113,25 @@ function ImageReorderGrid({
                         }}
                     >
                         <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
-                        {/* Cover badge */}
+                        {/* Cover badge: Indicates the primary thumbnail for gallery views. */}
                         {i === 0 && (
                             <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(234,229,217,0.9)", color: "#111", fontSize: "8px", padding: "2px 5px", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                 Cover
                             </div>
                         )}
-                        {/* Index badge */}
+                        {/* Order identifier. */}
                         {i > 0 && (
                             <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(0,0,0,0.5)", color: "#fff", fontSize: "8px", padding: "2px 5px", fontFamily: "var(--font-mono)" }}>
                                 #{i + 1}
                             </div>
                         )}
-                        {/* Remove button */}
                         <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(i); }}
                             style={{ position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "rgba(200,50,50,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
                             title="Remove"
                         >×</button>
-                        {/* Crop button (only for new uploads) */}
+                        {/* Entry point for the SimpleArtworkCropperModal (New files only). */}
                         {item.type === "new" && onCropClick && (
                             <button
                                 type="button"
@@ -118,7 +143,7 @@ function ImageReorderGrid({
                     </div>
                 ))}
 
-                {/* Add more button */}
+                {/* Add more button: Triggers standard file picker. */}
                 {items.length < maxItems && (
                     <button
                         type="button"
@@ -133,7 +158,7 @@ function ImageReorderGrid({
                     onChange={e => {
                         const files = Array.from(e.target.files || []).slice(0, maxItems - items.length);
                         if (files.length > 0) onAddFiles(files);
-                        (e.target as HTMLInputElement).value = ""; // Also clear here just in case
+                        (e.target as HTMLInputElement).value = "";
                     }}
                 />
             </div>
@@ -144,7 +169,9 @@ function ImageReorderGrid({
     );
 }
 
-// ── Tag multi-select ──────────────────────────────────────────────────────────
+/**
+ * Chip-based multi-selection interface for artwork tags.
+ */
 function TagMultiSelect({ tags, selected, onChange, placeholder }: {
     tags: Tag[];
     selected: number[];
@@ -181,8 +208,9 @@ function TagMultiSelect({ tags, selected, onChange, placeholder }: {
     );
 }
 
-// ── Internal Components ─────────────────────────────────────────────────────
-
+/**
+ * Standardized form field title with validation dots.
+ */
 function FieldLabel({ text, required = false, valid = true }: { text: string; required?: boolean; valid?: boolean }) {
     return (
         <div className="flex items-center gap-2 mb-2">
@@ -194,16 +222,22 @@ function FieldLabel({ text, required = false, valid = true }: { text: string; re
     );
 }
 
-// ── Section heading ───────────────────────────────────────────────────────────
+/**
+ * Semantic divider for the artwork creation form.
+ */
 function FormSection({ title }: { title: string }) {
     return (
-        <div className="border-b border-zinc-700 pb-2 mb-4 mt-6">
-            <span className="font-mono text-xs font-bold tracking-widest uppercase text-[#F7F3EC]">{title}</span>
+        <div className="flex items-center gap-4 mb-4">
+            <h3 className="text-lg font-serif italic text-[#F7F3EC] shrink-0">{title}</h3>
+            <div className="flex-1 h-px bg-white/10"></div>
         </div>
     );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+/**
+ * Main administrative interface for curated artwork management.
+ * Orchestrates metadata editing, collection assignment, and visual asset reordering.
+ */
 export default function ArtworksTab() {
     const [artworks, setArtworks] = useState<Artwork[]>([]);
     const [collections, setCollections] = useState<Collection[]>([]);
@@ -213,10 +247,10 @@ export default function ArtworksTab() {
     const [uploading, setUploading] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
 
-    // Image drag-and-drop state
+    // List of images currently being edited or queued for upload.
     const [imageItems, setImageItems] = useState<DragItem[]>([]);
     
-    // Cropper state
+    // Tracks which image is currently being processed in the cropper modal.
     const [cropImageIndex, setCropImageIndex] = useState<number | null>(null);
 
     const defaultForm = {
@@ -236,11 +270,13 @@ export default function ArtworksTab() {
     };
     const [formData, setFormData] = useState<any>(defaultForm);
 
+    /** Safe utility to resolve absolute image URLs from relative backend paths. */
     const resolveImageUrl = useCallback((img: ImageEntry): string => {
         if (typeof img === "string") return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
         return getImageUrl(img, "thumb") || "";
     }, []);
 
+    /** Populates local state with fresh data from the API. */
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -258,6 +294,7 @@ export default function ArtworksTab() {
 
     useEffect(() => { fetchData(); }, []);
 
+    /** Queues selected files for upload and generates local preview URLs. */
     const addFiles = (files: File[]) => {
         const newItems: DragItem[] = files.map(f => ({
             type: "new", url: URL.createObjectURL(f), file: f,
@@ -267,6 +304,7 @@ export default function ArtworksTab() {
 
     const removeImage = (idx: number) => setImageItems(prev => prev.filter((_, i) => i !== idx));
 
+    /** Commits cropped image data back to the upload queue as a high-quality WebP file. */
     const handleSaveCrop = async (croppedBlob: Blob) => {
         if (cropImageIndex === null) return;
         const newFile = new File([croppedBlob], `cropped-${Date.now()}.webp`, { type: "image/webp" });
@@ -282,7 +320,14 @@ export default function ArtworksTab() {
         setCropImageIndex(null);
     };
 
-    // ── Submit ────────────────────────────────────────────────────────────────
+    /** 
+     * Handles the complex multi-step save operation:
+     * 1. Validates business constraints (price, status, image count).
+     * 2. Calculates metric-to-imperial dimension conversions.
+     * 3. Syncs primary metadata (title, description, tags).
+     * 4. Syncs existing image reordering/removals.
+     * 5. Uploads new binary assets for asynchronous background processing.
+     */
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -297,11 +342,11 @@ export default function ArtworksTab() {
         if (payload.width_cm) payload.width_in = Number((parseFloat(payload.width_cm) * 0.393701).toFixed(2));
         if (payload.height_cm) payload.height_in = Number((parseFloat(payload.height_cm) * 0.393701).toFixed(2));
 
-        // Conditionally nullify unused prices based on status toggles
+        // Sanitize prices based on availability toggles.
         if (payload.original_status !== "available") payload.original_price = null;
         if (!payload.has_prints) payload.base_print_price = null;
         
-        // Nullify dimensions if digital or empty
+        // Sanitize dimensions for digital-only assets.
         if (payload.original_status === "digital") {
             payload.width_cm = null;
             payload.height_cm = null;
@@ -336,13 +381,15 @@ export default function ArtworksTab() {
             const data = await res.json();
             const targetId = editingId || data.data?.id;
 
-            // Step 1 (edit only): Save current state of existing images (removes + reordering).
-            // This MUST happen BEFORE uploading new files, so Celery reads the correct base list.
+            /** 
+             * Sync current reorder state of persistent images.
+             * This must precede new uploads to ensure background processing can
+             * append new variants to the correct list.
+             */
             if (editingId) {
                 const existingOrdered = imageItems
                     .filter(it => it.type === "existing")
                     .map(it => it.existingData!);
-                // Always PATCH to apply removals/reordering (even if empty — that means all were removed)
                 await apiFetch(`${apiUrl}/artworks/${editingId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
@@ -350,7 +397,7 @@ export default function ArtworksTab() {
                 });
             }
 
-            // Step 2: Upload new files. Celery will read the PATCH-updated DB and append to it.
+            /** Upload new binary assets for variant generation. */
             const newFiles = imageItems.filter(it => it.type === "new" && it.file).map(it => it.file!);
             if (newFiles.length > 0 && targetId) {
                 const fd = new FormData();
@@ -371,7 +418,7 @@ export default function ArtworksTab() {
         }
     };
 
-    // ── Edit click ────────────────────────────────────────────────────────────
+    /** Pre-hydrates the form with existing artwork data for modification. */
     const handleEditClick = async (art: Artwork) => {
         try {
             const res = await apiFetch(`${getApiUrl()}/artworks/${art.id}`);
@@ -392,7 +439,6 @@ export default function ArtworksTab() {
                 collection_id: full.collection_id || null,
                 original_status: full.original_status || "available",
             });
-            // Populate existing images for reorder
             const existing: DragItem[] = (full.images || []).map((img: ImageEntry) => ({
                 type: "existing" as const,
                 url: resolveImageUrl(img),
@@ -407,6 +453,7 @@ export default function ArtworksTab() {
         }
     };
 
+    /** Removes an artwork and its associated assets from the permanent record. */
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this artwork?")) return;
         const res = await apiFetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE" });
@@ -416,7 +463,7 @@ export default function ArtworksTab() {
 
     const inp = "w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white";
 
-    if (loading) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Loading admin data...</div>;
+    if (loading) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Synchronizing catalog database...</div>;
 
     return (
         <div className="space-y-6">
@@ -560,7 +607,7 @@ export default function ArtworksTab() {
                     </div>
 
                     <button type="submit" disabled={uploading} className="w-full bg-[#EAE5D9] text-[#111111] py-3 uppercase tracking-widest font-mono text-sm disabled:opacity-50 hover:bg-white transition-colors">
-                        {uploading ? "Saving..." : editingId ? "Update Artwork" : "Create Artwork"}
+                        {uploading ? "Saving Asset..." : editingId ? "Update Artwork" : "Create Artwork"}
                     </button>
                 </form>
             )}
@@ -572,7 +619,7 @@ export default function ArtworksTab() {
                 onSaveCrop={handleSaveCrop}
             />
 
-            {/* Artwork grid */}
+            {/* Artwork catalog grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                 {artworks.map(art => (
                     <div key={art.id} className="border border-white/10 p-4 relative group bg-white/5">
@@ -580,7 +627,7 @@ export default function ArtworksTab() {
                             {art.images && art.images.length > 0 ? (
                                 <img src={getImageUrl(art.images[0], "thumb")} alt={art.title} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                             ) : (
-                                <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600 font-mono">No image</div>
+                                <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600 font-mono">Image Missing</div>
                             )}
                         </div>
                         <h3 className="font-serif italic text-lg text-[#F7F3EC] truncate">{art.title}</h3>

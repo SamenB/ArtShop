@@ -1,7 +1,10 @@
 "use client";
-// Navbar — clean pill navigation + preference switchers (language, currency, units).
-// Mobile: hamburger → full-screen menu with preferences at the bottom.
-// Desktop: pill bar with nav links + compact preference pills.
+
+/**
+ * Global Navigation Header.
+ * Implements a responsive, glass-morphic interface containing primary routing paths and user preference settings.
+ * Collapses into a full-screen mobile drawer upon viewport constraint.
+ */
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";

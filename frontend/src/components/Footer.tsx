@@ -1,16 +1,20 @@
 "use client";
-// Footer uses onMouseEnter/onMouseLeave for link hover effects,
-// so it must be a Client Component.
-// It still renders on the server first (SSR), then hydrates in the browser.
+
+/**
+ * Global Application Footer.
+ * Must be a Client Component to manage `onMouseEnter`/`onMouseLeave` inline hover state.
+ * Renders server-side first cleanly before hydrating.
+ */
 
 import Link from "next/link";
 
-// Social links — easy to update
+/** Centralized dictionary for social mapping to easily update external relations. */
 const SOCIAL_LINKS = [
     { href: "https://instagram.com", label: "Instagram", icon: "◈" },
     { href: "mailto:hello@artshop.com", label: "Email", icon: "◉" },
 ];
 
+/** Main footer internal routing dictionary. */
 const FOOTER_NAV = [
     { href: "/gallery", label: "Gallery" },
     { href: "/shop", label: "Shop" },
@@ -18,6 +22,7 @@ const FOOTER_NAV = [
     { href: "/contact", label: "Contact" },
 ];
 
+/** Renders standard exhibition footer containing routing, social media, and copyright text. */
 export default function Footer() {
     const currentYear = new Date().getFullYear();
 

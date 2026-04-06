@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Invisible Asset Preloader.
+ * Queues and pre-fetches high priority graphics in the browser's background idle time.
+ */
+
 import { useEffect } from "react";
 import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 

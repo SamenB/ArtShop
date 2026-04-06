@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Immersive Fullscreen Image Viewer.
+ * Orchestrates multi-touch pan, pinch-to-zoom, and rapid swipe navigation using hardware-accelerated transforms.
+ */
+
 import { useState, useCallback, useRef, useEffect } from "react";
 import { getImageUrl } from "@/utils";
 

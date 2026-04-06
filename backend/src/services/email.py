@@ -1,3 +1,8 @@
+"""
+Service for handling email communications.
+Integrates with SMTP to send transactional emails like contact notifications 
+and automated customer replies.
+"""
 import smtplib
 from email.message import EmailMessage
 
@@ -10,18 +15,25 @@ def send_contact_emails(
     name: str, email: str, message: str, admin_email: str | None = None
 ) -> bool:
     """
-    Sends two emails:
-    1. Notification to the site owner.
-    2. Auto-reply to the customer.
-    Runs synchronously (should be spawned in BackgroundTasks in FastAPI).
+    Orchestrates the sending of contact form notification emails.
+    
+    Logic:
+    1. Sends an alert to the site administrator with the customer's details and message.
+    2. Sends an automated acknowledgment (auto-reply) to the customer.
+    
+    Note: This function is synchronous and should be executed in a background task 
+    to avoid blocking the main API response.
+    
+    Returns:
+        bool: True if both emails were sent successfully, False otherwise.
     """
     if not all([settings.SMTP_HOST, settings.SMTP_USER, settings.SMTP_PASSWORD]):
         logger.warning("SMTP configuration is incomplete. Skipping email send.")
         return False
 
     try:
-        # Create SMTP connection
-        # Usually port 465 is for SSL, 587 is for TLS
+        # Establish SMTP connection.
+        # Uses SSL for port 465, otherwise attempts STARTTLS on standard ports like 587.
         if settings.SMTP_PORT == 465:
             server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT)
         else:
@@ -31,17 +43,18 @@ def send_contact_emails(
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         sender = settings.SMTP_USER
 
-        # 1. SEND TO OWNER (ADMIN)
+        # 1. SEND NOTIFICATION TO THE SITE OWNER (ADMIN)
         owner_msg = EmailMessage()
         owner_msg["Subject"] = f"New Inquiry from {name} (The Samen Bondarenko Gallery)"
         owner_msg["From"] = sender
-        # Send to the primary admin email or the sender itself
+        
+        # Determine recipient: specified admin_email or first configured admin.
         target_email = admin_email or (
             settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else sender
         )
         owner_msg["To"] = target_email
 
-        # Set reply-to to the customer's email so the owner can reply directly!
+        # Set Reply-To to the customer's email for direct follow-up convenience.
         owner_msg["Reply-To"] = email
         owner_msg.set_content(
             f"You have a new message from The Samen Bondarenko Gallery website:\n\n"
@@ -51,7 +64,7 @@ def send_contact_emails(
         )
         server.send_message(owner_msg)
 
-        # 2. SEND AUTO-REPLY TO CUSTOMER
+        # 2. SEND AUTO-REPLY TO THE CUSTOMER
         customer_msg = EmailMessage()
         customer_msg["Subject"] = "Thank you for getting in touch!"
         customer_msg["From"] = sender
@@ -59,7 +72,7 @@ def send_contact_emails(
         customer_msg.set_content(
             f"Hello {name},\n\n"
             f"Thank you for contacting The Samen Bondarenko Gallery. This is an automated message to confirm that we have received your inquiry.\n\n"
-            f"We have safely received your message:\n"
+            f"Message received:\n"
             f'"{message}"\n\n'
             f"Best regards,\n"
             f"The Samen Bondarenko Gallery"

@@ -1,29 +1,41 @@
 "use client";
 
+/**
+ * Public Contact Page.
+ * Renders the studio's contact information (email, social links, address) dynamically fetched from user settings,
+ * alongside a standard inquiry submission form. Features staggered reveal animations on load.
+ */
+
 import { useEffect, useState } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
+/**
+ * Main component governing the layout and state of the contact interface.
+ */
 export default function ContactPage() {
+    // Visibility state utilized purely for CSS fade-in animations on mount
     const [isVisible, setIsVisible] = useState(false);
     
-    // Form State
+    // Controlled Form State
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [message, setMessage] = useState("");
     
-    // UI State
+    // UI Feedback State
     const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
     const [settings, setSettings] = useState<{ contact_email?: string; social_link?: string; studio_address?: string } | null>(null);
 
+    /** Triggers mounting animations and retrieves global site settings. */
     useEffect(() => {
         setIsVisible(true);
-        // Fetch public settings for contact details
+        // Fetch public settings for dynamic contact details
         apiFetch(`${getApiUrl()}/settings`)
             .then(res => res.json())
             .then(data => setSettings(data))
             .catch(err => console.error("Failed to fetch settings", err));
     }, []);
 
+    /** Validates inputs and delegates the form payload to the backend messaging service. */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name || !email || !message) return;

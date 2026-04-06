@@ -1,3 +1,10 @@
+"""
+API endpoints for user authentication, registration, and token management.
+Supports standard email/password login and Google OAuth.
+Uses a hybrid approach for token management:
+- Refresh Token: Whitelist in Redis (rt:{jti}).
+- Access Token: Blacklist in Redis upon logout (at_bl:{token}).
+"""
 import time
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -14,38 +21,45 @@ from src.services.auth import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# ─── Ключи Redis ───────────────────────────────────────────────────────────────
+# --- Redis Keys Strategy ---
 #
-# Используем ДВЕ разные стратегии для двух типов токенов:
+# We use two different strategies for the two types of tokens:
 #
-# REFRESH TOKEN → WHITELIST:
-#   Ключ: "rt:{jti}"  Значение: user_id  TTL: 7 дней
-#   При входе — создаём запись. При использовании — удаляем, создаём новую.
-#   При logout — удаляем. Нет записи → токен невалиден.
-#   Плюс: Redis хранит ТОЛЬКО активные токены, сам чистится по TTL.
+# REFRESH TOKEN -> WHITELIST:
+#   Key: "rt:{jti}"  Value: user_id  TTL: 7 days
+#   On login - create entry. On use - delete old, create new.
+#   On logout - delete. No entry -> token is invalid.
+#   Benefit: Redis only stores active tokens and auto-cleans via TTL.
 #
-# ACCESS TOKEN → BLACKLIST (только при logout):
-#   Ключ: "at_bl:{token}"  Значение: "1"  TTL: оставшееся время жизни токена
-#   Нужен потому что access_token — stateless JWT, и нам нужно
-#   аннулировать его ДО истечения TTL при logout.
-#   Записей мало: каждая живёт максимум 30 минут и сама исчезает.
+# ACCESS TOKEN -> BLACKLIST (only on logout):
+#   Key: "at_bl:{token}"  Value: "1"  TTL: remaining lifetime of the token
+#   Needed because access_token is a stateless JWT, and we need
+#   to invalidate it BEFORE its TTL expires when a user logs out.
+#   Few entries: each lives maximum 30 minutes and auto-disappears.
 
 
 def _rt_key(jti: str) -> str:
+    """
+    Returns the Redis key for a refresh token's JTI.
+    """
     return f"rt:{jti}"
 
 
 def _at_blacklist_key(token: str) -> str:
+    """
+    Returns the Redis key for an access token's blacklist entry.
+    """
     return f"at_bl:{token}"
 
 
-# ─── Cookie helpers ────────────────────────────────────────────────────────────
+# --- Cookie helpers ---
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     """
-    Устанавливает оба токена как httpOnly cookies.
-    secure=True только в продакшене (HTTPS). samesite='lax' — защита от CSRF.
+    Sets both access and refresh tokens as HTTP-only cookies.
+    - secure=True: Only in production (HTTPS).
+    - samesite='lax': Protection against CSRF.
     """
     base_params = dict(
         httponly=True,
@@ -68,25 +82,30 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
 
 
 def _clear_auth_cookies(response: Response) -> None:
+    """
+    Removes authentication cookies from the client browser.
+    """
     response.delete_cookie(key="access_token", path="/")
     response.delete_cookie(key="refresh_token", path="/")
 
 
 async def _save_refresh_token(jti: str, user_id: int) -> None:
-    """Сохраняет refresh token в Redis whitelist при выдаче."""
+    """
+    Saves the refresh token JTI in the Redis whitelist upon issuance.
+    """
     ttl = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
     await redis_manager.set(_rt_key(jti), str(user_id), expire=ttl)
 
 
 async def _issue_tokens(response: Response, user_id: int, username: str) -> str:
     """
-    Создаёт пару токенов, сохраняет refresh в Redis whitelist, пишет cookies.
-    Возвращает access_token (для тела ответа).
+    Generates a new token pair, saves the refresh token to the whitelist, and sets cookies.
+    Returns the new access_token.
     """
     access_token, refresh_token = AuthService().create_token_pair(
         user_id=user_id, username=username
     )
-    # Извлекаем jti нового refresh_token чтобы сохранить в Redis
+    # Extract jti from new refresh_token to save in Redis
     payload = AuthService().decode_refresh_token(refresh_token)
     await _save_refresh_token(jti=payload["jti"], user_id=user_id)
 
@@ -94,16 +113,15 @@ async def _issue_tokens(response: Response, user_id: int, username: str) -> str:
     return access_token
 
 
-# ─── Register ─────────────────────────────────────────────────────────────────
+# --- Register ---
 
 
 @router.post("/register", status_code=201)
 async def register_user(user: UserRequestAdd, request: Request, response: Response, db: DBDep):
     """
-    Регистрация нового пользователя.
-    Rate limit: 10 запросов за 1 час с одного IP.
-    Пароль: мин. 8 символов, хотя бы одна буква и одна цифра (валидация на уровне Pydantic).
-    После успешной регистрации — сразу авторизован (авто-логин).
+    Registers a new user.
+    Rate limit: 10 requests per 1 hour per IP.
+    Automatically logs in the user after successful registration.
     """
     await check_rate_limit(request, endpoint="register", max_requests=10, window_seconds=3600)
 
@@ -117,27 +135,27 @@ async def register_user(user: UserRequestAdd, request: Request, response: Respon
         new_user = await db.users.add(new_user_data)
         await db.commit()
     except ObjectAlreadyExistsException:
-        # Перехватываем внутреннее исключение и бросаем чистое — без деталей таблицы
+        # Catch internal exception and raise a clean user-facing error
         raise UserAlreadyExistsException
 
     access_token = await _issue_tokens(response, user_id=new_user.id, username=new_user.username)
     return {"status": "OK", "access_token": access_token}
 
 
-# ─── Login ────────────────────────────────────────────────────────────────────
+# --- Login ---
 
 
 @router.post("/login")
 async def login_user(data: UserLogin, request: Request, response: Response, db: DBDep):
     """
-    Логин по email + пароль.
-    Rate limit: 5 попыток за 15 минут с одного IP — защита от bruteforce.
-    Возвращает access_token (30 мин) + refresh_token (7 дней) в httpOnly cookies.
+    Authenticates a user via email and password.
+    Rate limit: 5 attempts per 15 minutes per IP (bruteforce protection).
+    Returns access_token (30 min) and refresh_token (7 days) in HTTP-only cookies.
     """
     await check_rate_limit(request, endpoint="login", max_requests=5, window_seconds=900)
 
     user = await db.users.get_user_with_password(email=data.email)
-    # Одинаковый ответ при неверном email и неверном пароле — не раскрываем, есть ли такой юзер
+    # Return identical error for wrong email/password to prevent user enumeration
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not AuthService().verify_password(data.password, user.hashed_password):
@@ -147,22 +165,17 @@ async def login_user(data: UserLogin, request: Request, response: Response, db: 
     return {"access_token": access_token}
 
 
-# ─── Refresh ──────────────────────────────────────────────────────────────────
+# --- Refresh ---
 
 
 @router.post("/refresh")
 async def refresh_tokens(request: Request, response: Response, db: DBDep):
     """
-    Обновляет пару токенов (Refresh Token Rotation, WHITELIST схема).
-
-    Схема:
-    1. Читаем refresh_token из cookie
-    2. Декодируем и проверяем подпись + тип
-    3. Проверяем Redis WHITELIST: запись "rt:{jti}" существует?
-       - Нет → токен невалиден (уже использован, logout, или подделан) → 401
-       - Да → продолжаем
-    4. УДАЛЯЕМ старую запись из Redis (токен использован — он одноразовый)
-    5. Выдаём новую пару токенов → новый jti → новая запись в Redis whitelist
+    Refreshes the token pair using Refresh Token Rotation (Whitelist strategy).
+    1. Reads refresh_token from cookies.
+    2. Validates JTI against current Redis whitelist.
+    3. If valid, deletes old JTI and issues a new token pair.
+    If the token has already been used or deleted (logout), access is denied.
     """
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
@@ -175,53 +188,55 @@ async def refresh_tokens(request: Request, response: Response, db: DBDep):
     if not jti or not user_id:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    # Проверяем whitelist: есть ли этот jti в Redis?
+    # Check whitelist: is this jti present in Redis?
     stored = await redis_manager.get(_rt_key(jti))
     if not stored:
-        # Токена нет в Redis — значит он уже был использован, logout, или истёк.
-        # Если кто-то пытается повторно использовать старый rotate-нутый refresh_token —
-        # это признак кражи: один пользователь уже обновил, а тут кто-то пришёл со старым.
+        # Token missing from Redis: either already used, logged out, or expired.
+        # Potential theft signal if someone tries to re-use an old refresh_token.
         raise HTTPException(
             status_code=401, detail="Session expired or already used. Please log in again."
         )
 
-    # Удаляем старую запись — токен использован, он одноразовый
+    # Delete old entry as it is single-use
     await redis_manager.delete(_rt_key(jti))
 
-    # Проверяем что пользователь всё ещё существует в БД
+    # Verify user still exists in database
     user = await db.users.get_one_or_none(id=user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Выдаём новую пару → новый jti автоматически сохраняется в whitelist внутри _issue_tokens
+    # Issue new pair; new jti is automatically saved to whitelist within _issue_tokens
     new_access = await _issue_tokens(response, user_id=user.id, username=user.username)
     return {"access_token": new_access}
 
 
-# ─── Me ───────────────────────────────────────────────────────────────────────
+# --- Me ---
 
 
 @router.get("/me", response_model=User)
 async def get_current_user(user_id: UserDep, db: DBDep):
+    """
+    Returns basic information about the currently authenticated user.
+    """
     user = await db.users.get_one(id=user_id)
     is_admin = user.email.lower() in settings.ADMIN_EMAILS
     return {"id": user.id, "username": user.username, "email": user.email, "is_admin": is_admin}
 
 
-# ─── Logout ───────────────────────────────────────────────────────────────────
+# --- Logout ---
 
 
 @router.post("/logout")
 async def logout_user(request: Request, response: Response):
     """
-    Logout:
-    - refresh_token: удаляем из Redis whitelist → токен мгновенно невалиден
-    - access_token: добавляем в blacklist до истечения его TTL (максимум 30 мин)
-    - Оба cookie удаляются из браузера
+    Logs out the user by:
+    - Deleting the refresh_token from the Redis whitelist.
+    - Adding the access_token to the Redis blacklist until its TTL expires.
+    - Clearing authentication cookies from the browser.
     """
     auth_service = AuthService()
 
-    # Инвалидируем refresh_token — удаляем из whitelist
+    # Invalidate refresh_token by removing from whitelist
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
         try:
@@ -230,9 +245,9 @@ async def logout_user(request: Request, response: Response):
             if jti:
                 await redis_manager.delete(_rt_key(jti))
         except Exception:
-            pass  # Токен уже просрочен или невалиден — не страшно
+            pass  # Token already expired or invalid: no further action needed
 
-    # Инвалидируем access_token — добавляем в blacklist до конца его TTL
+    # Invalidate access_token by adding to blacklist until expiration
     access_token = request.cookies.get("access_token")
     if access_token:
         try:
@@ -247,16 +262,15 @@ async def logout_user(request: Request, response: Response):
     return {"status": "OK"}
 
 
-# ─── Google OAuth ─────────────────────────────────────────────────────────────
+# --- Google OAuth ---
 
 
 @router.post("/google")
 async def google_login(data: GoogleLoginRequest, request: Request, response: Response, db: DBDep):
     """
-    Google OAuth — принимает ID Token от фронтенда (Google Sign-In).
-    Если пользователь новый — создаёт аккаунт с случайным паролем
-    (пользователь не знает пароль, вход только через Google).
-    Rate limit: 10 попыток за 5 минут.
+    Handles Google OAuth login.
+    If the user is new, creates a new account with a random password.
+    Rate limit: 10 attempts per 5 minutes.
     """
     await check_rate_limit(request, endpoint="google", max_requests=10, window_seconds=300)
 
@@ -280,7 +294,7 @@ async def google_login(data: GoogleLoginRequest, request: Request, response: Res
         new_user_data = UserAdd(
             username=name,
             email=email,
-            # ВАЖНО: случайный пароль — нельзя угадать и войти через /login
+            # Assign random password: user must login via Google as they won't know the password
             hashed_password=AuthService().hash_password(AuthService.make_random_password()),
         )
         user = await db.users.add(new_user_data)

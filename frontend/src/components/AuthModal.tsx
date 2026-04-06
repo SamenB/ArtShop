@@ -1,28 +1,41 @@
 "use client";
+
+/**
+ * Authentication Overlay Interface.
+ * Manages user registration, standard email login, and Google OAuth flows within a centralized modal context.
+ * Parses validation errors elegantly for a smooth end-user experience.
+ */
+
 import { useState } from "react";
 import { useUser } from "@/context/UserContext";
 import { X } from "lucide-react";
 import { getApiUrl } from "@/utils";
 import { GoogleLogin } from "@react-oauth/google";
 
+/** Props regulating the overlay's display state mapped from parent components. */
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-// Парсит ошибки от FastAPI: может быть строкой (detail: "...") или
-// массивом Pydantic-ошибок (detail: [{msg: "..."}, ...])
+/**
+ * Parses generic or structured error outputs from the FastAPI backend.
+ * Normalizes Pydantic arrays into displayable string messages.
+ * @param data Top-level error object from JSON fetch response.
+ * @returns Formatted human-readable string.
+ */
 function parseApiError(data: any): string {
     if (!data?.detail) return "Authentication failed";
     if (typeof data.detail === "string") return data.detail;
     if (Array.isArray(data.detail)) {
-        // Pydantic validation errors — берём первое сообщение
+        // Extract the target message from Pydantic validation errors
         const first = data.detail[0];
         return first?.msg?.replace("Value error, ", "") ?? "Validation error";
     }
     return "Authentication failed";
 }
 
+/** Reusable floating modal managing session lifecycles without redirecting. */
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState("");
@@ -34,6 +47,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     if (!isOpen) return null;
 
+    /** Clears all temporary state variables gracefully. */
     const resetForm = () => {
         setEmail("");
         setPassword("");
@@ -41,11 +55,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         setError("");
     };
 
+    /** Toggles interface between login and registration layouts. */
     const switchMode = (login: boolean) => {
         setIsLogin(login);
         setError("");
     };
 
+    /** Prepares the JSON payload and pushes the auth intent to the backend. */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
@@ -65,7 +81,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             });
 
             if (resp.ok) {
-                // И логин, и регистрация теперь сразу выдают cookies → авто-логин
+                // Login and Registration automatically attach robust session cookies for auto-login
                 await refreshUser();
                 resetForm();
                 onClose();
@@ -80,6 +96,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }
     };
 
+    /** Verifies a third-party token via Google Identity APIs. */
     const handleGoogleSuccess = async (credentialResponse: any) => {
         setError("");
         setIsLoading(true);

@@ -1,17 +1,30 @@
 "use client";
-// LabelsTab — unified tab for Collections + Medium tags + General tags
+
+/**
+ * Labels Management Tab.
+ * Centralized interface for managing collections, medium-specific tags, and general tags.
+ * Ensures consistent taxonomy across the entire artwork catalog.
+ */
+
 import { useState, useEffect } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
+/** Represents a collection grouping for artworks. */
 interface Collection { id: number; title: string; }
+
+/** Represents a metadata tag for filtering and classification. */
 interface Tag { id: number; title: string; category?: string | null; }
 
-// ── Mini inline-add form ──────────────────────────────────────────────────────
+/**
+ * Compact inline form for adding new taxonomy entries.
+ */
 function AddItemRow({
     placeholder,
     onAdd,
 }: {
+    /** Input placeholder text guiding the user on naming conventions. */
     placeholder: string;
+    /** Async callback triggered upon submission of a valid, non-empty string. */
     onAdd: (title: string) => Promise<void>;
 }) {
     const [title, setTitle] = useState("");
@@ -39,13 +52,15 @@ function AddItemRow({
                 disabled={saving || !title.trim()}
                 className="px-4 py-2 bg-white/10 text-white uppercase font-mono text-[10px] tracking-widest hover:bg-white/20 transition-colors disabled:opacity-40 rounded-sm whitespace-nowrap"
             >
-                {saving ? "Adding…" : "+ Add"}
+                {saving ? "Adding..." : "+ Add"}
             </button>
         </form>
     );
 }
 
-// ── Tag chip ──────────────────────────────────────────────────────────────────
+/**
+ * Visual pill representation of a taxonomy entry, with a deletion control.
+ */
 function TagChip({ label, onDelete }: { label: string; onDelete: () => void }) {
     return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-white/15 rounded-full text-[11px] font-mono text-zinc-300 bg-white/3 group">
@@ -59,16 +74,22 @@ function TagChip({ label, onDelete }: { label: string; onDelete: () => void }) {
     );
 }
 
-// ── Section wrapper ───────────────────────────────────────────────────────────
+/**
+ * Structural wrapper for cohesive grouping of related taxonomy editors.
+ */
 function Section({
     title,
     accent,
     description,
     children,
 }: {
+    /** Heading of the taxonomy domain. */
     title: string;
+    /** Hex color code for the visual bullet indicator. */
     accent: string;
+    /** Clarifying text guiding the administrator on usage. */
     description: string;
+    /** Child components (Chips and AddItemRow). */
     children: React.ReactNode;
 }) {
     return (
@@ -83,7 +104,9 @@ function Section({
     );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+/**
+ * Main component governing the global labels configuration.
+ */
 export default function LabelsTab() {
     const [collections, setCollections] = useState<Collection[]>([]);
     const [mediumTags, setMediumTags] = useState<Tag[]>([]);
@@ -92,6 +115,7 @@ export default function LabelsTab() {
 
     const apiUrl = getApiUrl();
 
+    /** Pulls all taxonomy datasets concurrently to build the interface state. */
     const fetchAll = async () => {
         setLoading(true);
         try {
@@ -109,7 +133,7 @@ export default function LabelsTab() {
 
     useEffect(() => { fetchAll(); }, []);
 
-    // Collections CRUD
+    /** Adds a new curated collection domain. */
     const addCollection = async (title: string) => {
         const res = await apiFetch(`${apiUrl}/collections`, {
             method: "POST",
@@ -117,15 +141,17 @@ export default function LabelsTab() {
             body: JSON.stringify({ title }),
         });
         if (res.ok) fetchAll();
-        else { const e = await res.json(); alert(e.detail || "Failed"); }
+        else { const e = await res.json(); alert(e.detail || "Failed to add collection"); }
     };
+
+    /** Obliterates a collection and cascades nullification to its artworks. */
     const deleteCollection = async (id: number) => {
-        if (!confirm("Delete this collection?")) return;
+        if (!confirm("Delete this collection? Artworks will lose this categorization.")) return;
         await apiFetch(`${apiUrl}/collections/${id}`, { method: "DELETE" });
         setCollections(c => c.filter(x => x.id !== id));
     };
 
-    // Tag CRUD (medium / general)
+    /** Persists a generalized or medium-specific tag. */
     const addTag = async (title: string, category: string) => {
         const res = await apiFetch(`${apiUrl}/tags`, {
             method: "POST",
@@ -133,10 +159,11 @@ export default function LabelsTab() {
             body: JSON.stringify({ title, category }),
         });
         if (res.ok) fetchAll();
-        else { const e = await res.json(); alert(e.detail || "Failed"); }
+        else { const e = await res.json(); alert(e.detail || "Failed to add tag"); }
     };
+
+    /** Removes a tag, providing intelligent prompts regarding active usage. */
     const deleteTag = async (id: number, title: string) => {
-        // Fetch usage count first — professional UX: informed confirmation
         let usageMsg = "";
         try {
             const r = await apiFetch(`${apiUrl}/tags/${id}/usage`);
@@ -144,10 +171,10 @@ export default function LabelsTab() {
                 const data = await r.json();
                 const n = data.artwork_count;
                 usageMsg = n > 0
-                    ? `\n\n⚠️ This tag is currently used by ${n} artwork${n > 1 ? "s" : ""}. It will be removed from ${n > 1 ? "all of them" : "it"}.`
-                    : "\n\nThis tag is not linked to any artworks.";
+                    ? `\n\n⚠️ This tag is currently linked to ${n} artwork${n > 1 ? "s" : ""}. Proceeding will sever these links.`
+                    : "\n\nThis tag is currently unused.";
             }
-        } catch { /* ignore, still allow delete */ }
+        } catch { /* Silent fail is acceptable; fallback to standard confirmation */ }
 
         if (!confirm(`Delete tag "${title}"?${usageMsg}`)) return;
         await apiFetch(`${apiUrl}/tags/${id}`, { method: "DELETE" });
@@ -155,7 +182,7 @@ export default function LabelsTab() {
     };
 
     if (loading) return (
-        <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Loading labels…</div>
+        <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Checking taxonomy dependencies...</div>
     );
 
     return (
@@ -163,59 +190,56 @@ export default function LabelsTab() {
             <div className="mb-2">
                 <h2 className="text-2xl font-serif italic">Labels & Tags</h2>
                 <p className="text-zinc-600 font-mono text-xs mt-1 tracking-wide">
-                    Manage all classifiers used across artworks and shop filters.
+                    Manage the global taxonomy for artwork clarification and shop filtering.
                 </p>
             </div>
 
-            {/* 1. Collections */}
             <Section
                 title="Collections"
                 accent="#6B9AC4"
-                description="Group artworks into named collections. Artworks are assigned a collection in the artwork editor."
+                description="Primary structural series. Artworks are constrained to a single collection in the dashboard."
             >
                 <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {collections.map(c => (
                         <TagChip key={c.id} label={c.title} onDelete={() => deleteCollection(c.id)} />
                     ))}
                     {collections.length === 0 && (
-                        <span className="text-zinc-700 font-mono text-[11px] italic">No collections yet</span>
+                        <span className="text-zinc-700 font-mono text-[11px] italic">No collections registered</span>
                     )}
                 </div>
-                <AddItemRow placeholder="e.g. Landscapes, Portraits, Sketches…" onAdd={addCollection} />
+                <AddItemRow placeholder="e.g. Exhibitions, Archive, Ongoing..." onAdd={addCollection} />
             </Section>
 
-            {/* 2. Medium / Materials */}
             <Section
                 title="Medium / Materials"
                 accent="#A47CC4"
-                description="Materials or techniques (Oil, Charcoal, Watercolour…). These appear in the Shop filter and artwork editor."
+                description="Physical classification tools (e.g., Oil, Watercolor). Vital for shop filtering algorithms."
             >
                 <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {mediumTags.map(t => (
                         <TagChip key={t.id} label={t.title} onDelete={() => deleteTag(t.id, t.title)} />
                     ))}
                     {mediumTags.length === 0 && (
-                        <span className="text-zinc-700 font-mono text-[11px] italic">No medium tags yet</span>
+                        <span className="text-zinc-700 font-mono text-[11px] italic">No medium tags registered</span>
                     )}
                 </div>
-                <AddItemRow placeholder="e.g. Oil on canvas, Charcoal, Acrylic…" onAdd={t => addTag(t, "medium")} />
+                <AddItemRow placeholder="e.g. Oil on Canvas, Digital, Ceramics..." onAdd={t => addTag(t, "medium")} />
             </Section>
 
-            {/* 3. General Tags */}
             <Section
                 title="General Tags"
                 accent="#6BB87A"
-                description="Free-form tags for any other categorisation. Useful for search and future filters."
+                description="Auxiliary search handles and thematic descriptors."
             >
                 <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {generalTags.map(t => (
                         <TagChip key={t.id} label={t.title} onDelete={() => deleteTag(t.id, t.title)} />
                     ))}
                     {generalTags.length === 0 && (
-                        <span className="text-zinc-700 font-mono text-[11px] italic">No general tags yet</span>
+                        <span className="text-zinc-700 font-mono text-[11px] italic">No general tags registered</span>
                     )}
                 </div>
-                <AddItemRow placeholder="e.g. Abstract, Figurative, Nature…" onAdd={t => addTag(t, "general")} />
+                <AddItemRow placeholder="e.g. Surrealism, Monochromatic, Sketches..." onAdd={t => addTag(t, "general")} />
             </Section>
         </div>
     );

@@ -1,3 +1,8 @@
+"""
+Service layer for authentication and security.
+Handles JWT token generation (access and refresh pairs), password hashing, 
+and secure random password generation for OAuth users.
+"""
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -10,12 +15,24 @@ from src.services.base import BaseService
 
 
 class AuthService(BaseService):
+    """
+    Provides cryptographic and token-based security operations.
+    Integrates with JWT and pwdlib for robust authentication.
+    """
+
     def __init__(self):
+        """
+        Initializes the password hashing engine with recommended settings.
+        """
         self.password_hash = PasswordHash.recommended()
 
     # ─── Access Token ──────────────────────────────────────────────────────────
 
     def create_access_token(self, data: dict) -> str:
+        """
+        Generates a short-lived JWT access token for user sessions.
+        Includes an expiration timestamp and a 'type' claim.
+        """
         to_encode = data.copy()
         expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
@@ -24,6 +41,10 @@ class AuthService(BaseService):
         return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
     def decode_access_token(self, token: str) -> dict:
+        """
+        Validates and decodes a JWT access token.
+        Raises specific exceptions for expiration or invalid signatures.
+        """
         try:
             payload = jwt.decode(
                 token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
@@ -40,10 +61,10 @@ class AuthService(BaseService):
 
     def create_refresh_token(self, data: dict) -> str:
         """
-        Refresh token — opaque JWT с TTL 7 дней.
-        Хранится в Redis; при использовании инвалидируется (rotation).
+        Generates a long-lived JWT refresh token.
+        Includes a unique JTI (JWT ID) for rotation and whitelist tracking in Redis.
+        TTL is determined by project settings (default 7 days).
         """
-        # jti — уникальный ID токена (для whitelist/rotation)
         now = datetime.now(timezone.utc)
         to_encode = data.copy()
         to_encode.update(
@@ -56,6 +77,10 @@ class AuthService(BaseService):
         return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
     def decode_refresh_token(self, token: str) -> dict:
+        """
+        Validates and decodes a JWT refresh token.
+        Ensures the 'type' claim matches before returning the payload.
+        """
         try:
             payload = jwt.decode(
                 token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
@@ -69,7 +94,9 @@ class AuthService(BaseService):
             raise InvalidTokenException
 
     def create_token_pair(self, user_id: int, username: str) -> tuple[str, str]:
-        """Создаёт пару access + refresh токенов для пользователя."""
+        """
+        Creates both an access token and a refresh token for a user.
+        """
         data = {"user_id": user_id, "username": username}
         access = self.create_access_token(data)
         refresh = self.create_refresh_token(data)
@@ -78,12 +105,21 @@ class AuthService(BaseService):
     # ─── Password ──────────────────────────────────────────────────────────────
 
     def hash_password(self, password: str) -> str:
+        """
+        Generates a secure hash from a plain-text password.
+        """
         return self.password_hash.hash(password)
 
     def verify_password(self, password: str, hashed_password: str) -> bool:
+        """
+        Verifies a plain-text password against a stored hash.
+        """
         return self.password_hash.verify(password, hashed_password)
 
     @staticmethod
     def make_random_password() -> str:
-        """Генерирует криптографически случайный пароль для OAuth-пользователей."""
+        """
+        Generates a cryptographically secure random hex string.
+        Used as a placeholder password for OAuth/Google-registered users.
+        """
         return secrets.token_hex(32)

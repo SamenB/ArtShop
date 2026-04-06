@@ -1,29 +1,24 @@
 "use client";
-// PreferencesContext — global state for user preferences:
-// language, currency, and measurement units.
-//
-// WHY a Context?
-// These settings affect MANY components across the app (Navbar, Shop, Gallery, etc.)
-// Instead of passing props through every level ("prop drilling"),
-// Context lets any component read/update these values directly.
-//
-// HOW it works:
-// 1. createContext() creates a "channel" for sharing data
-// 2. PreferencesProvider wraps the app and holds the actual state
-// 3. usePreferences() hook lets any child component access the values
-// 4. Values are saved to localStorage so they persist across page reloads
 
+/**
+ * Context provider for managing global user preferences.
+ * Handles localization (language), financial settings (currency), 
+ * and measurement units (centimeters vs inches).
+ * Synchronizes state with localStorage and provides live currency conversion.
+ */
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
-// Supported languages — extend this list as translations are added
+/** Supported application languages. */
 export type Language = "en" | "uk";
-// Supported currencies
+
+/** Supported display currencies. */
 export type Currency = "USD" | "UAH";
-// Measurement units
+
+/** Supported measurement units for artwork dimensions. */
 export type Units = "cm" | "in";
 
-// Shape of the context value — what every consumer gets access to
+/** Definition of the preferences state and formatting utilities. */
 interface PreferencesContextType {
     language: Language;
     currency: Currency;
@@ -31,54 +26,62 @@ interface PreferencesContextType {
     setLanguage: (lang: Language) => void;
     setCurrency: (cur: Currency) => void;
     setUnits: (u: Units) => void;
+    /** Current exchange rates fetch from an external API. */
     rates: Record<Currency, number>;
+    /** Utility to convert and format a USD price into the user's preferred currency. */
     convertPrice: (usdPrice: number) => string;
+    /** Global administrative setting for base print pricing. */
     globalPrintPrice: number;
 }
 
-// Labels for display in the UI
+/** UI labels for the language selector. */
 export const LANGUAGE_LABELS: Record<Language, ReactNode> = {
     en: "EN",
     uk: "UA",
 };
 
+/** Symbol identifiers for supported currencies. */
 export const CURRENCY_LABELS: Record<Currency, string> = {
     USD: "$",
     UAH: "₴",
 };
 
+/** Labels for the measurement unit selector. */
 export const UNITS_LABELS: Record<Units, string> = {
     cm: "CM",
     in: "IN",
 };
 
-// Create the context with undefined default — will be provided by PreferencesProvider
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
 
-// localStorage key — all preferences stored as one JSON object
 const STORAGE_KEY = "artshop_preferences";
 
-// Default values for first-time visitors
+/** Initial state for new visitors. */
 const DEFAULTS: { language: Language; currency: Currency; units: Units } = {
     language: "en",
     currency: "USD",
     units: "in",
 };
 
-// Provider component — wraps the entire app in layout.tsx
+/**
+ * High-level provider that manages session-persistent user settings.
+ * Orchestrates external data fetching for exchange rates and site-wide settings.
+ */
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-    // Initialize state from localStorage (if available) or defaults
     const [language, setLanguageState] = useState<Language>(DEFAULTS.language);
     const [currency, setCurrencyState] = useState<Currency>(DEFAULTS.currency);
     const [units, setUnitsState] = useState<Units>(DEFAULTS.units);
     const [loaded, setLoaded] = useState(false);
+    
+    // Default fallback rates in case of API failure.
     const [rates, setRates] = useState<Record<Currency, number>>({
         USD: 1,
         UAH: 39.5,
     });
+    
     const [globalPrintPrice, setGlobalPrintPrice] = useState<number>(150);
 
-    // Fetch site settings (for global print price, etc.)
+    // Fetch administrative site settings on initialization.
     useEffect(() => {
         async function fetchSettings() {
             try {
@@ -89,13 +92,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
                     setGlobalPrintPrice(data.global_print_price);
                 }
             } catch (err) {
-                console.warn("Backend unavailable, using default print prices.");
+                console.warn("Backend settings unavailable, using local defaults.");
             }
         }
         fetchSettings();
     }, []);
 
-    // Fetch live currency rates on mount
+    // Fetch real-time exchange rates.
     useEffect(() => {
         async function fetchRates() {
             try {
@@ -108,14 +111,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
                     });
                 }
             } catch (err) {
-                console.error("Failed to fetch rates, using fallbacks:", err);
+                console.error("Exchange rate API inaccessible, using cached fallbacks.");
             }
         }
         fetchRates();
     }, []);
 
-    // On mount: read saved preferences from localStorage
-    // useEffect runs only on the client (not during SSR) — safe to access localStorage
+    // Load persisted preferences from the browser's local storage.
     useEffect(() => {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
@@ -126,26 +128,25 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
                 if (parsed.units) setUnitsState(parsed.units);
             }
         } catch {
-            // localStorage not available or corrupted — use defaults
+            // Silently ignore corrupted storage data.
         }
         setLoaded(true);
     }, []);
 
-    // Save to localStorage whenever any preference changes
-    // Skip the initial render (before loaded) to avoid overwriting saved values with defaults
+    // Persist preference changes back to local storage.
     useEffect(() => {
         if (!loaded) return;
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({ language, currency, units }));
         } catch {
-            // localStorage full or not available — silently fail
+            // Silently ignore storage quota/permission issues.
         }
     }, [language, currency, units, loaded]);
 
-    // Setter functions that update both state and will trigger the save effect above
+    /** Updates language and applies smart defaults for currency/units. */
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
-        // Automatic syncing: when language changes, update defaults appropriately
+        // Smart syncing: switch defaults based on cultural territory.
         if (lang === "uk") {
             setCurrencyState("UAH");
             setUnitsState("cm");
@@ -154,14 +155,16 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             setUnitsState("in");
         }
     };
+    
     const setCurrency = (cur: Currency) => setCurrencyState(cur);
     const setUnits = (u: Units) => setUnitsState(u);
 
-    // Helper to format price according to current currency and fetched rates
+    /** Converts a base USD price to the active currency and formats it for display. */
     const convertPrice = (usdPrice: number) => {
         const rate = rates[currency] || 1;
         const converted = usdPrice * rate;
         
+        // Format as whole numbers for a cleaner gallery aesthetic.
         let formatted = new Intl.NumberFormat(language === "uk" ? "uk-UA" : "en-US", {
             style: "decimal",
             maximumFractionDigits: 0,
@@ -172,14 +175,26 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <PreferencesContext.Provider value={{ language, currency, units, setLanguage, setCurrency, setUnits, rates, convertPrice, globalPrintPrice }}>
+        <PreferencesContext.Provider value={{ 
+            language, 
+            currency, 
+            units, 
+            setLanguage, 
+            setCurrency, 
+            setUnits, 
+            rates, 
+            convertPrice, 
+            globalPrintPrice 
+        }}>
             {children}
         </PreferencesContext.Provider>
     );
 }
 
-// Custom hook — shortcut for components to access preferences
-// Throws an error if used outside of PreferencesProvider (catches bugs early)
+/**
+ * Hook to access localization state and pricing utilities.
+ * Throws if used outside of a PreferencesProvider.
+ */
 export function usePreferences() {
     const ctx = useContext(PreferencesContext);
     if (!ctx) throw new Error("usePreferences must be used within PreferencesProvider");

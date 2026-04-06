@@ -1,5 +1,10 @@
 "use client";
-// Shop — 7-section sidebar filters, all data from API
+
+/**
+ * Shop module for the ArtShop.
+ * Provides a comprehensive catalog of artworks with multi-layered sidebar filters,
+ * including categories, price ranges, dimensions, orientation, and more.
+ */
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
@@ -7,8 +12,10 @@ import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
+/** Availability states for artworks and prints. */
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
+/** Represents an artwork entry in the shop. */
 interface Product {
     id: number;
     slug?: string;
@@ -35,14 +42,19 @@ interface Product {
     collection_id?: number;
 }
 
+/** Collection metadata. */
 interface Collection { id: number; title: string; }
+
+/** Tag metadata for filtering (mediums, styles, etc.). */
 interface Tag { id: number; title: string; category?: string; }
 
+/** Aesthetic fallback color pairs. */
 const DEFAULT_GRADIENTS = [
     ["#6A9FB5", "#3A6E85"], ["#2A5F7A", "#1A3A55"],
     ["#8A7AB5", "#4A5A8A"], ["#5A8A8A", "#2A5A5A"], ["#D4905A", "#8A5030"],
 ];
 
+/** Sort options for the shop catalog. */
 type SortKey = "newest" | "price-low" | "price-high" | "size-small" | "size-large";
 const SORT_OPTIONS: { label: string; key: SortKey }[] = [
     { label: "Newest", key: "newest" },
@@ -52,16 +64,23 @@ const SORT_OPTIONS: { label: string; key: SortKey }[] = [
     { label: "Size ↓", key: "size-large" },
 ];
 
+/** Calculates the longest dimension of an artwork in cm. */
 const getLongestSide = (p: Product): number => Math.max(p.width_cm || 0, p.height_cm || 0);
+
+/** Calculates the surface area of an artwork in square cm. */
 const getArea = (p: Product) => (p.width_cm || 0) * (p.height_cm || 0);
+
+/** Determines calculated orientation if not explicitly provided by metadata. */
 const getOrientation = (p: Product): "horizontal" | "vertical" | "square" | null => {
     if (p.orientation) return p.orientation.toLowerCase() as any;
     if (!p.width_cm || !p.height_cm) return null;
     const ratio = p.width_cm / p.height_cm;
-    if (ratio > 1.1) return "horizontal";
-    if (ratio < 0.9) return "vertical";
+    if (ratio >= 1.1) return "horizontal";
+    if (ratio <= 0.9) return "vertical";
     return "square";
 };
+
+/** Groups artworks into broad size categories for filter logic. */
 const getSizeCategory = (p: Product): "small" | "medium" | "large" | null => {
     const area = getArea(p);
     if (!area) return null;
@@ -70,6 +89,10 @@ const getSizeCategory = (p: Product): "small" | "medium" | "large" | null => {
     return "large";
 };
 
+/**
+ * Sorts products based on selected strategy.
+ * For prints, uses the global print base price if original price is not relevant.
+ */
 function sortProducts(products: Product[], key: SortKey, globalPrintPrice: number) {
     const c = [...products];
     switch (key) {
@@ -82,10 +105,10 @@ function sortProducts(products: Product[], key: SortKey, globalPrintPrice: numbe
     return c;
 }
 
-// ── IMAGE ZONE HEIGHT per grid mode ──────────────────────────────────────────
+/** Height presets for the image exhibition zone based on grid density. */
 const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
-// ── Status labels + colours ──────────────────────────────────────────────────
+/** Status labels and thematic colors for physical availability. */
 const STATUS: Record<string, { label: string; color: string }> = {
     available: { label: "AVAILABLE", color: "#6DB87E" },
     sold: { label: "SOLD", color: "#C0392B" },
@@ -96,20 +119,28 @@ const STATUS: Record<string, { label: string; color: string }> = {
     digital: { label: "DIGITAL", color: "#8E44AD" },
 };
 
-// ── ProductCard ─────────────────────────────────────────────────────────────────
+/**
+ * Individual product card for the shop catalog.
+ * Features dynamic aspect-ratio calculation to align metadata perfectly with
+ * the image's left edge. Displays original status and print pricing.
+ */
 function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product; zoneH: number; gridMode: string; isMobile: boolean }) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
     const isSquare = ori === "square";
     const imgSrc = product.images?.[0] ? getImageUrl(product.images[0], "original") || "" : "";
-    const materialLabel = product.materials || product.medium || "Painting";
     const st = STATUS[product.original_status];
 
-    /* ── ref-based text alignment to painting's left edge ── */
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
+
+    /**
+     * Synchronizes metadata alignment with the actual rendered bounds of 
+     * the artwork image, compensating for variable aspect ratios within 
+     * fixed grid columns.
+     */
     const recalc = useCallback(() => {
         const c = containerRef.current;
         if (!c) return;
@@ -122,10 +153,19 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
         setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
     }, []);
-    useEffect(() => { recalc(); window.addEventListener("resize", recalc); return () => window.removeEventListener("resize", recalc); }, [recalc]);
-    // Recalc when zone height changes (grid mode switch) — image resizes, need new offset
-    useEffect(() => { requestAnimationFrame(recalc); }, [zoneH, recalc]);
 
+    useEffect(() => { 
+        recalc(); 
+        window.addEventListener("resize", recalc); 
+        return () => window.removeEventListener("resize", recalc); 
+    }, [recalc]);
+
+    // Re-calculate alignment when layout density (gridMode) shifts.
+    useEffect(() => { 
+        requestAnimationFrame(recalc); 
+    }, [zoneH, recalc]);
+
+    /** Format dimensions based on user's persistent unit preference (cm/in). */
     const sizeStr = useMemo(() => {
         const w = units === "in" ? product.width_in : product.width_cm;
         const h = units === "in" ? product.height_in : product.height_cm;
@@ -181,7 +221,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     )}
                 </div>
             </Link>
-            {/* Standard Info — aligned to painting's left vertical edge */}
+            
+            {/* Metadata overlay: Bottom-anchored and horizontally aligned to the image's vertical edge. */}
             {(gridMode !== "3" || !isMobile) && (
                 <div style={{
                     marginTop: `-${emptyBottom}px`,
@@ -201,7 +242,6 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     }}>
                         {product.title}
                     </p>
-
 
                     <p style={{
                         fontFamily: "var(--font-sans)",
@@ -229,17 +269,17 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     )}
                 </div>
             )}
-
         </div>
     );
 }
 
 
-// ── FilterCheckbox ────────────────────────────────────────────────────────────
+/**
+ * Minimalist checkbox for sidebar filtering.
+ * Uses CSS siblings for hover states and native hidden inputs for accessibility.
+ */
 function FilterCheckbox({ label, active, onClick, isMobile }: { label: string; active: boolean; onClick: () => void; isMobile?: boolean }) {
     return (
-        // CSS .filter-item:hover handled in globals.css — works for Apple Pencil,
-        // mouse, and touch. No JS state needed.
         <label className="filter-item">
             <span
                 className="filter-item-box"
@@ -271,7 +311,9 @@ function FilterCheckbox({ label, active, onClick, isMobile }: { label: string; a
     );
 }
 
-// ── SidebarSection ────────────────────────────────────────────────────────────
+/**
+ * Collapsible sidebar category with smooth CSS transitions.
+ */
 function SidebarSection({ title, children, defaultOpen = true, isMobile }: { title: string; children: React.ReactNode; defaultOpen?: boolean; isMobile?: boolean }) {
     const [open, setOpen] = useState(defaultOpen);
     return (
@@ -303,11 +345,14 @@ function SidebarSection({ title, children, defaultOpen = true, isMobile }: { tit
     );
 }
 
-// ── DualRangeSlider ───────────────────────────────────────────────────────────
-// Uses Pointer Events API + setPointerCapture for unified mouse / touch / pen
-// support. Works correctly on desktop and iPad (including Apple Pencil).
 const THUMB_R = 9;
 
+/**
+ * Advanced range slider for dimensions (width/height).
+ * Implements Pointer Events API with setPointerCapture for consistent
+ * interaction across mouse, touch, and stylus (e.g., Apple Pencil).
+ * Includes manual text inputs for precision filtering.
+ */
 function DualRangeSlider({
     label, unit, globalMin, globalMax, valueMin, valueMax, onChange
 }: {
@@ -319,7 +364,7 @@ function DualRangeSlider({
     const trackRef = useRef<HTMLDivElement>(null);
     const dragging = useRef<"min" | "max" | null>(null);
 
-    // Refs so pointer callbacks never read stale closures
+    // Dynamic refs to avoid closure staleness during high-frequency pointer moves.
     const rMin = useRef(valueMin);
     const rMax = useRef(valueMax);
     const rGMin = useRef(globalMin);
@@ -338,34 +383,38 @@ function DualRangeSlider({
         return Math.round(rGMin.current + p * (rGMax.current - rGMin.current));
     }, []);
 
-    // ── Local input state — free typing; filter applied on blur / Enter ────────
     const [localMin, setLocalMin] = useState(valueMin);
     const [localMax, setLocalMax] = useState(valueMax);
     const minFocused = useRef(false);
     const maxFocused = useRef(false);
+
     useEffect(() => { if (!minFocused.current) setLocalMin(valueMin); }, [valueMin]);
     useEffect(() => { if (!maxFocused.current) setLocalMax(valueMax); }, [valueMax]);
+
+    /** Standardizes and emits a minimum boundary update. */
     const applyMin = useCallback((raw: number) => {
         const v = Math.max(rGMin.current, Math.min(raw, rMax.current - 1));
         setLocalMin(v); rOnChange.current(v, rMax.current);
     }, []);
+
+    /** Standardizes and emits a maximum boundary update. */
     const applyMax = useCallback((raw: number) => {
         const v = Math.max(Math.min(raw, rGMax.current), rMin.current + 1);
         setLocalMax(v); rOnChange.current(rMin.current, v);
     }, []);
 
-    // ── Pointer capture: track captures itself — thumb-to-track capture ────────
-    // is unreliable in Safari. Thumbs are pointer-events:none (visual only).
+    /** Handles initial contact and captures the pointer for the track. */
     const handleTrackPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         e.preventDefault();
         const val = valFromClientX(e.clientX);
         const which = Math.abs(val - rMin.current) <= Math.abs(val - rMax.current) ? "min" : "max";
         dragging.current = which;
-        e.currentTarget.setPointerCapture(e.pointerId); // always valid: same element
+        e.currentTarget.setPointerCapture(e.pointerId);
         if (which === "min") rOnChange.current(Math.max(rGMin.current, Math.min(val, rMax.current - 1)), rMax.current);
         else rOnChange.current(rMin.current, Math.max(Math.min(val, rGMax.current), rMin.current + 1));
     }, [valFromClientX]);
 
+    /** Emits updates during pointer translation. */
     const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
         if (!dragging.current) return;
         e.preventDefault();
@@ -388,7 +437,7 @@ function DualRangeSlider({
         backgroundColor: "#1a1a18", borderRadius: "50%",
         border: "2px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,0.28)",
         transform: "translate(-50%, -50%)",
-        pointerEvents: "none", userSelect: "none", zIndex: 2, // visual only
+        pointerEvents: "none", userSelect: "none", zIndex: 2,
     };
     const leftOf = (v: number) =>
         `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${pct(v) / 100})`;
@@ -401,7 +450,7 @@ function DualRangeSlider({
                 </span>
                 {isActive && <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "#888" }}>{valueMin}–{valueMax} {unit}</span>}
             </div>
-            {/* Track — single pointer-capture target for the whole slider */}
+            
             <div
                 ref={trackRef}
                 style={{ position: "relative", height: "28px", padding: `0 ${THUMB_R}px`, boxSizing: "border-box", cursor: "pointer", marginBottom: "8px", touchAction: "none", userSelect: "none" }}
@@ -410,15 +459,11 @@ function DualRangeSlider({
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
             >
-                {/* bg track */}
                 <div style={{ position: "absolute", top: "50%", left: `${THUMB_R}px`, right: `${THUMB_R}px`, height: "3px", backgroundColor: "rgba(26,26,24,0.1)", borderRadius: "2px", transform: "translateY(-50%)", pointerEvents: "none" }} />
-                {/* active fill */}
                 <div style={{ position: "absolute", top: "50%", left: leftOf(valueMin), right: `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${(100 - pct(valueMax)) / 100})`, height: "3px", backgroundColor: "#1a1a18", borderRadius: "2px", transform: "translateY(-50%)", pointerEvents: "none" }} />
-                {/* thumbs — visual only, track handles all pointer interaction */}
                 <div style={{ ...thumbBase, left: leftOf(valueMin) }} />
                 <div style={{ ...thumbBase, left: leftOf(valueMax) }} />
             </div>
-            {/* Inputs: localMin/localMax so user types freely; applied on blur or Enter */}
             <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", color: "#bbb", marginBottom: "2px" }}>Min ({unit})</div>
@@ -450,7 +495,9 @@ function DualRangeSlider({
     );
 }
 
-// ── PriceRangeSection ─────────────────────────────────────────────────────────
+/**
+ * Specialized price filtering section with common presets.
+ */
 function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max: number; onChange: (min: number, max: number) => void; isMobile?: boolean }) {
     const [open, setOpen] = useState(false);
     const [localMin, setLocalMin] = useState(min);
@@ -499,7 +546,7 @@ function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max:
                                 isMobile={isMobile}
                             />
                         ))}
-                        {/* Custom range */}
+                        {/* Manual entry for specific budget ranges. */}
                         <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.5rem", alignItems: "center" }}>
                             <input
                                 type="number" placeholder="Min" value={localMin === 0 ? "" : localMin}
@@ -522,7 +569,11 @@ function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max:
     );
 }
 
-// ── MAIN PAGE ─────────────────────────────────────────────────────────────────
+/**
+ * Main Shop catalog page.
+ * Manages complex filtering state, multi-unit dimension handling,
+ * responsive layout transitions, and dynamic data fetching for artworks and tags.
+ */
 export default function ShopPage() {
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [collections, setCollections] = useState<Collection[]>([]);
@@ -530,18 +581,18 @@ export default function ShopPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Filter state
+    /** Filter state: Arrays for multi-select, primitives for ranges. */
     const [categoryFilter, setCategoryFilter] = useState<string[]>([]);    // "originals" | "prints"
     const [priceMin, setPriceMin] = useState(0);
     const [priceMax, setPriceMax] = useState(999999);
     const [widthMin, setWidthMin] = useState(0);
-    const [widthMax, setWidthMax] = useState(0);   // 0 = not yet initialised
+    const [widthMax, setWidthMax] = useState(0);
     const [heightMin, setHeightMin] = useState(0);
-    const [heightMax, setHeightMax] = useState(0); // 0 = not yet initialised
+    const [heightMax, setHeightMax] = useState(0);
     const [activeYears, setActiveYears] = useState<number[]>([]);
     const [activeOrientations, setActiveOrientations] = useState<string[]>([]);
     const [activeCollections, setActiveCollections] = useState<number[]>([]);
-    const [activeMediums, setActiveMediums] = useState<number[]>([]);      // tag IDs
+    const [activeMediums, setActiveMediums] = useState<number[]>([]);
 
     const [sortIdx, setSortIdx] = useState(0);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -552,7 +603,7 @@ export default function ShopPage() {
     const itemsPerPage = gridMode === "3" ? 36 : gridMode === "2" ? 24 : 12;
     const [visibleCount, setVisibleCount] = useState(12);
 
-    // ── Fetch data ──────────────────────────────────────────────────────────
+    /** Bootstraps the catalog data from multiple endpoints. */
     useEffect(() => {
         const apiUrl = getApiUrl();
         Promise.all([
@@ -574,12 +625,12 @@ export default function ShopPage() {
             if (Array.isArray(collData)) setCollections(collData);
             if (Array.isArray(tagData)) setMediumTags(tagData);
         }).catch(err => {
-            console.error(err);
+            console.error("Shop initialization failed:", err);
             setError("Network error.");
         }).finally(() => setLoading(false));
     }, []);
 
-    // ── Responsive ──────────────────────────────────────────────────────────
+    /** Monitors viewport width to toggle between desktop sidebar and mobile bottom drawer. */
     useEffect(() => {
         const update = () => setIsMobile(window.innerWidth < 1024);
         update();
@@ -587,7 +638,7 @@ export default function ShopPage() {
         return () => window.removeEventListener("resize", update);
     }, []);
 
-    // ── Grid mode persist (Separate for Mobile & PC) ─────────────────────────
+    /** Layout persistence: Remembers grid density preferences per device type in session storage. */
     useEffect(() => {
         const mob = window.innerWidth < 1024;
         const storageKey = mob ? "artshop_shop_gridMode_mobile" : "artshop_shop_gridMode_pc";
@@ -595,7 +646,7 @@ export default function ShopPage() {
         if (saved === "1" || saved === "2" || saved === "3") {
             setGridMode(saved);
         } else {
-            // Default: "1" (krupniy) on mobile, "2" (middle) on PC
+            // Defaults: High-visibility single-column for mobile, standard for desktop.
             setGridMode(mob ? "1" : "2");
         }
     }, [isMobile]);
@@ -606,12 +657,15 @@ export default function ShopPage() {
         sessionStorage.setItem(storageKey, val);
     };
 
-    // ── Available years from data ───────────────────────────────────────────
+    /** Unique years appearing in the current catalog for filter generation. */
     const availableYears = useMemo(() =>
         [...new Set(allProducts.map(p => p.year).filter(Boolean) as number[])].sort((a, b) => b - a),
         [allProducts]);
 
-    // ── Unit Switching & Values ─────────────────────────────────────────────
+    /** 
+     * Converts a specific dimension (width/height) to the user's preferred unit.
+     * Prioritizes native unit metadata if available; otherwise performs a calculated conversion.
+     */
     const getUnitVal = useCallback((p: Product, measure: "width" | "height") => {
         if (units === "in") {
             const valIn = (p as any)[`${measure}_in` as keyof Product];
@@ -622,47 +676,58 @@ export default function ShopPage() {
         return (p[`${measure}_cm` as keyof Product] as number) ?? 0;
     }, [units]);
 
-    // When units change, reset dimension filters to full range — avoids
-    // rounding-induced mismatches that would filter out everything.
+    /** 
+     * Reset slider bounds when switching units (cm <-> in) to prevent
+     * filtering collisions due to out-of-sync min/max values.
+     */
     const prevUnitsRef = useRef(units);
     useEffect(() => {
         if (prevUnitsRef.current !== units) {
             prevUnitsRef.current = units;
-            // wGlobalMin/Max will recalculate via useMemo; reset sliders
             setWidthMin(0); setWidthMax(0);
             setHeightMin(0); setHeightMax(0);
         }
     }, [units]);
 
-    // ── Compute dimension bounds from data ──────────────────────────────────
+    /** Calculate the minimum width bound across the entire catalog in current units. */
     const wGlobalMin = useMemo(() => {
         const vals = allProducts.map(p => getUnitVal(p, "width")).filter(v => v > 0);
         return vals.length ? Math.floor(Math.min(...vals)) : 0;
     }, [allProducts, getUnitVal]);
+
+    /** Calculate the maximum width bound across the entire catalog in current units. */
     const wGlobalMax = useMemo(() => {
         const vals = allProducts.map(p => getUnitVal(p, "width")).filter(v => v > 0);
         return vals.length ? Math.ceil(Math.max(...vals)) : (units === "in" ? 80 : 200);
     }, [allProducts, getUnitVal, units]);
+
+    /** Calculate the minimum height bound across the entire catalog in current units. */
     const hGlobalMin = useMemo(() => {
         const vals = allProducts.map(p => getUnitVal(p, "height")).filter(v => v > 0);
         return vals.length ? Math.floor(Math.min(...vals)) : 0;
     }, [allProducts, getUnitVal]);
+
+    /** Calculate the maximum height bound across the entire catalog in current units. */
     const hGlobalMax = useMemo(() => {
         const vals = allProducts.map(p => getUnitVal(p, "height")).filter(v => v > 0);
         return vals.length ? Math.ceil(Math.max(...vals)) : (units === "in" ? 80 : 200);
     }, [allProducts, getUnitVal, units]);
 
-    // Init width/height range once data arrives or unit resets
+    /** Hydrate slider state once global bounds are calculated from API data. */
     useEffect(() => {
         if (wGlobalMin > 0 && widthMax === 0) { setWidthMin(wGlobalMin); setWidthMax(wGlobalMax); }
         if (hGlobalMin > 0 && heightMax === 0) { setHeightMin(hGlobalMin); setHeightMax(hGlobalMax); }
     }, [wGlobalMin, wGlobalMax, hGlobalMin, hGlobalMax, widthMax, heightMax]);
 
-    // ── Client-side filtering (all filters applied at once) ─────────────────
+    /** 
+     * Core filtering engine.
+     * Aggregates all active UI filters (type, price, size, tech info) into a 
+     * single high-performance memoized list.
+     */
     const filtered = useMemo(() => {
         let list = allProducts;
 
-        // Category (originals available / prints available)
+        // Classification filter: Distinguishes between physical originals and reproductions.
         if (categoryFilter.includes("originals") && !categoryFilter.includes("prints")) {
             list = list.filter(p => p.original_status === "available");
         } else if (categoryFilter.includes("prints") && !categoryFilter.includes("originals")) {
@@ -671,14 +736,14 @@ export default function ShopPage() {
             list = list.filter(p => p.original_status === "available" || p.has_prints);
         }
 
-        // Price
+        // Budgetary constraints (Originals only).
         if (priceMin > 0 || priceMax < 999999) {
             list = list.filter(p => {
                 return p.original_status === "available" && p.original_price && p.original_price >= priceMin && p.original_price <= priceMax;
             });
         }
 
-        // Width filter
+        // Dimension constraints: Width.
         const effWMax = widthMax || wGlobalMax;
         if ((widthMin > 0 && widthMin > wGlobalMin) || effWMax < wGlobalMax) {
             list = list.filter(p => {
@@ -687,7 +752,7 @@ export default function ShopPage() {
             });
         }
 
-        // Height filter
+        // Dimension constraints: Height.
         const effHMax = heightMax || hGlobalMax;
         if ((heightMin > 0 && heightMin > hGlobalMin) || effHMax < hGlobalMax) {
             list = list.filter(p => {
@@ -696,12 +761,12 @@ export default function ShopPage() {
             });
         }
 
-        // Year
+        // Chronological constraints.
         if (activeYears.length > 0) {
             list = list.filter(p => p.year && activeYears.includes(p.year));
         }
 
-        // Orientation
+        // Geometric constraints.
         if (activeOrientations.length > 0) {
             list = list.filter(p => {
                 const ori = getOrientation(p);
@@ -709,12 +774,11 @@ export default function ShopPage() {
             });
         }
 
-        // Collections
+        // Structural and Thematic constraints.
         if (activeCollections.length > 0) {
             list = list.filter(p => p.collection_id && activeCollections.includes(p.collection_id));
         }
 
-        // Medium tags
         if (activeMediums.length > 0) {
             list = list.filter(p => (p.tags || []).some(t => activeMediums.includes(typeof t === "number" ? t : (t as any).id)));
         }
@@ -722,12 +786,12 @@ export default function ShopPage() {
         return list;
     }, [allProducts, categoryFilter, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeCollections, activeMediums, globalPrintPrice, getUnitVal]);
 
+    /** Final sorted results for exhibition, respecting pagination and display limits. */
     const displayed = useMemo(() => {
         return sortProducts(filtered, SORT_OPTIONS[sortIdx].key, globalPrintPrice).slice(0, visibleCount);
     }, [filtered, sortIdx, visibleCount, globalPrintPrice]);
 
-
-    // ── Active filter count ────────────────────────────────────────────
+    /** Calculate the total number of active filters to show count badges on mobile. */
     const widthActive = widthMin > wGlobalMin || widthMax < wGlobalMax;
     const heightActive = heightMin > hGlobalMin || heightMax < hGlobalMax;
     const afc = categoryFilter.length
@@ -736,6 +800,7 @@ export default function ShopPage() {
         + activeYears.length + activeOrientations.length
         + activeCollections.length + (activeMediums?.length ?? 0);
 
+    /** Resets the entire filter matrix to the default exhibition state. */
     const clearAll = () => {
         setCategoryFilter([]); setPriceMin(0); setPriceMax(999999);
         setWidthMin(wGlobalMin); setWidthMax(wGlobalMax);
@@ -744,16 +809,27 @@ export default function ShopPage() {
         setActiveCollections([]); setActiveMediums([]);
     };
 
+    /** Unified string multi-select toggler. */
     const toggleStr = (setter: React.Dispatch<React.SetStateAction<string[]>>, val: string) =>
         setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+
+    /** Unified numeric multi-select toggler. */
     const toggleNum = (setter: React.Dispatch<React.SetStateAction<number[]>>, val: number) =>
         setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
-    // ── Infinite scroll ─────────────────────────────────────────────────────
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
-    useEffect(() => { setVisibleCount(itemsPerPage); }, [categoryFilter, priceMin, priceMax, widthMin, widthMax, heightMin, heightMax, activeYears, activeOrientations, activeCollections, activeMediums, sortIdx, itemsPerPage]);
-    useEffect(() => { if (inView && visibleCount < filtered.length) setVisibleCount(prev => prev + itemsPerPage); }, [inView, filtered.length, visibleCount, itemsPerPage]);
 
+    // Handle initial pagination and reacts to filter changes by resetting the visible offset.
+    useEffect(() => { 
+        setVisibleCount(itemsPerPage); 
+    }, [categoryFilter, priceMin, priceMax, widthMin, widthMax, heightMin, heightMax, activeYears, activeOrientations, activeCollections, activeMediums, sortIdx, itemsPerPage]);
+
+    // Infinite scroll trigger: Increments display quota when the user approaches the end of the results.
+    useEffect(() => { 
+        if (inView && visibleCount < filtered.length) setVisibleCount(prev => prev + itemsPerPage); 
+    }, [inView, filtered.length, visibleCount, itemsPerPage]);
+
+    /** CSS grid column mapping for the current density mode. */
     const getColumns = () => {
         if (isMobile) {
             if (gridMode === "1") return "1fr";
@@ -764,24 +840,36 @@ export default function ShopPage() {
         if (gridMode === "2") return "repeat(auto-fill, minmax(340px, 1fr))";
         return "repeat(auto-fill, minmax(220px, 1fr))";
     };
+
+    /** CSS grid gap mapping for the current density mode. */
     const getGap = () => {
-        if (isMobile) { if (gridMode === "1") return "2.25rem"; if (gridMode === "2") return "1rem"; return "0.5rem"; }
-        if (gridMode === "1") return "5rem 140px"; if (gridMode === "2") return "4rem 100px"; return "2.5rem 70px";
+        if (isMobile) { 
+            if (gridMode === "1") return "2.25rem"; 
+            if (gridMode === "2") return "1rem"; 
+            return "0.5rem"; 
+        }
+        if (gridMode === "1") return "5rem 140px"; 
+        if (gridMode === "2") return "4rem 100px"; 
+        return "2.5rem 70px";
     };
 
-    // ── 7-section filter panel ──────────────────────────────────────────────
+    /** 
+     * Shared filter panel composition.
+     * Rendered either in the desktop sidebar or the mobile bottom drawer.
+     * Divided into 7 logical sections: Category, Price, Size, Year, Orientation, Collections, and Medium.
+     */
     const filtersJSX = (
         <>
-            {/* 1. Category */}
+            {/* 1. Classification filtering. */}
             <SidebarSection title="Category" defaultOpen={false} isMobile={isMobile}>
                 <FilterCheckbox label="Available Originals" active={categoryFilter.includes("originals")} onClick={() => toggleStr(setCategoryFilter, "originals")} isMobile={isMobile} />
                 <FilterCheckbox label="Prints Available" active={categoryFilter.includes("prints")} onClick={() => toggleStr(setCategoryFilter, "prints")} isMobile={isMobile} />
             </SidebarSection>
 
-            {/* 2. Price */}
+            {/* 2. Budgetary filtering. */}
             <PriceRangeSection min={priceMin} max={priceMax} onChange={(mn, mx) => { setPriceMin(mn); setPriceMax(mx); }} isMobile={isMobile} />
 
-            {/* 3. Size — Width & Height sliders */}
+            {/* 3. Physical dimension filtering. */}
             <SidebarSection title="Size" defaultOpen={false} isMobile={isMobile}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", alignItems: "center" }}>
                     <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>({units})</span>
@@ -812,7 +900,7 @@ export default function ShopPage() {
                 )}
             </SidebarSection>
 
-            {/* 4. Year */}
+            {/* 4. Temporal filtering. */}
             <SidebarSection title="Year" defaultOpen={false} isMobile={isMobile}>
                 {availableYears.length > 0 ? availableYears.map(y => (
                     <FilterCheckbox key={y} label={String(y)} active={activeYears.includes(y)} onClick={() => toggleNum(setActiveYears, y)} isMobile={isMobile} />
@@ -821,14 +909,14 @@ export default function ShopPage() {
                 )}
             </SidebarSection>
 
-            {/* 5. Orientation */}
+            {/* 5. Geometric orientation filtering. */}
             <SidebarSection title="Orientation" defaultOpen={false} isMobile={isMobile}>
                 <FilterCheckbox label="Horizontal" active={activeOrientations.includes("horizontal")} onClick={() => toggleStr(setActiveOrientations, "horizontal")} isMobile={isMobile} />
                 <FilterCheckbox label="Vertical" active={activeOrientations.includes("vertical")} onClick={() => toggleStr(setActiveOrientations, "vertical")} isMobile={isMobile} />
                 <FilterCheckbox label="Square" active={activeOrientations.includes("square")} onClick={() => toggleStr(setActiveOrientations, "square")} isMobile={isMobile} />
             </SidebarSection>
 
-            {/* 6. Collections */}
+            {/* 6. Structural collection filtering. */}
             {collections.length > 0 && (
                 <SidebarSection title="Collections" defaultOpen={false} isMobile={isMobile}>
                     {collections.map(c => (
@@ -837,17 +925,18 @@ export default function ShopPage() {
                 </SidebarSection>
             )}
 
-            {/* 7. Medium */}
+            {/* 7. Material/Medium tag filtering. */}
             <SidebarSection title="Medium" defaultOpen={false} isMobile={isMobile}>
                 {mediumTags.length > 0 ? mediumTags.map(t => (
                     <FilterCheckbox key={t.id} label={t.title} active={activeMediums.includes(t.id)} onClick={() => toggleNum(setActiveMediums, t.id)} isMobile={isMobile} />
                 )) : (
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#bbb", fontStyle: "italic" }}>Add medium tags in dashboard → Labels &amp; Tags</span>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#bbb", fontStyle: "italic" }}>Add medium tags in dashboard → Labels & Tags</span>
                 )}
             </SidebarSection>
         </>
     );
 
+    // Initial page load: Reset scroll to provide a consistent entrance to the catalog.
     useEffect(() => {
         if (typeof window !== "undefined") {
             window.scrollTo({ top: 0, behavior: "instant" });
@@ -856,10 +945,10 @@ export default function ShopPage() {
 
     return (
         <div style={{ backgroundColor: "#ffffff", color: "var(--color-charcoal)", minHeight: "100vh" }}>
-            {/* Mobile filter drawer backdrop */}
+            {/* Mobile Bottom Drawer Backdrop: Dims the content when filtering is active. */}
             {drawerOpen && <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(26,26,24,0.75)", zIndex: 40 }} />}
 
-            {/* Mobile filter drawer */}
+            {/* Mobile Bottom Drawer: Contains all filters for compact accessibility. */}
             <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50, backgroundColor: "#ffffff", borderTop: "1px solid var(--color-border)", transform: drawerOpen ? "translateY(0)" : "translateY(100%)", transition: "transform 0.38s cubic-bezier(0.4,0,0.2,1)", maxHeight: "85vh", overflowY: "auto" }}>
                 <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid rgba(26,26,24,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, backgroundColor: "#ffffff", zIndex: 1 }}>
                     <div style={{ position: "absolute", top: "0.5rem", left: "50%", transform: "translateX(-50%)", width: "32px", height: "3px", borderRadius: "2px", backgroundColor: "rgba(26,26,24,0.12)" }} />
@@ -877,11 +966,10 @@ export default function ShopPage() {
                 </div>
             </div>
 
-            {/* Layout */}
             <div style={{ display: "flex", gap: "0", alignItems: "flex-start" }}>
-                {/* Desktop sidebar — 240px to fit price inputs comfortably */}
+                {/* Desktop Sidebar: Static panel for persistent filtering during navigation. */}
                 <aside className="shop-desktop-sidebar" style={{ width: "240px", minWidth: "240px", flexShrink: 0, paddingLeft: "1.25rem", paddingRight: "1.5rem", paddingTop: "1.25rem", borderRight: "1px solid rgba(26,26,24,0.07)" }}>
-                    {/* Always reserve space → no layout shift when Clear all appears */}
+                    {/* Clear All action: Strategically reserved space to prevent layout shifts. */}
                     <button
                         onClick={clearAll}
                         disabled={afc === 0}
@@ -903,9 +991,8 @@ export default function ShopPage() {
                     {filtersJSX}
                 </aside>
 
-                {/* Main content */}
                 <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "1rem 1rem 6rem 1rem" : "1rem 2.5rem 6rem 2rem" }}>
-                    {/* Top bar */}
+                    {/* Catalog Control Bar: Status counter and sort/grid density toggles. */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: isMobile ? "nowrap" : "wrap", gap: isMobile ? "0.75rem" : "1rem", overflowX: isMobile ? "auto" : "visible", paddingBottom: isMobile ? "5px" : 0, scrollbarWidth: "none" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1rem", flexShrink: 0 }}>
                             <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 300, color: "var(--color-muted)", whiteSpace: "nowrap" }}>{filtered.length} works</span>
@@ -916,7 +1003,6 @@ export default function ShopPage() {
                             )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1rem", flexShrink: 0 }}>
-                            {/* Grid toggles */}
                             <div className="grid-toggle-wrapper" style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
                                 {(["1", "2", "3"] as const).map(mode => (
                                     <button key={mode} onClick={() => handleSetGridMode(mode)} title={`${mode} in a row`}
@@ -929,7 +1015,6 @@ export default function ShopPage() {
                                     </button>
                                 ))}
                             </div>
-                            {/* Sort */}
                             <div style={{ position: "relative" }}>
                                 <select value={sortIdx} onChange={e => setSortIdx(Number(e.target.value))} style={{ appearance: "none", backgroundColor: "transparent", border: "1px solid rgba(26,26,24,0.2)", borderRadius: "20px", padding: "0.4rem 2.2rem 0.4rem 1rem", fontFamily: "var(--font-sans)", fontSize: "0.8rem", color: "var(--color-charcoal)", cursor: "pointer", outline: "none" }}>
                                     {SORT_OPTIONS.map((s, i) => <option key={i} value={i}>{s.label}</option>)}
@@ -939,7 +1024,7 @@ export default function ShopPage() {
                         </div>
                     </div>
 
-                    {loading && <div style={{ padding: "5rem 1rem", textAlign: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)", fontSize: "0.85rem" }}>Loading...</div>}
+                    {loading && <div style={{ padding: "5rem 1rem", textAlign: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)", fontSize: "0.85rem" }}>Curating catalog...</div>}
                     {error && <div style={{ padding: "5rem 1rem", textAlign: "center", fontFamily: "var(--font-sans)", color: "#C87070" }}>{error}</div>}
 
                     {!loading && !error && (filtered.length > 0 ? (
@@ -948,14 +1033,14 @@ export default function ShopPage() {
                         </div>
                     ) : (
                         <div style={{ textAlign: "center", padding: "5rem 1rem" }}>
-                            <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "1.2rem", color: "var(--color-muted)", marginBottom: "1.25rem" }}>No works match these filters</p>
-                            <button onClick={clearAll} style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-accent)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Clear all filters</button>
+                            <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "1.2rem", color: "var(--color-muted)", marginBottom: "1.25rem" }}>Exhibition results remain empty for these parameters.</p>
+                            <button onClick={clearAll} style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-accent)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Reset all parameters</button>
                         </div>
                     ))}
 
                     {visibleCount < filtered.length && (
                         <div ref={loadMoreRef} style={{ height: "40px", marginTop: "2rem", display: "flex", justifyContent: "center" }}>
-                            <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", fontFamily: "var(--font-sans)" }}>Loading more...</span>
+                            <span style={{ fontSize: "0.8rem", color: "var(--color-muted)", fontFamily: "var(--font-sans)" }}>Curating more works...</span>
                         </div>
                     )}
                 </div>

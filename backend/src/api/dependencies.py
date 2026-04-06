@@ -1,3 +1,7 @@
+"""
+Common FastAPI dependencies used across different API routers.
+Includes authentication, authorization, and database session management.
+"""
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -11,11 +15,18 @@ from src.utils.db_manager import DBManager
 
 
 class PaginationParams(BaseModel):
+    """
+    Standard pagination parameters.
+    """
     page: int = 1
     per_page: int = 3
 
 
 def get_token(request: Request) -> str:
+    """
+    Extracts the access token from the request cookies.
+    Raises 401 if the token is missing.
+    """
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authorized")
@@ -23,7 +34,11 @@ def get_token(request: Request) -> str:
 
 
 async def get_current_user_id(token: str = Depends(get_token)) -> int:
-    # Проверяем blacklist — access_token мог быть инвалидирован при logout
+    """
+    Identifies the currently logged-in user by decoding the access token.
+    Checks the Redis blacklist to ensure the token has not been invalidated (e.g., via logout).
+    """
+    # Check blacklist — access_token might have been invalidated upon logout
     blacklisted = await redis_manager.get(f"at_bl:{token}")
     if blacklisted:
         raise HTTPException(
@@ -34,6 +49,10 @@ async def get_current_user_id(token: str = Depends(get_token)) -> int:
 
 
 async def get_current_user_id_optional(request: Request) -> int | None:
+    """
+    Optionally identifies the currently logged-in user.
+    Returns None if the token is missing, invalid, or blacklisted instead of raising an error.
+    """
     token = request.cookies.get("access_token")
     if not token:
         return None
@@ -48,6 +67,10 @@ async def get_current_user_id_optional(request: Request) -> int | None:
 
 
 async def get_db():
+    """
+    Dependency that provides an asynchronous database manager instance.
+    The session is automatically closed after the request is processed.
+    """
     async with DBManager(session_factory=new_session) as db:
         yield db
 
@@ -55,6 +78,10 @@ async def get_db():
 async def check_admin(
     user_id: int = Depends(get_current_user_id), db: "DBManager" = Depends(get_db)
 ) -> int:
+    """
+    Authorization dependency that ensures the current user has administrative privileges.
+    Raises 403 if the user is not an administrator.
+    """
     user = await db.users.get_one(id=user_id)
     if user.email.lower() not in settings.ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Forbidden: Admin access required")

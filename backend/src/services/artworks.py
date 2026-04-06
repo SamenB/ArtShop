@@ -1,3 +1,8 @@
+"""
+Service layer for artwork business logic.
+Handles sophisticated operations like unique slug generation, relationship management, 
+and bulk processing, abstracting data access from the API layer.
+"""
 import re
 
 from loguru import logger
@@ -19,15 +24,30 @@ from src.services.base import BaseService
 
 
 class ArtworkService(BaseService):
+    """
+    Provides high-level methods for managing artworks.
+    Ensures data consistency and handles transaction management.
+    """
+
     async def get_artwork_by_id(self, artwork_id: int):
+        """
+        Retrieves a single artwork by its numeric primary key.
+        """
         artwork = await self.db.artworks.get_one(id=artwork_id)
         return artwork
 
     async def get_artwork_by_slug(self, slug: str):
+        """
+        Retrieves a single artwork by its unique URL-friendly slug.
+        """
         artwork = await self.db.artworks.get_one(slug=slug)
         return artwork
 
     async def generate_unique_slug(self, title: str) -> str:
+        """
+        Generates a unique, URL-safe slug from an artwork title.
+        Appends a numeric suffix if a collision is detected in the database.
+        """
         base_slug = title.lower()
         base_slug = re.sub(r"[^a-z0-9]+", "-", base_slug).strip("-")
         if not base_slug:
@@ -57,6 +77,10 @@ class ArtworkService(BaseService):
         orientation: str | None = None,
         size_category: str | None = None,
     ):
+        """
+        Retrieves a list of artworks based on filtered availability and metadata.
+        Standardizes error handling for database-level exceptions.
+        """
         try:
             artworks = await self.db.artworks.get_available_artworks(
                 limit=limit,
@@ -77,17 +101,20 @@ class ArtworkService(BaseService):
         return artworks
 
     async def create_artwork(self, artwork_data: ArtworkAddRequest):
+        """
+        Stores a new artwork record and its associated tags.
+        Handles default collection assignment ('Sketch') and unique slug generation.
+        """
         try:
-            # Handle collection
+            # Handle collection assignment
             collection_id = artwork_data.collection_id
             if collection_id is None:
                 sketch_coll = await self.db.collections.get_one_or_none(title="Sketch")
                 if not sketch_coll:
+                    # Creating a default 'Sketch' collection if missing
                     sketch_coll = await self.db.collections.add(
                         ArtworkAdd(title="Sketch")
-                    )  # Use dict or proper schema if needed, but repository usually takes dict/schema
-                    # Actually repository add takes pydantic model or dict.
-                    # CollectionAdd schema is better
+                    )
                 collection_id = sketch_coll.id
 
             artwork_dict = artwork_data.model_dump()
@@ -95,11 +122,14 @@ class ArtworkService(BaseService):
             artwork_dict["slug"] = await self.generate_unique_slug(artwork_data.title)
 
             artwork = await self.db.artworks.add(ArtworkAdd(**artwork_dict))
+            
+            # Map tag associations
             artwork_tags = [
                 ArtworkTagAdd(artwork_id=artwork.id, tag_id=tag_id) for tag_id in artwork_data.tags
             ]
             if artwork_tags:
                 await self.db.artwork_tags.add_bulk(artwork_tags)
+            
             await self.db.commit()
         except ObjectAlreadyExistsException:
             raise
@@ -110,20 +140,25 @@ class ArtworkService(BaseService):
         return artwork
 
     async def update_artwork(self, artwork_id: int, artwork_data: ArtworkAddRequest):
+        """
+        Performs a full update of an artwork record.
+        Maintains immutable fields like images (via separate API) and slugs.
+        Synchronizes tag associations.
+        """
         # Verify artwork exists
         existing = await self.db.artworks.get_one(id=artwork_id)
 
         try:
-            # Exclude images from PUT - they are managed separately via /images endpoint
+            # Exclude fields managed by specialized endpoints or immutable logic
             artwork_dict = artwork_data.model_dump()
             artwork_dict.pop("images", None)
-            # Exclude tags - handled separately via set_artwork_tags below
             artwork_dict.pop("tags", None)
-            # Preserve existing slug — ArtworkAdd.slug defaults to None and would overwrite DB slug with NULL
             artwork_dict.pop("slug", None)
+            
+            # Reattach preserved fields
             artwork_dict["slug"] = existing.slug
-            # Preserve existing images
             artwork_dict["images"] = existing.images
+            
             await self.db.artworks.edit(ArtworkAdd(**artwork_dict), id=artwork_id)
             await self.db.artwork_tags.set_artwork_tags(artwork_id, artwork_data.tags)
             await self.db.commit()
@@ -133,8 +168,12 @@ class ArtworkService(BaseService):
         logger.info("Artwork updated: id={}", artwork_id)
 
     async def update_artwork_partially(self, artwork_id: int, artwork_data: ArtworkPatchRequest):
+        """
+        Updates only the specified fields of an artwork record.
+        Handles partial metadata and tag updates.
+        """
         artwork_data_dict = artwork_data.model_dump(exclude_unset=True)
-        # Verify artwork exists (raises ObjectNotFoundException if not found)
+        # Verify artwork existence
         await self.db.artworks.get_one(id=artwork_id)
 
         try:
@@ -149,7 +188,10 @@ class ArtworkService(BaseService):
         logger.info("Artwork partially updated: id={}", artwork_id)
 
     async def delete_artwork(self, artwork_id: int):
-        # Verify artwork exists
+        """
+        Removes an artwork record and its associated metadata from the database.
+        """
+        # Verify existence
         await self.db.artworks.get_one(id=artwork_id)
 
         try:
@@ -161,7 +203,10 @@ class ArtworkService(BaseService):
         logger.info("Artwork deleted: id={}", artwork_id)
 
     async def create_artworks_bulk(self, artworks_data: list[ArtworkAddBulk]):
-
+        """
+        Efficiently inserts multiple artwork records in a single batch.
+        Useful for migrations or bulk administrative actions.
+        """
         try:
             artworks_to_add = [ArtworkAdd(**artwork.model_dump()) for artwork in artworks_data]
             await self.db.artworks.add_bulk(artworks_to_add)

@@ -1,8 +1,18 @@
 "use client";
 
+/**
+ * About page for the ArtShop.
+ * Displays the artist's statement, philosophy, and selected exhibitions.
+ * Fetches dynamic settings (like artist photo and statement) from the backend.
+ */
+
 import { useEffect, useState } from "react";
 import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 
+/**
+ * Artist profile and philosophy page.
+ * Uses a responsive grid with staggered fade-in animations for a premium feel.
+ */
 export default function AboutPage() {
     const [isVisible, setIsVisible] = useState(false);
     const [settings, setSettings] = useState<any>(null);

@@ -1,3 +1,7 @@
+"""
+API endpoints for managing artwork orders.
+Includes order creation, tracking, and administrative management.
+"""
 from fastapi import APIRouter, Body
 
 from src.api.dependencies import AdminDep, DBDep, UserDep, UserDepOptional
@@ -9,11 +13,17 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 
 @router.get("")
 async def get_all_orders(admin_id: AdminDep, db: DBDep):
+    """
+    Retrieves all orders in the system. Requires admin privileges.
+    """
     return await OrderService(db).get_all_orders()
 
 
 @router.get("/me")
 async def get_my_orders(user_id: UserDep, db: DBDep):
+    """
+    Retrieves all orders belonging to the currently authenticated user.
+    """
     return await OrderService(db).get_my_orders(user_id)
 
 
@@ -23,18 +33,27 @@ async def create_order(
     order_data: OrderAddRequest,
     user_id: UserDepOptional = None,
 ):
+    """
+    Creates a new order. Optionally associates the order with a user ID if authenticated.
+    """
     order = await OrderService(db).create_order(order_data, user_id)
     return {"status": "OK", "data": order}
 
 
 @router.post("/bulk")
 async def create_orders_bulk(db: DBDep, orders_data: list[OrderBulkRequest] = Body()):
+    """
+    Creates multiple orders in a single request. Primarily used for data migration or testing.
+    """
     result = await OrderService(db).create_orders_bulk(orders_data)
     return {"status": "OK", "data": result}
 
 
 @router.get("/timeline")
 async def get_orders_timeline(admin_id: AdminDep, db: DBDep):
+    """
+    Retrieves a timeline view of all orders. Requires admin privileges.
+    """
     return await OrderService(db).get_orders_timeline()
 
 
@@ -42,5 +61,8 @@ async def get_orders_timeline(admin_id: AdminDep, db: DBDep):
 async def update_order_status(
     order_id: int, admin_id: AdminDep, db: DBDep, status_data: OrderStatusUpdate
 ):
+    """
+    Updates the payment status of a specific order. Requires admin privileges.
+    """
     await OrderService(db).update_payment_status(order_id, status_data.payment_status)
     return {"status": "OK"}

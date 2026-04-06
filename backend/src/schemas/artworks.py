@@ -1,3 +1,6 @@
+"""
+Pydantic schemas for artwork data validation and serialization.
+"""
 import enum
 import re
 
@@ -7,8 +10,10 @@ from src.schemas.tags import Tag
 
 
 class OriginalStatus(str, enum.Enum):
-    """Allowed values for original artwork status — validated by Pydantic, stored as plain string in DB"""
-
+    """
+    Allowed values for the status of an original artwork piece.
+    Validated by Pydantic and stored as a string in the database.
+    """
     AVAILABLE = "available"
     SOLD = "sold"
     RESERVED = "reserved"
@@ -19,6 +24,10 @@ class OriginalStatus(str, enum.Enum):
 
 
 class ArtworkAddRequest(BaseModel):
+    """
+    Schema for the initial artwork creation request from the frontend.
+    Includes tag IDs for relationship management.
+    """
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
     original_price: int | None = Field(None, description="Price of the original artwork")
@@ -46,6 +55,10 @@ class ArtworkAddRequest(BaseModel):
 
 
 class ArtworkAdd(BaseModel):
+    """
+    Schema for adding an artwork record to the database.
+    Includes the auto-generated slug.
+    """
     title: str = Field(..., description="Title of the artwork")
     slug: str | None = Field(None, description="Unique slug for the artwork")
     description: str | None = Field(None, description="Description of the artwork")
@@ -73,6 +86,9 @@ class ArtworkAdd(BaseModel):
 
 
 class Artwork(ArtworkAdd):
+    """
+    Represents a full artwork entity retrieved from the database.
+    """
     id: int = Field(..., description="ID of the artwork")
     slug: str | None = Field(None, description="Unique slug for the artwork")
 
@@ -85,6 +101,9 @@ class Artwork(ArtworkAdd):
 
 
 class ArtworkWithTags(Artwork):
+    """
+    Represents an artwork entity including its associated tags.
+    """
     tags: list[Tag]
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs or image objects."
@@ -92,6 +111,9 @@ class ArtworkWithTags(Artwork):
 
 
 class ArtworkPatchRequest(BaseModel):
+    """
+    Schema for partial artwork update requests from the frontend.
+    """
     title: str | None = Field(None, description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
     original_price: int | None = Field(None, description="Price of the original artwork")
@@ -118,6 +140,9 @@ class ArtworkPatchRequest(BaseModel):
 
 
 class ArtworkPatch(BaseModel):
+    """
+    Schema for applying partial updates to an artwork record in the database.
+    """
     title: str | None = Field(None, description="Title of the artwork")
     slug: str | None = Field(None, description="Unique slug for the artwork")
     description: str | None = Field(None, description="Description of the artwork")
@@ -144,8 +169,9 @@ class ArtworkPatch(BaseModel):
 
 
 class ArtworkAddBulk(BaseModel):
-    """Schema for bulk artwork creation"""
-
+    """
+    Schema for high-performance bulk artwork creation.
+    """
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
     original_price: int | None = Field(None, description="Price of the original artwork")

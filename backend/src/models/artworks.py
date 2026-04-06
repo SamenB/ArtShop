@@ -1,3 +1,6 @@
+"""
+SQLAlchemy database model for artworks.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -14,7 +17,13 @@ if TYPE_CHECKING:
 
 
 class ArtworksOrm(Base):
+    """
+    Represents an artwork in the store.
+    Includes metadata like title, description, physical dimensions, and pricing.
+    Supports both original sales and print options.
+    """
     __tablename__ = "artworks"
+
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     title: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
@@ -42,6 +51,7 @@ class ArtworksOrm(Base):
         BigInteger, ForeignKey("collections.id"), nullable=True
     )
 
+    # Relationships
     collection: Mapped["CollectionsOrm"] = relationship(back_populates="artworks")
 
     tags: Mapped[list["TagsOrm"]] = relationship(
