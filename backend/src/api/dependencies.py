@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from src.config import settings
 from src.database import new_session
+from src.init import redis_manager
 from src.services.auth import AuthService
 from src.utils.db_manager import DBManager
 
@@ -14,9 +15,6 @@ class PaginationParams(BaseModel):
     per_page: int = 3
 
 
-PaginationDep = Annotated[PaginationParams, Depends()]
-
-
 def get_token(request: Request) -> str:
     token = request.cookies.get("access_token")
     if not token:
@@ -24,32 +22,34 @@ def get_token(request: Request) -> str:
     return token
 
 
-def get_current_user_id(token: str = Depends(get_token)) -> int:
+async def get_current_user_id(token: str = Depends(get_token)) -> int:
+    # Проверяем blacklist — access_token мог быть инвалидирован при logout
+    blacklisted = await redis_manager.get(f"at_bl:{token}")
+    if blacklisted:
+        raise HTTPException(
+            status_code=401, detail="Token has been invalidated. Please log in again."
+        )
     data = AuthService().decode_access_token(token)
     return data.get("user_id")
 
 
-def get_current_user_id_optional(request: Request) -> int | None:
+async def get_current_user_id_optional(request: Request) -> int | None:
     token = request.cookies.get("access_token")
     if not token:
         return None
     try:
+        blacklisted = await redis_manager.get(f"at_bl:{token}")
+        if blacklisted:
+            return None
         data = AuthService().decode_access_token(token)
         return data.get("user_id")
     except Exception:
         return None
 
 
-UserDep = Annotated[int, Depends(get_current_user_id)]
-UserDepOptional = Annotated[int | None, Depends(get_current_user_id_optional)]
-
-
 async def get_db():
     async with DBManager(session_factory=new_session) as db:
         yield db
-
-
-DBDep = Annotated[DBManager, Depends(get_db)]
 
 
 async def check_admin(
@@ -61,4 +61,8 @@ async def check_admin(
     return user_id
 
 
+PaginationDep = Annotated[PaginationParams, Depends()]
+UserDep = Annotated[int, Depends(get_current_user_id)]
+UserDepOptional = Annotated[int | None, Depends(get_current_user_id_optional)]
+DBDep = Annotated[DBManager, Depends(get_db)]
 AdminDep = Annotated[int, Depends(check_admin)]

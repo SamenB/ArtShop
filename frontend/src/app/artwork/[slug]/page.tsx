@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useCart } from "@/context/CartContext";
 import Lightbox from "@/components/Lightbox";
-import { getApiUrl, getImageUrl, artworkUrl } from "@/utils";
+import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
@@ -134,7 +134,7 @@ export default function ArtworkDetailPage() {
 
     useEffect(() => {
         if (!slug) return;
-        fetch(`${getApiUrl()}/artworks/${slug}`)
+        apiFetch(`${getApiUrl()}/artworks/${slug}`)
             .then(res => res.json())
             .then(data => {
                 const item = data.data || data;
@@ -150,7 +150,7 @@ export default function ArtworkDetailPage() {
 
     // Fetch all artwork slugs for prev/next navigation
     useEffect(() => {
-        fetch(`${getApiUrl()}/artworks?limit=500&fields=slug`)
+        apiFetch(`${getApiUrl()}/artworks?limit=500&fields=slug`)
             .then(res => res.json())
             .then(data => {
                 const items = data.data || data.items || data || [];

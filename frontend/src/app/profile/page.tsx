@@ -7,7 +7,7 @@ import SettingsTab from "@/app/admin/components/SettingsTab";
 import ArtworksTab from "@/app/admin/components/ArtworksTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 interface Order {
     id: number;
@@ -54,8 +54,8 @@ export default function ProfilePage() {
             setDataLoading(true);
             try {
                 const [ordersRes, likesRes] = await Promise.all([
-                    fetch(`${getApiUrl()}/orders/me`, { credentials: "include" }),
-                    fetch(`${getApiUrl()}/users/me/likes`, { credentials: "include" })
+                    apiFetch(`${getApiUrl()}/orders/me`),
+                    apiFetch(`${getApiUrl()}/users/me/likes`)
                 ]);
                 if (ordersRes.ok) setOrders(await ordersRes.json());
                 if (likesRes.ok) setLikes(await likesRes.json());

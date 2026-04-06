@@ -1,13 +1,26 @@
 "use client";
 import { useState } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
 import { useUser } from "@/context/UserContext";
 import { X } from "lucide-react";
 import { getApiUrl } from "@/utils";
+import { GoogleLogin } from "@react-oauth/google";
 
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
+}
+
+// Парсит ошибки от FastAPI: может быть строкой (detail: "...") или
+// массивом Pydantic-ошибок (detail: [{msg: "..."}, ...])
+function parseApiError(data: any): string {
+    if (!data?.detail) return "Authentication failed";
+    if (typeof data.detail === "string") return data.detail;
+    if (Array.isArray(data.detail)) {
+        // Pydantic validation errors — берём первое сообщение
+        const first = data.detail[0];
+        return first?.msg?.replace("Value error, ", "") ?? "Validation error";
+    }
+    return "Authentication failed";
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
@@ -16,13 +29,28 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [password, setPassword] = useState("");
     const [username, setUsername] = useState("");
     const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
     const { refreshUser } = useUser();
 
     if (!isOpen) return null;
 
+    const resetForm = () => {
+        setEmail("");
+        setPassword("");
+        setUsername("");
+        setError("");
+    };
+
+    const switchMode = (login: boolean) => {
+        setIsLogin(login);
+        setError("");
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setIsLoading(true);
+
         const endpoint = isLogin ? "/auth/login" : "/auth/register";
         const payload = isLogin
             ? { email, password }
@@ -33,48 +61,49 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
-                credentials: "include"
+                credentials: "include",
             });
+
             if (resp.ok) {
-                if (!isLogin) {
-                    // auto switch to login
-                    setIsLogin(true);
-                    setError("Registration successful! Please log in.");
-                } else {
-                    await refreshUser();
-                    onClose();
-                }
+                // И логин, и регистрация теперь сразу выдают cookies → авто-логин
+                await refreshUser();
+                resetForm();
+                onClose();
             } else {
-                const err = await resp.json();
-                setError(err.detail || "Authentication Failed");
+                const data = await resp.json().catch(() => ({}));
+                setError(parseApiError(data));
             }
-        } catch (err) {
-            setError("Network err");
+        } catch {
+            setError("Network error — please try again");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleGoogleSuccess = async (tokenResponse: any) => {
+    const handleGoogleSuccess = async (credentialResponse: any) => {
+        setError("");
+        setIsLoading(true);
         try {
             const res = await fetch(`${getApiUrl()}/auth/google`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token: tokenResponse.credential }),
-                credentials: "include"
+                body: JSON.stringify({ token: credentialResponse.credential }),
+                credentials: "include",
             });
             if (res.ok) {
                 await refreshUser();
+                resetForm();
                 onClose();
             } else {
                 setError("Google authentication failed");
             }
-        } catch (e) {
+        } catch {
             setError("Google authentication failed");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    // The custom hook requires access_token, but our backend expects id_token.
-    // It's easier to use the standard button. We will import GoogleLogin.
-    // But wait, we can just use the provided GoogleLogin component directly inside the form.
     return (
         <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="relative w-full max-w-md rounded-2xl bg-[#1C1916] border border-[#2D2A26] p-8 shadow-2xl">
@@ -104,7 +133,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                 required
                                 value={username}
                                 onChange={e => setUsername(e.target.value)}
-                                placeholder="Samen Bondarenko"
+                                placeholder="Your name"
+                                autoComplete="name"
                             />
                         </div>
                     )}
@@ -118,6 +148,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                             placeholder="you@example.com"
+                            autoComplete="email"
                         />
                     </div>
 
@@ -130,14 +161,21 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             placeholder="••••••••"
+                            autoComplete={isLogin ? "current-password" : "new-password"}
                         />
+                        {!isLogin && (
+                            <span className="text-xs text-zinc-600 mt-0.5">
+                                Min 8 characters, at least one letter and one digit
+                            </span>
+                        )}
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full mt-2 py-3.5 rounded-xl bg-[#F7F3EC] text-black font-semibold tracking-wide hover:bg-[#EAE5D9] transition-colors"
+                        disabled={isLoading}
+                        className="w-full mt-2 py-3.5 rounded-xl bg-[#F7F3EC] text-black font-semibold tracking-wide hover:bg-[#EAE5D9] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                        {isLogin ? "Sign In" : "Sign Up"}
+                        {isLoading ? "Please wait…" : isLogin ? "Sign In" : "Sign Up"}
                     </button>
                 </form>
 
@@ -148,36 +186,24 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 </div>
 
                 <div className="flex justify-center">
-                    <GoogleLoginWrapper handleSuccess={handleGoogleSuccess} />
+                    <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => setError("Google authentication failed")}
+                        theme="filled_black"
+                        shape="pill"
+                    />
                 </div>
 
                 <p className="mt-8 text-center text-sm text-zinc-500">
                     {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
                     <button
-                        onClick={() => setIsLogin(!isLogin)}
+                        onClick={() => switchMode(!isLogin)}
                         className="text-[#F7F3EC] hover:underline cursor-pointer transition-colors"
                     >
                         {isLogin ? "Sign Up" : "Sign In"}
                     </button>
                 </p>
-
             </div>
         </div>
     );
-}
-
-// Separated into component to avoid top-level issues
-import { GoogleLogin } from '@react-oauth/google';
-
-function GoogleLoginWrapper({ handleSuccess }: any) {
-    return (
-        <GoogleLogin
-            onSuccess={handleSuccess}
-            onError={() => {
-                console.log('Login Failed');
-            }}
-            theme="filled_black"
-            shape="pill"
-        />
-    )
 }

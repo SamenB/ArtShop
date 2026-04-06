@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 
 interface Artwork {
     id: number;
@@ -13,7 +13,7 @@ export default function ImagePreloader() {
         // Run preloading aggressively after initial mount but without blocking
         // main thread interactive paint
         const runPreload = () => {
-             fetch(`${getApiUrl()}/artworks?limit=1000`)
+             apiFetch(`${getApiUrl()}/artworks?limit=1000`)
                 .then(res => res.json())
                 .then(data => {
                     const rawData = data.items || data.data || data;

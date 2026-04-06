@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 export default function ContactPage() {
     const [isVisible, setIsVisible] = useState(false);
@@ -18,7 +18,7 @@ export default function ContactPage() {
     useEffect(() => {
         setIsVisible(true);
         // Fetch public settings for contact details
-        fetch(`${getApiUrl()}/settings`)
+        apiFetch(`${getApiUrl()}/settings`)
             .then(res => res.json())
             .then(data => setSettings(data))
             .catch(err => console.error("Failed to fetch settings", err));
@@ -30,7 +30,7 @@ export default function ContactPage() {
         
         setStatus("loading");
         try {
-            const res = await fetch(`${getApiUrl()}/contact`, {
+            const res = await apiFetch(`${getApiUrl()}/contact`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, email, message })

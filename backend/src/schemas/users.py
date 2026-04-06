@@ -1,13 +1,22 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class UserBase(BaseModel):
-    username: str = Field(..., description="Username of the user")
+    username: str = Field(..., min_length=2, max_length=50, description="Username of the user")
     email: EmailStr = Field(..., description="Email of the user")
 
 
 class UserRequestAdd(UserBase):
-    password: str = Field(..., description="Password of the user raw")
+    password: str = Field(..., min_length=8, max_length=128, description="Password of the user raw")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if not any(c.isalpha() for c in v):
+            raise ValueError("Password must contain at least one letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
 
 
 class UserAdd(UserBase):

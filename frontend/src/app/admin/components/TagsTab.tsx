@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 interface Tag { id: number; title: string; category?: string | null; }
 
@@ -18,7 +18,7 @@ export default function TagsTab() {
 
     const fetchTags = async () => {
         try {
-            const res = await fetch(`${getApiUrl()}/tags`, { credentials: "include" });
+            const res = await apiFetch(`${getApiUrl()}/tags`);
             if (res.ok) setTags(await res.json());
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
@@ -31,11 +31,10 @@ export default function TagsTab() {
         if (!newTitle.trim()) return;
         setSaving(true);
         try {
-            const res = await fetch(`${getApiUrl()}/tags`, {
+            const res = await apiFetch(`${getApiUrl()}/tags`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: newTitle, category: newCategory }),
-                credentials: "include",
             });
             if (res.ok) { setNewTitle(""); fetchTags(); }
             else { const err = await res.json(); alert(err.detail || "Failed to create tag"); }
@@ -45,7 +44,7 @@ export default function TagsTab() {
 
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this tag? Artworks using it will simply lose the tag.")) return;
-        const res = await fetch(`${getApiUrl()}/tags/${id}`, { method: "DELETE", credentials: "include" });
+        const res = await apiFetch(`${getApiUrl()}/tags/${id}`, { method: "DELETE" });
         if (res.ok) setTags(tags.filter(t => t.id !== id));
         else alert("Delete failed");
     };

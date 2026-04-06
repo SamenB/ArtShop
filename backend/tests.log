@@ -1,0 +1,152 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\semen\Desktop\Programing\ArtShop\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\semen\Desktop\Programing\ArtShop\backend
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.12.0, asyncio-1.3.0, dotenv-0.5.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 33 items
+
+tests/integration_tests/artworks/test_api.py::test_add_order ERROR       [  3%]
+
+=================================== ERRORS ====================================
+______________________ ERROR at setup of test_add_order _______________________
+
+self = <Coroutine test_add_order>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+venv\Lib\site-packages\pytest_asyncio\plugin.py:458: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+venv\Lib\site-packages\pytest_asyncio\plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+venv\Lib\site-packages\pytest_asyncio\plugin.py:361: in _async_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\anaconda3\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\anaconda3\Lib\asyncio\base_events.py:687: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+venv\Lib\site-packages\pytest_asyncio\plugin.py:357: in setup
+    res = await fixture_function(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\conftest.py:97: in register_user
+    response = await ac.post(
+venv\Lib\site-packages\httpx\_client.py:1859: in post
+    return await self.request(
+venv\Lib\site-packages\httpx\_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_client.py:1629: in send
+    response = await self._send_handling_auth(
+venv\Lib\site-packages\httpx\_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+venv\Lib\site-packages\httpx\_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\httpx\_transports\asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\fastapi\applications.py:1139: in __call__
+    await super().__call__(scope, receive, send)
+venv\Lib\site-packages\starlette\applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+venv\Lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+venv\Lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+venv\Lib\site-packages\starlette\middleware\base.py:191: in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ^^^^^^^^^^^^^^^^^^^^
+..\..\..\..\anaconda3\Lib\contextlib.py:158: in __exit__
+    self.gen.throw(value)
+venv\Lib\site-packages\starlette\_utils.py:85: in collapse_excgroups
+    raise exc
+venv\Lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\main.py:74: in log_requests
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+venv\Lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+venv\Lib\site-packages\starlette\middleware\cors.py:85: in __call__
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+venv\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+venv\Lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\starlette\routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+venv\Lib\site-packages\starlette\routing.py:736: in app
+    await route.handle(scope, receive, send)
+venv\Lib\site-packages\starlette\routing.py:290: in handle
+    await self.app(scope, receive, send)
+venv\Lib\site-packages\fastapi\routing.py:120: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+venv\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+venv\Lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+venv\Lib\site-packages\fastapi\routing.py:106: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+venv\Lib\site-packages\fastapi\routing.py:430: in app
+    raw_response = await run_endpoint_function(
+venv\Lib\site-packages\fastapi\routing.py:316: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\api\auth.py:106: in register_user
+    await check_rate_limit(request, endpoint="register", max_requests=10, window_seconds=3600)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+request = <starlette.requests.Request object at 0x0000028D7D8DA900>
+endpoint = 'register', max_requests = 10, window_seconds = 3600
+
+    async def check_rate_limit(request: Request, endpoint: str, max_requests: int, window_seconds: int) -> None:
+        """
+        \u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 rate limit \u0434\u043b\u044f \u0437\u0430\u0434\u0430\u043d\u043d\u043e\u0433\u043e endpoint + IP.
+    
+        Args:
+            request: FastAPI Request (\u0434\u043b\u044f \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f IP \u043a\u043b\u0438\u0435\u043d\u0442\u0430)
+            endpoint: \u0423\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u0438\u043c\u044f \u043a\u043b\u044e\u0447\u0430 (\u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440 "login")
+            max_requests: \u041c\u0430\u043a\u0441\u0438\u043c\u0443\u043c \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432 \u0432 \u043e\u043a\u043d\u0435
+            window_seconds: \u0414\u043b\u0438\u043d\u0430 \u043e\u043a\u043d\u0430 \u0432 \u0441\u0435\u043a\u0443\u043d\u0434\u0430\u0445
+        """
+        # \u0411\u0435\u0440\u0451\u043c \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0439 IP (\u0443\u0447\u0438\u0442\u044b\u0432\u0430\u0435\u043c X-Forwarded-For \u043e\u0442 Nginx)
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
+    
+        key = f"rate_limit:{endpoint}:{client_ip}"
+    
+        # \u0418\u043d\u043a\u0440\u0435\u043c\u0435\u043d\u0442\u0438\u0440\u0443\u0435\u043c \u0441\u0447\u0451\u0442\u0447\u0438\u043a \u0430\u0442\u043e\u043c\u0430\u0440\u043d\u043e
+>       count = await redis_manager.redis.incr(key)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'incr'
+
+src\middleware\rate_limit.py:39: AttributeError
+---------------------------- Captured stdout setup ----------------------------
+2026-04-06 19:19:11 | DEBUG    | src.main:log_requests:71 | Request: POST http://test/auth/register Origin: None
+---------------------------- Captured stderr setup ----------------------------
+--- Logging error in Loguru Handler #4 ---\nRecord was: {'elapsed': datetime.timedelta(microseconds=831146), 'exception': None, 'extra': {}, 'file': (name='main.py', path='C:\\\\Users\\\\semen\\\\Desktop\\\\Programing\\\\ArtShop\\\\backend\\\\src\\\\main.py'), 'function': 'log_requests', 'level': (name='DEBUG', no=10, icon='\U0001f41e'), 'line': 71, 'message': 'Request: POST http://test/auth/register Origin: None', 'module': 'main', 'name': 'src.main', 'process': (id=7496, name='MainProcess'), 'thread': (id=31180, name='MainThread'), 'time': datetime(2026, 4, 6, 19, 19, 11, 666117, tzinfo=datetime.timezone(datetime.timedelta(seconds=10800), 'FLE Daylight Time'))}\nTraceback (most recent call last):\n  File "C:\\Users\\semen\\Desktop\\Programing\\ArtShop\\backend\\venv\\Lib\\site-packages\\loguru\\_handler.py", line 206, in emit\n    self._sink.write(str_record)\n  File "C:\\Users\\semen\\Desktop\\Programing\\ArtShop\\backend\\venv\\Lib\\site-packages\\loguru\\_file_sink.py", line 204, in write\n    self._terminate_file(is_rotating=True)\n  File "C:\\Users\\semen\\Desktop\\Programing\\ArtShop\\backend\\venv\\Lib\\site-packages\\loguru\\_file_sink.py", line 276, in _terminate_file\n    os.rename(old_path, renamed_path)\nPermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\\\Users\\\\semen\\\\Desktop\\\\Programing\\\\ArtShop\\\\backend\\\\logs\\\\app.log' -> 'C:\\\\Users\\\\semen\\\\Desktop\\\\Programing\\\\ArtShop\\\\backend\\\\logs\\\\app.2026-03-04_15-15-14_184037.log'\n--- End of logging error ---
+=========================== short test summary info ===========================
+ERROR tests/integration_tests/artworks/test_api.py::test_add_order - Attribut...
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+============================== 1 error in 1.14s ===============================

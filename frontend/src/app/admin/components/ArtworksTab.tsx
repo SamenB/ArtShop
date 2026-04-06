@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
 
 interface ArtworkImage { thumb: string; medium: string; original: string; }
@@ -245,9 +245,9 @@ export default function ArtworksTab() {
         setLoading(true);
         try {
             const [artRes, collRes, tagRes] = await Promise.all([
-                fetch(`${getApiUrl()}/artworks?limit=100`, { credentials: "include" }),
-                fetch(`${getApiUrl()}/collections`, { credentials: "include" }),
-                fetch(`${getApiUrl()}/tags?category=medium`, { credentials: "include" }),
+                apiFetch(`${getApiUrl()}/artworks?limit=100`),
+                apiFetch(`${getApiUrl()}/collections`),
+                apiFetch(`${getApiUrl()}/tags?category=medium`),
             ]);
             if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
             if (collRes.ok) { const d = await collRes.json(); setCollections(d); }
@@ -322,9 +322,9 @@ export default function ArtworksTab() {
         const url = editingId ? `${apiUrl}/artworks/${editingId}` : `${apiUrl}/artworks`;
 
         try {
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method, headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload), credentials: "include",
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {
@@ -343,11 +343,10 @@ export default function ArtworksTab() {
                     .filter(it => it.type === "existing")
                     .map(it => it.existingData!);
                 // Always PATCH to apply removals/reordering (even if empty — that means all were removed)
-                await fetch(`${apiUrl}/artworks/${editingId}`, {
+                await apiFetch(`${apiUrl}/artworks/${editingId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ images: existingOrdered }),
-                    credentials: "include",
                 });
             }
 
@@ -356,7 +355,7 @@ export default function ArtworksTab() {
             if (newFiles.length > 0 && targetId) {
                 const fd = new FormData();
                 newFiles.forEach(f => fd.append("files", f));
-                await fetch(`${apiUrl}/artworks/${targetId}/images`, { method: "POST", body: fd, credentials: "include" });
+                await apiFetch(`${apiUrl}/artworks/${targetId}/images`, { method: "POST", body: fd });
             }
 
             alert(`Artwork ${editingId ? "updated" : "created"}! Images processing in background.`);
@@ -375,7 +374,7 @@ export default function ArtworksTab() {
     // ── Edit click ────────────────────────────────────────────────────────────
     const handleEditClick = async (art: Artwork) => {
         try {
-            const res = await fetch(`${getApiUrl()}/artworks/${art.id}`, { credentials: "include" });
+            const res = await apiFetch(`${getApiUrl()}/artworks/${art.id}`);
             if (!res.ok) return;
             const full = await res.json();
             setFormData({
@@ -410,7 +409,7 @@ export default function ArtworksTab() {
 
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this artwork?")) return;
-        const res = await fetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE", credentials: "include" });
+        const res = await apiFetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE" });
         if (res.ok) setArtworks(artworks.filter(a => a.id !== id));
         else alert("Delete failed");
     };

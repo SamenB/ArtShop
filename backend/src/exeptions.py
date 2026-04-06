@@ -53,3 +53,13 @@ class TokenExpiredException(ArtShopExeption):
 class InvalidTokenException(ArtShopExeption):
     detail = "Invalid token"
     status_code = 401
+
+
+class UserAlreadyExistsException(ArtShopExeption):
+    detail = "A user with this email already exists"
+    status_code = 409
+
+
+class RateLimitExceededException(ArtShopExeption):
+    detail = "Too many requests. Please try again later."
+    status_code = 429

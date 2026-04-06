@@ -467,13 +467,10 @@ h3 {
 @media (max-width: 1023px) {
   @keyframes magnetic-pull {
     0% {
-      transform: translateY(60px) scale(0.96);
-    }
-    25% {
-      transform: translateY(45px) scale(0.98); /* Subtle tension phase */
+      transform: translateY(160px);
     }
     100% {
-      transform: translateY(0) scale(1); /* Acceleration into place */
+      transform: translateY(0);
     }
   }
 
@@ -484,17 +481,17 @@ h3 {
 
   @supports (animation-timeline: view()) {
     .magnetic-scroll {
-      /* Map animation strictly to the scroll offset */
-      animation: magnetic-pull linear both;
+      /* Viscous magnet effect: starts slow, snaps into place */
+      animation: magnetic-pull cubic-bezier(0.5, 0, 0.2, 1) both;
       animation-timeline: view();
-      /* Starts slightly after entering viewport, finishes when it covers 35% from bottom */
-      animation-range: entry 0% cover 22%;
+      /* Stays hidden below, then finishes quickly in the bottom 30-40% of the element's height */
+      animation-range: entry 0% entry 45%;
     }
     
     .magnetic-scroll-header {
-      animation: magnetic-pull linear both;
+      animation: magnetic-pull cubic-bezier(0.5, 0, 0.2, 1) both;
       animation-timeline: view();
-      animation-range: entry 0% cover 15%;
+      animation-range: entry 0% entry 100%;
     }
   }
 }

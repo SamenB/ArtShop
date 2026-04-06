@@ -1,7 +1,7 @@
 "use client";
 // LabelsTab — unified tab for Collections + Medium tags + General tags
 import { useState, useEffect } from "react";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 interface Collection { id: number; title: string; }
 interface Tag { id: number; title: string; category?: string | null; }
@@ -96,9 +96,9 @@ export default function LabelsTab() {
         setLoading(true);
         try {
             const [collRes, medRes, genRes] = await Promise.all([
-                fetch(`${apiUrl}/collections`, { credentials: "include" }),
-                fetch(`${apiUrl}/tags?category=medium`, { credentials: "include" }),
-                fetch(`${apiUrl}/tags?category=general`, { credentials: "include" }),
+                apiFetch(`${apiUrl}/collections`),
+                apiFetch(`${apiUrl}/tags?category=medium`),
+                apiFetch(`${apiUrl}/tags?category=general`),
             ]);
             if (collRes.ok) setCollections(await collRes.json());
             if (medRes.ok) setMediumTags(await medRes.json());
@@ -111,8 +111,8 @@ export default function LabelsTab() {
 
     // Collections CRUD
     const addCollection = async (title: string) => {
-        const res = await fetch(`${apiUrl}/collections`, {
-            method: "POST", credentials: "include",
+        const res = await apiFetch(`${apiUrl}/collections`, {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ title }),
         });
@@ -121,14 +121,14 @@ export default function LabelsTab() {
     };
     const deleteCollection = async (id: number) => {
         if (!confirm("Delete this collection?")) return;
-        await fetch(`${apiUrl}/collections/${id}`, { method: "DELETE", credentials: "include" });
+        await apiFetch(`${apiUrl}/collections/${id}`, { method: "DELETE" });
         setCollections(c => c.filter(x => x.id !== id));
     };
 
     // Tag CRUD (medium / general)
     const addTag = async (title: string, category: string) => {
-        const res = await fetch(`${apiUrl}/tags`, {
-            method: "POST", credentials: "include",
+        const res = await apiFetch(`${apiUrl}/tags`, {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ title, category }),
         });
@@ -139,7 +139,7 @@ export default function LabelsTab() {
         // Fetch usage count first — professional UX: informed confirmation
         let usageMsg = "";
         try {
-            const r = await fetch(`${apiUrl}/tags/${id}/usage`, { credentials: "include" });
+            const r = await apiFetch(`${apiUrl}/tags/${id}/usage`);
             if (r.ok) {
                 const data = await r.json();
                 const n = data.artwork_count;
@@ -150,7 +150,7 @@ export default function LabelsTab() {
         } catch { /* ignore, still allow delete */ }
 
         if (!confirm(`Delete tag "${title}"?${usageMsg}`)) return;
-        await fetch(`${apiUrl}/tags/${id}`, { method: "DELETE", credentials: "include" });
+        await apiFetch(`${apiUrl}/tags/${id}`, { method: "DELETE" });
         fetchAll();
     };
 

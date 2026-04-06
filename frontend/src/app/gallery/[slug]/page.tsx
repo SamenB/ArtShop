@@ -2,7 +2,7 @@
 // Redirect old /gallery/{id} links to the new canonical /artwork/{id}-{slug} URL
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getApiUrl, artworkUrl } from "@/utils";
+import { getApiUrl, artworkUrl, apiFetch } from "@/utils";
 
 export default function GallerySlugRedirect() {
     const params = useParams();
@@ -15,7 +15,7 @@ export default function GallerySlugRedirect() {
         if (!id) { router.replace("/shop"); return; }
 
         // Fetch title so we can build the pretty URL, fallback to just /artwork/{id}
-        fetch(`${getApiUrl()}/artworks/${id}`)
+        apiFetch(`${getApiUrl()}/artworks/${id}`)
             .then(res => res.json())
             .then(data => {
                 const item = data.data || data;

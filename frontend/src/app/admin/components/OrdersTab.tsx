@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 interface Order {
     id: number;
@@ -17,7 +17,7 @@ export default function OrdersTab() {
 
     const fetchOrders = async () => {
         try {
-            const res = await fetch(`${getApiUrl()}/orders`, { credentials: "include" });
+            const res = await apiFetch(`${getApiUrl()}/orders`);
             if (res.ok) {
                 const data = await res.json();
                 setOrders(data);
@@ -35,11 +35,10 @@ export default function OrdersTab() {
 
     const updateStatus = async (id: number, newStatus: string) => {
         try {
-            const res = await fetch(`${getApiUrl()}/orders/${id}/status`, {
+            const res = await apiFetch(`${getApiUrl()}/orders/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ payment_status: newStatus }),
-                credentials: "include"
             });
             if (res.ok) {
                 setOrders(orders.map(o => o.id === id ? { ...o, payment_status: newStatus } : o));

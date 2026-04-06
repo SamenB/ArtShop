@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 interface Collection {
     id: number;
@@ -15,7 +15,7 @@ export default function CollectionsTab() {
 
     const fetchCollections = async () => {
         try {
-            const res = await fetch(`${getApiUrl()}/collections`, { credentials: "include" });
+            const res = await apiFetch(`${getApiUrl()}/collections`);
             if (res.ok) {
                 const data = await res.json();
                 setCollections(data);
@@ -38,11 +38,10 @@ export default function CollectionsTab() {
         const apiUrl = getApiUrl();
         console.log(`Creating collection at ${apiUrl}/collections with title: ${newTitle}`);
         try {
-            const res = await fetch(`${apiUrl}/collections`, {
+            const res = await apiFetch(`${apiUrl}/collections`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: newTitle }),
-                credentials: "include"
             });
             if (res.ok) {
                 setNewTitle("");
@@ -62,9 +61,8 @@ export default function CollectionsTab() {
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this collection? Note: Artworks in this collection will remain but their collection reference might be broken.")) return;
         try {
-            const res = await fetch(`${getApiUrl()}/collections/${id}`, { 
+            const res = await apiFetch(`${getApiUrl()}/collections/${id}`, { 
                 method: "DELETE", 
-                credentials: "include" 
             });
             if (res.ok) {
                 setCollections(collections.filter(c => c.id !== id));

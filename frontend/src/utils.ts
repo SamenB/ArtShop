@@ -25,6 +25,61 @@ export const getApiUrl = (serverHost?: string) => {
     return ENV_API_URL;
 };
 
+// ─── Silent Refresh Interceptor ──────────────────────────────────────────────
+//
+// apiFetch — замена нативному fetch.
+// При получении 401 автоматически вызывает POST /auth/refresh (один раз),
+// и повторяет исходный запрос. Если refresh не удался — возвращает 401.
+//
+// Конкурентность: если несколько запросов одновременно получают 401,
+// refresh вызывается только один раз — остальные ждут результата.
+
+let _refreshing = false;
+let _refreshWaiters: Array<(ok: boolean) => void> = [];
+
+async function _tryRefresh(): Promise<boolean> {
+    if (_refreshing) {
+        // Уже идёт refresh — ждём его результата
+        return new Promise((resolve) => _refreshWaiters.push(resolve));
+    }
+    _refreshing = true;
+    try {
+        const res = await fetch(`${getApiUrl()}/auth/refresh`, {
+            method: "POST",
+            credentials: "include",
+        });
+        const ok = res.ok;
+        _refreshWaiters.forEach((w) => w(ok));
+        _refreshWaiters = [];
+        return ok;
+    } catch {
+        _refreshWaiters.forEach((w) => w(false));
+        _refreshWaiters = [];
+        return false;
+    } finally {
+        _refreshing = false;
+    }
+}
+
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const opts: RequestInit = { credentials: "include", ...options };
+    const response = await fetch(url, opts);
+
+    if (response.status === 401) {
+        const refreshed = await _tryRefresh();
+        if (refreshed) {
+            // Повторяем запрос с обновлёнными куками
+            return fetch(url, opts);
+        }
+        // Refresh не удался — возвращаем оригинальный 401
+        // UserContext поймает его и очистит состояние пользователя
+    }
+
+    return response;
+}
+
+
+
 export const getImageUrl = (
     image: string | { thumb?: string; medium?: string; original?: string } | null | undefined, 
     prefer: 'thumb' | 'medium' | 'original' = 'medium',

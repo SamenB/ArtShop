@@ -14,7 +14,7 @@
 // 4. Values are saved to localStorage so they persist across page reloads
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 // Supported languages — extend this list as translations are added
 export type Language = "en" | "uk";
@@ -82,7 +82,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         async function fetchSettings() {
             try {
-                const res = await fetch(`${getApiUrl()}/settings`);
+                const res = await apiFetch(`${getApiUrl()}/settings`);
                 if (!res.ok) return;
                 const data = await res.json();
                 if (data && data.global_print_price) {

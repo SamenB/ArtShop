@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 
 export default function AboutPage() {
     const [isVisible, setIsVisible] = useState(false);
@@ -9,7 +9,7 @@ export default function AboutPage() {
 
     useEffect(() => {
         setIsVisible(true);
-        fetch(`${getApiUrl()}/settings`)
+        apiFetch(`${getApiUrl()}/settings`)
             .then(res => res.json())
             .then(data => setSettings(data))
             .catch(() => console.warn("Backend unavailable"));

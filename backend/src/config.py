@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Cookie security: set False for LOCAL dev (no HTTPS), True for prod
+    COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
+
     ADMIN_EMAILS: list[str] = []
 
     @field_validator("ADMIN_EMAILS", mode="before")

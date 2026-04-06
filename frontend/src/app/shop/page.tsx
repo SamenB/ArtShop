@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
-import { getApiUrl, getImageUrl, artworkUrl } from "@/utils";
+import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
 
@@ -556,9 +556,9 @@ export default function ShopPage() {
     useEffect(() => {
         const apiUrl = getApiUrl();
         Promise.all([
-            fetch(`${apiUrl}/artworks?limit=1000`).then(r => r.json()),
-            fetch(`${apiUrl}/collections`).then(r => r.json()),
-            fetch(`${apiUrl}/tags?category=medium`).then(r => r.json()),
+            apiFetch(`${apiUrl}/artworks?limit=1000`).then(r => r.json()),
+            apiFetch(`${apiUrl}/collections`).then(r => r.json()),
+            apiFetch(`${apiUrl}/tags?category=medium`).then(r => r.json()),
         ]).then(([artData, collData, tagData]) => {
             const rawData = artData.items || artData.data || artData;
             if (Array.isArray(rawData)) {

@@ -1,5 +1,6 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { getApiUrl, apiFetch } from "@/utils";
 
 export interface User {
     id: number;
@@ -17,38 +18,42 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-import { getApiUrl } from "@/utils";
-
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const refreshUser = async () => {
+    const refreshUser = useCallback(async () => {
         try {
-            const resp = await fetch(`${getApiUrl()}/auth/me`, {
-                credentials: "include" // always include cookies
-            });
+            // apiFetch автоматически попробует обновить токены при 401
+            const resp = await apiFetch(`${getApiUrl()}/auth/me`);
             if (resp.ok) {
-                const data = await resp.json();
-                setUser(data);
+                setUser(await resp.json());
             } else {
+                // 401 после неудачного refresh — пользователь не авторизован
                 setUser(null);
             }
-        } catch (e) {
+        } catch {
             setUser(null);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const logout = async () => {
-        await fetch(`${getApiUrl()}/auth/logout`, { method: "POST", credentials: "include" });
+    const logout = useCallback(async () => {
+        try {
+            await fetch(`${getApiUrl()}/auth/logout`, {
+                method: "POST",
+                credentials: "include",
+            });
+        } catch {
+            // Даже при сетевой ошибке — очищаем локальное состояние
+        }
         setUser(null);
-    };
+    }, []);
 
     useEffect(() => {
         refreshUser();
-    }, []);
+    }, [refreshUser]);
 
     return (
         <UserContext.Provider value={{ user, loading, refreshUser, logout }}>

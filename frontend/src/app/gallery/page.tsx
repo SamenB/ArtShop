@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import Lightbox from "@/components/Lightbox";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 import { useUser } from "@/context/UserContext";
 
 type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
@@ -237,8 +237,8 @@ export default function GalleryPage() {
 
     useEffect(() => {
         Promise.all([
-            fetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json()),
-            fetch(`${getApiUrl()}/collections`).then(res => res.json())
+            apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json()),
+            apiFetch(`${getApiUrl()}/collections`).then(res => res.json())
         ])
             .then(([artworksData, collectionsData]) => {
                 const rawData = artworksData.items || artworksData.data || artworksData;
@@ -337,12 +337,11 @@ export default function GalleryPage() {
 
     const handleColorChange = async (colId: number, color: string | null) => {
         try {
-            const res = await fetch(`${getApiUrl()}/collections/${colId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bg_color: color }),
-                credentials: "include"
-            });
+            const res = await apiFetch(`${getApiUrl()}/collections/${colId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bg_color: color }),
+        });
             if (res.ok) {
                 setAllCollections(prev => prev.map(c => c.id === colId ? { ...c, bg_color: color || undefined } : c));
             }

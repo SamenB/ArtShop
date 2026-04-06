@@ -6,7 +6,7 @@ import { useCart } from "@/context/CartContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import { GoogleLogin } from "@react-oauth/google";
 import { useUser } from "@/context/UserContext";
-import { getApiUrl } from "@/utils";
+import { getApiUrl, apiFetch } from "@/utils";
 
 export default function CheckoutPage() {
     const { items, cartTotal, clearCart } = useCart();
@@ -99,7 +99,7 @@ export default function CheckoutPage() {
                 }))
             };
 
-            const res = await fetch(`${getApiUrl()}/orders`, {
+            const res = await apiFetch(`${getApiUrl()}/orders`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(orderRequest)

@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
 from src.database import Base, engine_null_pool, new_session_null_pool
+from src.init import redis_manager
 from src.main import app
 from src.models import *
 from src.models.orders import OrderItemOrm, OrdersOrm
@@ -23,6 +24,35 @@ from src.schemas.orders import OrderAdd
 from src.schemas.tags import ArtworkTagAdd, TagAdd
 from src.schemas.users import UserAdd
 from src.utils.db_manager import DBManager
+
+
+class MockRedis:
+    def __init__(self):
+        self.data = {}
+
+    async def get(self, key):
+        return self.data.get(key)
+
+    async def set(self, key, value, ex=None):
+        self.data[key] = value
+
+    async def delete(self, key):
+        self.data.pop(key, None)
+
+    async def incr(self, key):
+        self.data[key] = self.data.get(key, 0) + 1
+        return self.data[key]
+
+    async def expire(self, key, seconds):
+        pass
+
+
+@pytest.fixture(scope="session", autouse=True)
+def mock_redis():
+    mock_r = MockRedis()
+    redis_manager.redis = mock_r
+    return mock_r
+
 
 MOCKS_DIR = Path(__file__).parent / "mocks"
 
@@ -96,9 +126,13 @@ async def ac():
 async def register_user(ac, setup_database):
     response = await ac.post(
         url="/auth/register",
-        json={"email": "test_admin@artshop.com", "password": "password", "username": "testadmin"},
+        json={
+            "email": "test_admin@artshop.com",
+            "password": "password123",
+            "username": "testadmin",
+        },
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
 
 
 @pytest.fixture(scope="session")
@@ -108,7 +142,7 @@ async def authenticated_ac(register_user, ac):
         "/auth/login",
         json={
             "email": "test_admin@artshop.com",
-            "password": "password",
+            "password": "password123",
         },
     )
     assert response.status_code == 200

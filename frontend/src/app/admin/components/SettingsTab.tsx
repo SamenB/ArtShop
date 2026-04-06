@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getApiUrl, getImageUrl } from "@/utils";
+import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 import ImageCropperModal from "./ImageCropperModal";
 
 interface SiteSettings {
@@ -41,7 +41,7 @@ export default function SettingsTab() {
     useEffect(() => {
         const url = `${getApiUrl()}/settings`;
         console.log("Fetching settings from:", url);
-        fetch(url)
+        apiFetch(url)
             .then((res) => {
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                 return res.json();
@@ -69,10 +69,9 @@ export default function SettingsTab() {
         formData.append("file", file);
         
         try {
-            const res = await fetch(`${getApiUrl()}/upload/image`, {
+            const res = await apiFetch(`${getApiUrl()}/upload/image`, {
                 method: "POST",
                 body: formData,
-                credentials: "include"
             });
             if (res.ok) {
                 const data = await res.json();
@@ -103,16 +102,16 @@ export default function SettingsTab() {
             // Upload Desktop bg
             const desktopForm = new FormData();
             desktopForm.append("file", desktopBlob, `cover_${activeCoverSlot + 1}_desktop.webp`);
-            const resDesktop = await fetch(`${getApiUrl()}/upload/image`, {
-                method: "POST", body: desktopForm, credentials: "include"
+            const resDesktop = await apiFetch(`${getApiUrl()}/upload/image`, {
+                method: "POST", body: desktopForm,
             });
             const dData = await resDesktop.json();
 
             // Upload Mobile bg
             const mobileForm = new FormData();
             mobileForm.append("file", mobileBlob, `cover_${activeCoverSlot + 1}_mobile.webp`);
-            const resMobile = await fetch(`${getApiUrl()}/upload/image`, {
-                method: "POST", body: mobileForm, credentials: "include"
+            const resMobile = await apiFetch(`${getApiUrl()}/upload/image`, {
+                method: "POST", body: mobileForm,
             });
             const mData = await resMobile.json();
 
@@ -144,11 +143,10 @@ export default function SettingsTab() {
         if (!settings) return;
         setSaving(true);
         try {
-            const res = await fetch(`${getApiUrl()}/settings`, {
+            const res = await apiFetch(`${getApiUrl()}/settings`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(settings),
-                credentials: "include"
             });
             if (res.ok) {
                 alert("Settings saved successfully!");
