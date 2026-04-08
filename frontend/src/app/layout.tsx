@@ -32,10 +32,6 @@ export const metadata: Metadata = {
     siteName: "Samen Bondarenko Gallery",
     locale: "en_US",
   },
-  icons: {
-    icon: '/sb-icon.svg?v=4',
-    apple: '/sb-icon.svg?v=4',
-  },
 };
 
 /**
