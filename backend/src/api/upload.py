@@ -2,6 +2,7 @@
 API endpoints for general image uploads.
 Handles image validation, processing (conversion to WebP), and optimization.
 """
+
 import asyncio
 import os
 import shutil

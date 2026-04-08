@@ -1,6 +1,7 @@
 """
 SQLAlchemy database model for artwork collections.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ class CollectionsOrm(Base):
     Represents a group of artworks (e.g., 'Nature', 'Abstract').
     Used for categorizing artworks and applying visual styles (bg_color) on the frontend.
     """
+
     __tablename__ = "collections"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

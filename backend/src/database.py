@@ -3,6 +3,7 @@ Database foundation layer for the application.
 Configures SQLAlchemy asynchronous engines, connection pooling strategies,
 and session factories for both standard and high-concurrency (null-pool) operations.
 """
+
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
@@ -38,4 +39,5 @@ class Base(DeclarativeBase):
     Common base class for all SQLAlchemy Declarative ORM models.
     Enables unified schema management and metadata discovery.
     """
+
     pass

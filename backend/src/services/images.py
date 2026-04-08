@@ -2,6 +2,7 @@
 Service for handling image uploads and asynchronous processing.
 Manages temporary storage and dispatches background tasks for image optimization and mapping.
 """
+
 import os
 import shutil
 
@@ -14,6 +15,7 @@ class ImageService:
     """
     Handles file system operations for uploaded images and integrates with Celery tasks.
     """
+
     TEMP_DIR = "temp"
 
     @classmethod

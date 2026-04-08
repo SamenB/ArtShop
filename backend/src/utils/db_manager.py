@@ -3,6 +3,7 @@ Database session and repository management utility.
 Implements the Unit of Work pattern to coordinate multiple repositories within a single
 atomic transaction. Includes specialized handling for database deadlocks.
 """
+
 import asyncio
 
 from sqlalchemy.exc import OperationalError

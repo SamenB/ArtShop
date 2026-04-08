@@ -2,6 +2,7 @@
 Base repository providing common CRUD operations for SQLAlchemy models.
 Automatically maps database models to Pydantic schemas using the provided mapper.
 """
+
 from typing import Any, Sequence
 
 from asyncpg import UniqueViolationError

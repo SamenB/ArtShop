@@ -2,6 +2,7 @@
 API endpoints for managing artwork tags and categories.
 Provides functionality for tag retrieval, usage tracking, and CRUD operations.
 """
+
 from fastapi import APIRouter, Body, Query
 from fastapi_cache.decorator import cache
 

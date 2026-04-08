@@ -1,6 +1,7 @@
 """
 Pydantic schemas for site settings data validation and serialization.
 """
+
 from typing import Optional
 
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ class SiteSettingsBase(BaseModel):
     Base schema for site configuration.
     Includes branding texts, image URLs, slideshow settings, and global print prices.
     """
+
     about_text: Optional[str] = None
     contact_email: Optional[str] = None
     social_link: Optional[str] = None
@@ -32,6 +34,7 @@ class SiteSettingsResponse(SiteSettingsBase):
     """
     Represents site settings as retrieved from the database.
     """
+
     id: int
 
 
@@ -39,4 +42,5 @@ class SiteSettingsUpdate(SiteSettingsBase):
     """
     Schema for updating site settings.
     """
+
     pass

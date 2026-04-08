@@ -2,6 +2,7 @@
 API endpoints for managing global site settings.
 Provides functionality to retrieve and update configurations like contact info, prices, and slideshow parameters.
 """
+
 from fastapi import APIRouter
 
 from src.api.dependencies import AdminDep, DBDep

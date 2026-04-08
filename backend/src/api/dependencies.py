@@ -2,6 +2,7 @@
 Common FastAPI dependencies used across different API routers.
 Includes authentication, authorization, and database session management.
 """
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -18,6 +19,7 @@ class PaginationParams(BaseModel):
     """
     Standard pagination parameters.
     """
+
     page: int = 1
     per_page: int = 3
 

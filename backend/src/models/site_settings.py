@@ -1,6 +1,7 @@
 """
 SQLAlchemy database model for global site settings.
 """
+
 from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,6 +14,7 @@ class SiteSettingsOrm(Base):
     Includes technical contacts, about texts, background images for the landing page,
     slideshow parameters, and global pricing for prints.
     """
+
     __tablename__ = "site_settings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
 

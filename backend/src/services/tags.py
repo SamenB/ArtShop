@@ -3,6 +3,7 @@ Service layer for artwork tag business logic.
 Handles categorization and metadata tagging for artworks,
 including usage tracking and relationship cleanup.
 """
+
 from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 

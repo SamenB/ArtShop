@@ -1,6 +1,7 @@
 """
 Utility functions for repository-level queries.
 """
+
 from sqlalchemy import select
 
 from src.models.artworks import ArtworksOrm

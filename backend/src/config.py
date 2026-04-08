@@ -3,6 +3,7 @@ Global application configuration and environment variable management.
 Uses pydantic-settings to load and validate configuration from .env files
 and system environment variables.
 """
+
 import json
 from typing import Literal
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     Central settings object for the backend application.
     Defines database connections, security keys, and external service credentials.
     """
+
     MODE: Literal["TEST", "LOCAL", "DEV", "PROD"] = "LOCAL"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG"
 
@@ -99,9 +101,9 @@ class Settings(BaseSettings):
 
     # Configuration for loading environment variables.
     model_config = SettingsConfigDict(
-        env_file="../.env", # Relative path from the src directory.
+        env_file="../.env",  # Relative path from the src directory.
         env_file_encoding="utf-8",
-        extra="ignore", # Allows sharing .env with frontend without validation errors.
+        extra="ignore",  # Allows sharing .env with frontend without validation errors.
     )
 
 

@@ -3,6 +3,7 @@ Service layer for authentication and security.
 Handles JWT token generation (access and refresh pairs), password hashing,
 and secure random password generation for OAuth users.
 """
+
 import secrets
 from datetime import datetime, timedelta, timezone
 

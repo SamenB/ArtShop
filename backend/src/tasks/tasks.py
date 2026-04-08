@@ -3,6 +3,7 @@ Asynchronous background tasks for the ArtShop application.
 Includes image processing (optimization, resizing, and WebP conversion)
 and scheduled maintenance tasks like email notifications.
 """
+
 import asyncio
 import time
 from pathlib import Path

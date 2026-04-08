@@ -3,6 +3,7 @@ Asynchronous task queue configuration using Celery.
 Defines the connection to the Redis broker, includes task modules,
 and configures periodic tasks via Celery Beat.
 """
+
 from celery import Celery
 
 from src.config import settings

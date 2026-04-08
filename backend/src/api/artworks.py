@@ -2,6 +2,7 @@
 API endpoints for managing artworks.
 Includes CRUD operations, bulk creation, and image uploading.
 """
+
 import os
 import shutil
 

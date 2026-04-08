@@ -3,6 +3,7 @@ Service for handling email communications.
 Integrates with SMTP to send transactional emails like contact notifications
 and automated customer replies.
 """
+
 import smtplib
 from email.message import EmailMessage
 

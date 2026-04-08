@@ -1,6 +1,7 @@
 """
 SQLAlchemy database models for orders and their constituent items.
 """
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
@@ -14,6 +15,7 @@ class OrdersOrm(Base):
     Represents a customer order.
     Stores contact information, billing details, marketing preferences, and payment status.
     """
+
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
@@ -34,9 +36,7 @@ class OrdersOrm(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     # Payment status options: pending, paid, failed, mock_paid
-    payment_status: Mapped[str] = mapped_column(
-        String(20), default="pending"
-    )
+    payment_status: Mapped[str] = mapped_column(String(20), default="pending")
     invoice_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     payment_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
@@ -55,6 +55,7 @@ class OrderItemOrm(Base):
     Represents an individual item within an order.
     Can be an original artwork or a specific print edition.
     """
+
     __tablename__ = "order_items"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"))

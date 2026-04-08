@@ -2,6 +2,7 @@
 Repository for managing artwork data access.
 Extends BaseRepository to provide specialized filtering and eager loading of tags.
 """
+
 from sqlalchemy import and_, select
 from sqlalchemy.orm import joinedload
 
@@ -18,6 +19,7 @@ class ArtworksRepository(BaseRepository):
     Handles complex queries for artworks, including multi-criteria filtering and pagination.
     Uses ArtworkMapper for data transformation.
     """
+
     model = ArtworksOrm
     mapper = ArtworkMapper
 

@@ -1,6 +1,7 @@
 """
 SQLAlchemy database model for user accounts.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ class UsersOrm(Base):
     Represents a registered user of the ArtShop.
     Includes technical credentials (email, hashed password) and artistic preferences (likes).
     """
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

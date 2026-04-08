@@ -3,6 +3,7 @@ Main application entry point for the ArtShop backend.
 Configures the FastAPI instance, manages lifecycle events (lifespan),
 registers global middleware (CORS, logging), and orchestrates API routing.
 """
+
 from contextlib import asynccontextmanager
 
 import redis.asyncio as redis
@@ -69,7 +70,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     # Matches local network patterns to support mobile testing and local development.
     allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(?::\d+)?$",
-    allow_credentials=True, # Required for HTTPOnly authentication cookies.
+    allow_credentials=True,  # Required for HTTPOnly authentication cookies.
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -97,7 +98,7 @@ async def log_requests(request: Request, call_next):
         "Incoming Request: {} {} | Origin: {}",
         request.method,
         request.url,
-        request.headers.get("origin")
+        request.headers.get("origin"),
     )
     response = await call_next(request)
     return response

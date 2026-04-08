@@ -1,6 +1,7 @@
 """
 Global initialization for application components.
 """
+
 from src.config import settings
 from src.connectors.redis_connector import RedisManager
 

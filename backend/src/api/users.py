@@ -2,6 +2,7 @@
 API endpoints for user-specific data and interactions.
 Currently handles artwork "likes" (favorites) for the authenticated user.
 """
+
 from fastapi import APIRouter
 from sqlalchemy import delete, insert, select
 
@@ -17,11 +18,7 @@ async def get_my_likes(user_id: UserDep, db: DBDep):
     """
     Retrieves all artworks liked by the currently authenticated user.
     """
-    query = (
-        select(ArtworksOrm)
-        .join(UserLikesOrm)
-        .filter(UserLikesOrm.user_id == user_id)
-    )
+    query = select(ArtworksOrm).join(UserLikesOrm).filter(UserLikesOrm.user_id == user_id)
     result = await db.session.execute(query)
     artworks = result.scalars().all()
     return artworks

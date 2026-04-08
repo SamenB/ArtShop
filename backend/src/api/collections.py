@@ -1,6 +1,7 @@
 """
 API endpoints for managing artwork collections.
 """
+
 from fastapi import APIRouter, Body, HTTPException
 
 from src.api.dependencies import AdminDep, DBDep

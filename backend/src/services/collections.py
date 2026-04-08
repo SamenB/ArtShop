@@ -2,6 +2,7 @@
 Service layer for artwork collection business logic.
 Handles grouping of artworks and associated categorization metadata.
 """
+
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.exeptions import DatabaseException, ObjectAlreadyExistsException

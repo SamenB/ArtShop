@@ -1,6 +1,7 @@
 """
 Base class for mapping between database models and Pydantic schemas.
 """
+
 from typing import Any, ClassVar
 
 from pydantic import BaseModel

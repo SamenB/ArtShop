@@ -2,6 +2,7 @@
 API endpoints for contact form submissions.
 Handles sending emails to both the user and the administrator.
 """
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, EmailStr
 
@@ -16,6 +17,7 @@ class ContactRequest(BaseModel):
     """
     Schema for the contact form submission request.
     """
+
     name: str
     email: EmailStr
     message: str

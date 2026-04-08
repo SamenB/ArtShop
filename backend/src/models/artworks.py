@@ -1,6 +1,7 @@
 """
 SQLAlchemy database model for artworks.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -22,6 +23,7 @@ class ArtworksOrm(Base):
     Includes metadata like title, description, physical dimensions, and pricing.
     Supports both original sales and print options.
     """
+
     __tablename__ = "artworks"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

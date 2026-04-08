@@ -3,6 +3,7 @@ Service layer for artwork business logic.
 Handles sophisticated operations like unique slug generation, relationship management,
 and bulk processing, abstracting data access from the API layer.
 """
+
 import re
 
 from loguru import logger
@@ -112,9 +113,7 @@ class ArtworkService(BaseService):
                 sketch_coll = await self.db.collections.get_one_or_none(title="Sketch")
                 if not sketch_coll:
                     # Creating a default 'Sketch' collection if missing
-                    sketch_coll = await self.db.collections.add(
-                        ArtworkAdd(title="Sketch")
-                    )
+                    sketch_coll = await self.db.collections.add(ArtworkAdd(title="Sketch"))
                 collection_id = sketch_coll.id
 
             artwork_dict = artwork_data.model_dump()
