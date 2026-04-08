@@ -11,7 +11,7 @@ from src.database import Base
 
 class OrdersOrm(Base):
     """
-    Represents a customer order. 
+    Represents a customer order.
     Stores contact information, billing details, marketing preferences, and payment status.
     """
     __tablename__ = "orders"

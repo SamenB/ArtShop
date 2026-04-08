@@ -1,6 +1,6 @@
 """
 Service layer for artwork business logic.
-Handles sophisticated operations like unique slug generation, relationship management, 
+Handles sophisticated operations like unique slug generation, relationship management,
 and bulk processing, abstracting data access from the API layer.
 """
 import re

@@ -1,6 +1,6 @@
 """
 Database seeding utility for development and testing.
-Provides a scriptable way to populate the database with a consistent set 
+Provides a scriptable way to populate the database with a consistent set
 of mock artworks, descriptions, and placeholder images.
 """
 import asyncio
@@ -17,7 +17,7 @@ from src.models.artworks import ArtworksOrm
 async def seed_artworks():
     """
     Generates and persists a batch of test artwork records.
-    
+
     Generates 40 items with varying attributes:
     - Prices based on index.
     - Alternating availability statuses (available vs. sold).

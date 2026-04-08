@@ -1,6 +1,6 @@
 """
 Main application entry point for the ArtShop backend.
-Configures the FastAPI instance, manages lifecycle events (lifespan), 
+Configures the FastAPI instance, manages lifecycle events (lifespan),
 registers global middleware (CORS, logging), and orchestrates API routing.
 """
 from contextlib import asynccontextmanager
@@ -38,11 +38,11 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """
     Asynchronous context manager for the FastAPI application lifecycle.
-    
+
     Startup:
     - Establishes connection to the Redis server.
     - Initializes the application-wide cache (FastAPICache) using Redis.
-    
+
     Shutdown:
     - Gracefully closes Redis connections.
     """

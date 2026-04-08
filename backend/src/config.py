@@ -1,6 +1,6 @@
 """
 Global application configuration and environment variable management.
-Uses pydantic-settings to load and validate configuration from .env files 
+Uses pydantic-settings to load and validate configuration from .env files
 and system environment variables.
 """
 import json

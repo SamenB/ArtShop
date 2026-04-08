@@ -1,6 +1,6 @@
 """
 Database foundation layer for the application.
-Configures SQLAlchemy asynchronous engines, connection pooling strategies, 
+Configures SQLAlchemy asynchronous engines, connection pooling strategies,
 and session factories for both standard and high-concurrency (null-pool) operations.
 """
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

@@ -1,6 +1,6 @@
 """
 Service for handling email communications.
-Integrates with SMTP to send transactional emails like contact notifications 
+Integrates with SMTP to send transactional emails like contact notifications
 and automated customer replies.
 """
 import smtplib
@@ -16,14 +16,14 @@ def send_contact_emails(
 ) -> bool:
     """
     Orchestrates the sending of contact form notification emails.
-    
+
     Logic:
     1. Sends an alert to the site administrator with the customer's details and message.
     2. Sends an automated acknowledgment (auto-reply) to the customer.
-    
-    Note: This function is synchronous and should be executed in a background task 
+
+    Note: This function is synchronous and should be executed in a background task
     to avoid blocking the main API response.
-    
+
     Returns:
         bool: True if both emails were sent successfully, False otherwise.
     """

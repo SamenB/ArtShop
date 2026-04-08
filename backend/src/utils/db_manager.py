@@ -1,6 +1,6 @@
 """
 Database session and repository management utility.
-Implements the Unit of Work pattern to coordinate multiple repositories within a single 
+Implements the Unit of Work pattern to coordinate multiple repositories within a single
 atomic transaction. Includes specialized handling for database deadlocks.
 """
 import asyncio
@@ -53,7 +53,7 @@ class DBManager:
     async def commit(self):
         """
         Commits the current transaction to the database.
-        
+
         Includes a retry mechanism for 'deadlock' operational errors.
         Attempts to re-commit up to 3 times with exponential backoff before raising.
         """

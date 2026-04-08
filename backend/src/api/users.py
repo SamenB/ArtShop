@@ -30,7 +30,7 @@ async def get_my_likes(user_id: UserDep, db: DBDep):
 @router.post("/likes/{artwork_id}")
 async def add_like(artwork_id: int, user_id: UserDep, db: DBDep):
     """
-    Adds an artwork to the user's liked list. 
+    Adds an artwork to the user's liked list.
     Verifies artwork existence and prevents duplicate likes.
     """
     # Check if artwork exists

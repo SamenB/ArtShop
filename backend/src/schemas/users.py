@@ -14,7 +14,7 @@ class UserBase(BaseModel):
 
 class UserRequestAdd(UserBase):
     """
-    Schema for the initial user registration request. 
+    Schema for the initial user registration request.
     Includes raw password for validation.
     """
     password: str = Field(..., min_length=8, max_length=128, description="Password of the user raw")

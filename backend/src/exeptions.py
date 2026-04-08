@@ -1,6 +1,6 @@
 """
 Custom exception hierarchy for the ArtShop application.
-Provides specialized error classes for database, authentication, 
+Provides specialized error classes for database, authentication,
 business logic, and rate limiting scenarios.
 """
 

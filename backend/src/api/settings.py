@@ -14,7 +14,7 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 @router.get("", response_model=SiteSettingsResponse)
 async def get_settings(db: DBDep):
     """
-    Retrieves the global site settings. 
+    Retrieves the global site settings.
     Initializes default settings if none exist.
     """
     settings_obj = await db.session.get(SiteSettingsOrm, 1)

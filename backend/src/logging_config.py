@@ -1,6 +1,6 @@
 """
 Logging configuration using the loguru library.
-Sets up console and rotating file handlers with environment-specific formatting 
+Sets up console and rotating file handlers with environment-specific formatting
 and retention policies.
 """
 import sys
@@ -14,7 +14,7 @@ from src.config import settings
 def setup_logging():
     """
     Initializes application-wide logging with the following strategies:
-    
+
     1. Removes the default Loguru standard output handler.
     2. Adds a custom console handler:
        - PROD mode: Serialized JSON output for cloud log aggregators.

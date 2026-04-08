@@ -1,6 +1,6 @@
 """
 Service layer for artwork tag business logic.
-Handles categorization and metadata tagging for artworks, 
+Handles categorization and metadata tagging for artworks,
 including usage tracking and relationship cleanup.
 """
 from loguru import logger
@@ -56,7 +56,7 @@ class TagService(BaseService):
     async def delete_tag(self, tag_id: int):
         """
         Deletes a tag from the system.
-        
+
         Logic:
         1. Explicitly removes all artwork-tag associations to prevent foreign key violations.
         2. Deletes the tag entity itself.

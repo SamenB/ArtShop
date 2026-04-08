@@ -1,6 +1,6 @@
 """
 Asynchronous background tasks for the ArtShop application.
-Includes image processing (optimization, resizing, and WebP conversion) 
+Includes image processing (optimization, resizing, and WebP conversion)
 and scheduled maintenance tasks like email notifications.
 """
 import asyncio
@@ -34,7 +34,7 @@ def run_async(coro):
 def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[str]):
     """
     Optimizes and generates multiple versions of uploaded images.
-    
+
     Logic:
     1. Creates target directories if missing.
     2. Converts images to WebP format with different resolutions (original, medium, thumb).

@@ -6,7 +6,7 @@ from src.utils.db_manager import DBManager
 
 class BaseService:
     """
-    Abstract base class for services. 
+    Abstract base class for services.
     Maintains a reference to the DBManager for database operations.
     """
     db: DBManager

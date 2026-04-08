@@ -19,13 +19,13 @@ class ImageService:
     @classmethod
     def save_and_process_collection_image(cls, collection_id: int, file: UploadFile) -> str:
         """
-        Saves an uploaded file to a local temporary directory and triggers 
+        Saves an uploaded file to a local temporary directory and triggers
         a background task to process the image and attach it to a collection.
-        
+
         Args:
             collection_id: The ID of the collection to link the image to.
             file: The uploaded image file from FastAPI.
-            
+
         Returns:
             str: The local path to the temporary file.
         """

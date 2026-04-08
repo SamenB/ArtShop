@@ -37,7 +37,7 @@ class ArtworksRepository(BaseRepository):
     ):
         """
         Retrieves a list of available artworks based on various filters.
-        Filters include title (fuzzy), tags, collection, production year, price range, 
+        Filters include title (fuzzy), tags, collection, production year, price range,
         aspect ratio (orientation), and surface area (size category).
         """
         artworks_ids_to_get = available_artwork_ids()

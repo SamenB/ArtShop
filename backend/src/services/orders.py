@@ -1,6 +1,6 @@
 """
 Service layer for order processing and management.
-Handles complex checkout logic including inventory checks for original artworks, 
+Handles complex checkout logic including inventory checks for original artworks,
 print availability verification, and multi-entity transaction management.
 """
 from loguru import logger
@@ -51,7 +51,7 @@ class OrderService(BaseService):
     async def create_order(self, order_data: OrderAddRequest, user_id: int | None):
         """
         Processes a new order placement.
-        
+
         Logic:
         1. Validates availability of each item (original vs print).
         2. Updates artwork status to 'sold' if an original is purchased.
