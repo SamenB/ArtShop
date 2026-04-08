@@ -42,7 +42,7 @@ async def seed_artworks():
                 ],
             )
             session.add(artwork)
-            
+
         # Commit the batch transaction.
         await session.commit()
     print("Database successfully seeded with 40 test artworks!")

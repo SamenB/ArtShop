@@ -94,9 +94,9 @@ async def log_requests(request: Request, call_next):
     Captures request methods, target URLs, and origin headers.
     """
     logger.debug(
-        "Incoming Request: {} {} | Origin: {}", 
-        request.method, 
-        request.url, 
+        "Incoming Request: {} {} | Origin: {}",
+        request.method,
+        request.url,
         request.headers.get("origin")
     )
     response = await call_next(request)

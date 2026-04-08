@@ -47,7 +47,7 @@ def send_contact_emails(
         owner_msg = EmailMessage()
         owner_msg["Subject"] = f"New Inquiry from {name} (The Samen Bondarenko Gallery)"
         owner_msg["From"] = sender
-        
+
         # Determine recipient: specified admin_email or first configured admin.
         target_email = admin_email or (
             settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else sender

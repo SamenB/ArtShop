@@ -9,7 +9,7 @@ from pathlib import Path
 
 from loguru import logger
 from PIL import Image
-from sqlalchemy import update, select
+from sqlalchemy import select, update
 
 from src.database import new_session_null_pool
 from src.models.artworks import ArtworksOrm
@@ -107,7 +107,7 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
                 row = result.scalar_one_or_none()
                 existing_images = list(row) if row else []
                 merged_images = existing_images + the_final_paths
-                
+
                 # Update the model with the merged JSON array.
                 stmt = (
                     update(orm_model).where(orm_model.id == model_id).values(images=merged_images)

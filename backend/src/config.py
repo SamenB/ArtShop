@@ -17,14 +17,14 @@ class Settings(BaseSettings):
     """
     MODE: Literal["TEST", "LOCAL", "DEV", "PROD"] = "LOCAL"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG"
-    
+
     # Database (PostgreSQL) Configuration
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     DB_HOST: str
     DB_PORT: int
-    
+
     # Redis Configuration
     REDIS_HOST: str
     REDIS_PORT: int

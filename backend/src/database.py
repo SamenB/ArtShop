@@ -21,7 +21,7 @@ if settings.MODE == "TEST":
 engine = create_async_engine(settings.DB_URL, echo=False, **db_params)
 
 # null_pool_engine: Explicitly bypasses connection pooling.
-# Useful for background tasks (Celery) or scripts where persistent connections 
+# Useful for background tasks (Celery) or scripts where persistent connections
 # might lead to exhaustion or stale states.
 engine_null_pool = create_async_engine(settings.DB_URL, echo=False, poolclass=NullPool)
 

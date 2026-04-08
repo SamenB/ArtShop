@@ -122,14 +122,14 @@ class ArtworkService(BaseService):
             artwork_dict["slug"] = await self.generate_unique_slug(artwork_data.title)
 
             artwork = await self.db.artworks.add(ArtworkAdd(**artwork_dict))
-            
+
             # Map tag associations
             artwork_tags = [
                 ArtworkTagAdd(artwork_id=artwork.id, tag_id=tag_id) for tag_id in artwork_data.tags
             ]
             if artwork_tags:
                 await self.db.artwork_tags.add_bulk(artwork_tags)
-            
+
             await self.db.commit()
         except ObjectAlreadyExistsException:
             raise
@@ -154,11 +154,11 @@ class ArtworkService(BaseService):
             artwork_dict.pop("images", None)
             artwork_dict.pop("tags", None)
             artwork_dict.pop("slug", None)
-            
+
             # Reattach preserved fields
             artwork_dict["slug"] = existing.slug
             artwork_dict["images"] = existing.images
-            
+
             await self.db.artworks.edit(ArtworkAdd(**artwork_dict), id=artwork_id)
             await self.db.artwork_tags.set_artwork_tags(artwork_id, artwork_data.tags)
             await self.db.commit()

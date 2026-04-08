@@ -13,8 +13,14 @@ from src.exeptions import (
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
-from src.schemas.orders import EditionType, OrderAdd, OrderAddRequest, OrderBulkRequest, OrderItemAdd
 from src.schemas.artworks import ArtworkPatch
+from src.schemas.orders import (
+    EditionType,
+    OrderAdd,
+    OrderAddRequest,
+    OrderBulkRequest,
+    OrderItemAdd,
+)
 from src.services.base import BaseService
 
 
@@ -78,7 +84,7 @@ class OrderService(BaseService):
                     # Original artworks must be 'available' to be sold
                     if artwork.original_status != "available":
                         raise OriginalSoldOutException()
-                    
+
                     # Mark original as sold immediately to prevent double-booking
                     await self.db.artworks.edit(
                         ArtworkPatch(original_status="sold"), exclude_unset=True, id=artwork.id
@@ -140,11 +146,11 @@ class OrderService(BaseService):
             if valid_orders:
                 await self.db.orders.add_bulk(valid_orders)
                 await self.db.commit()
-                
+
             skipped_count = len(orders_data) - len(valid_orders)
             logger.info("Bulk orders: inserted={}, skipped={}", len(valid_orders), skipped_count)
             return {"inserted": len(valid_orders), "skipped": skipped_count}
-            
+
         except ObjectAlreadyExistsException:
             raise
         except SQLAlchemyError:
