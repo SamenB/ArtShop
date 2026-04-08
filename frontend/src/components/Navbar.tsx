@@ -26,8 +26,8 @@ import { useCart } from "@/context/CartContext";
 
 
 const NAV_LINKS = [
-    { href: "/gallery", label: "Gallery" },
     { href: "/shop", label: "Shop" },
+    { href: "/gallery", label: "Gallery" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
 ];
