@@ -247,12 +247,9 @@ export default function CheckoutPage() {
                         <button 
                             disabled={isSubmitting}
                             type="submit"
-                            style={{
-                                marginTop: "1rem", padding: "1.25rem", backgroundColor: isSubmitting ? "#ccc" : "#334C75", color: "#fff",
-                                border: "none", borderRadius: "4px", fontFamily: "var(--font-sans)", fontSize: "0.85rem",
-                                fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", cursor: isSubmitting ? "default" : "pointer",
-                                transition: "background 0.2s"
-                            }}>
+                            className="premium-cta-btn"
+                            style={{ width: "100%", marginTop: "1rem" }}
+                        >
                             {isSubmitting ? "Processing..." : "Continue to Payment Method"}
                         </button>
                     </div>
@@ -329,11 +326,9 @@ export default function CheckoutPage() {
                                 <button 
                                     type="button"
                                     onClick={applyPromo}
-                                    style={{
-                                        padding: "0.75rem 1.5rem", backgroundColor: "#334C75", color: "#fff",
-                                        border: "none", borderRadius: "4px", fontFamily: "var(--font-sans)", fontSize: "0.75rem",
-                                        fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer"
-                                    }}>
+                                    className="premium-cta-btn"
+                                    style={{ padding: "0.75rem 1.5rem", fontSize: "0.75rem" }}
+                                >
                                     Apply
                                 </button>
                             </div>

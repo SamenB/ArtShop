@@ -220,16 +220,11 @@ export default function ContactPage() {
                             <button
                                 type="submit"
                                 disabled={status === "loading"}
+                                className="premium-cta-btn"
                                 style={{
-                                    marginTop: "20px", padding: "12px 30px", backgroundColor: "var(--color-charcoal)",
-                                    color: "var(--color-cream)", border: "none", fontFamily: "var(--font-sans)",
-                                    fontSize: "0.75rem", fontWeight: 500, letterSpacing: "0.15em",
-                                    textTransform: "uppercase", cursor: status === "loading" ? "default" : "pointer", 
-                                    borderRadius: "2px", opacity: status === "loading" ? 0.7 : 1,
-                                    transition: "opacity 0.2s ease"
+                                    marginTop: "20px",
+                                    opacity: status === "loading" ? 0.7 : 1,
                                 }}
-                                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-                                onMouseLeave={(e) => (e.currentTarget.style.opacity = status === "loading" ? "0.7" : "1")}
                             >
                                 {status === "loading" ? "Sending..." : "Send Message"}
                             </button>

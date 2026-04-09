@@ -495,3 +495,25 @@ h3 {
     }
   }
 }
+
+/* ─────────────────────────────────────────────
+   Premium Sunset Gradient Buttons
+   "Pink to Orange" theme for high-end CTA feel
+───────────────────────────────────────────── */
+.premium-cta-btn {
+  @apply text-white bg-gradient-to-br from-[#ec4899] to-[#fb923c] hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-pink-200 font-medium rounded-lg text-base px-6 py-3 text-center transition-all duration-300;
+  box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3);
+}
+
+.premium-cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4);
+}
+
+.premium-cta-btn:active {
+  transform: translateY(0);
+}
+
+.premium-cta-btn:disabled {
+  @apply from-gray-300 to-gray-400 cursor-not-allowed opacity-70 transform-none shadow-none;
+}

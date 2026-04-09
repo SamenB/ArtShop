@@ -274,6 +274,26 @@ export default function ArtworkDetailPage() {
                         height: calc(100% - 130px);
                     }
                 }
+
+                @media (max-width: 767px) {
+                    .purchase-card {
+                        margin-left: -2rem !important;
+                        margin-right: -2rem !important;
+                        border-left: none !important;
+                        border-right: none !important;
+                        border-radius: 0 !important;
+                        box-shadow: none !important;
+                        padding: 2rem 1.25rem !important; /* Kept 2rem vertical, reduced horizontal to 1.25rem */
+                    }
+                    .purchase-card-footer {
+                        margin: 1rem -1.25rem -2rem !important; /* Adjusted to match card padding */
+                        padding: 2rem 1.25rem !important;
+                        border-radius: 0 !important;
+                    }
+                    .purchase-tabs {
+                        margin-left: -0.75rem !important;
+                    }
+                }
             `}</style>
 
                 {/* ── GALLERY NAV ── */}
@@ -709,7 +729,7 @@ export default function ArtworkDetailPage() {
                         <h1 style={{ display: layoutMetrics.winW < 768 ? "none" : "block", fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
 
                         <div style={{ position: "relative", marginTop: "1rem" }}>
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", marginLeft: "1rem" }}>
+                            <div className="purchase-tabs" style={{ display: "flex", alignItems: "flex-end", gap: "2px", marginLeft: "1rem" }}>
                                 {(["original", "print"] as const).map(type => (
                                     <button key={type} onClick={() => setPurchaseType(type)} style={{ padding: "0.75rem 1.5rem 1rem", fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", backgroundColor: purchaseType === type ? "#fff" : "#F1F5F9", color: purchaseType === type ? "var(--color-charcoal)" : "var(--color-muted)", border: "1px solid var(--color-border)", borderBottom: purchaseType === type ? "1px solid #fff" : "1px solid var(--color-border)", borderRadius: "8px 8px 0 0", cursor: "pointer", position: "relative", zIndex: purchaseType === type ? 2 : 1, marginBottom: "-1px", minWidth: "120px" }}>
                                         {type === "original" ? "Original" : "Fine Art Print"}
@@ -717,7 +737,7 @@ export default function ArtworkDetailPage() {
                                 ))}
                             </div>
 
-                            <div style={{ backgroundColor: "#fff", padding: "2rem", borderRadius: "12px", borderTopLeftRadius: purchaseType === "original" ? "0px" : "12px", boxShadow: "var(--shadow-panel)", display: "flex", flexDirection: "column", gap: "2rem", border: "1px solid var(--color-border)", position: "relative", zIndex: 1 }}>
+                            <div className="purchase-card" style={{ backgroundColor: "#fff", padding: "2rem", borderRadius: "12px", borderTopLeftRadius: purchaseType === "original" ? "0px" : "12px", boxShadow: "var(--shadow-panel)", display: "flex", flexDirection: "column", gap: "2rem", border: "1px solid var(--color-border)", position: "relative", zIndex: 1 }}>
                                 {purchaseType === "original" ? (
                                     <>
                                         <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
@@ -725,12 +745,15 @@ export default function ArtworkDetailPage() {
                                             <p style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-charcoal)" }}>{convertPrice(work.original_price)}</p>
                                             <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>Original Artwork • Certificate of Authenticity included</p>
                                         </div>
+                                        <div>
+                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.8rem", marginTop: "0.5rem" }}>About the Painting</h3>
+                                            <p style={{ fontSize: "0.9rem", lineHeight: 1.7, color: "var(--color-charcoal-mid)" }}>{work.description}</p>
+                                        </div>
                                         <button
+                                            className="premium-cta-btn"
                                             onClick={() => addItem({ id: `${work.id}-original`, slug: String(work.id), title: work.title, type: "original", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: work.original_price })}
                                             disabled={work.original_status !== "available"}
-                                            style={{ padding: "1.25rem", backgroundColor: work.original_status === "available" ? "var(--color-charcoal)" : "#b0b0b0", color: "#fff", border: "none", borderRadius: "4px", cursor: work.original_status === "available" ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "1rem", boxShadow: work.original_status === "available" ? "var(--shadow-card)" : "none", transition: "box-shadow 0.2s, transform 0.15s" }}
-                                            onMouseEnter={e => { if (work.original_status === "available") { e.currentTarget.style.boxShadow = "var(--shadow-card-hover)"; e.currentTarget.style.transform = "translateY(-1px)"; } }}
-                                            onMouseLeave={e => { e.currentTarget.style.boxShadow = work.original_status === "available" ? "var(--shadow-card)" : "none"; e.currentTarget.style.transform = "translateY(0)"; }}
+                                            style={{ width: "100%" }}
                                         >
                                             {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
                                         </button>
@@ -759,13 +782,11 @@ export default function ArtworkDetailPage() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <div style={{ backgroundColor: "#F1F5F9", margin: "1rem -2rem -2rem", padding: "2rem", borderRadius: "0 0 12px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F1F5F9", margin: "1rem -2rem -2rem", padding: "2rem", borderRadius: "0 0 12px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                             <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.75rem", fontWeight: 600 }}>{convertPrice(currentPrintPrice + (finish === "Framed" ? 100 : 0))}</span>
                                             <button
+                                                className="premium-cta-btn"
                                                 onClick={() => addItem({ id: `${work.id}-print-${finish}-${selectedPrint.labelCm}`, slug: String(work.id), title: work.title, type: "print", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: currentPrintPrice + (finish === "Framed" ? 100 : 0), finish, size: units === "cm" ? selectedPrint.labelCm : selectedPrint.labelIn })}
-                                                style={{ padding: "1rem 2rem", backgroundColor: "#334C75", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600, boxShadow: "var(--shadow-card)", transition: "box-shadow 0.2s, transform 0.15s" }}
-                                                onMouseEnter={e => { e.currentTarget.style.boxShadow = "var(--shadow-card-hover)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                                                onMouseLeave={e => { e.currentTarget.style.boxShadow = "var(--shadow-card)"; e.currentTarget.style.transform = "translateY(0)"; }}
                                             >Add to Cart</button>
                                         </div>
                                     </>
@@ -778,12 +799,8 @@ export default function ArtworkDetailPage() {
                 {/* ── Artwork details section ── */}
                 <div style={{ marginTop: layoutMetrics.winW < 768 ? "1.5rem" : "6rem", borderTop: "1px solid var(--color-border)", paddingTop: layoutMetrics.winW < 768 ? "2rem" : "4rem" }}>
                     <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", fontStyle: "italic", marginBottom: "3rem", textAlign: "center" }}>Artwork Details</h2>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "4rem" }}>
-                        <div>
-                            <h3 style={{ fontSize: "0.85rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.5rem" }}>About</h3>
-                            <p style={{ fontSize: "0.95rem", lineHeight: 1.8, color: "var(--color-charcoal-mid)" }}>{work.description}</p>
-                        </div>
-                        <div>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                        <div style={{ maxWidth: "600px", width: "100%" }}>
                             <h3 style={{ fontSize: "0.85rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.5rem" }}>Specifications</h3>
                             <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                 <tbody>

@@ -149,14 +149,8 @@ export default function CartDrawer() {
                                 setIsCartOpen(false);
                                 window.location.href = "/checkout";
                             }}
-                            style={{
-                                width: "100%", padding: "1rem", backgroundColor: "var(--color-charcoal)",
-                                color: "var(--color-cream)", border: "none", fontFamily: "var(--font-sans)",
-                                fontSize: "0.85rem", letterSpacing: "0.15em", textTransform: "uppercase",
-                                cursor: "pointer", transition: "opacity 0.2s"
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
-                            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                            className="premium-cta-btn"
+                            style={{ width: "100%" }}
                         >
                             Checkout
                         </button>
