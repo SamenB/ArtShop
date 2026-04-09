@@ -517,3 +517,35 @@ h3 {
 .premium-cta-btn:disabled {
   @apply from-gray-300 to-gray-400 cursor-not-allowed opacity-70 transform-none shadow-none;
 }
+
+/* ─────────────────────────────────────────────
+   Artwork Status Stamps (Badges)
+   Premium 2026 Pastel Aesthetic
+───────────────────────────────────────────── */
+.status-stamp {
+  position: absolute;
+  top: 15px;
+  right: -32px;
+  transform: rotate(45deg);
+  padding: 4px 35px;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  white-space: nowrap;
+  mix-blend-mode: multiply; /* Helps it look more like a "stamp" on the image */
+  opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .status-stamp {
+    top: 10px;
+    right: -28px;
+    padding: 3px 30px;
+    font-size: 0.55rem;
+  }
+}

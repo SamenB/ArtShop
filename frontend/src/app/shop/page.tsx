@@ -108,15 +108,20 @@ function sortProducts(products: Product[], key: SortKey, globalPrintPrice: numbe
 /** Height presets for the image exhibition zone based on grid density. */
 const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
-/** Status labels and thematic colors for physical availability. */
-const STATUS: Record<string, { label: string; color: string }> = {
-    available: { label: "AVAILABLE", color: "#6DB87E" },
-    sold: { label: "SOLD", color: "#C0392B" },
-    reserved: { label: "RESERVED", color: "#D4A017" },
-    not_for_sale: { label: "NOT FOR SALE", color: "#999" },
-    on_exhibition: { label: "ON EXHIBITION", color: "#2980B9" },
-    archived: { label: "ARCHIVED", color: "#7f8c8d" },
-    digital: { label: "DIGITAL", color: "#8E44AD" },
+/**
+ * Status config for availability badges.
+ * `available` has no badge — focus stays on the CTA.
+ * For all others, a small pill is overlaid on the image corner.
+ * Colors use soft semantic palette: muted reds/ambers/blues/greys.
+ */
+const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string; textColor: string }> = {
+    available:     { label: "AVAILABLE",    badgeBg: "rgba(100,185,120,0.13)", badgeText: "#3a7a4a",  textColor: "#6DB87E" },
+    sold:          { label: "SOLD",          badgeBg: "rgba(180,60,60,0.11)",   badgeText: "#9b2c2c",  textColor: "#C05050" },
+    reserved:      { label: "RESERVED",      badgeBg: "rgba(200,160,50,0.13)",  badgeText: "#836a1a",  textColor: "#C8A32A" },
+    not_for_sale:  { label: "NOT FOR SALE",  badgeBg: "rgba(120,120,120,0.11)", badgeText: "#555",     textColor: "#999" },
+    on_exhibition: { label: "ON EXHIBITION", badgeBg: "rgba(50,130,200,0.11)",  badgeText: "#20527a",  textColor: "#4A90BE" },
+    archived:      { label: "ARCHIVED",      badgeBg: "rgba(100,100,100,0.10)", badgeText: "#666",     textColor: "#7f8c8d" },
+    digital:       { label: "DIGITAL ONLY",  badgeBg: "rgba(120,90,200,0.12)",  badgeText: "#5a3a9a",  textColor: "#8E44AD" },
 };
 
 /**
@@ -154,15 +159,15 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
     }, []);
 
-    useEffect(() => { 
-        recalc(); 
-        window.addEventListener("resize", recalc); 
-        return () => window.removeEventListener("resize", recalc); 
+    useEffect(() => {
+        recalc();
+        window.addEventListener("resize", recalc);
+        return () => window.removeEventListener("resize", recalc);
     }, [recalc]);
 
     // Re-calculate alignment when layout density (gridMode) shifts.
-    useEffect(() => { 
-        requestAnimationFrame(recalc); 
+    useEffect(() => {
+        requestAnimationFrame(recalc);
     }, [zoneH, recalc]);
 
     /** Format dimensions based on user's persistent unit preference (cm/in). */
@@ -189,6 +194,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
+                        position: "relative",
                     }}
                 >
                     {imgSrc ? (
@@ -206,6 +212,11 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                                 alignSelf: "center",
                                 flexShrink: 0,
                                 boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+                                // Slightly desaturate sold/archived artworks — best-practice visual cue
+                                filter: (product.original_status === "sold" || product.original_status === "archived")
+                                    ? "grayscale(35%) brightness(0.97)"
+                                    : undefined,
+                                transition: "filter 0.3s ease",
                             }}
                         />
                     ) : (
@@ -219,9 +230,11 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                             boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
                         }} />
                     )}
+
+                    {/* No badges on the image itself — they go in the metadata area below */}
                 </div>
             </Link>
-            
+
             {/* Metadata overlay: Bottom-anchored and horizontally aligned to the image's vertical edge. */}
             {(gridMode !== "3" || !isMobile) && (
                 <div style={{
@@ -250,14 +263,41 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     }}>
                         {sizeStr}
                     </p>
-                    <p style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
-                        fontWeight: 300, color: "#aaa", lineHeight: 1.2, margin: 0
-                    }}>
-                        Original
-                        {st && <> — <span style={{ fontWeight: 600, color: st.color, opacity: 0.85, letterSpacing: "0.02em" }}>{st.label}</span></>}
-                    </p>
+                    {/* Original status pill — shown for all statuses */}
+                    {st && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1px" }}>
+                            <span style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                backgroundColor: st.badgeBg,
+                                border: `1px solid ${st.badgeText}33`,
+                                borderRadius: "4px",
+                                padding: "2px 7px 2px 5px",
+                            }}>
+                                <span style={{
+                                    display: "inline-block",
+                                    width: "5px",
+                                    height: "5px",
+                                    borderRadius: "50%",
+                                    backgroundColor: st.badgeText,
+                                    flexShrink: 0,
+                                }} />
+                                <span style={{
+                                    fontFamily: "var(--font-sans)",
+                                    fontSize: gridMode === "1" ? "0.60rem" : gridMode === "2" ? "0.58rem" : "0.55rem",
+                                    fontWeight: 600,
+                                    letterSpacing: "0.07em",
+                                    textTransform: "uppercase",
+                                    color: st.badgeText,
+                                    lineHeight: 1,
+                                    whiteSpace: "nowrap",
+                                }}>
+                                    {st.label}
+                                </span>
+                            </span>
+                        </div>
+                    )}
                     {product.has_prints && product.base_print_price && (
                         <p style={{
                             fontFamily: "var(--font-sans)",
@@ -450,7 +490,7 @@ function DualRangeSlider({
                 </span>
                 {isActive && <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "#888" }}>{valueMin}–{valueMax} {unit}</span>}
             </div>
-            
+
             <div
                 ref={trackRef}
                 style={{ position: "relative", height: "28px", padding: `0 ${THUMB_R}px`, boxSizing: "border-box", cursor: "pointer", marginBottom: "8px", touchAction: "none", userSelect: "none" }}
@@ -820,13 +860,13 @@ export default function ShopPage() {
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
     // Handle initial pagination and reacts to filter changes by resetting the visible offset.
-    useEffect(() => { 
-        setVisibleCount(itemsPerPage); 
+    useEffect(() => {
+        setVisibleCount(itemsPerPage);
     }, [categoryFilter, priceMin, priceMax, widthMin, widthMax, heightMin, heightMax, activeYears, activeOrientations, activeCollections, activeMediums, sortIdx, itemsPerPage]);
 
     // Infinite scroll trigger: Increments display quota when the user approaches the end of the results.
-    useEffect(() => { 
-        if (inView && visibleCount < filtered.length) setVisibleCount(prev => prev + itemsPerPage); 
+    useEffect(() => {
+        if (inView && visibleCount < filtered.length) setVisibleCount(prev => prev + itemsPerPage);
     }, [inView, filtered.length, visibleCount, itemsPerPage]);
 
     /** CSS grid column mapping for the current density mode. */
@@ -843,13 +883,13 @@ export default function ShopPage() {
 
     /** CSS grid gap mapping for the current density mode. */
     const getGap = () => {
-        if (isMobile) { 
-            if (gridMode === "1") return "2.25rem"; 
-            if (gridMode === "2") return "1rem"; 
-            return "0.5rem"; 
+        if (isMobile) {
+            if (gridMode === "1") return "2.25rem";
+            if (gridMode === "2") return "1rem";
+            return "0.5rem";
         }
-        if (gridMode === "1") return "5rem 140px"; 
-        if (gridMode === "2") return "4rem 100px"; 
+        if (gridMode === "1") return "5rem 140px";
+        if (gridMode === "2") return "4rem 100px";
         return "2.5rem 70px";
     };
 

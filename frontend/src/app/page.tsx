@@ -125,7 +125,7 @@ export default async function Home() {
             />
           );
         })()}
-        
+
         {/* Subtle radial overlay for enhanced text legibility. */}
         <div
           aria-hidden="true"

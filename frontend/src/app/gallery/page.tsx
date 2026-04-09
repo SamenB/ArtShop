@@ -67,9 +67,9 @@ type SortKey = "default" | "year" | "title" | "available";
 
 /** Human-readable labels for the sort selector. */
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-    { key: "default", label: "Collection" }, 
+    { key: "default", label: "Collection" },
     { key: "year", label: "Newest" },
-    { key: "title", label: "Title A–Z" }, 
+    { key: "title", label: "Title A–Z" },
     { key: "available", label: "Available" },
 ];
 
@@ -139,15 +139,15 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile }: ArtCardProps) {
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
     }, []);
 
-    useEffect(() => { 
-        recalc(); 
-        window.addEventListener("resize", recalc); 
-        return () => window.removeEventListener("resize", recalc); 
+    useEffect(() => {
+        recalc();
+        window.addEventListener("resize", recalc);
+        return () => window.removeEventListener("resize", recalc);
     }, [recalc]);
 
     // Recalculate whenever the viewing zone height changes (e.g., density toggle).
-    useEffect(() => { 
-        requestAnimationFrame(recalc); 
+    useEffect(() => {
+        requestAnimationFrame(recalc);
     }, [zoneH, recalc]);
 
     return (
@@ -373,11 +373,11 @@ export default function GalleryPage() {
      * pagination limits for the infinite scroll experience.
      */
     const sorted = useMemo(() => {
-        const groups = Object.entries(collectionsMap).map(([name, data]) => ({ 
-            name, 
-            id: data.id, 
-            bg: data.bg, 
-            works: sortWorks(data.works, sortKey) 
+        const groups = Object.entries(collectionsMap).map(([name, data]) => ({
+            name,
+            id: data.id,
+            bg: data.bg,
+            works: sortWorks(data.works, sortKey)
         }));
 
         let remaining = visibleCount;
@@ -470,7 +470,7 @@ export default function GalleryPage() {
                             <span style={{ position: "absolute", right: "0.8rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.65rem", color: "var(--color-charcoal)", fontWeight: 300 }}>∨</span>
                         </div>
                     </div>
-                    
+
                     <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1.5rem", flexShrink: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                             <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>View</span>
@@ -551,69 +551,69 @@ export default function GalleryPage() {
                         <section key={name} style={{ paddingBottom: "1.5rem", marginBottom: 0 }}>
                             {/* Visual hierarchy header: True centered collection title. */}
                             <div className="magnetic-scroll-header" style={{ width: "100%" }}>
-                                    <div
-                                        style={{
-                                            maxWidth: "1600px", margin: "0 auto",
-                                            width: "100%", display: "flex", alignItems: "center",
-                                            justifyContent: "space-between", padding: isMobile ? "0.5rem 1.25rem 0.5rem" : "0.5rem 2.5rem 1rem",
-                                            background: "none", border: "none", textAlign: "center",
-                                        }}
-                                    >
-                                        {/* Pure structural balance spacer. */}
-                                        <div style={{ width: "20px", flexShrink: 0 }} aria-hidden="true" />
+                                <div
+                                    style={{
+                                        maxWidth: "1600px", margin: "0 auto",
+                                        width: "100%", display: "flex", alignItems: "center",
+                                        justifyContent: "space-between", padding: isMobile ? "0.5rem 1.25rem 0.5rem" : "0.5rem 2.5rem 1rem",
+                                        background: "none", border: "none", textAlign: "center",
+                                    }}
+                                >
+                                    {/* Pure structural balance spacer. */}
+                                    <div style={{ width: "20px", flexShrink: 0 }} aria-hidden="true" />
 
-                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", flexGrow: 1 }}>
-                                            <h2 style={{
-                                                fontFamily: "var(--font-artwork-title)",
-                                                fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
-                                                fontWeight: 400,
-                                                fontStyle: "normal",
-                                                color: "var(--color-charcoal)",
-                                                lineHeight: 1.1,
-                                                margin: 0,
-                                            }}>{name}</h2>
-                                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: 300, color: "var(--color-muted)", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: "10px", justifyContent: "center" }}>
-                                                {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
-                                                {user?.is_admin && id && (
-                                                    <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
-                                                        <input
-                                                            type="color"
-                                                            value={bg || "#404040"}
-                                                            onChange={(e) => handleColorChange(id, e.target.value)}
-                                                            style={{
-                                                                width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
-                                                                borderRadius: "4px", cursor: "pointer", background: "none"
-                                                            }}
-                                                            title="Pick Collection Atmosphere Color"
-                                                        />
-                                                        <button
-                                                            onClick={() => handleColorChange(id, null)}
-                                                            style={{
-                                                                fontFamily: "var(--font-sans)", fontSize: "0.65rem", padding: "3px 6px",
-                                                                border: "1px solid rgba(26,26,24,0.2)", borderRadius: "4px", background: "transparent",
-                                                                cursor: "pointer", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em"
-                                                            }}
-                                                            title="Revert to Atmospheric Default"
-                                                        >
-                                                            Reset
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </span>
-                                        </div>
-
-                                        <div style={{ width: "20px", display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-                                            {/* Decorative slot. */}
-                                        </div>
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", flexGrow: 1 }}>
+                                        <h2 style={{
+                                            fontFamily: "var(--font-artwork-title)",
+                                            fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
+                                            fontWeight: 400,
+                                            fontStyle: "normal",
+                                            color: "var(--color-charcoal)",
+                                            lineHeight: 1.1,
+                                            margin: 0,
+                                        }}>{name}</h2>
+                                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: 300, color: "var(--color-muted)", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: "10px", justifyContent: "center" }}>
+                                            {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
+                                            {user?.is_admin && id && (
+                                                <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
+                                                    <input
+                                                        type="color"
+                                                        value={bg || "#404040"}
+                                                        onChange={(e) => handleColorChange(id, e.target.value)}
+                                                        style={{
+                                                            width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
+                                                            borderRadius: "4px", cursor: "pointer", background: "none"
+                                                        }}
+                                                        title="Pick Collection Atmosphere Color"
+                                                    />
+                                                    <button
+                                                        onClick={() => handleColorChange(id, null)}
+                                                        style={{
+                                                            fontFamily: "var(--font-sans)", fontSize: "0.65rem", padding: "3px 6px",
+                                                            border: "1px solid rgba(26,26,24,0.2)", borderRadius: "4px", background: "transparent",
+                                                            cursor: "pointer", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em"
+                                                        }}
+                                                        title="Revert to Atmospheric Default"
+                                                    >
+                                                        Reset
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </span>
                                     </div>
+
+                                    <div style={{ width: "20px", display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
+                                        {/* Decorative slot. */}
+                                    </div>
+                                </div>
                             </div>
 
                             <div style={{ display: "block" }}>
                                 <div style={{ overflow: "hidden", padding: "0 0 30px 0", margin: "0" }}>
                                     <div className="magnetic-scroll" style={{
-                                         width: "100%", 
-                                         padding: isMobile ? "1rem 1.25rem 2rem" : "1.5rem 0 3.5rem",
-                                         backgroundColor: "rgba(26, 26, 24, 0.04)",
+                                        width: "100%",
+                                        padding: isMobile ? "1rem 1.25rem 2rem" : "1.5rem 0 3.5rem",
+                                        backgroundColor: "rgba(26, 26, 24, 0.04)",
                                     }}>
                                         <div className={`art-grid`} style={{
                                             maxWidth: "1600px",

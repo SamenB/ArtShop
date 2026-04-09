@@ -43,23 +43,27 @@ const DEFAULT_GRADIENTS = [
     ["#D4905A", "#8A5030"],
 ];
 
-const PRINT_SIZES = [
-    { labelCm: "20 × 30 cm", labelIn: "8 × 12 in", multiplier: 0.6 },
-    { labelCm: "30 × 40 cm", labelIn: "12 × 16 in", multiplier: 1.0 },
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.5 },
-    { labelCm: "50 × 70 cm", labelIn: "20 × 28 in", multiplier: 2.0 },
-    { labelCm: "70 × 100 cm", labelIn: "28 × 40 in", multiplier: 3.0 },
+const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string; border: string; desc?: string } | null> = {
+    available: { label: "AVAILABLE", bg: "#F0FDF4", border: "#166534", desc: "Ready to ship globally" },
+    sold: { label: "SOLD", bg: "#FEF2F2", border: "#991B1B", desc: "This original has found a home" },
+    reserved: { label: "RESERVED", bg: "#FFFBEB", border: "#92400E", desc: "Currently on hold for a collector" },
+    not_for_sale: { label: "NOT FOR SALE", bg: "#F8FAFC", border: "#475569", desc: "Private collection" },
+    on_exhibition: { label: "EXHIBITION", bg: "#EFF6FF", border: "#1E40AF", desc: "Currently on display at a gallery" },
+    archived: null,
+    digital: { label: "DIGITAL ONLY", bg: "#FAF5FF", border: "#6B21A8", desc: "Available as high-res digital file" },
+};
+
+const CANVAS_SIZES = [
+    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.0 },
+    { labelCm: "60 × 90 cm", labelIn: "24 × 36 in", multiplier: 1.8 },
+    { labelCm: "80 × 120 cm", labelIn: "32 × 48 in", multiplier: 2.8 },
 ];
 
-const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string } | null> = {
-    available: { label: "AVAILABLE", bg: "#6DB87E" },
-    sold: { label: "SOLD", bg: "#D48A8A" },
-    reserved: { label: "RESERVED", bg: "#C8B478" },
-    not_for_sale: { label: "NOT FOR SALE", bg: "#b0b0b0" },
-    on_exhibition: { label: "ON EXHIBITION", bg: "#8AACC8" },
-    archived: null,
-    digital: { label: "DIGITAL", bg: "#B8A0D8" },
-};
+const PAPER_SIZES = [
+    { labelCm: "30 × 45 cm", labelIn: "12 × 18 in", multiplier: 1.0 },
+    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.5 },
+    { labelCm: "50 × 75 cm", labelIn: "20 × 30 in", multiplier: 2.2 },
+];
 
 export default function ArtworkDetailPage() {
     const params = useParams();
@@ -69,11 +73,13 @@ export default function ArtworkDetailPage() {
 
     const [work, setWork] = useState<Artwork | null>(null);
     const [loading, setLoading] = useState(true);
-    const [selectedPrint, setSelectedPrint] = useState(PRINT_SIZES[1]);
+    const [selectedCanvas, setSelectedCanvas] = useState(CANVAS_SIZES[0]);
+    const [selectedPaper, setSelectedPaper] = useState(PAPER_SIZES[0]);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [fullSizeOpen, setFullSizeOpen] = useState(false);
-    const [purchaseType, setPurchaseType] = useState<"original" | "print">("original");
-    const [finish, setFinish] = useState<"Rolled" | "Framed">("Rolled");
+    const [purchaseType, setPurchaseType] = useState<"original" | "canvas" | "paper">("original");
+    const [canvasFinish, setCanvasFinish] = useState<"Rolled" | "Framed">("Rolled");
+    const [paperFinish, setPaperFinish] = useState<"Matte" | "Satin">("Matte");
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
 
     // Toggle these to switch designs easily
@@ -143,6 +149,15 @@ export default function ArtworkDetailPage() {
                     gradientFrom: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][0],
                     gradientTo: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][1],
                 });
+
+                // Auto-select the most relevant tab
+                if (item.original_status === "available") {
+                    setPurchaseType("original");
+                } else if (item.has_prints) {
+                    setPurchaseType("canvas");
+                } else {
+                    setPurchaseType("original");
+                }
             })
             .catch(() => console.warn("Backend unavailable"))
             .finally(() => setLoading(false));
@@ -171,7 +186,8 @@ export default function ArtworkDetailPage() {
     if (!work) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Artwork not found.</div>;
 
     const images = work.images || [];
-    const currentPrintPrice = Math.round(globalPrintPrice * selectedPrint.multiplier);
+    const currentCanvasPrice = Math.round(globalPrintPrice * selectedCanvas.multiplier);
+    const currentPaperPrice = Math.round((globalPrintPrice * 0.8) * selectedPaper.multiplier);
 
     // Compute prev/next slugs
     const currentSlugIdx = allSlugs.indexOf(slug);
@@ -291,7 +307,9 @@ export default function ArtworkDetailPage() {
                         border-radius: 0 !important;
                     }
                     .purchase-tabs {
-                        margin-left: -0.75rem !important;
+                        margin-left: -2rem !important;
+                        margin-right: -2rem !important;
+                        width: calc(100% + 4rem) !important;
                     }
                 }
             `}</style>
@@ -728,70 +746,253 @@ export default function ArtworkDetailPage() {
                     <div style={{ marginTop: layoutMetrics.winW >= 768 ? "-1rem" : "0", paddingBottom: layoutMetrics.winW < 768 ? "1rem" : "6rem" }}>
                         <h1 style={{ display: layoutMetrics.winW < 768 ? "none" : "block", fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
 
-                        <div style={{ position: "relative", marginTop: "1rem" }}>
-                            <div className="purchase-tabs" style={{ display: "flex", alignItems: "flex-end", gap: "2px", marginLeft: "1rem" }}>
-                                {(["original", "print"] as const).map(type => (
-                                    <button key={type} onClick={() => setPurchaseType(type)} style={{ padding: "0.75rem 1.5rem 1rem", fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", backgroundColor: purchaseType === type ? "#fff" : "#F1F5F9", color: purchaseType === type ? "var(--color-charcoal)" : "var(--color-muted)", border: "1px solid var(--color-border)", borderBottom: purchaseType === type ? "1px solid #fff" : "1px solid var(--color-border)", borderRadius: "8px 8px 0 0", cursor: "pointer", position: "relative", zIndex: purchaseType === type ? 2 : 1, marginBottom: "-1px", minWidth: "120px" }}>
-                                        {type === "original" ? "Original" : "Fine Art Print"}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="purchase-card" style={{ backgroundColor: "#fff", padding: "2rem", borderRadius: "12px", borderTopLeftRadius: purchaseType === "original" ? "0px" : "12px", boxShadow: "var(--shadow-panel)", display: "flex", flexDirection: "column", gap: "2rem", border: "1px solid var(--color-border)", position: "relative", zIndex: 1 }}>
-                                {purchaseType === "original" ? (
+                        <div style={{ position: "relative", marginTop: "1rem", width: "100%" }}>
+                            {/* ── Three edge-to-edge folder tabs ── */}
+                            {(() => {
+                                const isSmall = layoutMetrics.winW < 768;
+                                const borderRadiusValue = isSmall ? "0" : "12px";
+                                return (
                                     <>
-                                        <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
-                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.5rem" }}>Purchase Details</h3>
-                                            <p style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-charcoal)" }}>{convertPrice(work.original_price)}</p>
-                                            <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>Original Artwork • Certificate of Authenticity included</p>
-                                        </div>
-                                        <div>
-                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.8rem", marginTop: "0.5rem" }}>About the Painting</h3>
-                                            <p style={{ fontSize: "0.9rem", lineHeight: 1.7, color: "var(--color-charcoal-mid)" }}>{work.description}</p>
-                                        </div>
-                                        <button
-                                            className="premium-cta-btn"
-                                            onClick={() => addItem({ id: `${work.id}-original`, slug: String(work.id), title: work.title, type: "original", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: work.original_price })}
-                                            disabled={work.original_status !== "available"}
-                                            style={{ width: "100%" }}
+                                        <style>{`
+                                            .purchase-tabs::-webkit-scrollbar { display: none; }
+                                        `}</style>
+                                        <div 
+                                            className="purchase-tabs" 
+                                            style={{ 
+                                                display: "grid", 
+                                                gridTemplateColumns: isSmall ? "repeat(3, 1fr)" : "repeat(3, auto)",
+                                                width: "100%",
+                                                gap: "0",
+                                                boxSizing: "border-box",
+                                            }}
                                         >
-                                            {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div>
-                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "1rem" }}>Select Size</h3>
-                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
-                                                {PRINT_SIZES.map(ps => (
-                                                    <button key={ps.labelCm} onClick={() => setSelectedPrint(ps)} style={{ padding: "0.75rem 0.5rem", border: `1px solid ${selectedPrint === ps ? "var(--color-charcoal)" : "var(--color-border-dark)"}`, borderRadius: "6px", cursor: "pointer", boxShadow: selectedPrint === ps ? "var(--shadow-thumb)" : "none", transition: "box-shadow 0.15s" }}>
-                                                        <span style={{ display: "block", fontSize: "0.75rem", fontWeight: selectedPrint === ps ? 600 : 400 }}>{units === "cm" ? ps.labelCm : ps.labelIn}</span>
-                                                        <span style={{ display: "block", fontSize: "0.65rem", color: "var(--color-muted)" }}>{convertPrice(Math.round(globalPrintPrice * ps.multiplier))}</span>
+                                            {([
+                                                { key: "original", label: "Original" },
+                                                { key: "canvas",   label: "Canvas Prints" },
+                                                { key: "paper",    label: "Paper Prints" },
+                                            ] as const).map(({ key, label }, idx) => {
+                                                const isActive = purchaseType === key;
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        onClick={() => setPurchaseType(key)}
+                                                        style={{
+                                                            position: "relative",
+                                                            padding: isSmall ? "1.4rem 0.75rem" : "1rem 1.5rem",
+                                                            fontFamily: "var(--font-sans)",
+                                                            fontSize: isSmall ? "0.78rem" : "0.7rem",
+                                                            fontWeight: isActive ? 600 : 400,
+                                                            letterSpacing: "0.12em",
+                                                            textTransform: "uppercase",
+                                                            backgroundColor: isActive ? "#ffffff" : "rgba(255, 255, 255, 0.4)",
+                                                            backdropFilter: isActive ? "none" : "blur(10px)",
+                                                            color: isActive ? "var(--color-charcoal)" : "var(--color-muted)",
+                                                            border: "none",
+                                                            borderRight: idx < 2 && !isActive ? "1px solid rgba(0,0,0,0.05)" : "none",
+                                                            borderTop: isActive ? "3px solid var(--color-charcoal)" : "1px solid rgba(0,0,0,0.05)",
+                                                            cursor: "pointer",
+                                                            zIndex: isActive ? 10 : 1,
+                                                            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                                                            whiteSpace: "nowrap",
+                                                            textAlign: isSmall ? "left" : "center",
+                                                            boxSizing: "border-box",
+                                                        }}
+                                                    >
+                                                        {label}
+                                                        {isActive && !isSmall && (
+                                                            <div style={{ position: "absolute", bottom: "-1px", left: 0, right: 0, height: "2px", backgroundColor: "#fff", zIndex: 11 }} />
+                                                        )}
                                                     </button>
-                                                ))}
-                                            </div>
+                                                );
+                                            })}
                                         </div>
-                                        <div>
-                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "1rem" }}>Select Finish</h3>
-                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                                                {(["Rolled", "Framed"] as const).map(f => (
-                                                    <button key={f} onClick={() => setFinish(f)} style={{ padding: "1rem", border: `1px solid ${finish === f ? "var(--color-charcoal)" : "var(--color-border-dark)"}`, backgroundColor: finish === f ? "rgba(26,26,24,0.02)" : "transparent", borderRadius: "6px", cursor: "pointer", boxShadow: finish === f ? "var(--shadow-thumb)" : "none", transition: "box-shadow 0.15s" }}>
-                                                        <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 500 }}>{f}</span>
-                                                        <span style={{ display: "block", fontSize: "0.7rem", color: "var(--color-muted)" }}>{f === "Rolled" ? "In tube" : `+ ${convertPrice(100)}`}</span>
+
+                                        <div className="purchase-card" style={{ backgroundColor: "#fff", padding: "2rem", borderRadius: `0 ${isSmall ? "0" : "12px"} ${borderRadiusValue} ${borderRadiusValue}`, boxShadow: "var(--shadow-panel)", display: "flex", flexDirection: "column", gap: "2rem", border: "1px solid var(--color-border)", position: "relative", zIndex: 1, width: "100%", boxSizing: "border-box" }}>
+                                            {purchaseType === "original" ? (
+                                                <>
+                                                    {/* Purchase Details */}
+                                                    {work.original_status === "available" && (
+                                                        <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
+                                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.5rem" }}>Purchase Details</h3>
+                                                            <p style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-charcoal)" }}>{convertPrice(work.original_price)}</p>
+                                                            <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>Original Artwork • Certificate of Authenticity included</p>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.8rem", marginTop: "0.5rem" }}>About the Painting</h3>
+                                                        <p style={{ fontSize: "0.9rem", lineHeight: 1.7, color: "var(--color-charcoal-mid)" }}>{work.description}</p>
+                                                    </div>
+
+                                                    {/* Availability notice */}
+                                                    {work.original_status !== "available" && STATUS_BADGE[work.original_status] && (() => {
+                                                        const s = STATUS_BADGE[work.original_status]!;
+                                                        return (
+                                                            <div style={{
+                                                                backgroundColor: s.bg,
+                                                                borderLeft: `3px solid ${s.border}`,
+                                                                borderRadius: "6px",
+                                                                padding: "0.85rem 1rem",
+                                                                display: "flex",
+                                                                alignItems: "flex-start",
+                                                                gap: "0.65rem",
+                                                            }}>
+                                                                <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: s.border, marginTop: "0.35rem", flexShrink: 0 }}></div>
+                                                                <div style={{ flex: 1 }}>
+                                                                    <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700, color: "var(--color-charcoal)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</p>
+                                                                    {s.desc && <p style={{ margin: "0.2rem 0 0", fontSize: "0.7rem", color: "var(--color-muted)", lineHeight: 1.4 }}>{s.desc}</p>}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+
+                                                    <button
+                                                        className="premium-cta-btn"
+                                                        disabled={work.original_status !== "available"}
+                                                        onClick={() => addItem({ id: String(work.id), slug: String(work.id), title: work.title, type: "original", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: work.original_price, size: work.size, finish: "Original" })}
+                                                        style={{ width: "100%", marginTop: "auto", opacity: work.original_status === "available" ? 1 : 0.6 }}
+                                                    >
+                                                        {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
                                                     </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F1F5F9", margin: "1rem -2rem -2rem", padding: "2rem", borderRadius: "0 0 12px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                            <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.75rem", fontWeight: 600 }}>{convertPrice(currentPrintPrice + (finish === "Framed" ? 100 : 0))}</span>
-                                            <button
-                                                className="premium-cta-btn"
-                                                onClick={() => addItem({ id: `${work.id}-print-${finish}-${selectedPrint.labelCm}`, slug: String(work.id), title: work.title, type: "print", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: currentPrintPrice + (finish === "Framed" ? 100 : 0), finish, size: units === "cm" ? selectedPrint.labelCm : selectedPrint.labelIn })}
-                                            >Add to Cart</button>
+                                                </>
+                                            ) : purchaseType === "canvas" ? (
+                                                <>
+                                                    {/* Canvas intro */}
+                                                    <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.25rem" }}>
+                                                        <p style={{ fontFamily: "var(--font-serif)", fontSize: "0.95rem", fontStyle: "italic", color: "var(--color-charcoal-mid)", lineHeight: 1.7, margin: 0 }}>
+                                                            Museum-grade canvas printed with archival UV inks. Stretcher-bar mounted and hand-finished.
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Size selector */}
+                                                    <div>
+                                                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.75rem" }}>Select Size</p>
+                                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
+                                                            {CANVAS_SIZES.map(ps => {
+                                                                const active = selectedCanvas === ps;
+                                                                return (
+                                                                    <button key={ps.labelCm} onClick={() => setSelectedCanvas(ps)} style={{
+                                                                        padding: "0.75rem 0.5rem",
+                                                                        border: `1.5px solid ${active ? "var(--color-charcoal)" : "var(--color-border-dark)"}`,
+                                                                        borderRadius: "6px", cursor: "pointer",
+                                                                        backgroundColor: active ? "rgba(26,26,24,0.03)" : "transparent",
+                                                                        boxShadow: active ? "var(--shadow-thumb)" : "none",
+                                                                        transition: "all 0.15s",
+                                                                    }}>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: active ? 600 : 400, color: "var(--color-charcoal)" }}>{units === "cm" ? ps.labelCm : ps.labelIn}</span>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.62rem", color: "var(--color-muted)", marginTop: "2px" }}>{convertPrice(Math.round(globalPrintPrice * ps.multiplier))}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Finish selector */}
+                                                    <div>
+                                                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.75rem" }}>Finish</p>
+                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                                                            {(["Rolled", "Framed"] as const).map(f => {
+                                                                const active = canvasFinish === f;
+                                                                return (
+                                                                    <button key={f} onClick={() => setCanvasFinish(f)} style={{
+                                                                        padding: "0.9rem 0.75rem",
+                                                                        border: `1.5px solid ${active ? "var(--color-charcoal)" : "var(--color-border-dark)"}`,
+                                                                        backgroundColor: active ? "rgba(26,26,24,0.03)" : "transparent",
+                                                                        borderRadius: "6px", cursor: "pointer",
+                                                                        boxShadow: active ? "var(--shadow-thumb)" : "none",
+                                                                        transition: "all 0.15s", textAlign: "left",
+                                                                    }}>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500 }}>{f}</span>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.68rem", color: "var(--color-muted)", marginTop: "2px" }}>{f === "Rolled" ? "Shipped in tube" : `+ ${convertPrice(120)}`}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Footer */}
+                                                    <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: "1rem -2rem -2rem", padding: "1.5rem 2rem", borderRadius: "0 0 12px 12px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                        <div>
+                                                            <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
+                                                            <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 400, color: "var(--color-charcoal)" }}>{convertPrice(currentCanvasPrice + (canvasFinish === "Framed" ? 120 : 0))}</span>
+                                                        </div>
+                                                        <button
+                                                            className="premium-cta-btn"
+                                                            onClick={() => addItem({ id: `${work.id}-canvas-${canvasFinish}-${selectedCanvas.labelCm}`, slug: String(work.id), title: work.title, type: "print", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: currentCanvasPrice + (canvasFinish === "Framed" ? 120 : 0), finish: canvasFinish, size: units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn })}
+                                                        >Add Canvas to Cart</button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* Paper intro */}
+                                                    <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.25rem" }}>
+                                                        <p style={{ fontFamily: "var(--font-serif)", fontSize: "0.95rem", fontStyle: "italic", color: "var(--color-charcoal-mid)", lineHeight: 1.7, margin: 0 }}>
+                                                            Archival giclée on 310 gsm Hahnemühle fine art paper. Colour-accurate, fade-resistant for 100+ years.
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Size selector */}
+                                                    <div>
+                                                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.75rem" }}>Select Size</p>
+                                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
+                                                            {PAPER_SIZES.map(ps => {
+                                                                const active = selectedPaper === ps;
+                                                                return (
+                                                                    <button key={ps.labelCm} onClick={() => setSelectedPaper(ps)} style={{
+                                                                        padding: "0.75rem 0.5rem",
+                                                                        border: `1.5px solid ${active ? "var(--color-charcoal)" : "var(--color-border-dark)"}`,
+                                                                        borderRadius: "6px", cursor: "pointer",
+                                                                        backgroundColor: active ? "rgba(26,26,24,0.03)" : "transparent",
+                                                                        boxShadow: active ? "var(--shadow-thumb)" : "none",
+                                                                        transition: "all 0.15s",
+                                                                    }}>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: active ? 600 : 400, color: "var(--color-charcoal)" }}>{units === "cm" ? ps.labelCm : ps.labelIn}</span>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.62rem", color: "var(--color-muted)", marginTop: "2px" }}>{convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Finish / surface selector */}
+                                                    <div>
+                                                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.75rem" }}>Surface</p>
+                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                                                            {(["Matte", "Satin"] as const).map(f => {
+                                                                const active = paperFinish === f;
+                                                                return (
+                                                                    <button key={f} onClick={() => setPaperFinish(f)} style={{
+                                                                        padding: "0.9rem 0.75rem",
+                                                                        border: `1.5px solid ${active ? "var(--color-charcoal)" : "var(--color-border-dark)"}`,
+                                                                        backgroundColor: active ? "rgba(26,26,24,0.03)" : "transparent",
+                                                                        borderRadius: "6px", cursor: "pointer",
+                                                                        boxShadow: active ? "var(--shadow-thumb)" : "none",
+                                                                        transition: "all 0.15s", textAlign: "left",
+                                                                    }}>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500 }}>{f}</span>
+                                                                        <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: "0.68rem", color: "var(--color-muted)", marginTop: "2px" }}>{f === "Matte" ? "No glare, velvety" : "Subtle sheen"}</span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Footer */}
+                                                    <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: "1rem -2rem -2rem", padding: "1.5rem 2rem", borderRadius: "0 0 12px 12px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                        <div>
+                                                            <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
+                                                            <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 400, color: "var(--color-charcoal)" }}>{convertPrice(currentPaperPrice)}</span>
+                                                        </div>
+                                                        <button
+                                                            className="premium-cta-btn"
+                                                            onClick={() => addItem({ id: `${work.id}-paper-${paperFinish}-${selectedPaper.labelCm}`, slug: String(work.id), title: work.title, type: "print", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: currentPaperPrice, finish: paperFinish, size: units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn })}
+                                                        >Add Print to Cart</button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </>
-                                )}
-                            </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
