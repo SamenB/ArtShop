@@ -138,7 +138,7 @@ async def send_emails_to_users_with_today_checkin_helper():
     """
     logger.info("Checking orders with today's check-in")
     async with DBManager(session_factory=new_session_null_pool) as db:
-        orders = await db.orders.get_orders_with_today_checkin()
+        orders = await db.orders.get_orders_today()
         logger.info("Found {} orders with today's check-in", len(orders))
 
 

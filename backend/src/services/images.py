@@ -16,7 +16,7 @@ class ImageService:
     Handles file system operations for uploaded images and integrates with Celery tasks.
     """
 
-    TEMP_DIR = "temp"
+    TEMP_DIR = "static/temp"
 
     @classmethod
     def save_and_process_collection_image(cls, collection_id: int, file: UploadFile) -> str:
