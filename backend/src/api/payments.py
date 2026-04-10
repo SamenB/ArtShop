@@ -89,20 +89,26 @@ async def create_payment(
     basket_items = []
     for item in order.items:
         # Use actual artwork title if the relationship is loaded.
-        artwork_title = getattr(item, "artwork", None)
-        name = artwork_title.title if artwork_title else f"Artwork #{item.artwork_id}"
+        artwork = getattr(item, "artwork", None)
+        name = artwork.title if artwork else f"Artwork #{item.artwork_id}"
         edition_label = EDITION_LABELS.get(item.edition_type, item.edition_type)
         if item.size:
             edition_label += f" · {item.size}"
-        basket_items.append(
-            {
-                "name": f"{name} — {edition_label}",
-                "qty": 1,
-                "sum": item.price * 100,  # Convert to smallest currency unit.
-                "total": item.price * 100,
-                "unit": "pcs",
-            }
-        )
+            
+        basket_item = {
+            "name": f"{name} — {edition_label}",
+            "qty": 1,
+            "sum": item.price * 100,  # Convert to smallest currency unit.
+            "total": item.price * 100,
+            "unit": "pcs",
+        }
+        
+        # Add icon if available globally accessible URL
+        if artwork and artwork.images and len(artwork.images) > 0:
+            # Monobank requires an absolute URL. Assuming stored images are.
+            basket_item["icon"] = artwork.images[0]
+            
+        basket_items.append(basket_item)
 
     # 4. Create the Monobank invoice.
     item_count = len(order.items)
@@ -251,6 +257,23 @@ async def get_payment_status(order_id: int, db: DBDep):
     order = await db.orders.get_one_or_none(id=order_id)
     if not order:
         raise ObjectNotFoundException(detail="Order not found")
+
+    # If status is awaiting_payment, actively poll Monobank to cover missed webhooks (e.g., localhost dev).
+    if order.payment_status == "awaiting_payment" and order.invoice_id:
+        try:
+            mono_status_data = await MonobankService().get_invoice_status(order.invoice_id)
+            mono_status = mono_status_data.get("status")
+            if mono_status:
+                internal_status = MONOBANK_STATUS_MAP.get(mono_status, mono_status)
+                if internal_status != order.payment_status:
+                    logger.info("Syncing payment status from API for order {}: {} -> {}", order.id, order.payment_status, internal_status)
+                    await OrderService(db).update_payment_status_by_invoice(
+                        invoice_id=order.invoice_id,
+                        payment_status=internal_status,
+                    )
+                    order.payment_status = internal_status
+        except Exception as e:
+            logger.warning("Failed to sync invoice status during polling for order {}: {}", order.id, e)
 
     return PaymentStatusResponse(
         order_id=order.id,
