@@ -106,7 +106,7 @@ function sortProducts(products: Product[], key: SortKey, globalPrintPrice: numbe
 }
 
 /** Height presets for the image exhibition zone based on grid density. */
-const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
+const IMAGE_ZONE: Record<string, number> = { "1": 560, "2": 440, "3": 300 };
 
 /**
  * Status config for availability badges.
@@ -249,7 +249,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                         fontFamily: "var(--font-sans)",
                         fontSize: gridMode === "1" ? "0.90rem" : gridMode === "2" ? "0.85rem" : "0.78rem",
                         fontWeight: 400, fontStyle: "italic", letterSpacing: "0.01em",
-                        color: "#666", margin: 0,
+                        color: "#333", margin: 0,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         lineHeight: 1.2
                     }}>
@@ -259,7 +259,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     <p style={{
                         fontFamily: "var(--font-sans)",
                         fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
-                        fontWeight: 300, color: "#bbb", lineHeight: 1.2, margin: 0
+                        fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
                     }}>
                         {sizeStr}
                     </p>
@@ -302,9 +302,9 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                         <p style={{
                             fontFamily: "var(--font-sans)",
                             fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
-                            fontWeight: 300, color: "#bbb", lineHeight: 1.2, margin: 0
+                            fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
                         }}>
-                            Prints starting at <span style={{ fontWeight: 400, color: "#999" }}>{convertPrice(product.base_print_price)}</span>
+                            Prints starting at <span style={{ fontWeight: 500, color: "#555" }}>{convertPrice(product.base_print_price)}</span>
                         </p>
                     )}
                 </div>
@@ -637,6 +637,7 @@ export default function ShopPage() {
     const [sortIdx, setSortIdx] = useState(0);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [isPhone, setIsPhone] = useState(false);
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
 
     const { globalPrintPrice, convertPrice, units } = usePreferences();
@@ -672,7 +673,10 @@ export default function ShopPage() {
 
     /** Monitors viewport width to toggle between desktop sidebar and mobile bottom drawer. */
     useEffect(() => {
-        const update = () => setIsMobile(window.innerWidth < 1024);
+        const update = () => {
+            setIsMobile(window.innerWidth < 1024);
+            setIsPhone(window.innerWidth < 768);
+        };
         update();
         window.addEventListener("resize", update);
         return () => window.removeEventListener("resize", update);
@@ -872,25 +876,39 @@ export default function ShopPage() {
     /** CSS grid column mapping for the current density mode. */
     const getColumns = () => {
         if (isMobile) {
-            if (gridMode === "1") return "1fr";
-            if (gridMode === "2") return "repeat(2, 1fr)";
-            return "repeat(3, 1fr)";
+            if (isPhone) {
+                if (gridMode === "1") return "1fr";
+                if (gridMode === "2") return "repeat(2, 1fr)";
+                return "repeat(3, 1fr)";
+            } else {
+                // Tablet layout
+                if (gridMode === "1") return "repeat(2, 1fr)";
+                if (gridMode === "2") return "repeat(3, 1fr)";
+                return "repeat(4, 1fr)";
+            }
         }
-        if (gridMode === "1") return "repeat(auto-fill, minmax(460px, 1fr))";
-        if (gridMode === "2") return "repeat(auto-fill, minmax(340px, 1fr))";
-        return "repeat(auto-fill, minmax(220px, 1fr))";
+        if (gridMode === "1") return "repeat(auto-fill, minmax(420px, 1fr))";
+        if (gridMode === "2") return "repeat(auto-fill, minmax(260px, 1fr))"; // Sized to fit 3 items easily
+        return "repeat(auto-fill, minmax(180px, 1fr))";
     };
 
     /** CSS grid gap mapping for the current density mode. */
     const getGap = () => {
         if (isMobile) {
-            if (gridMode === "1") return "2.25rem";
-            if (gridMode === "2") return "1rem";
-            return "0.5rem";
+            if (isPhone) {
+                if (gridMode === "1") return "2.25rem";
+                if (gridMode === "2") return "1rem";
+                return "0.5rem";
+            } else {
+                // Tablet gap
+                if (gridMode === "1") return "3rem 1.5rem";
+                if (gridMode === "2") return "2rem 1.25rem";
+                return "1rem 1rem";
+            }
         }
-        if (gridMode === "1") return "5rem 140px";
-        if (gridMode === "2") return "4rem 100px";
-        return "2.5rem 70px";
+        if (gridMode === "1") return "4rem 80px";
+        if (gridMode === "2") return "3rem 40px"; // Reduced to fit 3 columns
+        return "2rem 30px";
     };
 
     /** 
