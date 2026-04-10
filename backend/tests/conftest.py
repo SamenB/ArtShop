@@ -13,6 +13,10 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
+
+# Provide a dummy token so MonobankService initialization passes tests.
+settings.MONOBANK_TOKEN = "dummy_test_token"
+
 from src.database import Base, engine_null_pool, new_session_null_pool
 from src.init import redis_manager
 from src.main import app
