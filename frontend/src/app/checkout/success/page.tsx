@@ -98,60 +98,129 @@ function CheckoutSuccessContent() {
             justifyContent: "center",
             padding: "2rem",
             fontFamily: "var(--font-sans)",
+            background: "linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)", // Very subtle luxury backdrop
         }}>
-            <div style={{ maxWidth: "560px", textAlign: "center" }}>
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes fadeUp {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .luxury-btn {
+                    display: inline-block;
+                    padding: 1rem 3rem;
+                    background: linear-gradient(135deg, #ff7e5f, #feb47b);
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 50px;
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.15em;
+                    box-shadow: 0 8px 20px rgba(255, 126, 95, 0.3);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                }
+                .luxury-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 12px 25px rgba(255, 126, 95, 0.5);
+                }
+                .outline-btn {
+                    display: inline-block;
+                    padding: 1rem 3rem;
+                    background: transparent;
+                    color: #333;
+                    text-decoration: none;
+                    border-radius: 50px;
+                    border: 1px solid rgba(0,0,0,0.1);
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.15em;
+                    transition: all 0.3s ease;
+                }
+                .outline-btn:hover {
+                    border-color: rgba(0,0,0,0.3);
+                    background: rgba(0,0,0,0.02);
+                }
+            `}</style>
+
+            <div style={{
+                maxWidth: "520px",
+                width: "100%",
+                background: "rgba(255, 255, 255, 0.8)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid rgba(255, 255, 255, 0.5)",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.04)",
+                borderRadius: "24px",
+                padding: "4rem 2rem",
+                textAlign: "center",
+                animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}>
 
                 {/* Loading / Polling */}
                 {(status === "loading" || status === "awaiting_payment") && (
                     <>
-                        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⏳</div>
-                        <h1 style={{
-                            fontFamily: "var(--font-serif)",
-                            fontSize: "2rem",
-                            fontStyle: "italic",
-                            marginBottom: "1rem",
-                        }}>
-                            Confirming Payment...
-                        </h1>
-                        <p style={{
-                            color: "var(--color-muted)",
-                            lineHeight: 1.7,
-                            marginBottom: "2rem",
-                        }}>
-                            We&apos;re waiting for payment confirmation from the bank.
-                            This usually takes a few seconds.
-                        </p>
                         <div style={{
-                            width: "40px", height: "40px",
-                            border: "3px solid #e5e7eb",
-                            borderTopColor: "#334C75",
+                            width: "60px", height: "60px",
+                            border: "2px solid rgba(0,0,0,0.05)",
+                            borderTopColor: "#ff7e5f",
                             borderRadius: "50%",
                             animation: "spin 1s linear infinite",
-                            margin: "0 auto",
+                            margin: "0 auto 2.5rem auto",
                         }} />
-                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                        <h1 style={{
+                            fontFamily: "var(--font-serif)",
+                            fontSize: "2.2rem",
+                            fontWeight: 400,
+                            letterSpacing: "-0.02em",
+                            marginBottom: "1rem",
+                            color: "#111",
+                        }}>
+                            Confirming Payment
+                        </h1>
+                        <p style={{
+                            color: "#666",
+                            lineHeight: 1.8,
+                            fontSize: "0.95rem",
+                            maxWidth: "80%",
+                            margin: "0 auto",
+                        }}>
+                            Securely connecting to the bank. This usually takes just a moment.
+                        </p>
                     </>
                 )}
 
                 {/* Processing */}
                 {status === "processing" && (
                     <>
-                        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔄</div>
+                        <div style={{
+                            width: "60px", height: "60px",
+                            border: "2px solid rgba(0,0,0,0.05)",
+                            borderTopColor: "#334C75",
+                            borderRadius: "50%",
+                            animation: "spin 1s linear infinite",
+                            margin: "0 auto 2.5rem auto",
+                        }} />
                         <h1 style={{
                             fontFamily: "var(--font-serif)",
-                            fontSize: "2rem",
-                            fontStyle: "italic",
+                            fontSize: "2.2rem",
+                            fontWeight: 400,
+                            letterSpacing: "-0.02em",
                             marginBottom: "1rem",
+                            color: "#111",
                         }}>
-                            Payment Processing
+                            Processing
                         </h1>
                         <p style={{
-                            color: "var(--color-muted)",
-                            lineHeight: 1.7,
-                            marginBottom: "2rem",
+                            color: "#666",
+                            lineHeight: 1.8,
+                            fontSize: "0.95rem",
+                            maxWidth: "80%",
+                            margin: "0 auto",
                         }}>
-                            Your payment is being processed by the bank.
-                            You will receive an email confirmation once it&apos;s complete.
+                            Your payment is being processed. You will receive an email confirmation shortly.
                         </p>
                     </>
                 )}
@@ -159,48 +228,45 @@ function CheckoutSuccessContent() {
                 {/* Success */}
                 {status === "paid" && (
                     <>
-                        <div style={{ fontSize: "3.5rem", marginBottom: "1rem" }}>🎉</div>
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="url(#successGradient)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 2rem auto", display: "block" }}>
+                            <defs>
+                                <linearGradient id="successGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stopColor="#ff7e5f" />
+                                    <stop offset="100%" stopColor="#feb47b" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
                         <h1 style={{
                             fontFamily: "var(--font-serif)",
                             fontSize: "2.5rem",
-                            fontStyle: "italic",
+                            fontWeight: 400,
+                            letterSpacing: "-0.02em",
                             marginBottom: "1rem",
-                            color: "#166534",
+                            color: "#111",
                         }}>
-                            Thank You!
+                            Order Confirmed
                         </h1>
                         <p style={{
-                            color: "var(--color-muted)",
-                            lineHeight: 1.7,
+                            color: "#666",
+                            lineHeight: 1.8,
+                            fontSize: "1rem",
                             marginBottom: "0.5rem",
                         }}>
-                            Your payment has been confirmed successfully.
+                            Thank you for your purchase.
                         </p>
                         <p style={{
-                            color: "var(--color-muted)",
-                            lineHeight: 1.7,
-                            marginBottom: "2rem",
-                            fontSize: "0.9rem",
+                            color: "#888",
+                            lineHeight: 1.8,
+                            marginBottom: "2.5rem",
+                            fontSize: "0.85rem",
+                            letterSpacing: "0.02em",
                         }}>
                             Order #{orderId} — A confirmation email is on its way.
                         </p>
-                        <Link
-                            href="/gallery"
-                            style={{
-                                display: "inline-block",
-                                padding: "1rem 2.5rem",
-                                backgroundColor: "#334C75",
-                                color: "#fff",
-                                textDecoration: "none",
-                                borderRadius: "4px",
-                                fontSize: "0.85rem",
-                                fontWeight: 600,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.1em",
-                                transition: "opacity 0.2s",
-                            }}
-                        >
-                            Continue Browsing
+                        <Link href="/gallery" className="luxury-btn">
+                            Return to Gallery
                         </Link>
                     </>
                 )}
@@ -208,56 +274,37 @@ function CheckoutSuccessContent() {
                 {/* Failed */}
                 {status === "failed" && (
                     <>
-                        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>❌</div>
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#E53E3E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 2rem auto", display: "block" }}>
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
                         <h1 style={{
                             fontFamily: "var(--font-serif)",
-                            fontSize: "2rem",
-                            fontStyle: "italic",
+                            fontSize: "2.5rem",
+                            fontWeight: 400,
+                            letterSpacing: "-0.02em",
                             marginBottom: "1rem",
-                            color: "#991B1B",
+                            color: "#111",
                         }}>
                             Payment Failed
                         </h1>
                         <p style={{
-                            color: "var(--color-muted)",
-                            lineHeight: 1.7,
-                            marginBottom: "2rem",
+                            color: "#666",
+                            lineHeight: 1.8,
+                            fontSize: "0.95rem",
+                            marginBottom: "2.5rem",
+                            maxWidth: "90%",
+                            margin: "0 auto",
                         }}>
-                            Unfortunately, your payment could not be processed.
-                            No charges have been made. Please try again or contact us for assistance.
+                            Unfortunately, the transaction could not be completed. No charges have been made.
                         </p>
-                        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-                            <Link
-                                href="/checkout"
-                                style={{
-                                    padding: "1rem 2rem",
-                                    backgroundColor: "#334C75",
-                                    color: "#fff",
-                                    textDecoration: "none",
-                                    borderRadius: "4px",
-                                    fontSize: "0.85rem",
-                                    fontWeight: 600,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.1em",
-                                }}
-                            >
+                        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap", marginTop: "2rem" }}>
+                            <Link href="/checkout" className="luxury-btn">
                                 Try Again
                             </Link>
-                            <Link
-                                href="/contact"
-                                style={{
-                                    padding: "1rem 2rem",
-                                    border: "1px solid #d1d5db",
-                                    color: "#374151",
-                                    textDecoration: "none",
-                                    borderRadius: "4px",
-                                    fontSize: "0.85rem",
-                                    fontWeight: 600,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.1em",
-                                }}
-                            >
-                                Contact Support
+                            <Link href="/contact" className="outline-btn">
+                                Contact Us
                             </Link>
                         </div>
                     </>
@@ -266,38 +313,31 @@ function CheckoutSuccessContent() {
                 {/* Unknown / No Order */}
                 {status === "unknown" && (
                     <>
-                        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🤔</div>
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 2rem auto", display: "block" }}>
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
                         <h1 style={{
                             fontFamily: "var(--font-serif)",
-                            fontSize: "2rem",
-                            fontStyle: "italic",
+                            fontSize: "2.2rem",
+                            fontWeight: 400,
+                            letterSpacing: "-0.02em",
                             marginBottom: "1rem",
+                            color: "#111",
                         }}>
-                            Order Not Found
+                            Status Unavailable
                         </h1>
                         <p style={{
-                            color: "var(--color-muted)",
-                            lineHeight: 1.7,
-                            marginBottom: "2rem",
+                            color: "#666",
+                            lineHeight: 1.8,
+                            fontSize: "0.95rem",
+                            marginBottom: "2.5rem",
                         }}>
-                            We couldn&apos;t find information about this order.
-                            If you believe this is an error, please contact our support team.
+                            We couldn&apos;t retrieve the status of your order at this time.
+                            If you made a payment, please check your email.
                         </p>
-                        <Link
-                            href="/gallery"
-                            style={{
-                                display: "inline-block",
-                                padding: "1rem 2rem",
-                                backgroundColor: "#334C75",
-                                color: "#fff",
-                                textDecoration: "none",
-                                borderRadius: "4px",
-                                fontSize: "0.85rem",
-                                fontWeight: 600,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.1em",
-                            }}
-                        >
+                        <Link href="/gallery" className="outline-btn">
                             Back to Gallery
                         </Link>
                     </>
