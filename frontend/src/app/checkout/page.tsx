@@ -65,7 +65,10 @@ interface PlaceSuggestion {
 /* ------------------------------------------------------------------ */
 
 const inputBase: React.CSSProperties = {
-    padding: "0.85rem 1rem",
+    paddingTop: "0.85rem",
+    paddingBottom: "0.85rem",
+    paddingLeft: "1rem",
+    paddingRight: "1rem",
     borderWidth: "1px",
     borderStyle: "solid",
     borderColor: "rgba(17,17,17,0.18)",
