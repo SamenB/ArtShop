@@ -887,9 +887,10 @@ export default function ShopPage() {
                 return "repeat(4, 1fr)";
             }
         }
-        if (gridMode === "1") return "repeat(auto-fill, minmax(420px, 1fr))";
-        if (gridMode === "2") return "repeat(auto-fill, minmax(260px, 1fr))"; // Sized to fit 3 items easily
-        return "repeat(auto-fill, minmax(180px, 1fr))";
+        // Desktop layout (Strict grid structure)
+        if (gridMode === "1") return "repeat(2, 1fr)";
+        if (gridMode === "2") return "repeat(3, 1fr)"; // Strictly 3 items
+        return "repeat(4, 1fr)";
     };
 
     /** CSS grid gap mapping for the current density mode. */
