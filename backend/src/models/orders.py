@@ -30,6 +30,17 @@ class OrdersOrm(Base):
     newsletter_opt_in: Mapped[bool] = mapped_column(default=False)
     discovery_source: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Shipping Address (required for worldwide delivery)
+    shipping_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    shipping_country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    shipping_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    shipping_city: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    shipping_address_line1: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    shipping_address_line2: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    shipping_postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shipping_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shipping_notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
     # Order Specifics
     promo_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     total_price: Mapped[int] = mapped_column(Integer)
@@ -69,4 +80,4 @@ class OrderItemOrm(Base):
 
     # Relationships
     order: Mapped["OrdersOrm"] = relationship("OrdersOrm", back_populates="items")
-    artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm")
+    artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm", lazy="selectin")

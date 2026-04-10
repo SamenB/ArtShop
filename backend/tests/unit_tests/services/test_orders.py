@@ -40,7 +40,12 @@ async def test_create_order_original_sold_out_fails(order_service):
         first_name="T",
         last_name="U",
         email="e@e.com",
-        phone="123",
+        phone="1234567",
+        shipping_country="UA",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="St 1",
+        shipping_postal_code="01001",
         items=[
             {"artwork_id": 1, "edition_type": EditionType.ORIGINAL, "finish": "none", "price": 1000}
         ],
@@ -63,7 +68,12 @@ async def test_create_order_print_sold_out_fails(order_service):
         first_name="T",
         last_name="U",
         email="e@e.com",
-        phone="123",
+        phone="1234567",
+        shipping_country="UA",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="St 1",
+        shipping_postal_code="01001",
         items=[
             {"artwork_id": 1, "edition_type": EditionType.PRINT, "finish": "none", "price": 1000}
         ],
@@ -91,7 +101,12 @@ async def test_create_order_original_success(order_service):
         first_name="T",
         last_name="U",
         email="e@e.com",
-        phone="123",
+        phone="1234567",
+        shipping_country="UA",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="St 1",
+        shipping_postal_code="01001",
         items=[
             {"artwork_id": 1, "edition_type": EditionType.ORIGINAL, "finish": "none", "price": 1000}
         ],
@@ -129,7 +144,12 @@ async def test_create_order_print_success(order_service):
         first_name="T",
         last_name="U",
         email="e@e.com",
-        phone="123",
+        phone="1234567",
+        shipping_country="UA",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="St 1",
+        shipping_postal_code="01001",
         items=[
             {"artwork_id": 1, "edition_type": EditionType.PRINT, "finish": "none", "price": 1000}
         ],

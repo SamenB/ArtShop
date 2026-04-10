@@ -31,7 +31,13 @@ def test_order_mapper():
         email="test@user.com",
         phone="1234567",
         newsletter_opt_in=False,
+        shipping_country="Ukraine",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="Test St 1",
+        shipping_postal_code="01001",
         total_price=1000,
+        payment_status="pending",
         created_at=datetime(2026, 1, 1, 12, 0, 0),
         items=[],
     )

@@ -28,6 +28,44 @@ async def get_my_orders(user_id: UserDep, db: DBDep):
     return await OrderService(db).get_my_orders(user_id)
 
 
+@router.get("/track")
+async def track_orders_by_email(email: str, db: DBDep):
+    """
+    Public endpoint for order tracking by email address.
+    Allows guests (non-authenticated) to look up their order status.
+    Returns a sanitized list of orders associated with the provided email.
+    """
+    if not email or "@" not in email:
+        return {"status": "OK", "data": []}
+    orders = await OrderService(db).get_orders_by_email(email.strip().lower())
+    # Return sanitized order data — only what the customer needs
+    result = []
+    for order in orders:
+        result.append(
+            {
+                "id": order.id,
+                "created_at": str(order.created_at) if order.created_at else None,
+                "payment_status": order.payment_status,
+                "total_price": order.total_price,
+                "first_name": order.first_name,
+                "last_name": order.last_name,
+                "shipping_city": order.shipping_city,
+                "shipping_country": order.shipping_country,
+                "items": [
+                    {
+                        "artwork_id": item.artwork_id,
+                        "edition_type": item.edition_type,
+                        "finish": item.finish,
+                        "size": item.size,
+                        "price": item.price,
+                    }
+                    for item in (order.items or [])
+                ],
+            }
+        )
+    return {"status": "OK", "data": result}
+
+
 @router.post("")
 async def create_order(
     db: DBDep,

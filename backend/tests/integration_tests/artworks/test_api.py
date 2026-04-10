@@ -7,6 +7,11 @@ def get_base_payload(artwork_id: int, edition_type: str):
         "last_name": "Doe",
         "email": "johndoe@example.com",
         "phone": "5551234",
+        "shipping_country": "United States",
+        "shipping_country_code": "US",
+        "shipping_city": "New York",
+        "shipping_address_line1": "123 Main St",
+        "shipping_postal_code": "10001",
         "items": [
             {
                 "artwork_id": artwork_id,

@@ -49,6 +49,16 @@ class OrderService(BaseService):
         except SQLAlchemyError:
             raise DatabaseException
 
+    async def get_orders_by_email(self, email: str):
+        """
+        Retrieves all orders associated with a given email address.
+        Used for guest order tracking — no authentication required.
+        """
+        try:
+            return await self.db.orders.get_filtered(email=email)
+        except SQLAlchemyError:
+            raise DatabaseException
+
     async def create_order(self, order_data: OrderAddRequest, user_id: int | None):
         """
         Processes a new order placement.
@@ -68,6 +78,17 @@ class OrderService(BaseService):
                 last_name=order_data.last_name,
                 email=order_data.email,
                 phone=order_data.phone,
+                # Shipping address
+                shipping_country=order_data.shipping_country,
+                shipping_country_code=order_data.shipping_country_code,
+                shipping_state=order_data.shipping_state,
+                shipping_city=order_data.shipping_city,
+                shipping_address_line1=order_data.shipping_address_line1,
+                shipping_address_line2=order_data.shipping_address_line2,
+                shipping_postal_code=order_data.shipping_postal_code,
+                shipping_phone=order_data.shipping_phone,
+                shipping_notes=order_data.shipping_notes,
+                # Meta
                 newsletter_opt_in=order_data.newsletter_opt_in,
                 discovery_source=order_data.discovery_source,
                 promo_code=order_data.promo_code,
@@ -177,5 +198,86 @@ class OrderService(BaseService):
             )
             await self.db.commit()
         except SQLAlchemyError:
+            await self.db.rollback()
+            raise DatabaseException
+
+    async def link_payment_session(self, order_id: int, invoice_id: str, payment_url: str) -> None:
+        """
+        Associates a Monobank payment session with an existing order.
+
+        Stores the external invoice_id and payment page URL, and transitions
+        the order's payment status to 'awaiting_payment'.
+
+        Args:
+            order_id: The internal order identifier.
+            invoice_id: The Monobank-assigned invoice identifier.
+            payment_url: The Monobank-hosted payment page URL.
+        """
+        try:
+            from sqlalchemy import update as sa_update
+
+            update_stmt = (
+                sa_update(self.db.orders.model)
+                .filter_by(id=order_id)
+                .values(
+                    invoice_id=invoice_id,
+                    payment_url=payment_url,
+                    payment_status="awaiting_payment",
+                )
+            )
+            await self.db.session.execute(update_stmt)
+            await self.db.commit()
+        except SQLAlchemyError as e:
+            logger.error("Failed to link payment session for order {}: {}", order_id, e)
+            await self.db.rollback()
+            raise DatabaseException
+
+    async def update_payment_status_by_invoice(self, invoice_id: str, payment_status: str) -> None:
+        """
+        Updates the payment status of an order identified by its Monobank invoice_id.
+
+        Used by the webhook handler to process asynchronous status callbacks.
+        Terminal statuses ('paid', 'refunded') are protected from downgrade.
+
+        Args:
+            invoice_id: The Monobank invoice identifier.
+            payment_status: The new internal payment status to set.
+        """
+        try:
+            orders = await self.db.orders.get_filtered(invoice_id=invoice_id)
+            if not orders:
+                logger.warning("No order found for invoice_id: {}", invoice_id)
+                return
+
+            order = orders[0]
+
+            # Idempotency guard: don't downgrade terminal statuses.
+            terminal_statuses = {"paid", "refunded"}
+            if order.payment_status in terminal_statuses and payment_status != "refunded":
+                logger.info(
+                    "Skipping status update for order {}: already in terminal state '{}'",
+                    order.id,
+                    order.payment_status,
+                )
+                return
+
+            from sqlalchemy import update as sa_update
+
+            update_stmt = (
+                sa_update(self.db.orders.model)
+                .filter_by(id=order.id)
+                .values(payment_status=payment_status)
+            )
+            await self.db.session.execute(update_stmt)
+            await self.db.commit()
+
+            logger.info(
+                "Order {} payment status updated: {} → {}",
+                order.id,
+                order.payment_status,
+                payment_status,
+            )
+        except SQLAlchemyError as e:
+            logger.error("Failed to update payment status for invoice {}: {}", invoice_id, e)
             await self.db.rollback()
             raise DatabaseException

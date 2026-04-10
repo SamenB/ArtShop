@@ -1240,7 +1240,7 @@ export default function ArtworkDetailPage() {
                                                         <button
                                                             className="premium-cta-btn"
                                                             disabled={work.original_status !== "available"}
-                                                            onClick={() => addItem({ id: String(work.id), slug: String(work.id), title: work.title, type: "original", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, price: work.original_price, size: work.size, finish: "Original" })}
+                                                            onClick={() => addItem({ id: String(work.id), slug: String(work.id), title: work.title, type: "original", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined, price: work.original_price, size: work.size, finish: "Original" })}
                                                             style={{ width: "100%", marginTop: "auto", opacity: work.original_status === "available" ? 1 : 0.6 }}
                                                         >
                                                             {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
@@ -1389,6 +1389,7 @@ export default function ArtworkDetailPage() {
                                                                     type: "print",
                                                                     imageGradientFrom: work.gradientFrom!,
                                                                     imageGradientTo: work.gradientTo!,
+                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
                                                                     price: Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)),
                                                                     finish: canvasStyle === "framed" ? `Framed (${canvasFrame})` : "Rolled Canvas",
                                                                     size: units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn,
@@ -1460,6 +1461,7 @@ export default function ArtworkDetailPage() {
                                                                     type: "print",
                                                                     imageGradientFrom: work.gradientFrom!,
                                                                     imageGradientTo: work.gradientTo!,
+                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
                                                                     price: currentPaperPrice,
                                                                     finish: "Rolled — Matte",
                                                                     size: units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn,

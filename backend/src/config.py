@@ -88,6 +88,15 @@ class Settings(BaseSettings):
     SMTP_USER: str | None = None
     SMTP_PASSWORD: str | None = None
 
+    # Monobank Acquiring (Payment Gateway) Configuration
+    # Test token from https://api.monobank.ua/ ; production token from https://web.monobank.ua/
+    MONOBANK_TOKEN: str | None = None
+    MONOBANK_API_URL: str = "https://api.monobank.ua"
+    # Public-facing URL where Monobank sends webhook callbacks on payment status changes.
+    MONOBANK_WEBHOOK_URL: str | None = None
+    # URL to redirect the buyer after payment completion (success or failure).
+    MONOBANK_REDIRECT_URL: str | None = None
+
     # CORS Policy Configuration
     # Whitelist of allowed origins for browser-based requests.
     CORS_ORIGINS: list[str] = [

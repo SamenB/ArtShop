@@ -84,9 +84,22 @@ export default function CartDrawer() {
                                 <div key={item.id} style={{ display: "flex", gap: "1rem" }}>
                                     <div style={{
                                         width: "80px", height: "100px",
-                                        background: `linear-gradient(135deg, ${item.imageGradientFrom}, ${item.imageGradientTo})`,
-                                        flexShrink: 0
-                                    }} />
+                                        background: item.imageUrl ? "none" : `linear-gradient(135deg, ${item.imageGradientFrom}, ${item.imageGradientTo})`,
+                                        flexShrink: 0,
+                                        overflow: "hidden",
+                                        borderRadius: "4px"
+                                    }}>
+                                        {item.imageUrl && (
+                                            <img
+                                                src={item.imageUrl}
+                                                alt={item.title}
+                                                style={{
+                                                    width: "100%", height: "100%",
+                                                    objectFit: "cover", display: "block"
+                                                }}
+                                            />
+                                        )}
+                                    </div>
                                     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
                                             <Link

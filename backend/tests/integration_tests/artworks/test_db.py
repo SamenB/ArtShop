@@ -49,7 +49,12 @@ async def test_create_order(db, test_ids):
         first_name="New",
         last_name="Order",
         email="new@order.com",
-        phone="123456",
+        phone="1234567",
+        shipping_country="Ukraine",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="Test St 1",
+        shipping_postal_code="01001",
         total_price=1500,
         items=[],  # relationships handled separately
     )
@@ -81,6 +86,11 @@ async def test_update_order(db, sample_order, test_ids):
         last_name="Name",
         email="test@user.com",
         phone="12345678",
+        shipping_country="Ukraine",
+        shipping_country_code="UA",
+        shipping_city="Kyiv",
+        shipping_address_line1="Test St 1",
+        shipping_postal_code="01001",
         total_price=5000,
         items=[],
     )

@@ -24,6 +24,8 @@ export interface CartItem {
     imageGradientFrom: string;
     /** CSS gradient end color for placeholder/background. */
     imageGradientTo: string;
+    /** Actual artwork thumbnail URL for display in cart/checkout. */
+    imageUrl?: string;
     /** Current unit price of the item. */
     price: number;
     /** Number of units in the cart. */

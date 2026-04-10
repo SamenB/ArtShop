@@ -122,3 +122,40 @@ class RateLimitExceededException(ArtShopExeption):
 
     detail = "Request limit exceeded. Please try again later."
     status_code = 429
+
+
+class PaymentGatewayException(ArtShopExeption):
+    """
+    Raised when the external payment gateway (Monobank) returns an error
+    during invoice creation or status retrieval.
+    """
+
+    detail = "Payment gateway error. Please try again later."
+    status_code = 502
+
+
+class PaymentWebhookVerificationException(ArtShopExeption):
+    """
+    Raised when webhook signature verification fails.
+    This is a security-critical error indicating potential request forgery.
+    """
+
+    detail = "Webhook signature verification failed"
+    status_code = 403
+
+
+class MonobankServiceError(Exception):
+    """
+    Raised when the Monobank API returns a non-success HTTP status code.
+    Wraps the upstream error details for structured logging and handling.
+
+    Note: This intentionally inherits from 'Exception' rather than 'ArtShopExeption'
+    because it represents an external service transport error, not a client-facing
+    application error. It is caught in the API layer and re-raised as
+    'PaymentGatewayException' with a sanitized message for the end user.
+    """
+
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(f"Monobank API error {status_code}: {detail}")

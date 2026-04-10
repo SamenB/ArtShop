@@ -23,7 +23,12 @@ def test_order_add_request_valid():
         "first_name": "Test",
         "last_name": "Test",
         "email": "test@test.com",
-        "phone": "555",
+        "phone": "5551234",
+        "shipping_country": "Ukraine",
+        "shipping_country_code": "UA",
+        "shipping_city": "Kyiv",
+        "shipping_address_line1": "Test St 1",
+        "shipping_postal_code": "01001",
         "items": [{"artwork_id": 1, "edition_type": "original", "finish": "none", "price": 1000}],
     }
     order = OrderAddRequest(**data)

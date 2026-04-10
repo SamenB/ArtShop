@@ -5,6 +5,11 @@
         "last_name": "User 1",
         "email": "test1@example.com",
         "phone": "1234567890",
+        "shipping_country": "United States",
+        "shipping_country_code": "US",
+        "shipping_city": "New York",
+        "shipping_address_line1": "123 Main St",
+        "shipping_postal_code": "10001",
         "total_price": 11000,
         "items": [
             {
@@ -27,6 +32,11 @@
         "last_name": "User 2",
         "email": "test2@example.com",
         "phone": "1234567890",
+        "shipping_country": "Ukraine",
+        "shipping_country_code": "UA",
+        "shipping_city": "Odesa",
+        "shipping_address_line1": "Deribasovskaya 10",
+        "shipping_postal_code": "65000",
         "total_price": 3800,
         "items": [
             {
@@ -49,6 +59,11 @@
         "last_name": "User 3",
         "email": "test3@example.com",
         "phone": "1234567890",
+        "shipping_country": "Germany",
+        "shipping_country_code": "DE",
+        "shipping_city": "Berlin",
+        "shipping_address_line1": "Alexanderplatz 1",
+        "shipping_postal_code": "10178",
         "total_price": 3500,
         "items": [
             {
