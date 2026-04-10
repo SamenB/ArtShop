@@ -94,7 +94,7 @@ async def create_payment(
         edition_label = EDITION_LABELS.get(item.edition_type, item.edition_type)
         if item.size:
             edition_label += f" · {item.size}"
-            
+
         basket_item = {
             "name": f"{name} — {edition_label}",
             "qty": 1,
@@ -102,12 +102,12 @@ async def create_payment(
             "total": item.price * 100,
             "unit": "pcs",
         }
-        
+
         # Add icon if available globally accessible URL
         if artwork and artwork.images and len(artwork.images) > 0:
             # Monobank requires an absolute URL. Assuming stored images are.
             basket_item["icon"] = artwork.images[0]
-            
+
         basket_items.append(basket_item)
 
     # 4. Create the Monobank invoice.
@@ -266,14 +266,21 @@ async def get_payment_status(order_id: int, db: DBDep):
             if mono_status:
                 internal_status = MONOBANK_STATUS_MAP.get(mono_status, mono_status)
                 if internal_status != order.payment_status:
-                    logger.info("Syncing payment status from API for order {}: {} -> {}", order.id, order.payment_status, internal_status)
+                    logger.info(
+                        "Syncing payment status from API for order {}: {} -> {}",
+                        order.id,
+                        order.payment_status,
+                        internal_status,
+                    )
                     await OrderService(db).update_payment_status_by_invoice(
                         invoice_id=order.invoice_id,
                         payment_status=internal_status,
                     )
                     order.payment_status = internal_status
         except Exception as e:
-            logger.warning("Failed to sync invoice status during polling for order {}: {}", order.id, e)
+            logger.warning(
+                "Failed to sync invoice status during polling for order {}: {}", order.id, e
+            )
 
     return PaymentStatusResponse(
         order_id=order.id,
