@@ -10,6 +10,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
+import { useUser } from "@/context/UserContext";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
 /** Availability states for artworks and prints. */
@@ -129,7 +130,12 @@ const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string
  * Features dynamic aspect-ratio calculation to align metadata perfectly with
  * the image's left edge. Displays original status and print pricing.
  */
-function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product; zoneH: number; gridMode: string; isMobile: boolean }) {
+function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedIds, onAuthRequired }: {
+    product: Product; zoneH: number; gridMode: string; isMobile: boolean;
+    initialLiked?: boolean;
+    likedIds?: Set<number>;
+    onAuthRequired?: () => void;
+}) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
@@ -140,6 +146,14 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
+    const [imgHovered, setImgHovered] = useState(false);
+    const [liked, setLiked] = useState(initialLiked || false);
+    const [likeAnimating, setLikeAnimating] = useState(false);
+
+    // Sync liked state when likedIds loads from DB
+    useEffect(() => {
+        if (likedIds !== undefined) setLiked(likedIds.has(product.id));
+    }, [likedIds, product.id]);
 
     /**
      * Synchronizes metadata alignment with the actual rendered bounds of 
@@ -181,8 +195,38 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
         });
     }, [product, units]);
 
+    /** Like toggle: requires auth, animates, calls API with optimistic update. */
+    const handleLike = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // If not authenticated, show sign-in prompt instead
+        if (onAuthRequired) { onAuthRequired(); return; }
+        const newState = !liked;
+        setLiked(newState);
+        setLikeAnimating(true);
+        setTimeout(() => setLikeAnimating(false), 400);
+        try {
+            if (newState) {
+                await apiFetch(`${getApiUrl()}/users/me/likes/${product.id}`, { method: "POST" });
+            } else {
+                await apiFetch(`${getApiUrl()}/users/me/likes/${product.id}`, { method: "DELETE" });
+            }
+        } catch {
+            setLiked(!newState);
+        }
+    };
+
     return (
-        <div className="art-card magnetic-scroll" style={{ display: "flex", flexDirection: "column", width: "100%", padding: 0 }}>
+        <div
+            className="art-card magnetic-scroll"
+            style={{
+                display: "flex", flexDirection: "column", width: "100%", padding: 0,
+                /* Unified scale: image + text move as one glass plate */
+                transform: imgHovered ? "scale(1.03)" : "scale(1)",
+                transformOrigin: "center center",
+                transition: "transform 0.2s ease-out",
+            }}
+        >
             <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%" }}>
                 <div
                     ref={containerRef}
@@ -203,6 +247,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                             alt={product.title}
                             className="art-card-inner"
                             onLoad={recalc}
+                            onMouseEnter={() => setImgHovered(true)}
+                            onMouseLeave={() => setImgHovered(false)}
                             style={{
                                 display: "block",
                                 maxWidth: isHorizontal || isSquare ? "78%" : "80%",
@@ -211,12 +257,11 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                                 borderRadius: "1px",
                                 alignSelf: "center",
                                 flexShrink: 0,
-                                boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
-                                // Slightly desaturate sold/archived artworks — best-practice visual cue
-                                filter: (product.original_status === "sold" || product.original_status === "archived")
-                                    ? "grayscale(35%) brightness(0.97)"
-                                    : undefined,
-                                transition: "filter 0.3s ease",
+                                boxShadow: imgHovered
+                                    ? "4px 16px 40px rgba(28,25,22,0.82), 0 4px 12px rgba(28,25,22,0.50)"
+                                    : "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+                                transition: "box-shadow 0.2s ease-out",
+                                cursor: "pointer",
                             }}
                         />
                     ) : (
@@ -241,72 +286,120 @@ function ProductCard({ product, zoneH, gridMode, isMobile }: { product: Product;
                     marginTop: `-${emptyBottom}px`,
                     paddingTop: gridMode === "3" ? "0.5rem" : "0.7rem",
                     paddingLeft: `${textPad}px`,
+                    paddingRight: `${textPad}px`,
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "0rem"
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: "0.5rem",
                 }}>
-                    <p style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.90rem" : gridMode === "2" ? "0.85rem" : "0.78rem",
-                        fontWeight: 400, fontStyle: "italic", letterSpacing: "0.01em",
-                        color: "#333", margin: 0,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        lineHeight: 1.2
+                    {/* Left: text info */}
+                    <div style={{
+                        display: "flex", flexDirection: "column", gap: "0rem",
+                        flex: 1, minWidth: 0,
                     }}>
-                        {product.title}
-                    </p>
+                        <p style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: gridMode === "1" ? "0.90rem" : gridMode === "2" ? "0.85rem" : "0.78rem",
+                            fontWeight: 400, fontStyle: "italic", letterSpacing: "0.01em",
+                            color: "#333", margin: 0,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            lineHeight: 1.2
+                        }}>
+                            {product.title}
+                        </p>
 
-                    <p style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
-                        fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
-                    }}>
-                        {sizeStr}
-                    </p>
-                    {/* Original status pill — shown for all statuses */}
-                    {st && (
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1px" }}>
-                            <span style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                backgroundColor: st.badgeBg,
-                                border: `1px solid ${st.badgeText}33`,
-                                borderRadius: "4px",
-                                padding: "2px 7px 2px 5px",
-                            }}>
-                                <span style={{
-                                    display: "inline-block",
-                                    width: "5px",
-                                    height: "5px",
-                                    borderRadius: "50%",
-                                    backgroundColor: st.badgeText,
-                                    flexShrink: 0,
-                                }} />
-                                <span style={{
-                                    fontFamily: "var(--font-sans)",
-                                    fontSize: gridMode === "1" ? "0.60rem" : gridMode === "2" ? "0.58rem" : "0.55rem",
-                                    fontWeight: 600,
-                                    letterSpacing: "0.07em",
-                                    textTransform: "uppercase",
-                                    color: st.badgeText,
-                                    lineHeight: 1,
-                                    whiteSpace: "nowrap",
-                                }}>
-                                    {st.label}
-                                </span>
-                            </span>
-                        </div>
-                    )}
-                    {product.has_prints && product.base_print_price && (
                         <p style={{
                             fontFamily: "var(--font-sans)",
                             fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
                             fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
                         }}>
-                            Prints starting at <span style={{ fontWeight: 500, color: "#555" }}>{convertPrice(product.base_print_price)}</span>
+                            {sizeStr}
                         </p>
-                    )}
+                        {/* Original status pill — shown for all statuses */}
+                        {st && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1px" }}>
+                                <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    backgroundColor: st.badgeBg,
+                                    border: `1px solid ${st.badgeText}33`,
+                                    borderRadius: "4px",
+                                    padding: "2px 7px 2px 5px",
+                                }}>
+                                    <span style={{
+                                        display: "inline-block",
+                                        width: "5px",
+                                        height: "5px",
+                                        borderRadius: "50%",
+                                        backgroundColor: st.badgeText,
+                                        flexShrink: 0,
+                                    }} />
+                                    <span style={{
+                                        fontFamily: "var(--font-sans)",
+                                        fontSize: gridMode === "1" ? "0.60rem" : gridMode === "2" ? "0.58rem" : "0.55rem",
+                                        fontWeight: 600,
+                                        letterSpacing: "0.07em",
+                                        textTransform: "uppercase",
+                                        color: st.badgeText,
+                                        lineHeight: 1,
+                                        whiteSpace: "nowrap",
+                                    }}>
+                                        {st.label}
+                                    </span>
+                                </span>
+                            </div>
+                        )}
+                        {product.has_prints && product.base_print_price && (
+                            <p style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                                fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                            }}>
+                                Prints starting at <span style={{ fontWeight: 500, color: "#555" }}>{convertPrice(product.base_print_price)}</span>
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Right: Like button — prominent, stops card-hover propagation on pointer enter/leave */}
+                    <button
+                        onClick={handleLike}
+                        onMouseEnter={() => setImgHovered(false)}
+                        onMouseLeave={() => setImgHovered(false)}
+                        aria-label={liked ? "Unlike artwork" : "Like artwork"}
+                        style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "6px",
+                            marginTop: "-2px",
+                            flexShrink: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transform: likeAnimating ? "scale(1.35)" : "scale(1)",
+                            transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                            outline: "none",
+                        }}
+                    >
+                        <svg
+                            width={gridMode === "3" ? "18" : gridMode === "2" ? "22" : "26"}
+                            height={gridMode === "3" ? "18" : gridMode === "2" ? "22" : "26"}
+                            viewBox="0 0 24 24"
+                            fill={liked ? "#e84057" : "none"}
+                            stroke={liked ? "#e84057" : "#888"}
+                            strokeWidth={liked ? "1.5" : "2"}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{
+                                transition: "fill 0.25s ease, stroke 0.25s ease, filter 0.25s ease",
+                                filter: liked ? "drop-shadow(0 2px 6px rgba(232,64,87,0.4))" : "none",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                    </button>
                 </div>
             )}
         </div>
@@ -615,11 +708,17 @@ function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max:
  * responsive layout transitions, and dynamic data fetching for artworks and tags.
  */
 export default function ShopPage() {
+    const { user } = useUser();
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [collections, setCollections] = useState<Collection[]>([]);
     const [mediumTags, setMediumTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    /** Liked artwork IDs loaded from DB (only when user is authenticated). */
+    const [likedIds, setLikedIds] = useState<Set<number> | undefined>(undefined);
+    /** Controls the sign-in prompt modal for unauthenticated likes. */
+    const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
     /** Filter state: Arrays for multi-select, primitives for ranges. */
     const [categoryFilter, setCategoryFilter] = useState<string[]>([]);    // "originals" | "prints"
@@ -670,6 +769,20 @@ export default function ShopPage() {
             setError("Network error.");
         }).finally(() => setLoading(false));
     }, []);
+
+    /** Fetch the authenticated user's liked artwork IDs for UI state init. */
+    useEffect(() => {
+        if (!user) {
+            setLikedIds(new Set()); // Clear hearts when logged out
+            return;
+        }
+        apiFetch(`${getApiUrl()}/users/me/likes`)
+            .then(r => r.ok ? r.json() : [])
+            .then((items: { id: number }[]) => {
+                setLikedIds(new Set(items.map(a => a.id)));
+            })
+            .catch(() => setLikedIds(new Set()));
+    }, [user]);
 
     /** Monitors viewport width to toggle between desktop sidebar and mobile bottom drawer. */
     useEffect(() => {
@@ -1088,7 +1201,15 @@ export default function ShopPage() {
 
                     {!loading && !error && (filtered.length > 0 ? (
                         <div className="art-grid" style={{ display: "grid", gridTemplateColumns: getColumns(), justifyContent: "start", gap: getGap(), alignItems: "start" }}>
-                            {displayed.map(p => <ProductCard key={p.id} product={p} zoneH={IMAGE_ZONE[gridMode] || 380} gridMode={gridMode} isMobile={isMobile} />)}
+                            {displayed.map(p => <ProductCard
+                                key={p.id}
+                                product={p}
+                                zoneH={IMAGE_ZONE[gridMode] || 380}
+                                gridMode={gridMode}
+                                isMobile={isMobile}
+                                likedIds={likedIds}
+                                onAuthRequired={!user ? () => setShowAuthPrompt(true) : undefined}
+                            />)}
                         </div>
                     ) : (
                         <div style={{ textAlign: "center", padding: "5rem 1rem" }}>
@@ -1104,6 +1225,74 @@ export default function ShopPage() {
                     )}
                 </div>
             </div>
+            {/* Auth Prompt Modal — shown when unauthenticated user tries to like */}
+            {showAuthPrompt && (
+                <div
+                    onClick={() => setShowAuthPrompt(false)}
+                    style={{
+                        position: "fixed", inset: 0, zIndex: 9999,
+                        background: "rgba(10,10,10,0.65)",
+                        backdropFilter: "blur(6px)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        padding: "1rem",
+                    }}
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            background: "#fff",
+                            borderRadius: "20px",
+                            padding: "2.5rem 2rem",
+                            maxWidth: "360px",
+                            width: "100%",
+                            textAlign: "center",
+                            boxShadow: "0 32px 80px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)",
+                        }}
+                    >
+                        <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>♡</div>
+                        <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 400, fontStyle: "italic", color: "#1a1a18", marginBottom: "0.5rem" }}>
+                            Save to your collection
+                        </h2>
+                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", color: "#777", lineHeight: 1.6, marginBottom: "1.75rem" }}>
+                            Sign in to save artworks you love and revisit them anytime from your profile.
+                        </p>
+                        <a
+                            href={`${getApiUrl()}/auth/google`}
+                            style={{
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
+                                padding: "0.8rem 1.5rem",
+                                background: "#fff",
+                                border: "1.5px solid rgba(26,26,24,0.15)",
+                                borderRadius: "100px",
+                                fontFamily: "var(--font-sans)",
+                                fontSize: "0.9rem",
+                                fontWeight: 500,
+                                color: "#1a1a18",
+                                textDecoration: "none",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                                transition: "box-shadow 0.2s, border-color 0.2s",
+                                cursor: "pointer",
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.14)"; e.currentTarget.style.borderColor = "rgba(26,26,24,0.3)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; e.currentTarget.style.borderColor = "rgba(26,26,24,0.15)"; }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                            Continue with Google
+                        </a>
+                        <button
+                            onClick={() => setShowAuthPrompt(false)}
+                            style={{ marginTop: "1rem", background: "none", border: "none", fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "#999", cursor: "pointer", letterSpacing: "0.05em" }}
+                        >
+                            Continue browsing
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

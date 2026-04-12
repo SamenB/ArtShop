@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useCart } from "@/context/CartContext";
+import { useUser } from "@/context/UserContext";
 import Lightbox from "@/components/Lightbox";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
@@ -82,6 +83,11 @@ export default function ArtworkDetailPage() {
     const [canvasFrame, setCanvasFrame] = useState<"black" | "oak" | "white">("black");
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
+
+    const { user } = useUser();
+    const [liked, setLiked] = useState(false);
+    const [likeAnimating, setLikeAnimating] = useState(false);
+    const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
     // Toggle these to switch designs easily
     const mobileThumbsRound = true;
@@ -175,6 +181,20 @@ export default function ArtworkDetailPage() {
             })
             .catch(() => { });
     }, []);
+
+    // Fetch initial like state if authenticated
+    useEffect(() => {
+        if (!user || !work) {
+            setLiked(false);
+            return;
+        }
+        apiFetch(`${getApiUrl()}/users/me/likes`)
+            .then(res => res.ok ? res.json() : [])
+            .then((data: { id: number }[]) => {
+                setLiked(data.some(a => a.id === work.id));
+            })
+            .catch(() => setLiked(false));
+    }, [user, work]);
 
     useEffect(() => {
         if (fullSizeOpen) {
@@ -427,8 +447,33 @@ export default function ArtworkDetailPage() {
                 </div>
 
                 {/* Mobile Title above the image */}
-                <div style={{ display: layoutMetrics.winW < 768 ? "block" : "none", marginBottom: "0.5rem", marginTop: layoutMetrics.winW < 768 ? "0.5rem" : "0", textAlign: "left" }}>
+                <div style={{ display: layoutMetrics.winW < 768 ? "flex" : "none", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", marginTop: layoutMetrics.winW < 768 ? "0.5rem" : "0", textAlign: "left", gap: "1rem" }}>
                     <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
+                    <button
+                        onClick={async () => {
+                            if (!user) { setShowAuthPrompt(true); return; }
+                            const newState = !liked;
+                            setLiked(newState);
+                            setLikeAnimating(true);
+                            setTimeout(() => setLikeAnimating(false), 400);
+                            try {
+                                await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
+                            } catch {}
+                        }}
+                        aria-label={liked ? "Unlike" : "Like"}
+                        style={{
+                            background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
+                            width: "42px", height: "42px", display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", flexShrink: 0,
+                            transform: likeAnimating ? "scale(1.2)" : "scale(1)",
+                            transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s",
+                            outline: "none"
+                        }}
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill={liked ? "#e84057" : "none"} stroke={liked ? "#e84057" : "#999"} strokeWidth={liked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                    </button>
                 </div>
 
                 <div className={`grid grid-cols-1 items-start gap-12 lg:gap-16 ${work.orientation === "horizontal" ? "md:grid-cols-2" : "md:grid-cols-[1.25fr_1fr]"}`}>
@@ -727,7 +772,36 @@ export default function ArtworkDetailPage() {
 
                     {/* ── Right: Purchase panel ── */}
                     <div style={{ marginTop: layoutMetrics.winW >= 768 ? "-1rem" : "0", paddingBottom: layoutMetrics.winW < 768 ? "1rem" : "6rem" }}>
-                        <h1 style={{ display: layoutMetrics.winW < 768 ? "none" : "block", fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2, marginBottom: "1.5rem", marginTop: "-0.5rem" }}>{work.title}</h1>
+                        <div style={{ display: layoutMetrics.winW < 768 ? "none" : "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", marginTop: "-0.5rem", gap: "1rem" }}>
+                            <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
+                            <button
+                                onClick={async () => {
+                                    if (!user) { setShowAuthPrompt(true); return; }
+                                    const newState = !liked;
+                                    setLiked(newState);
+                                    setLikeAnimating(true);
+                                    setTimeout(() => setLikeAnimating(false), 400);
+                                    try {
+                                        await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
+                                    } catch {}
+                                }}
+                                aria-label={liked ? "Unlike" : "Like"}
+                                style={{
+                                    background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
+                                    width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center",
+                                    cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", flexShrink: 0,
+                                    transform: likeAnimating ? "scale(1.2)" : "scale(1)",
+                                    transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s",
+                                    outline: "none"
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)"}
+                                onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"}
+                            >
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill={liked ? "#e84057" : "none"} stroke={liked ? "#e84057" : "#999"} strokeWidth={liked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                                </svg>
+                            </button>
+                        </div>
 
                         <div style={{ position: "relative", marginTop: "1rem", width: layoutMetrics.winW < 768 ? "calc(100% + 4rem)" : "100%", marginLeft: layoutMetrics.winW < 768 ? "-2rem" : "0", marginRight: layoutMetrics.winW < 768 ? "-2rem" : "0" }}>
                             {/* ── Fluid Morphing Folder Tabs ── */}
@@ -1501,6 +1575,69 @@ export default function ArtworkDetailPage() {
 
                 {fullSizeOpen && (
                     <Lightbox works={[work] as any} startImageIndex={selectedImageIndex} onClose={() => setFullSizeOpen(false)} />
+                )}
+
+                {/* Auth Prompt Modal */}
+                {showAuthPrompt && (
+                    <div
+                        onClick={() => setShowAuthPrompt(false)}
+                        style={{
+                            position: "fixed", inset: 0, zIndex: 9999,
+                            background: "rgba(10,10,10,0.65)",
+                            backdropFilter: "blur(6px)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            padding: "1rem",
+                        }}
+                    >
+                        <div
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                                background: "#fff",
+                                borderRadius: "20px",
+                                padding: "2.5rem 2rem",
+                                maxWidth: "360px",
+                                width: "100%",
+                                textAlign: "center",
+                                boxShadow: "0 32px 80px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)",
+                            }}
+                        >
+                            <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>♡</div>
+                            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 400, fontStyle: "italic", color: "#1a1a18", marginBottom: "0.5rem" }}>
+                                Save to your collection
+                            </h2>
+                            <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", color: "#777", lineHeight: 1.6, marginBottom: "1.75rem" }}>
+                                Sign in to save artworks you love and revisit them anytime from your profile.
+                            </p>
+                            <a
+                                href={`${getApiUrl()}/auth/google`}
+                                style={{
+                                    display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
+                                    padding: "0.8rem 1.5rem", background: "#fff",
+                                    border: "1.5px solid rgba(26,26,24,0.15)", borderRadius: "100px",
+                                    fontFamily: "var(--font-sans)", fontSize: "0.9rem", fontWeight: 500, color: "#1a1a18",
+                                    textDecoration: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                                    transition: "box-shadow 0.2s, border-color 0.2s",
+                                    cursor: "pointer",
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.14)"; e.currentTarget.style.borderColor = "rgba(26,26,24,0.3)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; e.currentTarget.style.borderColor = "rgba(26,26,24,0.15)"; }}
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                                </svg>
+                                Continue with Google
+                            </a>
+                            <button
+                                onClick={() => setShowAuthPrompt(false)}
+                                style={{ marginTop: "1rem", background: "none", border: "none", fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "#999", cursor: "pointer", letterSpacing: "0.05em" }}
+                            >
+                                Continue browsing
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

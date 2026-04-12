@@ -115,7 +115,7 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
         )}
       </div>
 
-      {/* Title & Status — aligned to painting's left vertical edge */}
+      {/* Title, Medium & Status — shop-style metadata aligned to painting's left edge */}
       <div
         style={{
           marginTop: `-${emptyBottom}px`,
@@ -127,36 +127,82 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
           gap: "0.15rem"
         }}
       >
+        {/* Title */}
         <p
           style={{
-            fontFamily: "var(--font-serif)",
-            fontSize: "1.05rem",
-            fontWeight: 500,
+            fontFamily: "var(--font-sans)",
+            fontSize: "0.90rem",
+            fontWeight: 400,
             fontStyle: "italic",
-            color: "#666",
+            letterSpacing: "0.01em",
+            color: "#333",
             margin: 0,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            lineHeight: 1.35,
+            lineHeight: 1.2,
           }}
         >
           {work.title}
         </p>
-        <p style={{
-          fontFamily: "var(--font-sans)",
-          fontSize: "0.76rem",
-          fontWeight: 300,
-          color: "#aaa",
-          margin: 0,
-          lineHeight: 1.4,
-          letterSpacing: "0.01em",
-        }}>
-          Original
-          {work.original_status && STATUS[work.original_status] && (
-            <> — <span style={{ fontWeight: 700, color: STATUS[work.original_status].color, opacity: 0.9, letterSpacing: "0.03em" }}>{STATUS[work.original_status].label}</span></>
-          )}
-        </p>
+
+        {/* Medium / Size */}
+        {(work.medium || work.size) && (
+          <p style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "0.68rem",
+            fontWeight: 400,
+            color: "#999",
+            margin: 0,
+            lineHeight: 1.2,
+          }}>
+            {[work.medium, work.size].filter(Boolean).join(" · ")}
+          </p>
+        )}
+
+        {/* Status pill + Price */}
+        {work.original_status && STATUS[work.original_status] && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap" }}>
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              backgroundColor: STATUS[work.original_status].color + "18",
+              border: `1px solid ${STATUS[work.original_status].color}44`,
+              borderRadius: "4px",
+              padding: "2px 7px 2px 5px",
+            }}>
+              <span style={{
+                display: "inline-block",
+                width: "5px", height: "5px",
+                borderRadius: "50%",
+                backgroundColor: STATUS[work.original_status].color,
+                flexShrink: 0,
+              }} />
+              <span style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.58rem",
+                fontWeight: 600,
+                letterSpacing: "0.07em",
+                textTransform: "uppercase",
+                color: STATUS[work.original_status].color,
+                lineHeight: 1,
+              }}>
+                {STATUS[work.original_status].label}
+              </span>
+            </span>
+            {work.original_status === "available" && work.original_price && (
+              <span style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.78rem",
+                fontWeight: 500,
+                color: "#555",
+              }}>
+                ${work.original_price.toLocaleString()}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </Link>
   );

@@ -15,7 +15,7 @@ import SettingsTab from "@/app/admin/components/SettingsTab";
 import ArtworksTab from "@/app/admin/components/ArtworksTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
-import { getApiUrl, apiFetch } from "@/utils";
+import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
 /** Represents an item within an order. */
 interface OrderItem {
@@ -46,13 +46,19 @@ interface Order {
 /** Represents a lightweight artwork summary for liked/saved items. */
 interface Artwork {
     id: number;
+    slug?: string;
     title: string;
     medium: string;
     size: string;
-    aspectRatio: string;
-    gradientFrom: string;
-    gradientTo: string;
-    originalStatus: string;
+    images?: (string | { thumb: string; medium: string; original: string })[];
+    original_price?: number;
+    original_status?: string;
+    has_prints?: boolean;
+    base_print_price?: number;
+    orientation?: string;
+    aspectRatio?: string;
+    gradientFrom?: string;
+    gradientTo?: string;
 }
 
 /** Status badge color mapping. */
@@ -281,29 +287,74 @@ export default function ProfilePage() {
 
                         {/* Favorite Artworks View */}
                         {activeTab === "likes" && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 gap-y-16">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 gap-y-12">
                                 {likes.length === 0 ? (
                                     <div className="col-span-full text-center py-20 border border-white/5 rounded-2xl bg-white/2">
                                         <p className="font-serif italic text-xl text-zinc-400 mb-4">Your saved collection is empty.</p>
-                                        <Link href="/gallery" className="text-sm font-sans uppercase tracking-widest hover:text-white transition-colors text-zinc-500 underline underline-offset-4">Explore Gallery</Link>
+                                        <Link href="/shop" className="text-sm font-sans uppercase tracking-widest hover:text-white transition-colors text-zinc-500 underline underline-offset-4">Browse Shop</Link>
                                     </div>
                                 ) : (
-                                    likes.map((work) => (
-                                        <div key={work.id} className="flex flex-col group cursor-pointer">
-                                            <div className="w-full aspect-4/5 rounded-sm overflow-hidden mb-4 bg-zinc-900 border border-white/5 relative">
-                                                <div className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity" style={{ background: `linear-gradient(160deg, ${work.gradientFrom || '#3A3A3A'} 0%, ${work.gradientTo || '#1A1A1A'} 100%)` }} />
-                                            </div>
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-serif text-lg italic text-[#F7F3EC] mb-1">{work.title}</p>
-                                                    <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">{work.medium} • {work.size}</p>
+                                    likes.map((work) => {
+                                        const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "medium") || "" : "";
+                                        const handleRemove = async (e: React.MouseEvent) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            try {
+                                                await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: "DELETE" });
+                                                setLikes(prev => prev.filter(l => l.id !== work.id));
+                                            } catch (err) {
+                                                console.error("Failed to remove like", err);
+                                            }
+                                        };
+                                        return (
+                                            <Link
+                                                key={work.id}
+                                                href={artworkUrl(work.slug || work.id)}
+                                                className="flex flex-col group"
+                                                style={{ textDecoration: "none" }}
+                                            >
+                                                <div
+                                                    className="w-full rounded-sm overflow-hidden mb-3 bg-zinc-900 border border-white/5 relative"
+                                                    style={{ aspectRatio: work.orientation === "horizontal" ? "5/4" : work.orientation === "square" ? "1/1" : "4/5" }}
+                                                >
+                                                    {imgSrc ? (
+                                                        <img
+                                                            src={imgSrc}
+                                                            alt={work.title}
+                                                            style={{
+                                                                width: "100%",
+                                                                height: "100%",
+                                                                objectFit: "cover",
+                                                                transition: "transform 0.25s ease-out, filter 0.25s ease",
+                                                            }}
+                                                            className="group-hover:scale-[1.03]"
+                                                        />
+                                                    ) : (
+                                                        <div
+                                                            className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity"
+                                                            style={{ background: `linear-gradient(160deg, ${work.gradientFrom || '#3A3A3A'} 0%, ${work.gradientTo || '#1A1A1A'} 100%)` }}
+                                                        />
+                                                    )}
                                                 </div>
-                                                <button className="text-xs text-zinc-500 hover:text-red-400 transition-colors uppercase font-mono tracking-widest border border-white/10 px-3 py-1.5 rounded-full hover:border-red-400">
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))
+                                                <div className="flex justify-between items-start gap-3">
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <p className="font-serif text-lg italic text-[#F7F3EC] mb-0.5 truncate">{work.title}</p>
+                                                        <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                                                            {work.original_status === "available" && work.original_price
+                                                                ? convertPrice(work.original_price)
+                                                                : work.original_status?.replace(/_/g, " ") || ""}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleRemove}
+                                                        className="text-xs text-zinc-500 hover:text-red-400 transition-colors uppercase font-mono tracking-widest border border-white/10 px-3 py-1.5 rounded-full hover:border-red-400 flex-shrink-0"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </Link>
+                                        );
+                                    })
                                 )}
                             </div>
                         )}

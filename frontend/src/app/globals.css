@@ -281,9 +281,8 @@ h3 {
 }
 
 .art-card-inner {
-  /* Transform + box-shadow transitions for hover lift effect */
-  transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    box-shadow 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* Box-shadow transition for hover shadow enhancement */
+  transition: box-shadow 0.2s ease-out;
 }
 
 /* ─────────────────────────────────────────────
@@ -309,19 +308,32 @@ h3 {
 
 /* Hover + active — only on real pointer devices (mouse/trackpad).
    On touch: :active fires on ANY finger contact incl. scroll start → causes jerk. */
+  /* Scale is now driven by React state (imgHovered) — only fires
+     when mouse enters actual artwork pixels, not the card box.
+     Shadow enhancement is also handled inline. */
 @media (hover: hover) and (pointer: fine) {
-
-  /* Scale the painting on hover */
-  .art-card:hover .art-card-inner {
-    transform: scale(1.03);
-    box-shadow: 4px 18px 40px rgba(28, 25, 22, 0.90), 0 4px 10px rgba(28, 25, 22, 0.50) !important;
-  }
-
   .art-card:active .art-card-inner {
     transform: scale(0.98);
     box-shadow: 1px 5px 15px rgba(28, 25, 22, 0.80), 0 1px 5px rgba(28, 25, 22, 0.44) !important;
   }
 }
+
+/* ─────────────────────────────────────────────
+   Suppress browser focus-visible outline on artwork
+   cards and buttons to eliminate white pixel halo.
+   These elements use custom JS-driven hover feedback.
+───────────────────────────────────────────── */
+.art-card,
+.art-card:focus,
+.art-card:focus-visible,
+.art-card *:focus-visible,
+.art-card img:focus,
+.art-card button:focus-visible {
+  outline: none !important;
+  box-shadow: inherit !important;
+}
+/* Also suppress on plain <img> focus states */
+img:focus { outline: none; }
 
 
 /* ─────────────────────────────────────────────
