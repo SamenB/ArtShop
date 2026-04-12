@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import Lightbox from "@/components/Lightbox";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
+import { usePreferences } from "@/context/PreferencesContext";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 import { useUser } from "@/context/UserContext";
 
@@ -306,12 +307,29 @@ export default function GalleryPage() {
     const [lightbox, setLightbox] = useState<{ works: Artwork[]; index: number } | null>(null);
     const [cols, setCols] = useState(3);
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
+    const [gridLoaded, setGridLoaded] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
     const itemsPerPage = gridMode === "3" ? 36 : gridMode === "2" ? 24 : 12;
     const [visibleCount, setVisibleCount] = useState(12);
 
     const [error, setError] = useState<string | null>(null);
+
+    // Initial load of grid preference for Gallery
+    useEffect(() => {
+        const saved = localStorage.getItem("artshop_gallery_grid");
+        if (saved === "1" || saved === "2" || saved === "3") {
+            setGridMode(saved);
+        }
+        setGridLoaded(true);
+    }, []);
+
+    // Persist grid preference for Gallery
+    useEffect(() => {
+        if (gridLoaded) {
+            localStorage.setItem("artshop_gallery_grid", gridMode);
+        }
+    }, [gridMode, gridLoaded]);
 
     const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);

@@ -742,10 +742,27 @@ export default function ShopPage() {
     const [isMobile, setIsMobile] = useState(false);
     const [isPhone, setIsPhone] = useState(false);
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
+    const [gridLoaded, setGridLoaded] = useState(false);
 
     const { globalPrintPrice, convertPrice, units } = usePreferences();
     const itemsPerPage = gridMode === "3" ? 36 : gridMode === "2" ? 24 : 12;
     const [visibleCount, setVisibleCount] = useState(12);
+
+    // Initial load of grid preference for Shop
+    useEffect(() => {
+        const saved = localStorage.getItem("artshop_shop_grid");
+        if (saved === "1" || saved === "2" || saved === "3") {
+            setGridMode(saved);
+        }
+        setGridLoaded(true);
+    }, []);
+
+    // Persist grid preference for Shop
+    useEffect(() => {
+        if (gridLoaded) {
+            localStorage.setItem("artshop_shop_grid", gridMode);
+        }
+    }, [gridMode, gridLoaded]);
 
     /** Bootstraps the catalog data from multiple endpoints. */
     useEffect(() => {
