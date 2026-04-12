@@ -1,5 +1,5 @@
-import pytest
 from httpx import AsyncClient
+
 
 class TestArtworkCRUD:
     """Integration tests for Artwork CRUD operations."""
@@ -26,7 +26,7 @@ class TestArtworkCRUD:
             "original_status": "available",
             "collection_id": 1,
             "has_prints": True,
-            "orientation": "Square"
+            "orientation": "Square",
         }
         resp = await authenticated_ac.post("/artworks", json=payload)
         assert resp.status_code == 200
@@ -36,7 +36,9 @@ class TestArtworkCRUD:
     async def test_create_artwork_unauthorized(self):
         """POST /artworks should return 401 if unauthenticated."""
         from httpx import ASGITransport, AsyncClient
+
         from src.main import app
+
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             payload = {
                 "title": "Fail",
@@ -44,7 +46,7 @@ class TestArtworkCRUD:
                 "original_price": 1,
                 "original_status": "available",
                 "collection_id": 1,
-                "orientation": "Square"
+                "orientation": "Square",
             }
             resp = await ac.post("/artworks", json=payload)
             assert resp.status_code == 401
@@ -58,7 +60,7 @@ class TestArtworkCRUD:
             "original_price": 100,
             "original_status": "available",
             "collection_id": 1,
-            "orientation": "Square"
+            "orientation": "Square",
         }
         create_resp = await authenticated_ac.post("/artworks", json=payload)
         artwork_id = create_resp.json()["data"]["id"]

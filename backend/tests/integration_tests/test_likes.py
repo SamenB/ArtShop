@@ -1,5 +1,5 @@
-import pytest
 from httpx import AsyncClient
+
 
 class TestUserLikes:
     """Integration tests for user artwork likes."""
@@ -7,7 +7,9 @@ class TestUserLikes:
     async def test_likes_unauthenticated(self):
         """Endpoints should return 401 if unauthenticated."""
         from httpx import ASGITransport, AsyncClient
+
         from src.main import app
+
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             # GET /users/me/likes
             resp = await ac.get("/users/me/likes")
@@ -47,7 +49,7 @@ class TestUserLikes:
         """Authenticated user can unlike an artwork."""
         # Ensure it's liked first
         await authenticated_ac.post("/users/me/likes/3")
-        
+
         # Remove like
         resp = await authenticated_ac.delete("/users/me/likes/3")
         assert resp.status_code == 200
