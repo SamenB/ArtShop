@@ -135,7 +135,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     product: Product; zoneH: number; gridMode: string; isMobile: boolean;
     initialLiked?: boolean;
     likedIds?: Set<number>;
-    onAuthRequired?: () => void;
+    onAuthRequired?: (id: number) => void;
 }) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
@@ -201,7 +201,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
         e.preventDefault();
         e.stopPropagation();
         // If not authenticated, show sign-in prompt instead
-        if (onAuthRequired) { onAuthRequired(); return; }
+        if (onAuthRequired) { onAuthRequired(product.id); return; }
         const newState = !liked;
         setLiked(newState);
         setLikeAnimating(true);
@@ -722,6 +722,7 @@ export default function ShopPage() {
     const [likedIds, setLikedIds] = useState<Set<number> | undefined>(undefined);
     /** Controls the sign-in prompt modal for unauthenticated likes. */
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+    const [pendingLikeId, setPendingLikeId] = useState<number | null>(null);
 
     /** Filter state: Arrays for multi-select, primitives for ranges. */
     const [categoryFilter, setCategoryFilter] = useState<string[]>([]);    // "originals" | "prints"
@@ -945,6 +946,35 @@ export default function ShopPage() {
 
         return list;
     }, [allProducts, categoryFilter, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeCollections, activeMediums, globalPrintPrice, getUnitVal]);
+
+    /** 
+     * Executes the pending 'Like' action after successful login.
+     */
+    const handleLoginSuccess = async () => {
+        setShowAuthPrompt(false);
+        if (pendingLikeId) {
+            try {
+                // Optimistic update
+                setLikedIds(prev => new Set([...(prev || []), pendingLikeId]));
+                await apiFetch(`${getApiUrl()}/users/me/likes/${pendingLikeId}`, { method: "POST" });
+                setPendingLikeId(null);
+            } catch (err) {
+                console.error("Auto-like after login failed", err);
+                // Rollback if needed (optional since the list will refresh anyway on next fetch)
+                setLikedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(pendingLikeId);
+                    return next;
+                });
+            }
+        }
+    };
+
+    /** Opens the authentication prompt and records which item was being liked. */
+    const handleAuthRequired = (id: number) => {
+        setPendingLikeId(id);
+        setShowAuthPrompt(true);
+    };
 
     /** Final sorted results for exhibition, respecting pagination and display limits. */
     const displayed = useMemo(() => {
@@ -1211,7 +1241,7 @@ export default function ShopPage() {
                                 gridMode={gridMode}
                                 isMobile={isMobile}
                                 likedIds={likedIds}
-                                onAuthRequired={!user ? () => setShowAuthPrompt(true) : undefined}
+                                onAuthRequired={!user ? handleAuthRequired : undefined}
                             />)}
                         </div>
                     ) : (
@@ -1261,7 +1291,7 @@ export default function ShopPage() {
                         </p>
                         {/* Modern Google Authentication Button */}
                         <GoogleLoginButton 
-                            onSuccess={() => setShowAuthPrompt(false)} 
+                            onSuccess={handleLoginSuccess} 
                             containerStyle={{ marginBottom: "1rem" }}
                         />
                         <button

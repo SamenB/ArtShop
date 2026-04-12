@@ -108,7 +108,7 @@ interface ArtCardProps {
     isMobile: boolean;
     liked?: boolean;
     onLike?: (id: number, newState: boolean) => void;
-    onAuthRequired?: () => void;
+    onAuthRequired?: (id: number) => void;
 }
 
 /**
@@ -250,7 +250,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         onClick={e => {
                             e.stopPropagation();
                             e.preventDefault();
-                            if (onAuthRequired) { onAuthRequired(); return; }
+                            if (onAuthRequired) { onAuthRequired(work.id); return; }
                             const newState = !liked;
                             setLiked(newState);
                             setLikeAnimating(true);
@@ -313,8 +313,9 @@ export default function GalleryPage() {
 
     const [error, setError] = useState<string | null>(null);
 
-    const [likedIds, setLikedIds] = useState<Set<number> | undefined>(undefined);
+    const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+    const [pendingLikeId, setPendingLikeId] = useState<number | null>(null);
 
     // Initial page load: Reset scroll to ensure consistent exhibition entry.
     useEffect(() => {
@@ -322,6 +323,34 @@ export default function GalleryPage() {
             window.scrollTo({ top: 0, behavior: "instant" });
         }
     }, []);
+
+    /**
+     * Executes the pending 'Like' action after successful login.
+     */
+    const handleLoginSuccess = async () => {
+        setShowAuthPrompt(false);
+        if (pendingLikeId) {
+            try {
+                // Optimistic update
+                setLikedIds(prev => new Set([...prev, pendingLikeId]));
+                await apiFetch(`${getApiUrl()}/users/me/likes/${pendingLikeId}`, { method: "POST" });
+                setPendingLikeId(null);
+            } catch (err) {
+                console.error("Auto-like after login failed", err);
+                setLikedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(pendingLikeId);
+                    return next;
+                });
+            }
+        }
+    };
+
+    /** Opens the authentication prompt and records which item was being liked. */
+    const handleAuthRequired = (id: number) => {
+        setPendingLikeId(id);
+        setShowAuthPrompt(true);
+    };
 
     // Initialize layout state based on device capability.
     useEffect(() => {
@@ -707,11 +736,10 @@ export default function GalleryPage() {
                                                         try {
                                                             if (newState) {
                                                                 await apiFetch(`${getApiUrl()}/users/me/likes/${id}`, { method: "POST" });
-                                                                setLikedIds(prev => prev ? new Set(prev).add(id) : new Set([id]));
+                                                                setLikedIds(prev => new Set(prev).add(id));
                                                             } else {
                                                                 await apiFetch(`${getApiUrl()}/users/me/likes/${id}`, { method: "DELETE" });
                                                                 setLikedIds(prev => {
-                                                                    if (!prev) return prev;
                                                                     const next = new Set(prev);
                                                                     next.delete(id);
                                                                     return next;
@@ -719,7 +747,7 @@ export default function GalleryPage() {
                                                             }
                                                         } catch {}
                                                     }}
-                                                    onAuthRequired={!user ? () => setShowAuthPrompt(true) : undefined}
+                                                    onAuthRequired={!user ? handleAuthRequired : undefined}
                                                 />
                                             ))}
                                         </div>
@@ -771,7 +799,7 @@ export default function GalleryPage() {
                         </p>
                         {/* Modern Google Authentication Button */}
                         <GoogleLoginButton 
-                            onSuccess={() => setShowAuthPrompt(false)} 
+                            onSuccess={handleLoginSuccess} 
                             containerStyle={{ marginBottom: "1rem" }}
                         />
                         <button

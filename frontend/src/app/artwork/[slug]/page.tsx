@@ -89,6 +89,7 @@ export default function ArtworkDetailPage() {
     const [liked, setLiked] = useState(false);
     const [likeAnimating, setLikeAnimating] = useState(false);
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+    const [pendingLike, setPendingLike] = useState(false);
 
     // Toggle these to switch designs easily
     const mobileThumbsRound = true;
@@ -170,6 +171,24 @@ export default function ArtworkDetailPage() {
             .catch(() => console.warn("Backend unavailable"))
             .finally(() => setLoading(false));
     }, [slug]);
+
+    /**
+     * Executes the pending 'Like' action after successful login.
+     */
+    const handleLoginSuccess = async () => {
+        setShowAuthPrompt(false);
+        if (pendingLike && work) {
+            try {
+                // Optimistic update
+                setLiked(true);
+                await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: "POST" });
+                setPendingLike(false);
+            } catch (err) {
+                console.error("Auto-like after login failed", err);
+                setLiked(false);
+            }
+        }
+    };
 
     // Fetch all artwork slugs for prev/next navigation
     useEffect(() => {
@@ -452,7 +471,11 @@ export default function ArtworkDetailPage() {
                     <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                     <button
                         onClick={async () => {
-                            if (!user) { setShowAuthPrompt(true); return; }
+                            if (!user) { 
+                                setPendingLike(true);
+                                setShowAuthPrompt(true); 
+                                return; 
+                            }
                             const newState = !liked;
                             setLiked(newState);
                             setLikeAnimating(true);
@@ -1611,7 +1634,7 @@ export default function ArtworkDetailPage() {
                             </p>
                             {/* Modern Google Authentication Button */}
                             <GoogleLoginButton 
-                                onSuccess={() => setShowAuthPrompt(false)} 
+                                onSuccess={handleLoginSuccess} 
                                 containerStyle={{ marginBottom: "1rem" }}
                             />
                             <button
