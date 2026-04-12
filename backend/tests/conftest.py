@@ -16,7 +16,8 @@ from src.config import settings
 
 # Provide a dummy token so MonobankService initialization passes tests.
 settings.MONOBANK_TOKEN = "dummy_test_token"
-
+# Ensure our test admin actually has admin privileges
+settings.ADMIN_EMAILS = ["test_admin@artshop.com"]
 from src.database import Base, engine_null_pool, new_session_null_pool
 from src.init import redis_manager
 from src.main import app

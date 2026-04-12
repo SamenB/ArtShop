@@ -1,6 +1,7 @@
 [
     {
         "title": "Starry Night",
+        "slug": "starry-night",
         "description": "Oil on canvas",
         "original_price": 10000,
         "original_status": "available",
@@ -11,6 +12,7 @@
     },
     {
         "title": "Mona Lisa Print",
+        "slug": "mona-lisa-print",
         "description": "High quality print",
         "original_price": null,
         "original_status": "sold",
@@ -21,6 +23,7 @@
     },
     {
         "title": "Urban Graffiti",
+        "slug": "urban-graffiti",
         "description": "Spray paint on wall",
         "original_price": 3000,
         "original_status": "available",
@@ -31,6 +34,7 @@
     },
     {
         "title": "Sunset Photo",
+        "slug": "sunset-photo",
         "description": "Landscape photography",
         "original_price": 1500,
         "original_status": "available",
@@ -41,6 +45,7 @@
     },
     {
         "title": "Digital Abstract",
+        "slug": "digital-abstract",
         "description": "AI generated art",
         "original_price": 2000,
         "original_status": "available",
@@ -51,6 +56,7 @@
     },
     {
         "title": "Water Lilies",
+        "slug": "water-lilies",
         "description": "Impressionist painting",
         "original_price": 8000,
         "original_status": "available",
@@ -61,6 +67,7 @@
     },
     {
         "title": "The Scream Copy",
+        "slug": "the-scream-copy",
         "description": "Museum quality replica",
         "original_price": 7000,
         "original_status": "available",
