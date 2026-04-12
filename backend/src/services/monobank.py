@@ -77,6 +77,7 @@ class MonobankService:
         order_reference: str | None = None,
         destination: str | None = None,
         basket_items: list[dict[str, Any]] | None = None,
+        customer_emails: list[str] | None = None,
         redirect_url: str | None = None,
         webhook_url: str | None = None,
         validity_seconds: int = 3600,
@@ -94,6 +95,7 @@ class MonobankService:
             order_reference: Unique merchant-defined reference for the order.
             destination: Human-readable description shown on the payment page.
             basket_items: Optional list of items for the payment receipt.
+            customer_emails: Optional list of customer emails for receipt delivery.
             redirect_url: URL to redirect buyer after payment (overrides default).
             webhook_url: URL for status change callbacks (overrides default).
             validity_seconds: Invoice TTL in seconds (default: 1 hour).
@@ -123,6 +125,8 @@ class MonobankService:
             merchant_info["comment"] = destination
         if basket_items:
             merchant_info["basketOrder"] = basket_items
+        if customer_emails:
+            merchant_info["customerEmails"] = customer_emails
         if merchant_info:
             payload["merchantPaymInfo"] = merchant_info
 
@@ -136,6 +140,7 @@ class MonobankService:
             currency,
             order_reference,
         )
+        logger.debug("Monobank invoice payload: {}", payload)
 
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(

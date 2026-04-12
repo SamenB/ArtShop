@@ -26,6 +26,14 @@ class PaymentCreateRequest(BaseModel):
         description="ISO 4217 alpha-3 currency code: 'UAH', 'USD', or 'EUR'.",
         pattern="^(UAH|USD|EUR)$",
     )
+    amount_coins: Optional[int] = Field(
+        default=None,
+        description=(
+            "Pre-converted total amount in the currency's smallest unit "
+            "(e.g., kopiykas for UAH). If provided, overrides server-side "
+            "conversion from the order's USD total_price."
+        ),
+    )
 
 
 class PaymentCreateResponse(BaseModel):

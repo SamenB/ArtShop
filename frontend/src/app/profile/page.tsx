@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
+import { usePreferences } from "@/context/PreferencesContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import SettingsTab from "@/app/admin/components/SettingsTab";
@@ -16,14 +17,30 @@ import OrdersTab from "@/app/admin/components/OrdersTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
 import { getApiUrl, apiFetch } from "@/utils";
 
-/** Represents a transaction record for a user. */
-interface Order {
+/** Represents an item within an order. */
+interface OrderItem {
     id: number;
     artwork_id: number;
     edition_type: string;
+    finish: string;
+    size: string | null;
     price: number;
+}
+
+/** Represents a full order record. */
+interface Order {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    total_price: number;
+    payment_status: string;
     created_at: string;
-    artwork?: any;
+    shipping_city: string | null;
+    shipping_country: string | null;
+    shipping_country_code: string | null;
+    items: OrderItem[];
 }
 
 /** Represents a lightweight artwork summary for liked/saved items. */
@@ -38,6 +55,41 @@ interface Artwork {
     originalStatus: string;
 }
 
+/** Status badge color mapping. */
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+    paid: { bg: "rgba(34,197,94,0.15)", text: "#22c55e", label: "Paid" },
+    pending: { bg: "rgba(250,204,21,0.15)", text: "#eab308", label: "Pending" },
+    awaiting_payment: { bg: "rgba(250,204,21,0.15)", text: "#eab308", label: "Awaiting Payment" },
+    processing: { bg: "rgba(96,165,250,0.15)", text: "#60a5fa", label: "Processing" },
+    failed: { bg: "rgba(239,68,68,0.15)", text: "#ef4444", label: "Failed" },
+    refunded: { bg: "rgba(168,85,247,0.15)", text: "#a855f7", label: "Refunded" },
+    mock_paid: { bg: "rgba(34,197,94,0.15)", text: "#22c55e", label: "Mock Paid" },
+    hold: { bg: "rgba(96,165,250,0.15)", text: "#60a5fa", label: "On Hold" },
+};
+
+function StatusBadge({ status }: { status: string }) {
+    const config = STATUS_COLORS[status] || { bg: "rgba(255,255,255,0.1)", text: "#999", label: status };
+    return (
+        <span
+            style={{
+                display: "inline-block",
+                padding: "0.2rem 0.65rem",
+                borderRadius: "999px",
+                fontSize: "0.65rem",
+                fontFamily: "var(--font-sans, system-ui)",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                backgroundColor: config.bg,
+                color: config.text,
+                whiteSpace: "nowrap",
+            }}
+        >
+            {config.label}
+        </span>
+    );
+}
+
 /**
  * Personal account management view.
  * Features a dynamic tabbed interface that upgrades to a full administrative 
@@ -45,12 +97,14 @@ interface Artwork {
  */
 export default function ProfilePage() {
     const { user, loading } = useUser();
+    const { convertPrice } = usePreferences();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<"orders" | "likes" | "admin">("orders");
     const [adminSubTab, setAdminSubTab] = useState<"artworks" | "settings" | "labels" | "orders">("artworks");
     const [orders, setOrders] = useState<Order[]>([]);
     const [likes, setLikes] = useState<Artwork[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
+    const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
 
     /** Security check: Redirect non-authenticated users to landing page. */
     useEffect(() => {
@@ -126,25 +180,101 @@ export default function ProfilePage() {
                     <div>
                         {/* Order History View */}
                         {activeTab === "orders" && (
-                            <div className="space-y-6">
+                            <div className="space-y-4">
                                 {orders.length === 0 ? (
                                     <div className="text-center py-20 border border-white/5 rounded-2xl bg-white/2">
                                         <p className="font-serif italic text-xl text-zinc-400 mb-4">No completed orders yet.</p>
                                         <Link href="/shop" className="text-sm font-sans uppercase tracking-widest hover:text-white transition-colors text-zinc-500 underline underline-offset-4">Browse Collection</Link>
                                     </div>
                                 ) : (
-                                    orders.map((o) => (
-                                        <div key={o.id} className="p-6 border border-white/10 rounded-xl bg-white/2 flex justify-between items-center group hover:border-white/20 transition-colors">
-                                            <div>
-                                                <p className="font-mono text-xs uppercase tracking-widest text-zinc-500 mb-2">Order #{o.id} • {new Date(o.created_at).toLocaleDateString()}</p>
-                                                <p className="font-serif text-lg text-white mb-1">Artwork Reference: {o.artwork_id}</p>
-                                                <p className="font-sans text-sm text-zinc-400">Edition Specification: {o.edition_type}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="font-serif italic text-2xl text-[#EAE5D9]">${o.price}</p>
-                                            </div>
-                                        </div>
-                                    ))
+                                    orders
+                                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                        .map((order) => {
+                                            const isExpanded = expandedOrder === order.id;
+                                            return (
+                                                <div
+                                                    key={order.id}
+                                                    className="border border-white/10 rounded-xl bg-white/[0.02] overflow-hidden transition-all hover:border-white/20"
+                                                >
+                                                    {/* Order Header (clickable) */}
+                                                    <button
+                                                        onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                                                        className="w-full p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-left"
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-3 flex-wrap mb-1.5">
+                                                                <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
+                                                                    Order #{order.id}
+                                                                </p>
+                                                                <StatusBadge status={order.payment_status} />
+                                                            </div>
+                                                            <p className="font-sans text-sm text-zinc-300">
+                                                                {new Date(order.created_at).toLocaleDateString("en-US", {
+                                                                    year: "numeric", month: "long", day: "numeric"
+                                                                })}
+                                                                {order.items && order.items.length > 0 && (
+                                                                    <span className="text-zinc-500 ml-2">
+                                                                        · {order.items.length} {order.items.length === 1 ? "item" : "items"}
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-4">
+                                                            <p className="font-serif italic text-xl text-[#EAE5D9]">
+                                                                {convertPrice(order.total_price)}
+                                                            </p>
+                                                            <span
+                                                                className="text-zinc-500 text-xs transition-transform"
+                                                                style={{ transform: isExpanded ? "rotate(180deg)" : "none" }}
+                                                            >
+                                                                ▼
+                                                            </span>
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Expanded Details */}
+                                                    {isExpanded && (
+                                                        <div className="border-t border-white/5 px-5 py-4 space-y-4" style={{ animation: "fadeIn 0.2s ease" }}>
+                                                            {/* Items */}
+                                                            {order.items && order.items.length > 0 && (
+                                                                <div>
+                                                                    <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Items</p>
+                                                                    <div className="space-y-2">
+                                                                        {order.items.map((item, idx) => (
+                                                                            <div key={idx} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
+                                                                                <div>
+                                                                                    <p className="font-sans text-sm text-zinc-200">
+                                                                                        Artwork #{item.artwork_id}
+                                                                                    </p>
+                                                                                    <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">
+                                                                                        {item.edition_type === "original" ? "Original" : "Print"}
+                                                                                        {item.size && ` · ${item.size}`}
+                                                                                        {item.finish && ` · ${item.finish}`}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <p className="font-sans text-sm text-zinc-300 font-medium">
+                                                                                    {convertPrice(item.price)}
+                                                                                </p>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Shipping Info */}
+                                                            {(order.shipping_city || order.shipping_country) && (
+                                                                <div>
+                                                                    <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Shipping To</p>
+                                                                    <p className="font-sans text-sm text-zinc-400">
+                                                                        {[order.shipping_city, order.shipping_country].filter(Boolean).join(", ")}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
                                 )}
                             </div>
                         )}

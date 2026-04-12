@@ -742,7 +742,7 @@ function AddressInput({
 
 export default function CheckoutPage() {
     const { items, cartTotal, clearCart } = useCart();
-    const { convertPrice } = usePreferences();
+    const { convertPrice, rates } = usePreferences();
     const { user, refreshUser } = useUser();
 
     // --- Form state ---
@@ -1007,10 +1007,14 @@ export default function CheckoutPage() {
                 return;
             }
 
+            // Convert USD total to UAH kopiykas for Monobank
+            const uahRate = rates?.UAH || 39.5;
+            const totalUahCoins = Math.round(currentTotal * uahRate * 100);
+
             const paymentRes = await apiFetch(`${getApiUrl()}/payments/create`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ order_id: orderId, currency: "UAH" }),
+                body: JSON.stringify({ order_id: orderId, currency: "UAH", amount_coins: totalUahCoins }),
             });
 
             if (!paymentRes.ok) {
@@ -1035,8 +1039,8 @@ export default function CheckoutPage() {
             <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "2rem" }}>
                 <div>
                     <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", marginBottom: "1rem", fontStyle: "italic" }}>Your cart is empty</h2>
-                    <Link href="/gallery" style={{ color: "#ec4899", textDecoration: "underline", fontFamily: "var(--font-sans)" }}>
-                        Return to Gallery
+                    <Link href="/shop" style={{ color: "#ec4899", textDecoration: "underline", fontFamily: "var(--font-sans)" }}>
+                        Back to Shop
                     </Link>
                 </div>
             </div>
@@ -1110,7 +1114,7 @@ export default function CheckoutPage() {
                                     {/* ---- Contact Info ---- */}
                                     <div>
                                         <h2 style={sectionTitle}>Contact Information</h2>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                                        <div className="checkout-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                                             <SmartInput label="First Name" name="firstName" required placeholder="John" value={formData.firstName} onChange={handleInput} onBlur={handleBlur} error={touched.firstName ? errors.firstName : undefined} valid={formData.firstName.trim().length >= 1 && !errors.firstName} data-error={!!(touched.firstName && errors.firstName)} />
                                             <SmartInput label="Last Name" name="lastName" required placeholder="Doe" value={formData.lastName} onChange={handleInput} onBlur={handleBlur} error={touched.lastName ? errors.lastName : undefined} valid={formData.lastName.trim().length >= 1 && !errors.lastName} data-error={!!(touched.lastName && errors.lastName)} />
                                             <SmartInput label="Email" name="email" type="email" required placeholder="john@example.com" value={formData.email} onChange={handleInput} onBlur={handleBlur} error={touched.email ? errors.email : undefined} valid={/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(formData.email.trim()) && !errors.email} data-error={!!(touched.email && errors.email)} />
@@ -1179,11 +1183,11 @@ export default function CheckoutPage() {
                                                 onChange={handleInput}
                                                 valid={formData.addressLine2.length > 0}
                                             />
-                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                                            <div className="checkout-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                                                 <SmartInput label="City" name="city" required placeholder="City / Town" value={formData.city} onChange={handleInput} onBlur={handleBlur} error={touched.city ? errors.city : undefined} valid={formData.city.length > 1 && !errors.city} data-error={!!(touched.city && errors.city)} />
                                                 <SmartInput label={stateLabel} name="state" placeholder={stateLabel} value={formData.state} onChange={handleInput} valid={formData.state.length > 1} />
                                             </div>
-                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                                            <div className="checkout-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                                                 <SmartInput label={postalLabel} name="postalCode" required placeholder={postalLabel} value={formData.postalCode} onChange={handleInput} onBlur={handleBlur} error={touched.postalCode ? errors.postalCode : undefined} valid={formData.postalCode.length > 2 && !errors.postalCode} data-error={!!(touched.postalCode && errors.postalCode)} />
                                                 <SmartInput label="Delivery Phone" name="deliveryPhone" type="tel" placeholder="If different from contact" value={formData.deliveryPhone} onChange={handleInput} valid={formData.deliveryPhone.length > 5} />
                                             </div>
@@ -1306,6 +1310,32 @@ export default function CheckoutPage() {
                                         {isSubmitting ? "Processing..." : `Pay ${convertPrice(currentTotal)}`}
                                     </button>
 
+                                    {/* ---- Payment Method Badges ---- */}
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
+                                        <span style={{ fontSize: "0.65rem", color: "#aaa", fontFamily: "var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.06em" }}>We accept</span>
+                                        {/* Visa */}
+                                        <svg width="34" height="22" viewBox="0 0 34 22" fill="none" style={{ opacity: 0.5 }}>
+                                            <rect width="34" height="22" rx="4" fill="#1A1F71"/>
+                                            <text x="17" y="14" textAnchor="middle" fill="white" fontSize="9" fontWeight="700" fontFamily="Arial">VISA</text>
+                                        </svg>
+                                        {/* Mastercard */}
+                                        <svg width="34" height="22" viewBox="0 0 34 22" fill="none" style={{ opacity: 0.5 }}>
+                                            <rect width="34" height="22" rx="4" fill="#252525"/>
+                                            <circle cx="14" cy="11" r="6" fill="#EB001B" opacity="0.9"/>
+                                            <circle cx="20" cy="11" r="6" fill="#F79E1B" opacity="0.9"/>
+                                        </svg>
+                                        {/* Google Pay */}
+                                        <svg width="38" height="22" viewBox="0 0 38 22" fill="none" style={{ opacity: 0.5 }}>
+                                            <rect width="38" height="22" rx="4" fill="#fff" stroke="#ddd" strokeWidth="0.5"/>
+                                            <text x="19" y="13.5" textAnchor="middle" fill="#5F6368" fontSize="7" fontWeight="600" fontFamily="Arial">G Pay</text>
+                                        </svg>
+                                        {/* Apple Pay */}
+                                        <svg width="38" height="22" viewBox="0 0 38 22" fill="none" style={{ opacity: 0.5 }}>
+                                            <rect width="38" height="22" rx="4" fill="#000"/>
+                                            <text x="19" y="13.5" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="600" fontFamily="Arial"> Pay</text>
+                                        </svg>
+                                    </div>
+
                                     <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", color: "#999", textAlign: "center", lineHeight: 1.5 }}>
                                         You will be redirected to a secure Monobank payment page.
                                         Your financial information is never stored on our servers.
@@ -1415,6 +1445,11 @@ export default function CheckoutPage() {
                     }
                     .checkout-summary {
                         order: -1;
+                    }
+                }
+                @media (max-width: 480px) {
+                    .checkout-two-col {
+                        grid-template-columns: 1fr !important;
                     }
                 }
                 /* Override Google Places Autocomplete dropdown styling */

@@ -84,8 +84,17 @@ async def create_payment(
     if user_id and order.user_id and order.user_id != user_id:
         raise ObjectNotFoundException(detail="Order not found")
 
-    # 3. Build basket items for the Monobank receipt.
+    # 3. Determine the final amount to charge.
+    # If the frontend provides a pre-converted amount_coins (e.g., UAH kopiykas),
+    # use it to avoid exchange rate discrepancies between frontend display and Monobank.
+    if payment_data.amount_coins and payment_data.amount_coins > 0:
+        final_amount_coins = payment_data.amount_coins
+    else:
+        final_amount_coins = order.total_price * 100  # Fallback: treat as same currency.
+
+    # 4. Build basket items for the Monobank receipt.
     EDITION_LABELS = {"original": "Original Painting", "print": "Fine Art Print"}
+    order_total_usd_coins = sum(item.price for item in order.items) * 100 or 1
     basket_items = []
     for item in order.items:
         # Use actual artwork title if the relationship is loaded.
@@ -93,33 +102,65 @@ async def create_payment(
         name = artwork.title if artwork else f"Artwork #{item.artwork_id}"
         edition_label = EDITION_LABELS.get(item.edition_type, item.edition_type)
         if item.size:
-            edition_label += f" · {item.size}"
+            edition_label += f", {item.size}"
+
+        # Scale each item's price proportionally to match the converted total.
+        item_fraction = (item.price * 100) / order_total_usd_coins
+        item_sum = round(final_amount_coins * item_fraction)
 
         basket_item = {
-            "name": f"{name} — {edition_label}",
+            "name": f"{name} - {edition_label}",
             "qty": 1,
-            "sum": item.price * 100,  # Convert to smallest currency unit.
-            "total": item.price * 100,
+            "sum": item_sum,
+            "total": item_sum,
             "unit": "pcs",
         }
 
-        # Add icon if available globally accessible URL
-        if artwork and artwork.images and len(artwork.images) > 0:
-            # Monobank requires an absolute URL. Assuming stored images are.
-            basket_item["icon"] = artwork.images[0]
+        # Add product thumbnail for Monobank payment page display.
+        # Monobank requires an absolute, publicly accessible URL.
+        if artwork and artwork.images:
+            first_img = artwork.images[0] if artwork.images else None
+            if first_img:
+                # Extract the path from either string or dict format.
+                img_path = None
+                if isinstance(first_img, str):
+                    img_path = first_img
+                elif isinstance(first_img, dict):
+                    img_path = first_img.get("thumb") or first_img.get("medium") or first_img.get("original")
+
+                if img_path:
+                    # Build absolute URL using production domain.
+                    if img_path.startswith("http"):
+                        basket_item["icon"] = img_path
+                    elif img_path.startswith("/"):
+                        basket_item["icon"] = f"https://samen-bondarenko.com{img_path}"
 
         basket_items.append(basket_item)
 
-    # 4. Create the Monobank invoice.
+    # Adjust last basket item so totals match exactly (rounding correction).
+    if basket_items:
+        basket_sum = sum(bi["total"] for bi in basket_items)
+        diff = final_amount_coins - basket_sum
+        if diff != 0:
+            basket_items[-1]["sum"] += diff
+            basket_items[-1]["total"] += diff
+
+    # 5. Create the Monobank invoice with enriched merchant info.
     item_count = len(order.items)
+    buyer_name = f"{order.first_name} {order.last_name}".strip()
     description = (
-        f"Samen Bondarenko Gallery — Order #{order.id} "
+        f"Samen Bondarenko Gallery - Order #{order.id} "
+        f"for {buyer_name} "
         f"({item_count} {'item' if item_count == 1 else 'items'})"
     )
+
+    # Include customer email for auto-fill on Monobank payment page.
+    customer_emails = [order.email] if order.email else []
+
     try:
         mono = MonobankService()
         invoice_data = await mono.create_invoice(
-            amount_coins=order.total_price * 100,  # Convert to kopiykas/cents.
+            amount_coins=final_amount_coins,
             currency=payment_data.currency,
             order_reference=f"artshop-order-{order.id}",
             destination=description,
