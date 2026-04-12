@@ -126,7 +126,11 @@ async def create_payment(
                 if isinstance(first_img, str):
                     img_path = first_img
                 elif isinstance(first_img, dict):
-                    img_path = first_img.get("thumb") or first_img.get("medium") or first_img.get("original")
+                    img_path = (
+                        first_img.get("thumb")
+                        or first_img.get("medium")
+                        or first_img.get("original")
+                    )
 
                 if img_path:
                     # Build absolute URL using production domain.
@@ -153,9 +157,6 @@ async def create_payment(
         f"for {buyer_name} "
         f"({item_count} {'item' if item_count == 1 else 'items'})"
     )
-
-    # Include customer email for auto-fill on Monobank payment page.
-    customer_emails = [order.email] if order.email else []
 
     try:
         mono = MonobankService()

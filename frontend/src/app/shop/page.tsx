@@ -366,6 +366,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                         onClick={handleLike}
                         onMouseEnter={() => setImgHovered(false)}
                         onMouseLeave={() => setImgHovered(false)}
+                        onPointerDown={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
                         aria-label={liked ? "Unlike artwork" : "Like artwork"}
                         style={{
                             background: "none",

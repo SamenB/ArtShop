@@ -185,38 +185,6 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                     flexShrink: 0,
                 }}
             >
-                {/* Floating title box */}
-                {gridMode !== "3" && (
-                    <div style={{
-                        position: "absolute",
-                        bottom: `${emptyBottom}px`,
-                        left: "50%",
-                        transform: `translateX(-50%) translateY(calc(100% + ${isMobile ? "0.4rem" : "0.6rem"}))`,
-                        maxWidth: `max(10px, calc(100% - ${textPad * 2}px))`,
-                        pointerEvents: "none",
-                        padding: isMobile ? "0.15rem 0.5rem" : "0.2rem 0.7rem",
-                        backgroundColor: "transparent",
-                        textAlign: "center",
-                        zIndex: 2,
-                    }}>
-                        <p style={{
-                            fontFamily: "var(--font-sans)",
-                            fontSize: isMobile ? (gridMode === "1" ? "0.85rem" : "0.78rem") : (gridMode === "1" ? "0.90rem" : "0.85rem"),
-                            fontWeight: 400,
-                            fontStyle: "italic",
-                            letterSpacing: "0.01em",
-                            color: "#666",
-                            margin: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            lineHeight: 1.2,
-                        }}>
-                            {work.title}
-                        </p>
-                    </div>
-                )}
-
                 {imgSrc ? (
                     <img
                         src={imgSrc}
@@ -245,57 +213,80 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
                     }} />
                 )}
-
-                {/* Like button — floating bottom-right of image */}
-                <button
-                    onClick={e => {
-                        e.stopPropagation();
-                        if (onAuthRequired) { onAuthRequired(); return; }
-                        const newState = !liked;
-                        setLiked(newState);
-                        setLikeAnimating(true);
-                        setTimeout(() => setLikeAnimating(false), 400);
-                        onLike?.(work.id, newState);
-                    }}
-                    aria-label={liked ? "Unlike" : "Like"}
-                    style={{
-                        position: "absolute",
-                        bottom: `${Math.max(emptyBottom, 0) + 8}px`,
-                        right: `${Math.max(textPad, 0) + 8}px`,
-                        zIndex: 10,
-                        background: "rgba(255,255,255,0.88)",
-                        border: "none",
-                        borderRadius: "50%",
-                        width: gridMode === "3" ? "28px" : "34px",
-                        height: gridMode === "3" ? "28px" : "34px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                        transform: likeAnimating ? "scale(1.35)" : "scale(1)",
-                        transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s",
-                        opacity: liked ? 1 : 0.75,
-                        backdropFilter: "blur(4px)",
-                        outline: "none",
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-                    onMouseLeave={e => e.currentTarget.style.opacity = liked ? "1" : "0.75"}
-                >
-                    <svg
-                        width={gridMode === "3" ? "13" : "16"}
-                        height={gridMode === "3" ? "13" : "16"}
-                        viewBox="0 0 24 24"
-                        fill={liked ? "#e84057" : "none"}
-                        stroke={liked ? "#e84057" : "#999"}
-                        strokeWidth={liked ? "1.5" : "2"}
-                        strokeLinecap="round" strokeLinejoin="round"
-                        style={{ transition: "fill 0.25s, stroke 0.25s", pointerEvents: "none" }}
-                    >
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                </button>
             </div>
+
+            {/* Metadata overlay: Bottom-anchored and horizontally aligned to the image's vertical edge. */}
+            {(gridMode !== "3" || !isMobile) && (
+                <div style={{
+                    marginTop: `-${emptyBottom}px`,
+                    paddingTop: gridMode === "3" ? "0.4rem" : "0.6rem",
+                    paddingLeft: `${textPad}px`,
+                    paddingRight: `${textPad}px`,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: "0.5rem",
+                }}>
+                    {/* Left: text info */}
+                    <div style={{
+                        display: "flex", flexDirection: "column", gap: "0rem",
+                        flex: 1, minWidth: 0,
+                    }}>
+                        <p style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: gridMode === "1" ? "0.90rem" : gridMode === "2" ? "0.85rem" : "0.78rem",
+                            fontWeight: 400, fontStyle: "italic", letterSpacing: "0.01em",
+                            color: "#333", margin: 0,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            lineHeight: 1.2
+                        }}>
+                            {work.title}
+                        </p>
+                    </div>
+
+                    {/* Right: Like button — prominent, stops card-hover propagation on pointer enter/leave */}
+                    <button
+                        onClick={e => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (onAuthRequired) { onAuthRequired(); return; }
+                            const newState = !liked;
+                            setLiked(newState);
+                            setLikeAnimating(true);
+                            setTimeout(() => setLikeAnimating(false), 400);
+                            onLike?.(work.id, newState);
+                        }}
+                        onPointerDown={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
+                        aria-label={liked ? "Unlike" : "Like"}
+                        style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            padding: "6px", marginTop: "-2px", flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            transform: likeAnimating ? "scale(1.35)" : "scale(1)",
+                            transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                            outline: "none",
+                        }}
+                    >
+                        <svg
+                            width={gridMode === "3" ? "18" : gridMode === "2" ? "22" : "26"}
+                            height={gridMode === "3" ? "18" : gridMode === "2" ? "22" : "26"}
+                            viewBox="0 0 24 24"
+                            fill={liked ? "#e84057" : "none"}
+                            stroke={liked ? "#e84057" : "#888"}
+                            strokeWidth={liked ? "1.5" : "2"}
+                            strokeLinecap="round" strokeLinejoin="round"
+                            style={{
+                                transition: "fill 0.25s ease, stroke 0.25s ease, filter 0.25s ease",
+                                filter: liked ? "drop-shadow(0 2px 6px rgba(232,64,87,0.4))" : "none",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

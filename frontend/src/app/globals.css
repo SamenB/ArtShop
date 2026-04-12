@@ -312,7 +312,7 @@ h3 {
      when mouse enters actual artwork pixels, not the card box.
      Shadow enhancement is also handled inline. */
 @media (hover: hover) and (pointer: fine) {
-  .art-card:active .art-card-inner {
+  .art-card:active:not(:has(button:active)) .art-card-inner {
     transform: scale(0.98);
     box-shadow: 1px 5px 15px rgba(28, 25, 22, 0.80), 0 1px 5px rgba(28, 25, 22, 0.44) !important;
   }
