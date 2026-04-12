@@ -8,6 +8,7 @@ volumes:
   prometheus_data:
   grafana_data:
   media_data:
+  next_cache:
 
 
 services:
@@ -162,6 +163,9 @@ services:
       - "3000"
     depends_on:
       - api
+    volumes:
+      # Persistent cache to avoid EACCES permission errors in production
+      - next_cache:/app/.next/cache
     networks:
       - artshop-net
 

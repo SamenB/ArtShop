@@ -55,6 +55,10 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
         for idx, temp_file_path in enumerate(temp_paths):
             file_path = Path(temp_file_path)
             if not file_path.exists():
+                logger.error(
+                    "Temp file not found — possible volume mismatch between api and worker containers: {}",
+                    file_path,
+                )
                 continue
 
             with Image.open(file_path) as img:

@@ -137,11 +137,14 @@ async def upload_artwork_images(
     Uploads multiple images for a specific artwork.
     Images are saved to a temporary directory and then processed asynchronously via Celery.
     """
-    os.makedirs("static/temp", exist_ok=True)
+    # ВАЖНО: temp-папка должна быть внутри shared volume (static/images/temp),
+    # чтобы Celery worker (отдельный контейнер) смог получить доступ к файлам.
+    # static/images монтируется через media_data volume в api и worker.
+    os.makedirs("static/images/temp", exist_ok=True)
     temp_paths = []
     for idx, file in enumerate(files):
         # Use idx to prevent collisions when the same filename is uploaded twice
-        temp_path = f"static/temp/art_{artwork_id}_{idx}_{file.filename}"
+        temp_path = f"static/images/temp/art_{artwork_id}_{idx}_{file.filename}"
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         temp_paths.append(temp_path)
