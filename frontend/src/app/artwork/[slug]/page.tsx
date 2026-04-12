@@ -89,7 +89,6 @@ export default function ArtworkDetailPage() {
     const [liked, setLiked] = useState(false);
     const [likeAnimating, setLikeAnimating] = useState(false);
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-    const [pendingLike, setPendingLike] = useState(false);
 
     // Toggle these to switch designs easily
     const mobileThumbsRound = true;
@@ -172,23 +171,7 @@ export default function ArtworkDetailPage() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    /**
-     * Executes the pending 'Like' action after successful login.
-     */
-    const handleLoginSuccess = async () => {
-        setShowAuthPrompt(false);
-        if (pendingLike && work) {
-            try {
-                // Optimistic update
-                setLiked(true);
-                await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: "POST" });
-                setPendingLike(false);
-            } catch (err) {
-                console.error("Auto-like after login failed", err);
-                setLiked(false);
-            }
-        }
-    };
+    const { addPendingLike } = usePreferences();
 
     // Fetch all artwork slugs for prev/next navigation
     useEffect(() => {
@@ -472,7 +455,7 @@ export default function ArtworkDetailPage() {
                     <button
                         onClick={async () => {
                             if (!user) { 
-                                setPendingLike(true);
+                                if (work) addPendingLike(work.id);
                                 setShowAuthPrompt(true); 
                                 return; 
                             }
@@ -1634,7 +1617,7 @@ export default function ArtworkDetailPage() {
                             </p>
                             {/* Modern Google Authentication Button */}
                             <GoogleLoginButton 
-                                onSuccess={handleLoginSuccess} 
+                                onSuccess={() => setShowAuthPrompt(false)} 
                                 containerStyle={{ marginBottom: "1rem" }}
                             />
                             <button

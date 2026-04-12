@@ -722,7 +722,6 @@ export default function ShopPage() {
     const [likedIds, setLikedIds] = useState<Set<number> | undefined>(undefined);
     /** Controls the sign-in prompt modal for unauthenticated likes. */
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-    const [pendingLikeId, setPendingLikeId] = useState<number | null>(null);
 
     /** Filter state: Arrays for multi-select, primitives for ranges. */
     const [categoryFilter, setCategoryFilter] = useState<string[]>([]);    // "originals" | "prints"
@@ -744,7 +743,7 @@ export default function ShopPage() {
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
     const [gridLoaded, setGridLoaded] = useState(false);
 
-    const { globalPrintPrice, convertPrice, units } = usePreferences();
+    const { globalPrintPrice, convertPrice, units, addPendingLike } = usePreferences();
     const itemsPerPage = gridMode === "3" ? 36 : gridMode === "2" ? 24 : 12;
     const [visibleCount, setVisibleCount] = useState(12);
 
@@ -964,32 +963,9 @@ export default function ShopPage() {
         return list;
     }, [allProducts, categoryFilter, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeCollections, activeMediums, globalPrintPrice, getUnitVal]);
 
-    /** 
-     * Executes the pending 'Like' action after successful login.
-     */
-    const handleLoginSuccess = async () => {
-        setShowAuthPrompt(false);
-        if (pendingLikeId) {
-            try {
-                // Optimistic update
-                setLikedIds(prev => new Set([...(prev || []), pendingLikeId]));
-                await apiFetch(`${getApiUrl()}/users/me/likes/${pendingLikeId}`, { method: "POST" });
-                setPendingLikeId(null);
-            } catch (err) {
-                console.error("Auto-like after login failed", err);
-                // Rollback if needed (optional since the list will refresh anyway on next fetch)
-                setLikedIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(pendingLikeId);
-                    return next;
-                });
-            }
-        }
-    };
-
     /** Opens the authentication prompt and records which item was being liked. */
     const handleAuthRequired = (id: number) => {
-        setPendingLikeId(id);
+        addPendingLike(id);
         setShowAuthPrompt(true);
     };
 
@@ -1308,7 +1284,7 @@ export default function ShopPage() {
                         </p>
                         {/* Modern Google Authentication Button */}
                         <GoogleLoginButton 
-                            onSuccess={handleLoginSuccess} 
+                            onSuccess={() => setShowAuthPrompt(false)} 
                             containerStyle={{ marginBottom: "1rem" }}
                         />
                         <button

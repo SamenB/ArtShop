@@ -32,6 +32,10 @@ interface PreferencesContextType {
     convertPrice: (usdPrice: number) => string;
     /** Global administrative setting for base print pricing. */
     globalPrintPrice: number;
+    /** IDs of artworks liked while anonymous, waiting for login to sync. */
+    pendingLikes: number[];
+    addPendingLike: (id: number) => void;
+    clearPendingLikes: () => void;
 }
 
 /** UI labels for the language selector. */
@@ -80,6 +84,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     });
     
     const [globalPrintPrice, setGlobalPrintPrice] = useState<number>(150);
+    const [pendingLikes, setPendingLikes] = useState<number[]>([]);
 
     // Fetch administrative site settings on initialization.
     useEffect(() => {
@@ -131,6 +136,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             // Silently ignore corrupted storage data.
         }
         setLoaded(true);
+
+        // Load pending likes separately
+        try {
+            const savedLikes = localStorage.getItem("artshop_pending_likes");
+            if (savedLikes) {
+                setPendingLikes(JSON.parse(savedLikes));
+            }
+        } catch {}
     }, []);
 
     // Persist preference changes back to local storage.
@@ -142,6 +155,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             // Silently ignore storage quota/permission issues.
         }
     }, [language, currency, units, loaded]);
+
+    // Persist pending likes
+    useEffect(() => {
+        if (!loaded) return;
+        try {
+            localStorage.setItem("artshop_pending_likes", JSON.stringify(pendingLikes));
+        } catch {}
+    }, [pendingLikes, loaded]);
 
     /** Updates language and applies smart defaults for currency/units. */
     const setLanguage = (lang: Language) => {
@@ -158,6 +179,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     
     const setCurrency = (cur: Currency) => setCurrencyState(cur);
     const setUnits = (u: Units) => setUnitsState(u);
+    
+    const addPendingLike = (id: number) => {
+        setPendingLikes(prev => {
+            if (prev.includes(id)) return prev;
+            return [...prev, id];
+        });
+    };
+
+    const clearPendingLikes = () => setPendingLikes([]);
 
     /** Converts a base USD price to the active currency and formats it for display. */
     const convertPrice = (usdPrice: number) => {
@@ -184,7 +214,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             setUnits, 
             rates, 
             convertPrice, 
-            globalPrintPrice 
+            globalPrintPrice,
+            pendingLikes,
+            addPendingLike,
+            clearPendingLikes
         }}>
             {children}
         </PreferencesContext.Provider>

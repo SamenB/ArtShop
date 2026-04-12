@@ -7,6 +7,7 @@
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
+import { usePreferences } from "./PreferencesContext";
 
 /** Represents the authenticated user's profile data. */
 export interface User {
@@ -70,10 +71,33 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
     }, []);
 
+    const { pendingLikes, clearPendingLikes } = usePreferences();
+
     // Initial load: determine authentication status on mount.
     useEffect(() => {
         refreshUser();
     }, [refreshUser]);
+
+    /**
+     * Synchronize pending likes once the user is authenticated.
+     */
+    useEffect(() => {
+        if (user && pendingLikes.length > 0) {
+            const sync = async () => {
+                const ids = [...pendingLikes];
+                clearPendingLikes(); // Clear locally immediately to prevent double-sync
+
+                for (const id of ids) {
+                    try {
+                        await apiFetch(`${getApiUrl()}/users/me/likes/${id}`, { method: "POST" });
+                    } catch (err) {
+                        console.error(`Failed to sync pending like for artwork ${id}`, err);
+                    }
+                }
+            };
+            sync();
+        }
+    }, [user, pendingLikes, clearPendingLikes]);
 
     return (
         <UserContext.Provider value={{ user, loading, refreshUser, logout }}>
