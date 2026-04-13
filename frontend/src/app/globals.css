@@ -268,9 +268,11 @@ h3 {
   }
 
   .art-card-inner {
-    /* Allow it to reach full width natively, constraining height to prevent extreme verticals */
+    /* Allow it to reach full width natively.
+       82vh: most portrait paintings fill the full container width.
+       55vh was too restrictive — made tall verticals appear finger-thin. */
     max-width: 100% !important;
-    max-height: 55vh !important;
+    max-height: 82vh !important;
   }
 
   .art-grid {
@@ -474,36 +476,46 @@ img:focus { outline: none; }
 
 /* ─────────────────────────────────────────────
    Premium Magnetic Scroll Animation (Scroll-Driven)
-   Mobile Only, no opacity fading.
+   Mobile Only. Linear easing = true 1:1 magnetic feel.
+   'cover' range = animation plays over much longer scroll arc.
+   No opacity — pure transform, zero color shift.
 ───────────────────────────────────────────── */
 @media (max-width: 1023px) {
   @keyframes magnetic-pull {
-    0% {
-      transform: translateY(160px);
+    from {
+      transform: translateY(36px) scale(0.97);
     }
-    100% {
-      transform: translateY(0);
+    to {
+      transform: translateY(0) scale(1);
     }
   }
 
   .magnetic-scroll {
-    /* Fallback for completely unsupported browsers */
     transform: translateY(0);
   }
 
   @supports (animation-timeline: view()) {
     .magnetic-scroll {
-      /* Viscous magnet effect: starts slow, snaps into place */
-      animation: magnetic-pull cubic-bezier(0.5, 0, 0.2, 1) both;
+      /* Linear easing: card moves exactly 1:1 with your thumb — the true magnetic feel.
+         'cover 30%' range: animation plays from first pixel of entry until
+         the card covers 30% of the viewport — long, graceful, unhurried. */
+      animation: magnetic-pull linear both;
       animation-timeline: view();
-      /* Stays hidden below, then finishes quickly in the bottom 30-40% of the element's height */
-      animation-range: entry 0% entry 45%;
+      animation-range: entry 0% cover 30%;
     }
-    
+
+    /* First 2 cards are already in viewport on load —
+       skip animation entirely to prevent mid-transition jitter */
+    .no-scroll-anim {
+      animation: none !important;
+      transform: translateY(0) !important;
+      opacity: 1 !important;
+    }
+
     .magnetic-scroll-header {
-      animation: magnetic-pull cubic-bezier(0.5, 0, 0.2, 1) both;
+      animation: magnetic-pull linear both;
       animation-timeline: view();
-      animation-range: entry 0% entry 100%;
+      animation-range: entry 0% cover 20%;
     }
   }
 }

@@ -21,8 +21,14 @@ class SiteSettingsOrm(Base):
     # Texts
     about_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    social_link: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    social_instagram: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    social_telegram: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    social_threads: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    social_link: Mapped[str | None] = mapped_column(String(200), nullable=True)  # legacy fallback
     studio_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    footer_text_discover: Mapped[str | None] = mapped_column(Text, nullable=True)
+    footer_text_services: Mapped[str | None] = mapped_column(Text, nullable=True)
+    footer_text_circle: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Images
     artist_home_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

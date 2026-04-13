@@ -131,11 +131,12 @@ const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string
  * Features dynamic aspect-ratio calculation to align metadata perfectly with
  * the image's left edge. Displays original status and print pricing.
  */
-function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedIds, onAuthRequired }: {
+function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedIds, onAuthRequired, listIndex }: {
     product: Product; zoneH: number; gridMode: string; isMobile: boolean;
     initialLiked?: boolean;
     likedIds?: Set<number>;
     onAuthRequired?: (id: number) => void;
+    listIndex?: number;
 }) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
@@ -219,7 +220,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
 
     return (
         <div
-            className="art-card magnetic-scroll"
+            className={`art-card magnetic-scroll${listIndex !== undefined && listIndex < 2 ? " no-scroll-anim" : ""}`}
             style={{
                 display: "flex", flexDirection: "column", width: "100%", padding: 0,
                 /* Unified scale: image + text move as one glass plate */
@@ -252,8 +253,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                             onMouseLeave={() => setImgHovered(false)}
                             style={{
                                 display: "block",
-                                maxWidth: isHorizontal || isSquare ? "78%" : "80%",
-                                maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
+                                maxWidth: "78%",
+                                maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.92}px`,
                                 width: "auto", height: "auto",
                                 borderRadius: "1px",
                                 alignSelf: "center",
@@ -1227,13 +1228,14 @@ export default function ShopPage() {
 
                     {!loading && !error && (filtered.length > 0 ? (
                         <div className="art-grid" style={{ display: "grid", gridTemplateColumns: getColumns(), justifyContent: "start", gap: getGap(), alignItems: "start" }}>
-                            {displayed.map(p => <ProductCard
+                            {displayed.map((p, i) => <ProductCard
                                 key={p.id}
                                 product={p}
                                 zoneH={IMAGE_ZONE[gridMode] || 380}
                                 gridMode={gridMode}
                                 isMobile={isMobile}
                                 likedIds={likedIds}
+                                listIndex={i}
                                 onAuthRequired={!user ? handleAuthRequired : undefined}
                             />)}
                         </div>

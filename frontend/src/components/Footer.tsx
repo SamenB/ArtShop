@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { FormEvent, useState, useId } from "react";
+import { FormEvent, useState, useId, useEffect } from "react";
 import { Globe, CreditCard, MapPin } from "lucide-react";
+import { getApiUrl, apiFetch } from "@/utils";
 
 const InstagramLogo = ({ size = 24, color = "currentColor" }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} xmlns="http://www.w3.org/2000/svg">
@@ -35,6 +36,14 @@ export default function Footer() {
     const inputId = useId();
     const [email, setEmail] = useState("");
     const [subscribed, setSubscribed] = useState(false);
+    const [settings, setSettings] = useState<any>(null);
+
+    useEffect(() => {
+        apiFetch(`${getApiUrl()}/settings`)
+            .then(res => res.json())
+            .then(data => setSettings(data))
+            .catch(err => console.error("Error fetching footer settings:", err));
+    }, []);
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
@@ -208,37 +217,33 @@ export default function Footer() {
                 .payment-icons {
                     display: flex;
                     align-items: center;
-                    gap: 0.6rem;
+                    gap: 0.5rem;
                     margin-top: 0.6rem;
                     flex-wrap: wrap;
                 }
                 
                 .payment-badge {
-                    background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    padding: 0.3rem 0.6rem;
-                    border-radius: 6px;
+                    background: #FFFFFF;
+                    padding: 0 0.5rem;
+                    border-radius: 4px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    color: #FFFFFF;
-                    letter-spacing: 0.03em;
-                    height: 28px;
+                    height: 26px;
                     box-sizing: border-box;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
                 }
                 
-                /* Mastercard circles */
+                /* Mastercard circles within white badge */
                 .mc-circles {
                     display: flex;
                     align-items: center;
                 }
                 .mc-circle-red {
-                    width: 12px; height: 12px; border-radius: 50%; background: #EB001B; margin-right: -5px; z-index: 10;
+                    width: 14px; height: 14px; border-radius: 50%; background: #EB001B; margin-right: -6px; z-index: 10;
                 }
                 .mc-circle-yellow {
-                    width: 12px; height: 12px; border-radius: 50%; background: #F79E1B; opacity: 0.9;
+                    width: 14px; height: 14px; border-radius: 50%; background: #F79E1B; opacity: 0.95;
                 }
                 
                 .social-row {
@@ -332,16 +337,16 @@ export default function Footer() {
             <div className="footer-wrap">
                 <div className="social-mobile">
                     <div className="social-row">
-                        <a href="https://instagram.com/samenbondarenko" target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Instagram">
+                        <a href={settings?.social_instagram || "https://instagram.com/samen_bondarenko"} target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Instagram">
                             <InstagramLogo size={40} />
                         </a>
-                        <a href="https://t.me/samenbondarenko" target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Telegram">
+                        <a href={settings?.social_telegram || "https://t.me/samen_bondarenko"} target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Telegram">
                             <TelegramLogo size={40} />
                         </a>
-                        <a href="https://threads.net/@samenbondarenko" target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Threads">
+                        <a href={settings?.social_threads || "https://threads.net/@samen_bondarenko"} target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Threads">
                             <ThreadsLogo size={40} />
                         </a>
-                        <a href="mailto:hello@samenbondarenko.com" className="social-link" aria-label="Email">
+                        <a href={`mailto:${settings?.contact_email || "hello@samenbondarenko.com"}`} className="social-link" aria-label="Email">
                             <MailSolidLogo size={50} />
                         </a>
                     </div>
@@ -349,20 +354,43 @@ export default function Footer() {
 
                 <div className="footer-top">
                     {/* Column 1 */}
-                    <div>
-                        <h3 className="footer-col-title">Discover the Collection</h3>
-                        <p className="footer-col-desc">
-                            Welcome to a space where modern vision meets classical mastery. Explore an exclusive collection of original paintings and limited edition prints directly from the artist's studio.
-                        </p>
-                        <Link href="/gallery" className="footer-col-link">Explore Gallery</Link>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                        <div className="social-desktop">
+                            <h3 className="footer-col-title" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Connect
+                            </h3>
+                            <div className="social-row" style={{ marginTop: '0.75rem' }}>
+                                <a href={settings?.social_instagram || "https://instagram.com/samen_bondarenko"} target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Instagram">
+                                    <InstagramLogo size={40} />
+                                </a>
+                                <a href={settings?.social_telegram || "https://t.me/samen_bondarenko"} target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Telegram">
+                                    <TelegramLogo size={40} />
+                                </a>
+                                <a href={settings?.social_threads || "https://threads.net/@samen_bondarenko"} target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Threads">
+                                    <ThreadsLogo size={40} />
+                                </a>
+                                <a href={`mailto:${settings?.contact_email || "hello@samenbondarenko.com"}`} className="social-link" aria-label="Email">
+                                    <MailSolidLogo size={50} />
+                                </a>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="footer-col-title">Discover the Collection</h3>
+                            <p className="footer-col-desc">
+                                {settings?.footer_text_discover || "Welcome to a space where modern vision meets classical mastery. Explore an exclusive collection of original paintings and limited edition prints directly from the artist's studio."}
+                            </p>
+                            <Link href="/gallery" className="footer-col-link">Explore Gallery</Link>
+                        </div>
                     </div>
 
                     {/* Column 2 */}
                     <div>
-                        <h3 className="footer-col-title">Collector Services</h3>
-                        <p className="footer-col-desc">
-                            We pride ourselves on providing a premium experience, offering worldwide delivery and secure payment options for all our collectors globally.
-                        </p>
+                        <div>
+                            <h3 className="footer-col-title">Collector Services</h3>
+                            <p className="footer-col-desc">
+                                {settings?.footer_text_services || "We pride ourselves on providing a premium experience, offering worldwide delivery and secure payment options for all our collectors globally."}
+                            </p>
+                        </div>
                         
                         <div className="features-wrapper">
                             <div className="feature-item">
@@ -377,10 +405,32 @@ export default function Footer() {
                                 <div className="feature-text">
                                     <strong>Secure Payments</strong>
                                     <div className="payment-icons">
-                                        <div className="payment-badge" style={{ fontStyle: "italic", fontFamily: "sans-serif" }}>VISA</div>
+                                        {/* VISA */}
+                                        <div className="payment-badge" style={{ fontStyle: "italic", fontFamily: "sans-serif", color: "#1A1F71", fontSize: "0.85rem", fontWeight: 800 }}>VISA</div>
+                                        
+                                        {/* Mastercard */}
                                         <div className="payment-badge mc-circles">
                                             <div className="mc-circle-red" />
                                             <div className="mc-circle-yellow" />
+                                        </div>
+                                        
+                                        {/* Apple Pay */}
+                                        <div className="payment-badge" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", color: "#000000", fontSize: "0.80rem", fontWeight: 600 }}>
+                                            <svg viewBox="0 0 384 512" fill="currentColor" style={{ height: "13px", marginRight: "3px", transform: "translateY(-1px)" }}>
+                                                <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+                                            </svg>
+                                            Pay
+                                        </div>
+                                        
+                                        {/* Google Pay */}
+                                        <div className="payment-badge" style={{ fontFamily: '"Product Sans", "Google Sans", Roboto, sans-serif', fontSize: "0.85rem" }}>
+                                            <svg viewBox="0 0 24 24" style={{ height: "14px", width: "14px", marginRight: "1px" }}>
+                                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                                            </svg>
+                                            <span style={{ color: "#5F6368", fontWeight: 500, letterSpacing: "-0.2px" }}>Pay</span>
                                         </div>
                                     </div>
                                 </div>
@@ -389,7 +439,7 @@ export default function Footer() {
                                 <MapPin size={22} className="feature-icon" strokeWidth={1.5} />
                                 <div className="feature-text">
                                     <strong>Studio Location</strong>
-                                    <p>Kyiv, Ukraine 🇺🇦</p>
+                                    <p>{settings?.studio_address || "Kyiv, Ukraine"}</p>
                                 </div>
                             </div>
                         </div>
@@ -399,7 +449,7 @@ export default function Footer() {
                     <div>
                         <h3 className="footer-col-title">Join our Circle</h3>
                         <p className="footer-col-desc">
-                            Subscribe for early access to new works, exhibition announcements, and exclusive insights delivered to your inbox.
+                            {settings?.footer_text_circle || "Subscribe for early access to new works, exhibition announcements, and exclusive insights delivered to your inbox."}
                         </p>
                         {subscribed ? (
                              <p style={{ color: "#FFFFFF", fontStyle: "italic", marginTop: "1rem" }}>
@@ -420,26 +470,6 @@ export default function Footer() {
                                 <button type="submit" className="nl-btn">Subscribe</button>
                             </form>
                         )}
-                        
-                        <div className="social-desktop" style={{ marginTop: '3.5rem' }}>
-                            <h3 className="footer-col-title" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Connect
-                            </h3>
-                            <div className="social-row">
-                                <a href="https://instagram.com/samenbondarenko" target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Instagram">
-                                    <InstagramLogo size={40} />
-                                </a>
-                                <a href="https://t.me/samenbondarenko" target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Telegram">
-                                    <TelegramLogo size={40} />
-                                </a>
-                                <a href="https://threads.net/@samenbondarenko" target="_blank" rel="noopener noreferrer" className="social-link" aria-label="Threads">
-                                    <ThreadsLogo size={40} />
-                                </a>
-                                <a href="mailto:hello@samenbondarenko.com" className="social-link" aria-label="Email">
-                                    <MailSolidLogo size={50} />
-                                </a>
-                            </div>
-                        </div>
                     </div>
                 </div>
 

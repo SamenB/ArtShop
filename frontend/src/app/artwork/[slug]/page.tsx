@@ -457,7 +457,7 @@ export default function ArtworkDetailPage() {
                 </div>
 
                 {/* Mobile Title above the image */}
-                <div className="mobile-title-row" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem", marginTop: "1rem", textAlign: "left", gap: "1rem" }}>
+                <div className="mobile-title-row" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: "0", marginTop: "1rem", textAlign: "left", gap: "1rem" }}>
                     <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                     <button
                         onClick={async () => {
@@ -498,7 +498,7 @@ export default function ArtworkDetailPage() {
                     <div className="artwork-img-col">
 
                         {/* ── Image area: fills viewport height minus header-row ── */}
-                        <div className="artwork-img-area" style={{ marginTop: layoutMetrics.winW < 768 ? "-0.5rem" : "0" }}>
+                        <div className="artwork-img-area" style={{ marginTop: layoutMetrics.winW < 768 ? "0.75rem" : "0" }}>
                             {/* Wrapper that leaves 130px safely at the bottom for thumbnails on PC, but just flows dynamically on Mobile */}
                             <div className="artwork-slider-wrap">
 
@@ -819,7 +819,7 @@ export default function ArtworkDetailPage() {
                             </button>
                         </div>
 
-                        <div style={{ position: "relative", marginTop: layoutMetrics.winW < 768 ? "0.25rem" : "1rem", width: layoutMetrics.winW < 768 ? "calc(100% + 4rem)" : "100%", marginLeft: layoutMetrics.winW < 768 ? "-2rem" : "0", marginRight: layoutMetrics.winW < 768 ? "-2rem" : "0" }}>
+                        <div style={{ position: "relative", marginTop: layoutMetrics.winW < 768 ? "-0.5rem" : "1rem", width: layoutMetrics.winW < 768 ? "calc(100% + 4rem)" : "100%", marginLeft: layoutMetrics.winW < 768 ? "-2rem" : "0", marginRight: layoutMetrics.winW < 768 ? "-2rem" : "0" }}>
                             {/* ── Fluid Morphing Folder Tabs ── */}
                             {(() => {
                                 const isSmall = layoutMetrics.winW < 768;

@@ -15,6 +15,7 @@ import SettingsTab from "@/app/admin/components/SettingsTab";
 import ArtworksTab from "@/app/admin/components/ArtworksTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
+import FooterTab from "@/app/admin/components/FooterTab";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
 /** Represents an item within an order. */
@@ -106,7 +107,7 @@ export default function ProfilePage() {
     const { convertPrice } = usePreferences();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<"orders" | "likes" | "admin">("orders");
-    const [adminSubTab, setAdminSubTab] = useState<"artworks" | "settings" | "labels" | "orders">("artworks");
+    const [adminSubTab, setAdminSubTab] = useState<"artworks" | "settings" | "labels" | "orders" | "footer">("artworks");
     const [orders, setOrders] = useState<Order[]>([]);
     const [likes, setLikes] = useState<Artwork[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
@@ -363,7 +364,7 @@ export default function ProfilePage() {
                         {activeTab === "admin" && user.is_admin && (
                             <div className="mt-4 border border-white/5 rounded-2xl bg-black/40 p-6 lg:p-10 shadow-2xl">
                                 <div className="flex gap-4 mb-8 border-b border-white/10 overflow-x-auto pb-4">
-                                    {(["artworks", "settings", "labels", "orders"] as const).map((tab) => (
+                                    {(["artworks", "settings", "footer", "labels", "orders"] as const).map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setAdminSubTab(tab)}
@@ -378,6 +379,7 @@ export default function ProfilePage() {
                                     {adminSubTab === "artworks" && <ArtworksTab />}
                                     {adminSubTab === "settings" && <SettingsTab />}
                                     {adminSubTab === "labels" && <LabelsTab />}
+                                    {adminSubTab === "footer" && <FooterTab />}
                                     {adminSubTab === "orders" && <OrdersTab />}
                                 </div>
                             </div>

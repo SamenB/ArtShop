@@ -90,14 +90,14 @@ const sortWorks = (works: Artwork[], key: SortKey): Artwork[] => {
 const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
 
 /** Visual styling and labeling for artwork status indicators. */
-const STATUS: Record<string, { label: string; color: string }> = {
-    available: { label: "AVAILABLE", color: "#6DB87E" },
-    sold: { label: "SOLD", color: "#C0392B" },
-    reserved: { label: "RESERVED", color: "#D4A017" },
-    not_for_sale: { label: "NOT FOR SALE", color: "#999" },
-    on_exhibition: { label: "ON EXHIBITION", color: "#2980B9" },
-    archived: { label: "ARCHIVED", color: "#7f8c8d" },
-    digital: { label: "DIGITAL", color: "#8E44AD" },
+const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string; textColor: string }> = {
+    available:     { label: "AVAILABLE",    badgeBg: "rgba(100,185,120,0.13)", badgeText: "#3a7a4a",  textColor: "#6DB87E" },
+    sold:          { label: "SOLD",          badgeBg: "rgba(180,60,60,0.11)",   badgeText: "#9b2c2c",  textColor: "#C05050" },
+    reserved:      { label: "RESERVED",      badgeBg: "rgba(200,160,50,0.13)",  badgeText: "#836a1a",  textColor: "#C8A32A" },
+    not_for_sale:  { label: "NOT FOR SALE",  badgeBg: "rgba(120,120,120,0.11)", badgeText: "#555",     textColor: "#999" },
+    on_exhibition: { label: "ON EXHIBITION", badgeBg: "rgba(50,130,200,0.11)",  badgeText: "#20527a",  textColor: "#4A90BE" },
+    archived:      { label: "ARCHIVED",      badgeBg: "rgba(100,100,100,0.10)", badgeText: "#666",     textColor: "#7f8c8d" },
+    digital:       { label: "DIGITAL ONLY",  badgeBg: "rgba(120,90,200,0.12)",  badgeText: "#5a3a9a",  textColor: "#8E44AD" },
 };
 
 /** Properties for the individual artwork exhibition card. */
@@ -117,6 +117,7 @@ interface ArtCardProps {
  * Dynamically calculates padding and positioning to anchor title boxes strictly to image edges.
  */
 function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked, onLike, onAuthRequired }: ArtCardProps) {
+    const { units } = usePreferences();
     const ori = (work.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
     const isSquare = ori === "square";
@@ -131,6 +132,17 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
 
     // Sync on parent prop change (e.g., after DB load)
     useEffect(() => { setLiked(initialLiked || false); }, [initialLiked]);
+
+    /** Format dimensions based on user's persistent unit preference (cm/in). */
+    const sizeStr = useMemo(() => {
+        const w = units === "in" ? work.width_in : work.width_cm;
+        const h = units === "in" ? work.height_in : work.height_cm;
+        if (w && h) return `${w} x ${h} ${units}`;
+        return (work.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m: string, width: string, height: string) => {
+            if (units === "cm") return `${Math.round(Number(width) * 2.54)} x ${Math.round(Number(height) * 2.54)} cm`;
+            return m;
+        });
+    }, [work, units]);
 
     /**
      * Recalculates visual offsets to ensure the floating title title box 
@@ -195,8 +207,8 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         onLoad={recalc}
                         style={{
                             display: "block",
-                            maxWidth: isHorizontal || isSquare ? "78%" : "80%",
-                            maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
+                            maxWidth: "78%",
+                            maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.92}px`,
                             width: "auto", height: "auto",
                             borderRadius: "1px",
                             alignSelf: "center",
@@ -244,6 +256,48 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         }}>
                             {work.title}
                         </p>
+
+                        <p style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                            fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                        }}>
+                            {sizeStr}
+                        </p>
+                        {st && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1px" }}>
+                                <span style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    backgroundColor: st.badgeBg,
+                                    border: `1px solid ${st.badgeText}33`,
+                                    borderRadius: "4px",
+                                    padding: "2px 7px 2px 5px",
+                                }}>
+                                    <span style={{
+                                        display: "inline-block",
+                                        width: "5px",
+                                        height: "5px",
+                                        borderRadius: "50%",
+                                        backgroundColor: st.badgeText,
+                                        flexShrink: 0,
+                                    }} />
+                                    <span style={{
+                                        fontFamily: "var(--font-sans)",
+                                        fontSize: gridMode === "1" ? "0.60rem" : gridMode === "2" ? "0.58rem" : "0.55rem",
+                                        fontWeight: 600,
+                                        letterSpacing: "0.07em",
+                                        textTransform: "uppercase",
+                                        color: st.badgeText,
+                                        lineHeight: 1,
+                                        whiteSpace: "nowrap",
+                                    }}>
+                                        {st.label}
+                                    </span>
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right: Like button — prominent, stops card-hover propagation on pointer enter/leave */}
@@ -643,72 +697,45 @@ export default function GalleryPage() {
             <div style={{ display: "flex", flexDirection: "column" }}>
                 {sorted.map(({ name, id, bg, works, totalInGroup }, idx) => {
                     return (
-                        <section key={name} style={{ paddingBottom: "1.5rem", marginBottom: 0 }}>
-                            {/* Visual hierarchy header: True centered collection title. */}
-                            <div className="magnetic-scroll-header" style={{ width: "100%" }}>
+                        <section key={name} style={{ paddingBottom: "1.25rem", marginBottom: 0 }}>
+                            {/* Visual hierarchy header: Full-width ribbon styled collection title. */}
+                            <div className="magnetic-scroll-header" style={{ width: "100%", margin: isMobile ? "0 0 0.5rem 0" : "0 0 1rem 0" }}>
                                 <div
                                     style={{
                                         maxWidth: "1600px", margin: "0 auto",
                                         width: "100%", display: "flex", alignItems: "center",
-                                        justifyContent: "space-between", padding: isMobile ? "0.5rem 1.25rem 0.5rem" : "0.5rem 2.5rem 1rem",
-                                        background: "none", border: "none", textAlign: "center",
+                                        justifyContent: "flex-start", padding: "0",
+                                        background: "none", border: "none", textAlign: "left",
                                     }}
                                 >
-                                    {/* Pure structural balance spacer. */}
-                                    <div style={{ width: "20px", flexShrink: 0 }} aria-hidden="true" />
-
-                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", flexGrow: 1 }}>
+                                    <div style={{ 
+                                        display: "flex", alignItems: "center", gap: "1rem",
+                                        backgroundColor: "transparent",
+                                        width: "100%",
+                                        padding: isMobile ? "0.6rem 1.25rem" : "0.6rem 1.5rem",
+                                        borderBottom: "1px solid rgba(26,26,24,0.35)",
+                                    }}>
                                         <h2 style={{
-                                            fontFamily: "var(--font-artwork-title)",
-                                            fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
-                                            fontWeight: 400,
-                                            fontStyle: "normal",
+                                            fontFamily: "var(--font-sans)",
+                                            fontSize: "1.05rem",
+                                            fontWeight: 500,
+                                            letterSpacing: "0.05em",
+                                            textTransform: "uppercase",
                                             color: "var(--color-charcoal)",
-                                            lineHeight: 1.1,
                                             margin: 0,
                                         }}>{name}</h2>
-                                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", fontWeight: 300, color: "var(--color-muted)", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: "10px", justifyContent: "center" }}>
-                                            {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""} works
-                                            {user?.is_admin && id && (
-                                                <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
-                                                    <input
-                                                        type="color"
-                                                        value={bg || "#404040"}
-                                                        onChange={(e) => handleColorChange(id, e.target.value)}
-                                                        style={{
-                                                            width: "24px", height: "24px", padding: "0", border: "1px solid #ccc",
-                                                            borderRadius: "4px", cursor: "pointer", background: "none"
-                                                        }}
-                                                        title="Pick Collection Atmosphere Color"
-                                                    />
-                                                    <button
-                                                        onClick={() => handleColorChange(id, null)}
-                                                        style={{
-                                                            fontFamily: "var(--font-sans)", fontSize: "0.65rem", padding: "3px 6px",
-                                                            border: "1px solid rgba(26,26,24,0.2)", borderRadius: "4px", background: "transparent",
-                                                            cursor: "pointer", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em"
-                                                        }}
-                                                        title="Revert to Atmospheric Default"
-                                                    >
-                                                        Reset
-                                                    </button>
-                                                </div>
-                                            )}
+                                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", fontWeight: 300, color: "var(--color-muted)", position: 'relative', top: '1px' }}>
+                                            {works.length} {works.length < totalInGroup ? `of ${totalInGroup}` : ""}
                                         </span>
-                                    </div>
-
-                                    <div style={{ width: "20px", display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-                                        {/* Decorative slot. */}
                                     </div>
                                 </div>
                             </div>
 
                             <div style={{ display: "block" }}>
-                                <div style={{ overflow: "hidden", padding: "0 0 30px 0", margin: "0" }}>
+                                <div style={{ overflow: "hidden", padding: "20px 0 20px 0", margin: "-15px 0 0 0" }}>
                                     <div className="magnetic-scroll" style={{
                                         width: "100%",
-                                        padding: isMobile ? "1rem 1.25rem 2rem" : "1.5rem 0 3.5rem",
-                                        backgroundColor: "rgba(26, 26, 24, 0.04)",
+                                        padding: isMobile ? "0 1.25rem 1rem" : "0 0 0.5rem",
                                     }}>
                                         <div className={`art-grid`} style={{
                                             maxWidth: "1600px",
