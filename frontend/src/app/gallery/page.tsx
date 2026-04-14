@@ -768,7 +768,7 @@ export default function GalleryPage() {
                     return (
                         <section key={name} style={{ paddingBottom: "1.25rem", marginBottom: 0 }}>
                             {/* Visual hierarchy header: Full-width ribbon styled collection title. */}
-                            <div className="magnetic-scroll-header" style={{ width: "100%", margin: isMobile ? "0 0 0.5rem 0" : "0 0 1rem 0" }}>
+                            <div style={{ width: "100%", margin: isMobile ? "0 0 0.5rem 0" : "0 0 1rem 0" }}>
                                 <div
                                     style={{
                                         maxWidth: "1600px", margin: "0 auto",

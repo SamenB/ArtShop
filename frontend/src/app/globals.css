@@ -606,12 +606,6 @@ img:focus { outline: none; }
       transform: translateY(0) !important;
       opacity: 1 !important;
     }
-
-    .magnetic-scroll-header {
-      animation: magnetic-pull linear both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 20%;
-    }
   }
 }
 
