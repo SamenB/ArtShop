@@ -619,13 +619,13 @@ export default function GalleryPage() {
     /** Returns dynamic CSS gap spacing based on current grid intensity and device. */
     const getGap = () => {
         if (isMobile) {
-            if (gridMode === "1") return "3.2rem";
-            if (gridMode === "2") return "1rem";
-            if (gridMode === "3") return "0.5rem";
+            if (gridMode === "1") return "3.2rem 1rem";
+            if (gridMode === "2") return "1rem 0.5rem";
+            if (gridMode === "3") return "0.5rem 0.5rem";
         }
-        if (gridMode === "1") return "4rem 100px";
-        if (gridMode === "2") return "3rem 80px";
-        return "2rem 50px";
+        if (gridMode === "1") return "4rem 24px";
+        if (gridMode === "2") return "3rem 16px";
+        return "2rem 10px";
     };
 
     return (

@@ -1100,19 +1100,19 @@ function ShopPageContent() {
     const getGap = () => {
         if (isMobile) {
             if (isPhone) {
-                if (gridMode === "1") return "2.25rem";
-                if (gridMode === "2") return "1rem";
-                return "0.5rem";
+                if (gridMode === "1") return "2.25rem 1rem";
+                if (gridMode === "2") return "1rem 0.5rem";
+                return "0.5rem 0.5rem";
             } else {
                 // Tablet gap
                 if (gridMode === "1") return "3rem 1.5rem";
-                if (gridMode === "2") return "2rem 1.25rem";
-                return "1rem 1rem";
+                if (gridMode === "2") return "2rem 1rem";
+                return "1rem 0.5rem";
             }
         }
-        if (gridMode === "1") return "4rem 80px";
-        if (gridMode === "2") return "3rem 40px"; // Reduced to fit 3 columns
-        return "2rem 30px";
+        if (gridMode === "1") return "4rem 24px";
+        if (gridMode === "2") return "3rem 16px";
+        return "2rem 10px";
     };
 
     /** 
