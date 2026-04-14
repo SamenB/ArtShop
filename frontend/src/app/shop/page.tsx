@@ -117,13 +117,13 @@ const IMAGE_ZONE: Record<string, number> = { "1": 560, "2": 440, "3": 300 };
  * Colors use soft semantic palette: muted reds/ambers/blues/greys.
  */
 const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string; textColor: string }> = {
-    available:     { label: "AVAILABLE",    badgeBg: "rgba(100,185,120,0.13)", badgeText: "#3a7a4a",  textColor: "#6DB87E" },
-    sold:          { label: "SOLD",          badgeBg: "rgba(180,60,60,0.11)",   badgeText: "#9b2c2c",  textColor: "#C05050" },
-    reserved:      { label: "RESERVED",      badgeBg: "rgba(200,160,50,0.13)",  badgeText: "#836a1a",  textColor: "#C8A32A" },
-    not_for_sale:  { label: "NOT FOR SALE",  badgeBg: "rgba(120,120,120,0.11)", badgeText: "#555",     textColor: "#999" },
-    on_exhibition: { label: "ON EXHIBITION", badgeBg: "rgba(50,130,200,0.11)",  badgeText: "#20527a",  textColor: "#4A90BE" },
-    archived:      { label: "ARCHIVED",      badgeBg: "rgba(100,100,100,0.10)", badgeText: "#666",     textColor: "#7f8c8d" },
-    digital:       { label: "DIGITAL ONLY",  badgeBg: "rgba(120,90,200,0.12)",  badgeText: "#5a3a9a",  textColor: "#8E44AD" },
+    available: { label: "AVAILABLE", badgeBg: "rgba(100,185,120,0.13)", badgeText: "#3a7a4a", textColor: "#6DB87E" },
+    sold: { label: "SOLD", badgeBg: "rgba(180,60,60,0.11)", badgeText: "#9b2c2c", textColor: "#C05050" },
+    reserved: { label: "RESERVED", badgeBg: "rgba(200,160,50,0.13)", badgeText: "#836a1a", textColor: "#C8A32A" },
+    not_for_sale: { label: "NOT FOR SALE", badgeBg: "rgba(120,120,120,0.11)", badgeText: "#555", textColor: "#999" },
+    on_exhibition: { label: "ON EXHIBITION", badgeBg: "rgba(50,130,200,0.11)", badgeText: "#20527a", textColor: "#4A90BE" },
+    archived: { label: "ARCHIVED", badgeBg: "rgba(100,100,100,0.10)", badgeText: "#666", textColor: "#7f8c8d" },
+    digital: { label: "DIGITAL ONLY", badgeBg: "rgba(120,90,200,0.12)", badgeText: "#5a3a9a", textColor: "#8E44AD" },
 };
 
 /**
@@ -1285,8 +1285,8 @@ export default function ShopPage() {
                             Sign in to save artworks you love and revisit them anytime from your profile.
                         </p>
                         {/* Modern Google Authentication Button */}
-                        <GoogleLoginButton 
-                            onSuccess={() => setShowAuthPrompt(false)} 
+                        <GoogleLoginButton
+                            onSuccess={() => setShowAuthPrompt(false)}
                             containerStyle={{ marginBottom: "1rem" }}
                         />
                         <button
