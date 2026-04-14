@@ -387,6 +387,15 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                                 </span>
                             </div>
                         )}
+                        {product.original_status === "available" && product.original_price && (
+                            <p style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                                fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                            }}>
+                                Original <span style={{ fontWeight: 500, color: "#555" }}>{convertPrice(product.original_price)}</span>
+                            </p>
+                        )}
                         {product.has_prints && product.base_print_price && (
                             <p style={{
                                 fontFamily: "var(--font-sans)",
