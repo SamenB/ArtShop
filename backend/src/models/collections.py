@@ -18,14 +18,13 @@ if TYPE_CHECKING:
 class CollectionsOrm(Base):
     """
     Represents a group of artworks (e.g., 'Nature', 'Abstract').
-    Used for categorizing artworks and applying visual styles (bg_color) on the frontend.
+    Used for categorizing artworks.
     """
 
     __tablename__ = "collections"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     title: Mapped[str] = mapped_column(String(100), unique=True)
-    bg_color: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
     artworks: Mapped[list["ArtworksOrm"]] = relationship(back_populates="collection")

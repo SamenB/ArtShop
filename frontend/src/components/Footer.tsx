@@ -478,7 +478,7 @@ export default function Footer() {
                 <div className="footer-bottom">
                     <Link href="/" className="footer-brand" aria-label="Home">
                         <Image
-                            src="/logo-v2.png"
+                            src="/logo-v4.png"
                             alt="Samen Bondarenko"
                             width={340}
                             height={80}

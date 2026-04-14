@@ -273,9 +273,9 @@ export default function Navbar() {
                     <div style={{ display: "flex", alignItems: "center" }}>
                         {/* Logo */}
                         <div style={{ display: "flex", alignItems: "center" }}>
-                            <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none", flexShrink: 0 }}>
+                            <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none", flexShrink: 0, marginLeft: isMobile ? "-5px" : "-15px" }}>
                                 <Image
-                                    src="/logo-v2.png"
+                                    src="/logo-v4.png"
                                     alt="Samen Bondarenko"
                                     width={600}
                                     height={200}

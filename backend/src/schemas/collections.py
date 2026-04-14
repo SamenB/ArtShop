@@ -11,9 +11,6 @@ class CollectionAdd(BaseModel):
     """
 
     title: str = Field(..., description="Title of the collection")
-    bg_color: str | None = Field(
-        None, description="Hex color code for collection background gradient"
-    )
 
 
 class CollectionPatch(BaseModel):
@@ -22,9 +19,6 @@ class CollectionPatch(BaseModel):
     """
 
     title: str | None = Field(None, description="Title of the collection")
-    bg_color: str | None = Field(
-        None, description="Hex color code for collection background gradient"
-    )
 
 
 class Collection(CollectionAdd):

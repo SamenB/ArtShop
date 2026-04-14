@@ -25,8 +25,9 @@ interface Artwork {
     slug?: string;
     title: string;
     description: string;
-    medium: string;
+    medium?: string;
     materials?: string;
+    style?: string;
     size: string;
     original_price: number;
     original_status: OriginalStatus;
@@ -43,6 +44,7 @@ interface Artwork {
     gradientFrom?: string;
     /** UI fallback gradient end color. */
     gradientTo?: string;
+    tags?: Array<{ title: string; category: string; id: number }>;
 }
 
 /** 
@@ -61,7 +63,6 @@ const DEFAULT_GRADIENTS = [
 interface CollectionData {
     id: number;
     title: string;
-    bg_color?: string;
 }
 
 /** Supported sorting strategies for the gallery exhibition. */
@@ -358,6 +359,7 @@ export default function GalleryPage() {
     const [allCollections, setAllCollections] = useState<CollectionData[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortKey, setSortKey] = useState<SortKey>("default");
+    const [groupBy, setGroupBy] = useState<"collection" | "year" | "medium">("collection");
     const [lightbox, setLightbox] = useState<{ works: Artwork[]; index: number } | null>(null);
     const [cols, setCols] = useState(3);
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
@@ -464,25 +466,43 @@ export default function GalleryPage() {
      * a logically grouped exhibition experience.
      */
     const collectionsMap = useMemo(() => {
-        return allArtworks.reduce<Record<string, { id?: number, bg?: string, works: Artwork[] }>>((acc, a) => {
-            let collectionName = "Original Paintings";
-            let collId: number | undefined;
-            let bgStr: string | undefined;
+        return allArtworks.reduce<Record<string, { id?: number, works: Artwork[] }>>((acc, a) => {
+            let groupName = "Uncategorized";
+            let groupId: number | undefined;
 
-            if (a.collection_id) {
-                const comp = allCollections.find(c => c.id === a.collection_id);
-                if (comp) {
-                    collectionName = comp.title;
-                    collId = comp.id;
-                    bgStr = comp.bg_color;
+            if (groupBy === "collection") {
+                groupName = "Original Paintings";
+                if (a.collection_id) {
+                    const comp = allCollections.find(c => c.id === a.collection_id);
+                    if (comp) {
+                        groupName = comp.title;
+                        groupId = comp.id;
+                    }
+                }
+            } else if (groupBy === "year") {
+                if ((a as any).year) {
+                    groupName = String((a as any).year);
+                } else if ((a as any).created_at) {
+                    groupName = new Date((a as any).created_at).getFullYear().toString();
+                } else if (a.slug && a.slug.match(/(?:19|20)\d{2}/)) {
+                    groupName = a.slug.match(/(?:19|20)\d{2}/)![0];
+                } else {
+                    groupName = "Unknown Year";
+                }
+            } else if (groupBy === "medium") {
+                const mediumTag = a.tags?.find((t) => t.category === "medium");
+                groupName = mediumTag?.title || a.medium || a.style || a.materials || "Other";
+                // Capitalize properly if it exists, or provide safe fallback
+                if (groupName !== "Other") {
+                    groupName = groupName.charAt(0).toUpperCase() + groupName.slice(1);
                 }
             }
 
-            if (!acc[collectionName]) acc[collectionName] = { id: collId, bg: bgStr, works: [] };
-            acc[collectionName].works.push(a);
+            if (!acc[groupName]) acc[groupName] = { id: groupId, works: [] };
+            acc[groupName].works.push(a);
             return acc;
         }, {});
-    }, [allArtworks, allCollections]);
+    }, [allArtworks, allCollections, groupBy]);
 
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
@@ -525,34 +545,29 @@ export default function GalleryPage() {
         const groups = Object.entries(collectionsMap).map(([name, data]) => ({
             name,
             id: data.id,
-            bg: data.bg,
             works: sortWorks(data.works, sortKey)
         }));
 
+        if (groupBy === "year") {
+            groups.sort((a, b) => {
+                if (a.name === "Unknown Year") return 1;
+                if (b.name === "Unknown Year") return -1;
+                const yearA = parseInt(a.name) || 0;
+                const yearB = parseInt(b.name) || 0;
+                return yearB - yearA;
+            });
+        } else if (groupBy === "medium") {
+            groups.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
         let remaining = visibleCount;
         return groups.map(g => {
-            if (remaining <= 0) return { name: g.name, id: g.id, bg: g.bg, works: [], totalInGroup: g.works.length };
+            if (remaining <= 0) return { name: g.name, id: g.id, works: [], totalInGroup: g.works.length };
             const toShow = g.works.slice(0, remaining);
             remaining -= toShow.length;
-            return { name: g.name, id: g.id, bg: g.bg, works: toShow, totalInGroup: g.works.length };
+            return { name: g.name, id: g.id, works: toShow, totalInGroup: g.works.length };
         }).filter(g => g.works.length > 0);
-    }, [sortKey, visibleCount, collectionsMap]);
-
-    /** Admin utility: Updates a collection's atmospheric background color. */
-    const handleColorChange = async (colId: number, color: string | null) => {
-        try {
-            const res = await apiFetch(`${getApiUrl()}/collections/${colId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bg_color: color }),
-            });
-            if (res.ok) {
-                setAllCollections(prev => prev.map(c => c.id === colId ? { ...c, bg_color: color || undefined } : c));
-            }
-        } catch (e) {
-            console.error("Administrative update failed:", e);
-        }
-    };
+    }, [sortKey, visibleCount, collectionsMap, groupBy]);
 
     // Ensure visible count reacts elegantly to grid density changes.
     useEffect(() => {
@@ -596,27 +611,58 @@ export default function GalleryPage() {
             <div style={{ maxWidth: "1600px", margin: "0 auto", padding: isMobile ? "1rem 1rem 2rem 1rem" : "1.5rem 2.5rem 2rem" }}>
                 {/* Control Bar: Sorting and Layout density toggles. */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? "0.75rem" : "1rem", flexWrap: isMobile ? "nowrap" : "wrap", overflowX: isMobile ? "auto" : "visible", paddingBottom: isMobile ? "5px" : 0, scrollbarWidth: "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>Sort</span>
-                        <div style={{ position: "relative" }}>
-                            <select
-                                value={sortKey}
-                                onChange={(e) => setSortKey(e.target.value as SortKey)}
-                                style={{
-                                    appearance: "none",
-                                    backgroundColor: "transparent",
-                                    border: "1px solid rgba(26,26,24,0.2)",
-                                    borderRadius: "20px",
-                                    padding: "0.35rem 2.2rem 0.35rem 1rem",
-                                    fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)",
-                                    cursor: "pointer", outline: "none"
-                                }}
-                            >
-                                {SORT_OPTIONS.map(opt => (
-                                    <option key={opt.key} value={opt.key}>{opt.label}</option>
-                                ))}
-                            </select>
-                            <span style={{ position: "absolute", right: "0.8rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.65rem", color: "var(--color-charcoal)", fontWeight: 300 }}>∨</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.75rem" : "1.5rem", flexShrink: 0 }}>
+                        {/* GROUP BY TOGGLES / SELECTOR */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--color-muted)", display: isMobile ? "none" : "inline" }}>Group By</span>
+                            
+                            {isMobile ? (
+                                <div style={{ position: "relative" }}>
+                                    <select
+                                        value={groupBy}
+                                        onChange={(e) => setGroupBy(e.target.value as any)}
+                                        style={{
+                                            appearance: "none",
+                                            backgroundColor: "transparent",
+                                            border: "1px solid rgba(26,26,24,0.2)",
+                                            borderRadius: "20px",
+                                            padding: "0.35rem 2.2rem 0.35rem 1rem",
+                                            fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-charcoal)",
+                                            cursor: "pointer", outline: "none"
+                                        }}
+                                    >
+                                        <option value="collection">Collection</option>
+                                        <option value="year">Year</option>
+                                        <option value="medium">Medium</option>
+                                    </select>
+                                    <span style={{ position: "absolute", right: "0.8rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.65rem", color: "var(--color-charcoal)", fontWeight: 300 }}>∨</span>
+                                </div>
+                            ) : (
+                                <div style={{ display: "flex", alignItems: "center", backgroundColor: "var(--color-cream-dark)", borderRadius: "6px", padding: "2px" }}>
+                                    {[
+                                        { id: "collection", label: "Collection" },
+                                        { id: "year", label: "Year" },
+                                        { id: "medium", label: "Medium" }
+                                    ].map(opt => (
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => setGroupBy(opt.id as any)}
+                                            style={{
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                                padding: "4px 12px",
+                                                fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 500, letterSpacing: "0.05em",
+                                                backgroundColor: groupBy === opt.id ? "#ffffff" : "transparent",
+                                                color: groupBy === opt.id ? "var(--color-charcoal)" : "var(--color-muted)",
+                                                border: "none", borderRadius: "4px",
+                                                boxShadow: groupBy === opt.id ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                                                cursor: "pointer", transition: "all 0.2s"
+                                            }}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
