@@ -128,8 +128,9 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
-    const [measuredImgH, setMeasuredImgH] = useState(0);
-    const [measuredImgW, setMeasuredImgW] = useState(0);
+    const [measuredImgH, setMeasuredImgH] = useState(0); // Track exact image height safely
+    const [measuredImgW, setMeasuredImgW] = useState(0); // Track exact image width safely
+    const [imgHovered, setImgHovered] = useState(false);
     const [liked, setLiked] = useState(initialLiked || false);
     const [likeAnimating, setLikeAnimating] = useState(false);
 
@@ -189,6 +190,10 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                 cursor: "pointer", width: "100%",
                 background: "none", border: "none", margin: 0,
                 textAlign: "left", pointerEvents: "auto", padding: 0,
+                /* Unified scale: image + text move as one glass plate */
+                transform: imgHovered && !isMobile ? "scale(1.03)" : "scale(1)",
+                transformOrigin: "center center",
+                transition: "transform 0.2s ease-out",
                 WebkitTapHighlightColor: "transparent",
             }}
         >
@@ -204,6 +209,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                     justifyContent: "center",
                     flexShrink: 0,
                     zIndex: 10,
+                    pointerEvents: "none",
                 }}
             >
                 {imgSrc ? (
@@ -212,23 +218,29 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         alt={work.title}
                         className="art-card-inner"
                         onLoad={recalc}
+                        onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
+                        onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}
                         style={{
                             display: "block",
-                            maxWidth: "78%",
-                            maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.92}px`,
+                            maxWidth: "76%",
+                            maxHeight: isHorizontal || isSquare ? `${zoneH * 0.76}px` : `${zoneH * 0.90}px`,
                             width: "auto", height: "auto",
                             borderRadius: "4px",
                             alignSelf: "center",
                             flexShrink: 0,
-                            boxShadow: "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
+                            boxShadow: imgHovered && !isMobile
+                                ? "4px 16px 40px rgba(28,25,22,0.58), 0 4px 12px rgba(28,25,22,0.35)"
+                                : "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
+                            transition: "box-shadow 0.2s ease-out, transform 0.2s ease-out",
                             WebkitTouchCallout: "none",
                             userSelect: "none",
                             WebkitUserSelect: "none",
+                            pointerEvents: "auto",
                         }}
                     />
                 ) : (
                     <div className="art-card-inner" style={{
-                        width: isHorizontal || isSquare ? "78%" : "55%",
+                        width: isHorizontal || isSquare ? "76%" : "55%",
                         height: isHorizontal ? "55%" : "85%",
                         backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
                         borderRadius: "4px",
@@ -271,8 +283,9 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                 }}>
                     {/* Left: text info */}
                     <div style={{
-                        display: "flex", flexDirection: "column", gap: "0rem",
+                        display: "flex", flexDirection: "column", gap: "0.05rem",
                         flex: 1, minWidth: 0,
+                        pointerEvents: "auto",
                     }}>
                         <p style={{
                             fontFamily: "var(--font-sans)",
@@ -350,6 +363,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                             transform: likeAnimating ? "scale(1.35)" : "scale(1)",
                             transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
                             outline: "none",
+                            pointerEvents: "auto",
                         }}
                     >
                         <svg

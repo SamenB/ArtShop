@@ -9,14 +9,14 @@ import React, { useRef, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { artworkUrl, getImageUrl } from "@/utils";
 
-const STATUS: Record<string, { label: string; color: string }> = {
-  available: { label: "AVAILABLE", color: "#6DB87E" },
-  sold: { label: "SOLD", color: "#C0392B" },
-  reserved: { label: "RESERVED", color: "#D4A017" },
-  not_for_sale: { label: "NOT FOR SALE", color: "#999" },
-  on_exhibition: { label: "ON EXHIBITION", color: "#2980B9" },
-  archived: { label: "ARCHIVED", color: "#7f8c8d" },
-  digital: { label: "DIGITAL", color: "#8E44AD" },
+const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string; textColor: string }> = {
+  available: { label: "AVAILABLE", badgeBg: "rgba(100,185,120,0.13)", badgeText: "#3a7a4a", textColor: "#6DB87E" },
+  sold: { label: "SOLD", badgeBg: "rgba(180,60,60,0.11)", badgeText: "#9b2c2c", textColor: "#C05050" },
+  reserved: { label: "RESERVED", badgeBg: "rgba(200,160,50,0.13)", badgeText: "#836a1a", textColor: "#C8A32A" },
+  not_for_sale: { label: "NOT FOR SALE", badgeBg: "rgba(120,120,120,0.11)", badgeText: "#555", textColor: "#999" },
+  on_exhibition: { label: "ON EXHIBITION", badgeBg: "rgba(50,130,200,0.11)", badgeText: "#20527a", textColor: "#4A90BE" },
+  archived: { label: "ARCHIVED", badgeBg: "rgba(100,100,100,0.10)", badgeText: "#666", textColor: "#7f8c8d" },
+  digital: { label: "DIGITAL ONLY", badgeBg: "rgba(120,90,200,0.12)", badgeText: "#5a3a9a", textColor: "#8E44AD" },
 };
 
 interface Props {
@@ -37,6 +37,7 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
   const [measuredImgH, setMeasuredImgH] = useState(0);
   const [measuredImgW, setMeasuredImgW] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [imgHovered, setImgHovered] = useState(false);
 
   useEffect(() => {
       setIsMobile(window.innerWidth < 1024);
@@ -78,6 +79,11 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
         textDecoration: "none",
         color: "inherit",
         width: "100%",
+        /* Unified scale: image + text move as one glass plate */
+        transform: imgHovered && !isMobile ? "scale(1.03)" : "scale(1)",
+        transformOrigin: "center center",
+        transition: "transform 0.2s ease-out",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       <div
@@ -92,6 +98,7 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
           flexShrink: 0,
           position: "relative",
           zIndex: 10,
+          pointerEvents: "none",
         }}
       >
         {imgSrc ? (
@@ -100,29 +107,36 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
             alt={work.title}
             className="art-card-inner"
             onLoad={recalc}
+            onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
+            onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}
             style={{
               display: "block",
-              maxWidth: isHorizontal || isSquare ? "78%" : "80%",
-              maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.90}px`,
+              maxWidth: "76%",
+              maxHeight: isHorizontal || isSquare ? `${zoneH * 0.76}px` : `${zoneH * 0.90}px`,
               width: "auto",
               height: "auto",
               borderRadius: "4px",
               alignSelf: "center",
               flexShrink: 0,
-              boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+              boxShadow: imgHovered && !isMobile
+                  ? "4px 16px 40px rgba(28,25,22,0.58), 0 4px 12px rgba(28,25,22,0.35)"
+                  : "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
+              transition: "box-shadow 0.2s ease-out, transform 0.2s ease-out",
+              pointerEvents: "auto",
             }}
           />
         ) : (
           <div
             className="art-card-inner"
             style={{
-              width: isHorizontal || isSquare ? "78%" : "55%",
+              width: isHorizontal || isSquare ? "76%" : "55%",
               height: isHorizontal ? "55%" : "85%",
               backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
               borderRadius: "4px",
               alignSelf: "center",
               flexShrink: 0,
-              boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+              boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
+              pointerEvents: "auto",
             }}
           />
         )}
@@ -157,84 +171,107 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
           display: "flex",
           flexDirection: "column",
           gap: "0.05rem",
+          pointerEvents: "none", // Container passes through, children capture
         }}
       >
-        {/* Title */}
-        <p
-          style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "0.90rem",
-            fontWeight: 400,
-            fontStyle: "italic",
-            letterSpacing: "0.01em",
-            color: "#333",
-            margin: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            lineHeight: 1.2,
-          }}
-        >
-          {work.title}
-        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.05rem", pointerEvents: "auto" }}>
+        {(() => {
+          const st = work.original_status ? STATUS[work.original_status] : null;
 
-        {/* Medium / Size */}
-        {(work.medium || work.size) && (
-          <p style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "0.68rem",
-            fontWeight: 400,
-            color: "#999",
-            margin: 0,
-            lineHeight: 1.2,
-          }}>
-            {[work.medium, work.size].filter(Boolean).join(" · ")}
-          </p>
-        )}
+          return (
+            <React.Fragment>
+              {/* Title */}
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.90rem",
+                  fontWeight: 400,
+                  fontStyle: "italic",
+                  letterSpacing: "0.01em",
+                  color: "#333",
+                  margin: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  lineHeight: 1.2,
+                }}
+              >
+                {work.title}
+              </p>
 
-        {/* Status pill + Price */}
-        {work.original_status && STATUS[work.original_status] && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap" }}>
-            <span style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              backgroundColor: STATUS[work.original_status].color + "18",
-              border: `1px solid ${STATUS[work.original_status].color}44`,
-              borderRadius: "4px",
-              padding: "2px 7px 2px 5px",
-            }}>
-              <span style={{
-                display: "inline-block",
-                width: "5px", height: "5px",
-                borderRadius: "50%",
-                backgroundColor: STATUS[work.original_status].color,
-                flexShrink: 0,
-              }} />
-              <span style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.58rem",
-                fontWeight: 600,
-                letterSpacing: "0.07em",
-                textTransform: "uppercase",
-                color: STATUS[work.original_status].color,
-                lineHeight: 1,
-              }}>
-                {STATUS[work.original_status].label}
-              </span>
-            </span>
-            {work.original_status === "available" && work.original_price && (
-              <span style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.78rem",
-                fontWeight: 500,
-                color: "#555",
-              }}>
-                ${work.original_price.toLocaleString()}
-              </span>
-            )}
-          </div>
-        )}
+              {/* Medium / Size */}
+              {(work.medium || work.size) && (
+                <p style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.68rem",
+                  fontWeight: 400,
+                  color: "#777",
+                  margin: 0,
+                  lineHeight: 1.2,
+                }}>
+                  {[work.medium, work.size].filter(Boolean).join(" · ")}
+                </p>
+              )}
+
+              {/* Status pill */}
+              {st && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1px" }}>
+                  <span style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    backgroundColor: st.badgeBg,
+                    border: `1px solid ${st.badgeText}33`,
+                    borderRadius: "4px",
+                    padding: "2px 7px 2px 5px",
+                  }}>
+                    <span style={{
+                      display: "inline-block",
+                      width: "5px",
+                      height: "5px",
+                      borderRadius: "50%",
+                      backgroundColor: st.badgeText,
+                      flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "0.58rem",
+                      fontWeight: 600,
+                      letterSpacing: "0.07em",
+                      textTransform: "uppercase",
+                      color: st.badgeText,
+                      lineHeight: 1,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {st.label}
+                    </span>
+                  </span>
+                </div>
+              )}
+              
+              {/* Price */}
+              {work.original_status === "available" && work.original_price && (
+                <p style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.68rem",
+                  fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                }}>
+                  Original <span style={{ fontWeight: 500, color: "#555" }}>${work.original_price.toLocaleString()}</span>
+                </p>
+              )}
+              {work.has_prints && work.base_print_price && (
+                <p style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.68rem",
+                  fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                }}>
+                  Prints starting at <span style={{ fontWeight: 500, color: "#555" }}>${work.base_print_price.toLocaleString()}</span>
+                </p>
+              )}
+            </React.Fragment>
+          );
+        })()}
+      </div>
       </div>
     </Link>
   );

@@ -255,6 +255,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                         justifyContent: "center",
                         flexShrink: 0,
                         position: "relative",
+                        pointerEvents: "none",
                     }}
                 >
                     {imgSrc ? (
@@ -281,6 +282,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                                 WebkitTouchCallout: "none",
                                 userSelect: "none",
                                 WebkitUserSelect: "none",
+                                pointerEvents: "auto",
                             }}
                         />
                     ) : (
@@ -333,6 +335,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                     <div style={{
                         display: "flex", flexDirection: "column", gap: "0.05rem",
                         flex: 1, minWidth: 0,
+                        pointerEvents: "auto",
                     }}>
                         <p style={{
                             fontFamily: "var(--font-sans)",
@@ -428,6 +431,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                             transform: likeAnimating ? "scale(1.35)" : "scale(1)",
                             transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
                             outline: "none",
+                            pointerEvents: "auto",
                         }}
                     >
                         <svg

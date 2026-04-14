@@ -275,12 +275,15 @@ export default async function Home() {
           Showcases a curated selection of the most recent artworks.
       */}
       <section
+        className="premium-texture-bg"
         style={{
           padding: "clamp(3rem, 10vh, 6rem) 2rem",
-          maxWidth: "1280px",
+          maxWidth: "100%", 
+          backgroundColor: "var(--color-cream)",
           margin: "0 auto",
         }}
       >
+        <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
         <div
           style={{
             display: "flex",
@@ -385,6 +388,7 @@ export default async function Home() {
 
           {/* End Spacer for mobile horizontal scrolling behavior. */}
           <div className="recent-paintings-spacer" aria-hidden="true" />
+        </div>
         </div>
       </section>
 
