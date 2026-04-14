@@ -698,12 +698,10 @@ export default function Navbar() {
                 ─ All other pages: solid slate-gray band that matches the lighter
                   silver regions of the previous ambient animation.
             */}
-            {pathname !== "/" && (
-                <div
-                    className="navbar-spacer-bg"
-                    style={{ backgroundColor: "#4D4E5C" }}
-                />
-            )}
+            <div
+                className="navbar-spacer-bg"
+                style={{ backgroundColor: "#4D4E5C" }}
+            />
             <style dangerouslySetInnerHTML={{__html: `
                 .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); width: 100%; }
                 @media (max-width: 768px) { .navbar-spacer-bg { height: 63px; } }

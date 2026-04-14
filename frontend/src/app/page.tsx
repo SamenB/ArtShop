@@ -83,13 +83,13 @@ export default async function Home() {
       */}
       <section
         style={{
-          height: "100dvh",
+          height: "calc(100vh - clamp(63px, 42px + 2vw, 117px))",
           position: "relative",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-start",
-          paddingTop: "clamp(115px, 18vh, 195px)",
+          paddingTop: "clamp(2rem, 10vh, 5rem)",
           overflow: "hidden",
         }}
       >
