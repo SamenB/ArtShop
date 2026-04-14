@@ -133,7 +133,7 @@ const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string
  * Features dynamic aspect-ratio calculation to align metadata perfectly with
  * the image's left edge. Displays original status and print pricing.
  */
-function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedIds, onAuthRequired, listIndex }: {
+function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedIds, onAuthRequired, listIndex, onLikeChange }: {
     product: Product; zoneH: number; gridMode: string; isMobile: boolean;
     initialLiked?: boolean;
     likedIds?: Set<number>;
