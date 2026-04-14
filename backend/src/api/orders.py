@@ -6,7 +6,7 @@ Includes order creation, tracking, and administrative management.
 from fastapi import APIRouter, Body
 
 from src.api.dependencies import AdminDep, DBDep, UserDep, UserDepOptional
-from src.schemas.orders import OrderAddRequest, OrderBulkRequest, OrderStatusUpdate
+from src.schemas.orders import OrderAddRequest, OrderBulkRequest, OrderPatch, OrderStatusUpdate
 from src.services.orders import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -104,4 +104,24 @@ async def update_order_status(
     Updates the payment status of a specific order. Requires admin privileges.
     """
     await OrderService(db).update_payment_status(order_id, status_data.payment_status)
+    return {"status": "OK"}
+
+
+@router.patch("/{order_id}")
+async def patch_order(
+    order_id: int, admin_id: AdminDep, db: DBDep, order_patch: OrderPatch
+):
+    """
+    Applies partial updates to a specific order. Requires admin privileges.
+    """
+    await OrderService(db).patch_order(order_id, order_patch)
+    return {"status": "OK"}
+
+
+@router.delete("/{order_id}")
+async def delete_order(order_id: int, admin_id: AdminDep, db: DBDep):
+    """
+    Permanently deletes a specific order record. Requires admin privileges.
+    """
+    await OrderService(db).delete_order(order_id)
     return {"status": "OK"}

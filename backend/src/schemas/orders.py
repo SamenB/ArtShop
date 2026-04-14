@@ -20,6 +20,16 @@ class EditionType(str, Enum):
     PRINT = "print"
 
 
+class ArtworkSummary(BaseModel):
+    """
+    Lightweight summary of an artwork for inclusion in orders.
+    """
+
+    id: int
+    title: str
+    images: Optional[List[str | dict]] = None
+
+
 class OrderItemBase(BaseModel):
     """
     Base schema for individual items within an order.
@@ -39,6 +49,7 @@ class OrderItem(OrderItemBase):
 
     id: int
     order_id: int
+    artwork: Optional[ArtworkSummary] = None
 
 
 class OrderItemAdd(OrderItemBase):
@@ -154,6 +165,36 @@ class OrderStatusUpdate(BaseModel):
     """
 
     payment_status: str
+
+
+class OrderPatch(BaseModel):
+    """
+    Schema for administrative partial updates to an order.
+    """
+
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[str] = Field(None, min_length=5, max_length=200)
+    phone: Optional[str] = Field(None, min_length=7, max_length=50)
+
+    # Shipping fields
+    shipping_country: Optional[str] = Field(None, max_length=100)
+    shipping_country_code: Optional[str] = Field(None, min_length=2, max_length=2)
+    shipping_state: Optional[str] = Field(None, max_length=100)
+    shipping_city: Optional[str] = Field(None, max_length=200)
+    shipping_address_line1: Optional[str] = Field(None, max_length=500)
+    shipping_address_line2: Optional[str] = Field(None, max_length=500)
+    shipping_postal_code: Optional[str] = Field(None, max_length=20)
+    shipping_phone: Optional[str] = Field(None, max_length=50)
+    shipping_notes: Optional[str] = Field(None, max_length=1000)
+
+    # Meta
+    payment_status: Optional[str] = None
+    newsletter_opt_in: Optional[bool] = None
+    discovery_source: Optional[str] = None
+    promo_code: Optional[str] = None
+    invoice_id: Optional[str] = None
+    payment_url: Optional[str] = None
 
 
 Order.model_rebuild()

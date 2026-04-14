@@ -21,6 +21,7 @@ from src.schemas.orders import (
     OrderAddRequest,
     OrderBulkRequest,
     OrderItemAdd,
+    OrderPatch,
 )
 from src.services.base import BaseService
 
@@ -279,5 +280,50 @@ class OrderService(BaseService):
             )
         except SQLAlchemyError as e:
             logger.error("Failed to update payment status for invoice {}: {}", invoice_id, e)
+            await self.db.rollback()
+            raise DatabaseException
+
+
+    async def delete_order(self, order_id: int):
+        """
+        Deletes an order and its items.
+        If the order contained original artworks, their status is reverted to 'available'.
+        """
+        try:
+            order = await self.db.orders.get_one(id=order_id)
+            
+            # Revert artwork status for originals
+            for item in order.items:
+                if item.edition_type == EditionType.ORIGINAL:
+                    await self.db.artworks.edit(
+                        ArtworkPatch(original_status="available"), 
+                        exclude_unset=True, 
+                        id=item.artwork_id
+                    )
+            
+            # Delete order items first (due to FK constraints if any, 
+            # though SQLAlchemy might handle it depending on cascade)
+            await self.db.order_items.delete(order_id=order_id)
+            await self.db.orders.delete(id=order_id)
+            
+            await self.db.commit()
+            logger.info("Order deleted successfully: {}", order_id)
+        except ObjectNotFoundException:
+            raise
+        except SQLAlchemyError as e:
+            logger.error("Failed to delete order {}: {}", order_id, e)
+            await self.db.rollback()
+            raise DatabaseException
+
+    async def patch_order(self, order_id: int, data: OrderPatch):
+        """
+        Applies partial updates to an order.
+        """
+        try:
+            await self.db.orders.edit(data, exclude_unset=True, id=order_id)
+            await self.db.commit()
+            logger.info("Order patched successfully: {}", order_id)
+        except SQLAlchemyError as e:
+            logger.error("Failed to patch order {}: {}", order_id, e)
             await self.db.rollback()
             raise DatabaseException

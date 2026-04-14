@@ -275,13 +275,13 @@ export default function Navbar() {
                         <div style={{ display: "flex", alignItems: "center" }}>
                             <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none", flexShrink: 0, marginLeft: isMobile ? "-5px" : "-15px" }}>
                                 <Image
-                                    src="/logo-v4.png"
+                                    src="/logo-v5.png"
                                     alt="Samen Bondarenko"
                                     width={600}
                                     height={200}
                                     priority
                                     style={{
-                                        height: isMobile ? "49px" : "clamp(49px, 34px + 1.5vw, 90px)",
+                                        height: isMobile ? "43px" : "clamp(40px, 32px + 1vw, 72px)",
                                         width: "auto",
                                         objectFit: "contain",
                                         display: "block",
