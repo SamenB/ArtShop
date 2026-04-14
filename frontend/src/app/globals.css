@@ -89,6 +89,101 @@ body {
 }
 
 /* ─────────────────────────────────────────────
+   Premium Paper Texture Overlay
+   Uses SVG feTurbulence for organic grain on top of the base color.
+   Applied to the shop page wrapper via .premium-texture-bg
+───────────────────────────────────────────── */
+.premium-texture-bg {
+  position: relative;
+  background-color: var(--color-cream);
+}
+
+.premium-texture-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.28;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  mix-blend-mode: multiply;
+}
+
+/* Ensure all direct children sit above the texture overlay */
+.premium-texture-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─────────────────────────────────────────────
+   Liquid Glass — Apple-inspired frosted refraction card
+   Uses backdrop-filter blur + specular highlight pseudo-elements
+   to create a tactile, light-bending glass surface.
+   NOTE: overflow must NOT be hidden — the card uses paddingTop
+   taller than visible content to push text below the image.
+───────────────────────────────────────────── */
+.liquid-glass-card {
+  background: rgba(220, 220, 225, 0.45) !important;
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-right: 1px solid rgba(200, 200, 205, 0.4) !important;
+  border-bottom: 1px solid rgba(180, 180, 190, 0.35) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.04) inset;
+  isolation: isolate;
+}
+
+/* Top specular highlight — simulates light catching the upper rim of curved glass */
+.liquid-glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  border-radius: inherit;
+  background: linear-gradient(
+    178deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.18) 30%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Bottom edge refraction glow — prismatic rainbow shimmer along the lower rim */
+.liquid-glass-card::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 5%;
+  right: 5%;
+  height: 2px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(130, 180, 255, 0.4) 15%,
+    rgba(180, 140, 255, 0.35) 35%,
+    rgba(255, 170, 180, 0.3) 55%,
+    rgba(160, 255, 180, 0.35) 75%,
+    rgba(130, 180, 255, 0.3) 90%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+
+/* ─────────────────────────────────────────────
    Typography helpers
    h1-h3 → DM Serif Display (editorial, Le Labo feel)
    .font-sans → Inter (body)

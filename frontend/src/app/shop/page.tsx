@@ -12,6 +12,7 @@ import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useUser } from "@/context/UserContext";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
+import GoogleOAuthProviderWrapper from "@/components/GoogleOAuthProviderWrapper";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 /** Availability states for artworks and prints. */
@@ -148,6 +149,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
+    const [measuredImgH, setMeasuredImgH] = useState(0); // Track exact image height safely
+    const [measuredImgW, setMeasuredImgW] = useState(0); // Track exact image width safely
     const [imgHovered, setImgHovered] = useState(false);
     const [liked, setLiked] = useState(initialLiked || false);
     const [likeAnimating, setLikeAnimating] = useState(false);
@@ -173,6 +176,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
         }
         setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
+        setMeasuredImgH(inner.offsetHeight); // Strictly save the accurate image bounding height
+        setMeasuredImgW(inner.offsetWidth); // Save exact width for 5% margin logic
     }, []);
 
     useEffect(() => {
@@ -229,7 +234,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                 transition: "transform 0.2s ease-out",
             }}
         >
-            <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%" }}>
+            <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%", position: "relative", zIndex: 10 }}>
                 <div
                     ref={containerRef}
                     className="art-card-container"
@@ -282,21 +287,39 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                 </div>
             </Link>
 
-            {/* Metadata overlay: Bottom-anchored and horizontally aligned to the image's vertical edge. */}
+            {/* Metadata back-plate: sits behind the image, text below */}
             {(gridMode !== "3" || !isMobile) && (
                 <div style={{
-                    marginTop: `-${emptyBottom}px`,
-                    paddingTop: gridMode === "3" ? "0.5rem" : "0.7rem",
-                    paddingLeft: `${textPad}px`,
-                    paddingRight: `${textPad}px`,
+                    position: "relative",
+                    zIndex: 5,
+                    marginTop: measuredImgH > 0
+                        ? `-${emptyBottom + measuredImgH + 10}px`
+                        : `-${emptyBottom - (isMobile ? 10 : 8)}px`,
+                    marginLeft: `${textPad - 10}px`,
+                    marginRight: `${textPad - 10}px`,
+                    paddingTop: measuredImgH > 0
+                        ? `${measuredImgH + (isMobile ? 10 : 8) + 10}px`
+                        : "0.15rem",
+                    paddingBottom: "0.5rem",
+                    paddingLeft: "0.55rem",
+                    paddingRight: "0.55rem",
+                    backgroundColor: "rgba(235, 235, 237, 0.82)",
+                    backdropFilter: "blur(12px) saturate(1.3)",
+                    WebkitBackdropFilter: "blur(12px) saturate(1.3)",
+                    borderTop: "1px solid rgba(255,255,255,0.75)",
+                    borderLeft: "1px solid rgba(255,255,255,0.55)",
+                    borderRight: "1px solid rgba(200,200,205,0.38)",
+                    borderBottom: "1px solid rgba(180,180,190,0.3)",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.6) inset",
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "space-between",
-                    gap: "0.5rem",
+                    gap: "0.3rem",
                 }}>
                     {/* Left: text info */}
                     <div style={{
-                        display: "flex", flexDirection: "column", gap: "0rem",
+                        display: "flex", flexDirection: "column", gap: "0.05rem",
                         flex: 1, minWidth: 0,
                     }}>
                         <p style={{
@@ -1143,7 +1166,7 @@ export default function ShopPage() {
     }, []);
 
     return (
-        <div style={{ backgroundColor: "#ffffff", color: "var(--color-charcoal)", minHeight: "100vh" }}>
+        <div className="premium-texture-bg" style={{ color: "var(--color-charcoal)", minHeight: "100vh" }}>
             {/* Mobile Bottom Drawer Backdrop: Dims the content when filtering is active. */}
             {drawerOpen && <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(26,26,24,0.75)", zIndex: 40 }} />}
 

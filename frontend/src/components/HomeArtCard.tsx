@@ -31,8 +31,16 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
   const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") : "";
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const linkRef = useRef<HTMLAnchorElement>(null);
   const [textPad, setTextPad] = useState(0);
   const [emptyBottom, setEmptyBottom] = useState(0);
+  const [measuredImgH, setMeasuredImgH] = useState(0);
+  const [measuredImgW, setMeasuredImgW] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+      setIsMobile(window.innerWidth < 1024);
+  }, []);
 
   const recalc = useCallback(() => {
     const c = containerRef.current;
@@ -45,6 +53,8 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
     }
     setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
     setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
+    setMeasuredImgH(inner.offsetHeight);
+    setMeasuredImgW(inner.offsetWidth);
   }, []);
 
   useEffect(() => {
@@ -59,6 +69,7 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
 
   return (
     <Link
+      ref={linkRef}
       href={artworkUrl(work.slug || work.id)}
       className="art-card"
       style={{
@@ -79,6 +90,8 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
+          position: "relative",
+          zIndex: 10,
         }}
       >
         {imgSrc ? (
@@ -115,16 +128,35 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
         )}
       </div>
 
-      {/* Title, Medium & Status — shop-style metadata aligned to painting's left edge */}
+      {/* Title, Medium & Status — frosted glass backplate */}
       <div
         style={{
-          marginTop: `-${emptyBottom}px`,
-          paddingTop: "0.7rem",
-          paddingLeft: `${textPad}px`,
+          position: "relative",
+          zIndex: 5,
+          marginTop: measuredImgH > 0
+            ? `-${emptyBottom + measuredImgH + 10}px`
+            : `-${emptyBottom - (isMobile ? 10 : 8)}px`,
+          marginLeft: `${textPad - 10}px`,
+          marginRight: `${textPad - 10}px`,
+          paddingTop: measuredImgH > 0
+            ? `${measuredImgH + (isMobile ? 10 : 8) + 10}px`
+            : "0.15rem",
+          paddingBottom: "0.5rem",
+          paddingLeft: "0.55rem",
+          paddingRight: "0.55rem",
           flexShrink: 0,
+          backgroundColor: "rgba(235, 235, 237, 0.82)",
+          backdropFilter: "blur(12px) saturate(1.3)",
+          WebkitBackdropFilter: "blur(12px) saturate(1.3)",
+          borderTop: "1px solid rgba(255,255,255,0.75)",
+          borderLeft: "1px solid rgba(255,255,255,0.55)",
+          borderRight: "1px solid rgba(200,200,205,0.38)",
+          borderBottom: "1px solid rgba(180,180,190,0.3)",
+          borderRadius: "10px",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.6) inset",
           display: "flex",
           flexDirection: "column",
-          gap: "0.15rem"
+          gap: "0.05rem",
         }}
       >
         {/* Title */}
