@@ -128,6 +128,8 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
+    const [measuredImgH, setMeasuredImgH] = useState(0);
+    const [measuredImgW, setMeasuredImgW] = useState(0);
     const [liked, setLiked] = useState(initialLiked || false);
     const [likeAnimating, setLikeAnimating] = useState(false);
 
@@ -160,6 +162,8 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
         }
         setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
+        setMeasuredImgH(inner.offsetHeight);
+        setMeasuredImgW(inner.offsetWidth);
     }, []);
 
     useEffect(() => {
@@ -198,6 +202,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
+                    zIndex: 10,
                 }}
             >
                 {imgSrc ? (
@@ -211,7 +216,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                             maxWidth: "78%",
                             maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.92}px`,
                             width: "auto", height: "auto",
-                            borderRadius: "1px",
+                            borderRadius: "4px",
                             alignSelf: "center",
                             flexShrink: 0,
                             boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
@@ -222,7 +227,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         width: isHorizontal || isSquare ? "78%" : "55%",
                         height: isHorizontal ? "55%" : "85%",
                         backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
-                        borderRadius: "1px",
+                        borderRadius: "4px",
                         alignSelf: "center",
                         flexShrink: 0,
                         boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
@@ -230,17 +235,35 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                 )}
             </div>
 
-            {/* Metadata overlay: Bottom-anchored and horizontally aligned to the image's vertical edge. */}
+            {/* Metadata overlay: sits behind the image, text below. Uses frosted glass style. */}
             {(gridMode !== "3" || !isMobile) && (
                 <div style={{
-                    marginTop: `-${emptyBottom}px`,
-                    paddingTop: gridMode === "3" ? "0.4rem" : "0.6rem",
-                    paddingLeft: `${textPad}px`,
-                    paddingRight: `${textPad}px`,
+                    position: "relative",
+                    zIndex: 5,
+                    marginTop: measuredImgH > 0
+                        ? `-${emptyBottom + measuredImgH + 4}px`
+                        : `-${emptyBottom - (isMobile ? 10 : 8)}px`,
+                    marginLeft: `${textPad - 4}px`,
+                    marginRight: `${textPad - 4}px`,
+                    paddingTop: measuredImgH > 0
+                        ? `${measuredImgH + (isMobile ? 10 : 8) + 4}px`
+                        : "0.15rem",
+                    paddingBottom: "0.5rem",
+                    paddingLeft: "0.55rem",
+                    paddingRight: "0.55rem",
+                    backgroundColor: "rgba(235, 235, 237, 0.82)",
+                    backdropFilter: "blur(12px) saturate(1.3)",
+                    WebkitBackdropFilter: "blur(12px) saturate(1.3)",
+                    borderTop: "1px solid rgba(255,255,255,0.75)",
+                    borderLeft: "1px solid rgba(255,255,255,0.55)",
+                    borderRight: "1px solid rgba(200,200,205,0.38)",
+                    borderBottom: "1px solid rgba(180,180,190,0.3)",
+                    borderRadius: "4px",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.6) inset",
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "space-between",
-                    gap: "0.5rem",
+                    gap: "0.3rem",
                 }}>
                     {/* Left: text info */}
                     <div style={{
