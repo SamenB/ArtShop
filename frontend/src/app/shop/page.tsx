@@ -6,7 +6,8 @@
  * including categories, price ranges, dimensions, orientation, and more.
  */
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
@@ -138,6 +139,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     likedIds?: Set<number>;
     onAuthRequired?: (id: number) => void;
     listIndex?: number;
+    onLikeChange?: (id: number, liked: boolean) => void;
 }) {
     const { convertPrice, units } = usePreferences();
     const ori = (product.orientation || "vertical").toLowerCase();
@@ -152,13 +154,11 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     const [measuredImgH, setMeasuredImgH] = useState(0); // Track exact image height safely
     const [measuredImgW, setMeasuredImgW] = useState(0); // Track exact image width safely
     const [imgHovered, setImgHovered] = useState(false);
-    const [liked, setLiked] = useState(initialLiked || false);
+    const [localLiked, setLocalLiked] = useState(initialLiked || false);
     const [likeAnimating, setLikeAnimating] = useState(false);
 
-    // Sync liked state when likedIds loads from DB
-    useEffect(() => {
-        if (likedIds !== undefined) setLiked(likedIds.has(product.id));
-    }, [likedIds, product.id]);
+    // Derived strictly from parent's Single Source of Truth
+    const liked = likedIds !== undefined ? likedIds.has(product.id) : localLiked;
 
     /**
      * Synchronizes metadata alignment with the actual rendered bounds of 
@@ -208,10 +208,16 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
         e.stopPropagation();
         // If not authenticated, show sign-in prompt instead
         if (onAuthRequired) { onAuthRequired(product.id); return; }
+        
         const newState = !liked;
-        setLiked(newState);
+        
+        // Optimistically update both local and parent states instantly
+        setLocalLiked(newState); 
+        if (onLikeChange) onLikeChange(product.id, newState);
+        
         setLikeAnimating(true);
         setTimeout(() => setLikeAnimating(false), 400);
+        
         try {
             if (newState) {
                 await apiFetch(`${getApiUrl()}/users/me/likes/${product.id}`, { method: "POST" });
@@ -219,7 +225,9 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                 await apiFetch(`${getApiUrl()}/users/me/likes/${product.id}`, { method: "DELETE" });
             }
         } catch {
-            setLiked(!newState);
+            // Revert silently on failure
+            setLocalLiked(!newState);
+            if (onLikeChange) onLikeChange(product.id, !newState);
         }
     };
 
@@ -735,6 +743,15 @@ function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max:
  * responsive layout transitions, and dynamic data fetching for artworks and tags.
  */
 export default function ShopPage() {
+    return (
+        <Suspense fallback={<div style={{ minHeight: "100vh" }} />}>
+            <ShopPageContent />
+        </Suspense>
+    );
+}
+
+function ShopPageContent() {
+    const searchParams = useSearchParams();
     const { user } = useUser();
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [collections, setCollections] = useState<Collection[]>([]);
@@ -759,6 +776,11 @@ export default function ShopPage() {
     const [activeOrientations, setActiveOrientations] = useState<string[]>([]);
     const [activeCollections, setActiveCollections] = useState<number[]>([]);
     const [activeMediums, setActiveMediums] = useState<number[]>([]);
+    const [filterLiked, setFilterLiked] = useState(searchParams.get("liked") === "true");
+
+    useEffect(() => {
+        setFilterLiked(searchParams.get("liked") === "true");
+    }, [searchParams]);
 
     const [sortIdx, setSortIdx] = useState(0);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -937,6 +959,12 @@ export default function ShopPage() {
             list = list.filter(p => p.original_status === "available" || p.has_prints);
         }
 
+        // Liked constraint
+        if (filterLiked) {
+            if (!likedIds) return []; // Return empty array while loading
+            list = list.filter(p => likedIds.has(p.id));
+        }
+
         // Budgetary constraints (Originals only).
         if (priceMin > 0 || priceMax < 999999) {
             list = list.filter(p => {
@@ -985,13 +1013,23 @@ export default function ShopPage() {
         }
 
         return list;
-    }, [allProducts, categoryFilter, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeCollections, activeMediums, globalPrintPrice, getUnitVal]);
+    }, [allProducts, categoryFilter, filterLiked, likedIds, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeCollections, activeMediums, globalPrintPrice, getUnitVal]);
 
     /** Opens the authentication prompt and records which item was being liked. */
     const handleAuthRequired = (id: number) => {
         addPendingLike(id);
         setShowAuthPrompt(true);
     };
+
+    /** Synchronizes like state from child to parent, useful for live filtering. */
+    const handleLikeChange = useCallback((id: number, isLiked: boolean) => {
+        setLikedIds(prev => {
+            const next = new Set(prev || []);
+            if (isLiked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    }, []);
 
     /** Final sorted results for exhibition, respecting pagination and display limits. */
     const displayed = useMemo(() => {
@@ -1002,6 +1040,7 @@ export default function ShopPage() {
     const widthActive = widthMin > wGlobalMin || widthMax < wGlobalMax;
     const heightActive = heightMin > hGlobalMin || heightMax < hGlobalMax;
     const afc = categoryFilter.length
+        + (filterLiked ? 1 : 0)
         + (priceMin > 0 || priceMax < 999999 ? 1 : 0)
         + (widthActive ? 1 : 0) + (heightActive ? 1 : 0)
         + activeYears.length + activeOrientations.length
@@ -1014,6 +1053,7 @@ export default function ShopPage() {
         setHeightMin(hGlobalMin); setHeightMax(hGlobalMax);
         setActiveYears([]); setActiveOrientations([]);
         setActiveCollections([]); setActiveMediums([]);
+        setFilterLiked(false);
     };
 
     /** Unified string multi-select toggler. */
@@ -1082,6 +1122,13 @@ export default function ShopPage() {
      */
     const filtersJSX = (
         <>
+            {/* 0. Collection filtering. */}
+            {user && (
+                <SidebarSection title="My Collection" defaultOpen={true} isMobile={isMobile}>
+                    <FilterCheckbox label="My Likes" active={filterLiked} onClick={() => setFilterLiked(!filterLiked)} isMobile={isMobile} />
+                </SidebarSection>
+            )}
+
             {/* 1. Classification filtering. */}
             <SidebarSection title="Category" defaultOpen={false} isMobile={isMobile}>
                 <FilterCheckbox label="Available Originals" active={categoryFilter.includes("originals")} onClick={() => toggleStr(setCategoryFilter, "originals")} isMobile={isMobile} />
@@ -1260,6 +1307,7 @@ export default function ShopPage() {
                                 likedIds={likedIds}
                                 listIndex={i}
                                 onAuthRequired={!user ? handleAuthRequired : undefined}
+                                onLikeChange={handleLikeChange}
                             />)}
                         </div>
                     ) : (
