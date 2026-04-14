@@ -404,6 +404,7 @@ export default function ArtworkDetailPage() {
                                 textDecoration: "none",
                                 transition: "color 0.2s",
                                 whiteSpace: "nowrap",
+                                WebkitTapHighlightColor: "transparent",
                             }}
                             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
@@ -680,7 +681,8 @@ export default function ArtworkDetailPage() {
                                             transition: "background 0.3s ease, color 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                                             willChange: "transform, background",
                                             backdropFilter: "blur(4px)",
-                                            boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                                            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                                            WebkitTapHighlightColor: "transparent",
                                         }}
                                         onMouseEnter={e => {
                                             e.currentTarget.style.background = "rgba(255,255,255,0.95)";
@@ -750,6 +752,7 @@ export default function ArtworkDetailPage() {
                                                             opacity: isActive ? 1 : 0.55,
                                                             boxShadow: isActive ? (layoutMetrics.winW < 768 ? "0 2px 6px rgba(0,0,0,0.15)" : "var(--shadow-card-deep)") : (layoutMetrics.winW < 768 ? "0 1px 3px rgba(0,0,0,0.08)" : "var(--shadow-thumb)"),
                                                             transition: "margin 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+                                                            WebkitTapHighlightColor: "transparent",
                                                         }}
                                                         onMouseEnter={e => {
                                                             if (!isActive) {

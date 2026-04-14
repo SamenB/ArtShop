@@ -237,9 +237,10 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
             style={{
                 display: "flex", flexDirection: "column", width: "100%", padding: 0,
                 /* Unified scale: image + text move as one glass plate */
-                transform: imgHovered ? "scale(1.03)" : "scale(1)",
+                transform: imgHovered && !isMobile ? "scale(1.03)" : "scale(1)",
                 transformOrigin: "center center",
                 transition: "transform 0.2s ease-out",
+                WebkitTapHighlightColor: "transparent",
             }}
         >
             <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%", position: "relative", zIndex: 10 }}>
@@ -262,8 +263,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                             alt={product.title}
                             className="art-card-inner"
                             onLoad={recalc}
-                            onMouseEnter={() => setImgHovered(true)}
-                            onMouseLeave={() => setImgHovered(false)}
+                            onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
+                            onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}
                             style={{
                                 display: "block",
                                 maxWidth: "78%",
@@ -272,11 +273,14 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                                 borderRadius: "4px",
                                 alignSelf: "center",
                                 flexShrink: 0,
-                                boxShadow: imgHovered
-                                    ? "4px 16px 40px rgba(28,25,22,0.82), 0 4px 12px rgba(28,25,22,0.50)"
-                                    : "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
-                                transition: "box-shadow 0.2s ease-out",
+                                boxShadow: imgHovered && !isMobile
+                                    ? "4px 16px 40px rgba(28,25,22,0.58), 0 4px 12px rgba(28,25,22,0.35)"
+                                    : "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
+                                transition: "box-shadow 0.2s ease-out, transform 0.2s ease-out",
                                 cursor: "pointer",
+                                WebkitTouchCallout: "none",
+                                userSelect: "none",
+                                WebkitUserSelect: "none",
                             }}
                         />
                     ) : (

@@ -86,6 +86,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ─────────────────────────────────────────────
@@ -387,11 +388,11 @@ h3 {
    Apply via className="card-shadow" or boxShadow: "var(--shadow-card)"
 ───────────────────────────────────────────── */
 :root {
-  --shadow-card: 2px 10px 28px rgba(28, 25, 22, 0.55), 0 3px 8px rgba(28, 25, 22, 0.28);
-  --shadow-card-hover: 4px 18px 40px rgba(28, 25, 22, 0.72), 0 4px 10px rgba(28, 25, 22, 0.38);
-  --shadow-card-deep: 2px 10px 28px rgba(28, 25, 22, 0.72), 0 3px 8px rgba(28, 25, 22, 0.40);
-  --shadow-thumb: 1px 4px 10px rgba(28, 25, 22, 0.32), 0 1px 3px rgba(28, 25, 22, 0.18);
-  --shadow-panel: 0 8px 24px rgba(28, 25, 22, 0.22), 0 2px 8px rgba(28, 25, 22, 0.12);
+  --shadow-card: 2px 10px 28px rgba(28, 25, 22, 0.45), 0 3px 8px rgba(28, 25, 22, 0.22);
+  --shadow-card-hover: 4px 18px 40px rgba(28, 25, 22, 0.58), 0 4px 10px rgba(28, 25, 22, 0.32);
+  --shadow-card-deep: 2px 10px 28px rgba(28, 25, 22, 0.58), 0 3px 8px rgba(28, 25, 22, 0.32);
+  --shadow-thumb: 1px 4px 10px rgba(28, 25, 22, 0.28), 0 1px 3px rgba(28, 25, 22, 0.15);
+  --shadow-panel: 0 8px 24px rgba(28, 25, 22, 0.18), 0 2px 8px rgba(28, 25, 22, 0.10);
 }
 
 .card-shadow {
@@ -428,6 +429,10 @@ h3 {
 .art-card button:focus-visible {
   outline: none !important;
   box-shadow: inherit !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 /* Also suppress on plain <img> focus states */
 img:focus { outline: none; }
@@ -519,7 +524,7 @@ img:focus { outline: none; }
   user-select: none;
   border-radius: 4px;
   transition: background-color 0.12s ease;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 .filter-item:hover {
@@ -546,7 +551,7 @@ img:focus { outline: none; }
   cursor: pointer;
   border-radius: 3px;
   transition: background-color 0.12s ease;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 .filter-section-btn:hover {
@@ -661,4 +666,15 @@ img:focus { outline: none; }
     padding: 3px 30px;
     font-size: 0.55rem;
   }
-}
+}
+
+/* Aggressive Link Sanitization for Mobile */
+a, button, img {
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+a:active, a:focus {
+  background-color: transparent !important;
+}

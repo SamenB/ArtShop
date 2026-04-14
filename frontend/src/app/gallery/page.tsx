@@ -189,6 +189,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                 cursor: "pointer", width: "100%",
                 background: "none", border: "none", margin: 0,
                 textAlign: "left", pointerEvents: "auto", padding: 0,
+                WebkitTapHighlightColor: "transparent",
             }}
         >
             <div
@@ -219,7 +220,10 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                             borderRadius: "4px",
                             alignSelf: "center",
                             flexShrink: 0,
-                            boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+                            boxShadow: "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
+                            WebkitTouchCallout: "none",
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
                         }}
                     />
                 ) : (
