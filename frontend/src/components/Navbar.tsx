@@ -297,7 +297,6 @@ export default function Navbar() {
                             display: "flex",
                             alignItems: "center",
                             gap: "clamp(1.5rem, 1rem + 0.8vw, 3rem)",
-                            // removed translateY hack to restore true flex center
                         }}>
                             {NAV_LINKS.map((link) => {
                                 const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
@@ -312,9 +311,9 @@ export default function Navbar() {
                                             letterSpacing: "0.08em",
                                             textTransform: "uppercase",
                                             textDecoration: "none",
-                                            color: isActive ? "#FFFFFF" : "rgba(244,244,244,0.85)", // brighter
+                                            color: isActive ? "#FFFFFF" : "rgba(244,244,244,0.85)",
                                             borderBottom: isActive ? "1px solid rgba(244,244,244,0.4)" : "1px solid transparent",
-                                            padding: "4px 0", // equal top/bottom padding fixes vertical alignment with icons
+                                            padding: "4px 0",
                                             transition: "color 0.2s ease, border-color 0.2s ease",
                                         }}
                                         onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.color = "#FFFFFF"; e.currentTarget.style.borderColor = "rgba(244,244,244,0.2)"; } }}
@@ -475,7 +474,7 @@ export default function Navbar() {
                 }}
             />
             {/* Drawer */}
-<div
+            <div
                 style={{
                     position: "fixed",
                     top: "63px", right: 0, bottom: 0,
@@ -693,28 +692,20 @@ export default function Navbar() {
             {/* Auth Modal */}
             <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
-            {/* 
-                SPACER / TRACKING BACKGROUND
-                This behaves as normal document flow. It pushes the page content down 
-                so it doesn't hide behind the fixed navbar on load.
-                Because it sits at y=0, the fixed Navbar overlays it perfectly.
-                When the user scrolls, this spacer scrolls UP and away, revealing the 
-                page content under the semi-transparent Navbar.
+            {/*
+                SPACER
+                ─ "/" (homepage): no spacer — hero fills from y=0 behind the navbar.
+                ─ All other pages: solid slate-gray band that matches the lighter
+                  silver regions of the previous ambient animation.
             */}
-            {/* 
-                SPACER / TRACKING BACKGROUND
-                This behaves as normal document flow. It pushes the page content down 
-                so it doesn't hide behind the fixed navbar on load.
-            */}
-            <div 
-                style={{ 
-                    width: "100%",
-                    backgroundColor: "rgba(35, 35, 35, 0.75)", // 7.5 out of 10 grey background
-                }} 
-                className="navbar-spacer-bg"
-            />
+            {pathname !== "/" && (
+                <div
+                    className="navbar-spacer-bg"
+                    style={{ backgroundColor: "#4D4E5C" }}
+                />
+            )}
             <style dangerouslySetInnerHTML={{__html: `
-                .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); }
+                .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); width: 100%; }
                 @media (max-width: 768px) { .navbar-spacer-bg { height: 63px; } }
             `}} />
         </>

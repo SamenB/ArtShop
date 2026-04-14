@@ -83,7 +83,7 @@ export default async function Home() {
       */}
       <section
         style={{
-          minHeight: "100svh",
+          height: "100dvh",
           position: "relative",
           display: "flex",
           flexDirection: "column",

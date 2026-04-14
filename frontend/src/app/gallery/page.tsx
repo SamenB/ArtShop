@@ -620,7 +620,7 @@ export default function GalleryPage() {
     const getGap = () => {
         if (isMobile) {
             if (gridMode === "1") return "3.2rem 1rem";
-            if (gridMode === "2") return "1rem 0.5rem";
+            if (gridMode === "2") return "1.5rem 1.25rem";
             if (gridMode === "3") return "0.5rem 0.5rem";
         }
         if (gridMode === "1") return "4rem 24px";
