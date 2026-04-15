@@ -11,11 +11,7 @@ import { useUser } from "@/context/UserContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import SettingsTab from "@/app/admin/components/SettingsTab";
-import ArtworksTab from "@/app/admin/components/ArtworksTab";
-import OrdersTab from "@/app/admin/components/OrdersTab";
-import LabelsTab from "@/app/admin/components/LabelsTab";
-import FooterTab from "@/app/admin/components/FooterTab";
+
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 
 /** Represents an item within an order. */
@@ -220,8 +216,7 @@ export default function ProfilePage() {
     const { user, loading } = useUser();
     const { convertPrice } = usePreferences();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<"orders" | "likes" | "admin">("orders");
-    const [adminSubTab, setAdminSubTab] = useState<"artworks" | "settings" | "labels" | "orders" | "footer">("artworks");
+    const [activeTab, setActiveTab] = useState<"orders" | "likes">("orders");
     const [orders, setOrders] = useState<Order[]>([]);
     const [likes, setLikes] = useState<Artwork[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
@@ -232,7 +227,7 @@ export default function ProfilePage() {
         if (!loading && !user) {
             router.push("/");
         } else if (user?.is_admin) {
-            setActiveTab("admin");
+            router.push("/admin");
         }
     }, [user, loading, router]);
 
@@ -283,14 +278,7 @@ export default function ProfilePage() {
                     >
                         Saved Artworks
                     </button>
-                    {user.is_admin && (
-                        <button
-                            onClick={() => setActiveTab("admin")}
-                            className={`pb-4 text-sm font-sans tracking-widest uppercase transition-colors ${activeTab === "admin" ? "text-white border-b border-white" : "text-zinc-500 hover:text-zinc-300"}`}
-                        >
-                            Admin Dashboard
-                        </button>
-                    )}
+
                 </div>
 
                 {dataLoading ? (
@@ -471,30 +459,7 @@ export default function ProfilePage() {
                             </div>
                         )}
 
-                        {/* Administrative Control Dashboard */}
-                        {activeTab === "admin" && user.is_admin && (
-                            <div className="mt-4 border border-white/5 rounded-2xl bg-black/40 p-6 lg:p-10 shadow-2xl">
-                                <div className="flex gap-4 mb-8 border-b border-white/10 overflow-x-auto pb-4">
-                                    {(["artworks", "settings", "footer", "labels", "orders"] as const).map((tab) => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setAdminSubTab(tab)}
-                                            className={`px-4 py-2 text-xs font-mono tracking-widest uppercase transition-all rounded-full whitespace-nowrap ${adminSubTab === tab ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
-                                                }`}
-                                        >
-                                            {tab === "labels" ? "Labels & Tags" : tab}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="min-h-[500px]">
-                                    {adminSubTab === "artworks" && <ArtworksTab />}
-                                    {adminSubTab === "settings" && <SettingsTab />}
-                                    {adminSubTab === "labels" && <LabelsTab />}
-                                    {adminSubTab === "footer" && <FooterTab />}
-                                    {adminSubTab === "orders" && <OrdersTab />}
-                                </div>
-                            </div>
-                        )}
+
                     </div>
                 )}
             </main>

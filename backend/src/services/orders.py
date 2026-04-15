@@ -232,7 +232,27 @@ class OrderService(BaseService):
                 values["fulfillment_status"] = "cancelled"
                 await self._release_original_artworks(order)
 
-            await self.db.orders.edit(values, exclude_unset=True, id=order_id)
+            # Guard: when admin manually confirms payment:
+            # 1. Un-cancel the order (or advance pending) and start fulfillment.
+            # 2. Re-lock original artworks as 'sold'.
+            if payment_status == "paid":
+                if order.fulfillment_status in ["cancelled", "pending"]:
+                    values["fulfillment_status"] = FulfillmentStatus.CONFIRMED.value
+                    values["confirmed_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+                for item in getattr(order, "items", []):
+                    if item.edition_type == EditionType.ORIGINAL.value:
+                        await self.db.artworks.edit(
+                            ArtworkPatch(original_status="sold"),
+                            exclude_unset=True,
+                            id=item.artwork_id,
+                        )
+                        logger.info("Re-locked artwork {} as 'sold' on manual payment override for order {}", item.artwork_id, order_id)
+
+            # Use a direct SA update — values is a plain dict, not a Pydantic model.
+            from sqlalchemy import update as sa_update
+            from src.models.orders import OrdersOrm
+            update_stmt = sa_update(OrdersOrm).filter_by(id=order_id).values(**values)
+            await self.db.session.execute(update_stmt)
             await self.db.commit()
             logger.info("Admin updated payment status of {} to {} (forced)", order_id, payment_status)
         except SQLAlchemyError as e:
@@ -440,7 +460,24 @@ class OrderService(BaseService):
                     "Auto-advancing fulfillment for order {} pending → confirmed on payment",
                     order.id,
                 )
-            
+
+            # Guard: re-lock original artworks as 'sold' when payment is confirmed.
+            # This protects against race conditions where the abandoned-orders cleanup
+            # may have briefly released originals before payment arrived.
+            if payment_status == "paid":
+                for item in getattr(order, "items", []):
+                    if item.edition_type == EditionType.ORIGINAL.value:
+                        await self.db.artworks.edit(
+                            ArtworkPatch(original_status="sold"),
+                            exclude_unset=True,
+                            id=item.artwork_id,
+                        )
+                        logger.info(
+                            "Re-locked original artwork {} as 'sold' on payment confirmation for order {}",
+                            item.artwork_id,
+                            order.id,
+                        )
+
             # If payment failed/refunded, cancel fulfillment and release original artworks
             if payment_status in ["failed", "refunded"] and order.fulfillment_status != "cancelled":
                 values["fulfillment_status"] = FulfillmentStatus.CANCELLED.value
@@ -512,8 +549,22 @@ class OrderService(BaseService):
     async def patch_order(self, order_id: int, data: OrderPatch):
         """
         Applies partial updates to an order.
+        If payment_status is included, delegates to update_payment_status
+        to ensure artwork inventory is properly synced (sold/available).
         """
         try:
+            # If payment_status is being changed, run full business logic
+            # (artwork lock/release) via the dedicated method instead of raw edit.
+            if data.payment_status is not None:
+                payment_status = data.payment_status
+                # Create a copy without payment_status for the generic patch
+                patch_without_payment = data.model_copy(update={"payment_status": None})
+                if any(v is not None for k, v in patch_without_payment.model_dump(exclude_unset=True).items()):
+                    await self.db.orders.edit(patch_without_payment, exclude_unset=True, id=order_id)
+                # Delegate payment_status change to the method with full business logic
+                await self.update_payment_status(order_id, payment_status)
+                return
+
             await self.db.orders.edit(data, exclude_unset=True, id=order_id)
             await self.db.commit()
             logger.info("Order patched successfully: {}", order_id)
@@ -538,11 +589,11 @@ class OrderService(BaseService):
                 try:
                     await self._release_original_artworks(order)
                     await self.db.orders.edit(
-                        {
-                            "payment_status": "failed",
-                            "fulfillment_status": "cancelled",
-                            "notes": f"Auto-cancelled: Abandoned checkout timeout ({timeout_hours}h)"
-                        },
+                        OrderPatch(
+                            payment_status="failed",
+                            fulfillment_status="cancelled",
+                            notes=f"Auto-cancelled: Abandoned checkout timeout ({timeout_hours}h)"
+                        ),
                         exclude_unset=True,
                         id=order.id
                     )

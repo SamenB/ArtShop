@@ -1,24 +1,13 @@
 "use client";
 
-/**
- * Advanced dual-aspect Image Cropper Modal.
- * Used for generating responsive hero background images (16:9 for desktop, 9:16 for mobile).
- * Extracts cropped image data locally via HTML5 Canvas before uploading.
- */
-
 import React, { useState, useCallback } from "react";
 import Cropper from "react-easy-crop";
 import { X } from "lucide-react";
 
-/** Component properties for the Cropper Modal. */
 interface ImageCropperModalProps {
-    /** Controls modal visibility. */
     isOpen: boolean;
-    /** Source URL or Object URL of the image to crop. */
     imageSrc: string;
-    /** Callback triggered when the modal is closed without saving. */
     onClose: () => void;
-    /** Callback triggered upon successful generation of both cropped WebP blobs. */
     onSaveCrops: (desktopBlob: Blob, mobileBlob: Blob) => Promise<void>;
 }
 
@@ -34,17 +23,14 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
     const [activeTab, setActiveTab] = useState<"desktop" | "mobile">("desktop");
     const [saving, setSaving] = useState(false);
 
-    /** Updates the internal state tracking the desktop pixel crop coordinates. */
     const onDesktopCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
         setDesktopCroppedArea(croppedAreaPixels);
     }, []);
 
-    /** Updates the internal state tracking the mobile pixel crop coordinates. */
     const onMobileCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
         setMobileCroppedArea(croppedAreaPixels);
     }, []);
 
-    /** Standard utility to asynchronously load an image into a DOM element for canvas extraction. */
     const createImage = (url: string): Promise<HTMLImageElement> =>
         new Promise((resolve, reject) => {
             const image = new Image();
@@ -54,19 +40,12 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
             image.src = url;
         });
 
-    /**
-     * Extracts a cropped segment from the source image using HTML5 Canvas.
-     * @param imageSrc Internal URL representation of the source image.
-     * @param pixelCrop Boundary box defining the crop.
-     * @param format Export MIME type (default "image/webp").
-     * @returns Binary Blob of the generated cropped image.
-     */
     const getCroppedImg = async (imageSrc: string, pixelCrop: any, format = "image/webp"): Promise<Blob> => {
         const image = await createImage(imageSrc);
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
-        if (!ctx) throw new Error("No 2d context available on standard Canvas element.");
+        if (!ctx) throw new Error("No 2d context available");
 
         canvas.width = pixelCrop.width;
         canvas.height = pixelCrop.height;
@@ -87,11 +66,10 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
             canvas.toBlob((file) => {
                 if (file) resolve(file);
                 else reject(new Error("Canvas toBlob failed"));
-            }, format, 0.98); // High quality (0.98) to mitigate generation artifacts.
+            }, format, 0.98);
         });
     };
 
-    /** Orchestrates crop generation for both aspect ratios in sequence. */
     const handleSave = async () => {
         if (!desktopCroppedArea || !mobileCroppedArea) return;
         setSaving(true);
@@ -110,34 +88,42 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="relative w-full max-w-4xl h-[80vh] flex flex-col rounded-2xl bg-[#1C1C1C] border border-[#2D2D2D] shadow-2xl overflow-hidden">
-                <div className="flex justify-between items-center p-6 border-b border-white/10">
-                    <h2 className="text-2xl font-serif text-[#F7F3EC] italic">Crop Background Image</h2>
-                    <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
+        <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <div className="relative w-full max-w-4xl h-[80vh] flex flex-col rounded-2xl bg-white border border-gray-200 shadow-2xl overflow-hidden">
+                <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-white">
+                    <h2 className="text-2xl font-serif text-black italic">Crop Background Image</h2>
+                    <button onClick={onClose} className="text-zinc-400 hover:text-black transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
-                <div className="flex gap-4 p-4 border-b border-white/5 bg-black/20">
+                <div className="flex gap-4 p-4 border-b border-gray-100 bg-gray-50/50">
                     <button
                         onClick={() => setActiveTab("desktop")}
-                        className={`px-4 py-2 text-xs font-mono tracking-widest uppercase transition-all rounded-full ${activeTab === "desktop" ? "bg-[#EAE5D9] text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10"}`}
+                        className={`px-5 py-2.5 text-[10px] font-bold font-mono tracking-widest uppercase transition-all rounded-full ${
+                            activeTab === "desktop" 
+                            ? "bg-black text-white shadow-sm" 
+                            : "bg-white border border-gray-200 text-zinc-500 hover:border-black hover:text-black"
+                        }`}
                     >
                         Desktop (16:9)
                     </button>
                     <button
                         onClick={() => setActiveTab("mobile")}
-                        className={`px-4 py-2 text-xs font-mono tracking-widest uppercase transition-all rounded-full ${activeTab === "mobile" ? "bg-[#EAE5D9] text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10"}`}
+                        className={`px-5 py-2.5 text-[10px] font-bold font-mono tracking-widest uppercase transition-all rounded-full ${
+                            activeTab === "mobile" 
+                            ? "bg-black text-white shadow-sm" 
+                            : "bg-white border border-gray-200 text-zinc-500 hover:border-black hover:text-black"
+                        }`}
                     >
                         Mobile (9:16)
                     </button>
-                    <div className="flex-1 text-right text-xs text-zinc-500 font-mono flex items-center justify-end">
+                    <div className="flex-1 text-right text-[11px] text-zinc-400 font-mono flex items-center justify-end font-medium">
                         Adjust both crops before saving.
                     </div>
                 </div>
 
-                <div className="relative flex-1 bg-black">
+                <div className="relative flex-1 bg-gray-100">
                     {activeTab === "desktop" && (
                         <div className="absolute inset-0">
                             <Cropper
@@ -166,8 +152,8 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
                     )}
                 </div>
 
-                <div className="p-6 border-t border-white/10 bg-[#1C1C1C] flex justify-between items-center">
-                    <div className="w-1/2 flex items-center gap-4 text-xs font-mono tracking-widest text-zinc-400 uppercase">
+                <div className="p-6 border-t border-gray-100 bg-white flex justify-between items-center">
+                    <div className="w-1/2 flex items-center gap-4 text-[11px] font-bold font-mono tracking-widest text-black uppercase">
                         <span>Zoom</span>
                         <input
                             type="range"
@@ -180,13 +166,13 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
                                 if (activeTab === "desktop") setDesktopZoom(val);
                                 else setMobileZoom(val);
                             }}
-                            className="flex-1"
+                            className="flex-1 accent-black h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                         />
                     </div>
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-8 py-3 bg-[#EAE5D9] text-black font-mono text-sm tracking-widest uppercase rounded-sm hover:bg-white transition-colors disabled:opacity-50"
+                        className="px-8 py-3.5 bg-black text-white font-mono text-[11px] font-bold tracking-widest uppercase rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm"
                     >
                         {saving ? "Processing..." : "Save Crops"}
                     </button>
