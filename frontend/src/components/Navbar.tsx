@@ -366,15 +366,38 @@ export default function Navbar() {
                                                 {user.email}
                                             </span>
                                         </div>
-                                        <Link
-                                            href="/profile"
-                                            onClick={() => setProfileMenuOpen(false)}
-                                            style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                                        >
-                                            {user.is_admin ? "Admin Dashboard" : "Dashboard"}
-                                        </Link>
+                                        {user.is_admin ? (
+                                            <Link
+                                                href="/admin"
+                                                onClick={() => setProfileMenuOpen(false)}
+                                                style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                            >
+                                                Admin Dashboard
+                                            </Link>
+                                        ) : (
+                                            <>
+                                                <Link
+                                                    href="/shop?liked=true"
+                                                    onClick={() => setProfileMenuOpen(false)}
+                                                    style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                                >
+                                                    My Likes
+                                                </Link>
+                                                <Link
+                                                    href="/profile"
+                                                    onClick={() => setProfileMenuOpen(false)}
+                                                    style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                                >
+                                                    My Orders
+                                                </Link>
+                                            </>
+                                        )}
                                         <button
                                             onClick={() => { logout(); setProfileMenuOpen(false); }}
                                             style={{ textAlign: "left", padding: "8px 12px", fontSize: "0.85rem", color: "#E53E3E", background: "none", border: "none", cursor: "pointer", borderRadius: "8px" }}
@@ -554,26 +577,77 @@ export default function Navbar() {
                     {/* Profile / Login */}
                     {user ? (
                         <>
-                            <Link
-                                href="/profile"
-                                onClick={() => setMenuOpen(false)}
-                                style={{
-                                    display: "block",
-                                    padding: "0.55rem 0",
-                                    fontFamily: "var(--font-sans)",
-                                    fontSize: "1.15rem",
-                                    fontWeight: 300,
-                                    letterSpacing: "0.01em",
-                                    textDecoration: "none",
-                                    color: "rgba(26,26,24,0.55)",
-                                    borderBottom: "1px solid rgba(26,26,24,0.06)",
-                                    transform: menuOpen ? "translateX(0)" : "translateX(18px)",
-                                    opacity: menuOpen ? 1 : 0,
-                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
-                                }}
-                            >
-                                {user.is_admin ? "Admin Dashboard" : "Dashboard"}
-                            </Link>
+                            {user.is_admin ? (
+                                <Link
+                                    href="/admin"
+                                    onClick={() => setMenuOpen(false)}
+                                    style={{
+                                        display: "block",
+                                        padding: "0.55rem 0",
+                                        fontFamily: "var(--font-sans)",
+                                        fontSize: "1.15rem",
+                                        fontWeight: 300,
+                                        letterSpacing: "0.01em",
+                                        textDecoration: "none",
+                                        color: "rgba(26,26,24,0.55)",
+                                        borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                        transform: menuOpen ? "translateX(0)" : "translateX(18px)",
+                                        opacity: menuOpen ? 1 : 0,
+                                        transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
+                                >
+                                    Admin Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link
+                                        href="/shop?liked=true"
+                                        onClick={() => setMenuOpen(false)}
+                                        style={{
+                                            display: "block",
+                                            padding: "0.55rem 0",
+                                            fontFamily: "var(--font-sans)",
+                                            fontSize: "1.15rem",
+                                            fontWeight: 300,
+                                            letterSpacing: "0.01em",
+                                            textDecoration: "none",
+                                            color: "rgba(26,26,24,0.55)",
+                                            borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                            transform: menuOpen ? "translateX(0)" : "translateX(18px)",
+                                            opacity: menuOpen ? 1 : 0,
+                                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
+                                    >
+                                        My Likes
+                                    </Link>
+                                    <Link
+                                        href="/profile"
+                                        onClick={() => setMenuOpen(false)}
+                                        style={{
+                                            display: "block",
+                                            padding: "0.55rem 0",
+                                            fontFamily: "var(--font-sans)",
+                                            fontSize: "1.15rem",
+                                            fontWeight: 300,
+                                            letterSpacing: "0.01em",
+                                            textDecoration: "none",
+                                            color: "rgba(26,26,24,0.55)",
+                                            borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                            transform: menuOpen ? "translateX(0)" : "translateX(18px)",
+                                            opacity: menuOpen ? 1 : 0,
+                                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.18}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.18}s`,
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
+                                    >
+                                        My Orders
+                                    </Link>
+                                </>
+                            )}
                             <button
                                 onClick={() => { setMenuOpen(false); logout(); }}
                                 style={{

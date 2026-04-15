@@ -6,7 +6,7 @@
    Inter         = clean sans-serif for body
    Licorice      = premium calligraphic script for artwork titles (self-hosted)
 ───────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 /* Licorice — self-hosted for guaranteed rendering */
 @font-face {
@@ -56,6 +56,8 @@
   /* body copy */
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
   /* typewriter labels — Le Labo printed form style */
+  --font-price: 'Space Grotesk', system-ui, sans-serif;
+  /* Trendy 2026 geometric font for numbers/prices */
   --font-artwork-title: 'Licorice', cursive;
   /* premium calligraphic script — artwork page titles */
 
@@ -197,6 +199,16 @@ h3 {
   letter-spacing: -0.01em;
   font-weight: 400;
   /* DM Serif Display looks best at regular weight */
+}
+
+/* ─────────────────────────────────────────────
+   Premium Numbers Font — Trendy 2026 Geometric
+───────────────────────────────────────────── */
+.font-price {
+  font-family: var(--font-price) !important;
+  font-style: normal !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
 }
 
 /* ─────────────────────────────────────────────

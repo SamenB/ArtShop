@@ -5,7 +5,7 @@ Pydantic schemas for artwork data validation and serialization.
 import enum
 import re
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.schemas.tags import Tag
 
@@ -30,6 +30,8 @@ class ArtworkAddRequest(BaseModel):
     Schema for the initial artwork creation request from the frontend.
     Includes tag IDs for relationship management.
     """
+
+    model_config = ConfigDict(use_enum_values=True)
 
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
@@ -151,6 +153,8 @@ class ArtworkPatch(BaseModel):
     Schema for applying partial updates to an artwork record in the database.
     """
 
+    model_config = ConfigDict(use_enum_values=True)
+
     title: str | None = Field(None, description="Title of the artwork")
     slug: str | None = Field(None, description="Unique slug for the artwork")
     description: str | None = Field(None, description="Description of the artwork")
@@ -180,6 +184,8 @@ class ArtworkAddBulk(BaseModel):
     """
     Schema for high-performance bulk artwork creation.
     """
+
+    model_config = ConfigDict(use_enum_values=True)
 
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")

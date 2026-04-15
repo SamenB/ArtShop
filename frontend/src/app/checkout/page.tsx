@@ -1307,7 +1307,7 @@ export default function CheckoutPage() {
 
                                     {/* ---- Pay Button ---- */}
                                     <button type="button" onClick={handleSubmit} disabled={isSubmitting} className="premium-cta-btn" style={{ width: "100%", padding: "1.1rem", fontSize: "1.05rem" }}>
-                                        {isSubmitting ? "Processing..." : `Pay ${convertPrice(currentTotal)}`}
+                                        {isSubmitting ? "Processing..." : <>Pay <span className="font-price">{convertPrice(currentTotal)}</span></>}
                                     </button>
 
                                     {/* ---- Payment Method Badges ---- */}
@@ -1388,11 +1388,11 @@ export default function CheckoutPage() {
                                                     <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.3rem" }}>
                                                         {isDiscounted ? (
                                                             <>
-                                                                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", fontWeight: 700, color: "#ec4899" }}>{convertPrice(discountedPrice)}</span>
-                                                                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#999", textDecoration: "line-through" }}>{convertPrice(item.price)}</span>
+                                                                <span className="font-price" style={{ fontSize: "0.9rem", fontWeight: 700, color: "#ec4899" }}>{convertPrice(discountedPrice)}</span>
+                                                                <span className="font-price" style={{ fontSize: "0.8rem", color: "#999", textDecoration: "line-through" }}>{convertPrice(item.price)}</span>
                                                             </>
                                                         ) : (
-                                                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", fontWeight: 600 }}>{convertPrice(item.price)}</span>
+                                                            <span className="font-price" style={{ fontSize: "0.9rem", fontWeight: 600 }}>{convertPrice(item.price)}</span>
                                                         )}
                                                         {item.quantity > 1 && <span style={{ fontSize: "0.75rem", color: "#999" }}>× {item.quantity}</span>}
                                                     </div>
@@ -1411,12 +1411,12 @@ export default function CheckoutPage() {
                                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", borderTop: "1px solid rgba(17,17,17,0.06)", paddingTop: "1rem" }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-sans)", fontSize: "0.85rem" }}>
                                         <span style={{ color: "#888" }}>Subtotal</span>
-                                        <span style={{ fontWeight: 600, textDecoration: promoApplied ? "line-through" : "none" }}>{convertPrice(cartTotal)}</span>
+                                        <span className="font-price" style={{ fontWeight: 600, fontSize: "0.95rem", textDecoration: promoApplied ? "line-through" : "none" }}>{convertPrice(cartTotal)}</span>
                                     </div>
                                     {promoApplied && (
                                         <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-sans)", fontSize: "0.85rem", color: "#ec4899" }}>
                                             <span>Discount (10% prints)</span>
-                                            <span style={{ fontWeight: 600 }}>−{convertPrice(discountAmount)}</span>
+                                            <span className="font-price" style={{ fontWeight: 600, fontSize: "0.95rem" }}>−{convertPrice(discountAmount)}</span>
                                         </div>
                                     )}
                                     <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-sans)", fontSize: "0.85rem" }}>
@@ -1428,7 +1428,7 @@ export default function CheckoutPage() {
                                         borderTop: "1px solid rgba(17,17,17,0.08)", paddingTop: "0.75rem", marginTop: "0.25rem",
                                     }}>
                                         <span style={{ fontWeight: 500 }}>Total</span>
-                                        <span style={{ fontWeight: 700 }}>{convertPrice(currentTotal)}</span>
+                                        <span className="font-price" style={{ fontWeight: 700, fontSize: "1.2rem" }}>{convertPrice(currentTotal)}</span>
                                     </div>
                                 </div>
                             </div>

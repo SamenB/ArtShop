@@ -396,7 +396,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                                 fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
                                 fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
                             }}>
-                                Original <span style={{ fontWeight: 500, color: "#555" }}>{convertPrice(product.original_price)}</span>
+                                Original <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(product.original_price)}</span>
                             </p>
                         )}
                         {product.has_prints && product.base_print_price && (
@@ -405,7 +405,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                                 fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
                                 fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
                             }}>
-                                Prints starting at <span style={{ fontWeight: 500, color: "#555" }}>{convertPrice(product.base_print_price)}</span>
+                                Prints starting at <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(product.base_print_price)}</span>
                             </p>
                         )}
                     </div>

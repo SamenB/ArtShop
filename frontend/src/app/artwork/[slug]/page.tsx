@@ -1273,7 +1273,7 @@ export default function ArtworkDetailPage() {
                                                         {work.original_status === "available" && (
                                                             <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
                                                                 <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.5rem" }}>Purchase Details</h3>
-                                                                <p style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-charcoal)" }}>{convertPrice(work.original_price)}</p>
+                                                                <p className="font-price" style={{ fontSize: "1.65rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(work.original_price)}</p>
                                                                 <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>Original Artwork • Certificate of Authenticity included</p>
                                                             </div>
                                                         )}
@@ -1302,7 +1302,7 @@ export default function ArtworkDetailPage() {
                                                                 }}>
                                                                     <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.68rem", fontWeight: 600, color: "var(--color-charcoal)", marginBottom: "0.2rem" }}>Flat crate available on request</p>
                                                                     <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>
-                                                                        Custom crates from {convertPrice(1000)}+. Contact us for details.
+                                                                        Custom crates from <span className="font-price font-medium">{convertPrice(1000)}</span>+. Contact us for details.
                                                                     </p>
                                                                 </div>
                                                             </>
@@ -1395,7 +1395,7 @@ export default function ArtworkDetailPage() {
                                                                     onClick={() => setOpenDropdown(openDropdown === "canvas-size" ? null : "canvas-size")}
                                                                     type="button"
                                                                 >
-                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span>
+                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
                                                                     <span className="step-chevron" />
                                                                 </button>
                                                                 <div className={`step-options ${openDropdown === "canvas-size" ? "open" : ""}`}>
@@ -1406,7 +1406,7 @@ export default function ArtworkDetailPage() {
                                                                             className={`step-option ${selectedCanvas === ps ? "active" : ""}`}
                                                                             onClick={() => { setSelectedCanvas(ps); setOpenDropdown(null); }}
                                                                         >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span>
+                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
                                                                             <span className="opt-check" />
                                                                         </button>
                                                                     ))}
@@ -1469,7 +1469,7 @@ export default function ArtworkDetailPage() {
                                                         <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                                             <div>
                                                                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 400, color: "var(--color-charcoal)" }}>
+                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>
                                                                     {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}
                                                                 </span>
                                                             </div>
@@ -1510,7 +1510,7 @@ export default function ArtworkDetailPage() {
                                                                     onClick={() => setOpenDropdown(openDropdown === "paper-size" ? null : "paper-size")}
                                                                     type="button"
                                                                 >
-                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span>
+                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span></span>
                                                                     <span className="step-chevron" />
                                                                 </button>
                                                                 <div className={`step-options ${openDropdown === "paper-size" ? "open" : ""}`}>
@@ -1521,7 +1521,7 @@ export default function ArtworkDetailPage() {
                                                                             className={`step-option ${selectedPaper === ps ? "active" : ""}`}
                                                                             onClick={() => { setSelectedPaper(ps); setOpenDropdown(null); }}
                                                                         >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span>
+                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span></span>
                                                                             <span className="opt-check" />
                                                                         </button>
                                                                     ))}
@@ -1543,7 +1543,7 @@ export default function ArtworkDetailPage() {
                                                         <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                                             <div>
                                                                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 400, color: "var(--color-charcoal)" }}>{convertPrice(currentPaperPrice)}</span>
+                                                                <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(currentPaperPrice)}</span>
                                                             </div>
                                                             <button
                                                                 className="premium-cta-btn"

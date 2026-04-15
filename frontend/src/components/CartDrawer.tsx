@@ -112,7 +112,7 @@ export default function CartDrawer() {
                                             >
                                                 {item.title}
                                             </Link>
-                                            <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.9rem", fontWeight: 500 }}>
+                                            <span className="font-price" style={{ fontSize: "0.95rem", fontWeight: 500 }}>
                                                 {convertPrice(item.price * item.quantity)}
                                             </span>
                                         </div>
@@ -152,7 +152,7 @@ export default function CartDrawer() {
                     <div style={{ padding: "1.5rem", borderTop: "1px solid rgba(26,26,24,0.06)", backgroundColor: "#fff" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1.5rem", fontFamily: "var(--font-sans)", fontSize: "0.9rem" }}>
                             <span style={{ color: "var(--color-muted)" }}>Subtotal</span>
-                            <span style={{ fontWeight: 600 }}>{convertPrice(cartTotal)}</span>
+                            <span className="font-price" style={{ fontWeight: 600, fontSize: "0.95rem" }}>{convertPrice(cartTotal)}</span>
                         </div>
                         <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", color: "var(--color-muted)", textAlign: "center", marginBottom: "1rem" }}>
                             Taxes and shipping calculated at checkout
