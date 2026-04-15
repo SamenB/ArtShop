@@ -135,26 +135,26 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
         raise
 
 
-async def send_emails_to_users_with_today_checkin_helper():
+async def release_abandoned_orders_helper():
     """
-    Core logic for processing daily check-ins.
-    Identifies relevant orders and logs the batch size.
+    Helper for releasing artworks stuck in pending/awaiting_payment.
     """
-    logger.info("Checking orders with today's check-in")
+    from src.services.orders import OrderService
+    logger.info("Running abandoned orders cleanup...")
     async with DBManager(session_factory=new_session_null_pool) as db:
-        orders = await db.orders.get_orders_today()
-        logger.info("Found {} orders with today's check-in", len(orders))
+        await OrderService(db).run_abandoned_orders_cleanup(timeout_hours=2)
 
 
-@celery_instance.task(name="order_today_checkin")
-def send_emails_to_users_with_today_checkin():
+@celery_instance.task(name="release_abandoned_orders")
+def release_abandoned_orders():
     """
-    Periodic task triggered by Celery Beat for routine order monitoring.
+    Periodic task triggered by Celery Beat every hour to release
+    original artworks from abandoned shopping carts.
     """
-    logger.info("Task started: order_today_checkin")
+    logger.info("Task started: release_abandoned_orders")
     try:
-        run_async(send_emails_to_users_with_today_checkin_helper())
+        run_async(release_abandoned_orders_helper())
     except Exception as e:
-        logger.error("Task failed: order_today_checkin: {}", e)
+        logger.error("Task failed: release_abandoned_orders: {}", e)
         return
-    logger.info("Task finished: order_today_checkin")
+    logger.info("Task finished: release_abandoned_orders")

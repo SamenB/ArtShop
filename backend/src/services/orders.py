@@ -4,6 +4,8 @@ Handles complex checkout logic including inventory checks for original artworks,
 print availability verification, and multi-entity transaction management.
 """
 
+from datetime import datetime, timezone
+
 from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -17,13 +19,26 @@ from src.exeptions import (
 from src.schemas.artworks import ArtworkPatch
 from src.schemas.orders import (
     EditionType,
+    FulfillmentStatus,
+    FulfillmentStatusUpdate,
     OrderAdd,
     OrderAddRequest,
     OrderBulkRequest,
     OrderItemAdd,
     OrderPatch,
+    build_tracking_url,
 )
 from src.services.base import BaseService
+
+
+# Maps fulfillment_status → which timestamp column to set
+FULFILLMENT_TIMESTAMP_MAP: dict[str, str] = {
+    FulfillmentStatus.CONFIRMED: "confirmed_at",
+    FulfillmentStatus.PRINT_ORDERED: "print_ordered_at",
+    FulfillmentStatus.PRINT_RECEIVED: "print_received_at",
+    FulfillmentStatus.SHIPPED: "shipped_at",
+    FulfillmentStatus.DELIVERED: "delivered_at",
+}
 
 
 class OrderService(BaseService):
@@ -189,18 +204,166 @@ class OrderService(BaseService):
         except SQLAlchemyError:
             raise DatabaseException
 
+    async def _release_original_artworks(self, order) -> None:
+        """
+        Helper method to revert original artworks within an order back to 'available' status.
+        Must be called within a database transaction context before a commit.
+        """
+        for item in getattr(order, "items", []):
+            if item.edition_type == EditionType.ORIGINAL.value:
+                # Assuming artwork is already fetched. If not, fetch by artwork_id.
+                await self.db.artworks.edit(
+                    ArtworkPatch(original_status="available"),
+                    exclude_unset=True,
+                    id=item.artwork_id
+                )
+                logger.info("Released original artwork {} back to inventory", item.artwork_id)
+
     async def update_payment_status(self, order_id: int, payment_status: str):
         """
         Updates the payment processing status of an existing order.
+        If marked as failed or refunded, automatically cancels fulfillment and releases inventory.
         """
         try:
-            await self.db.orders.edit(
-                {"payment_status": payment_status}, exclude_unset=True, id=order_id
-            )
+            order = await self.db.orders.get_one(id=order_id)
+            values = {"payment_status": payment_status}
+
+            if payment_status in ["failed", "refunded"] and order.fulfillment_status != "cancelled":
+                values["fulfillment_status"] = "cancelled"
+                await self._release_original_artworks(order)
+
+            await self.db.orders.edit(values, exclude_unset=True, id=order_id)
             await self.db.commit()
-        except SQLAlchemyError:
+            logger.info("Admin updated payment status of {} to {} (forced)", order_id, payment_status)
+        except SQLAlchemyError as e:
             await self.db.rollback()
             raise DatabaseException
+
+    async def update_fulfillment_status(
+        self,
+        order_id: int,
+        update_data: FulfillmentStatusUpdate,
+    ) -> None:
+        """
+        Updates the fulfillment status of an order and auto-sets the corresponding timestamp.
+
+        When the status transitions to 'shipped':
+        - tracking_number and carrier are persisted.
+        - tracking_url is auto-generated from the carrier template if not manually provided.
+
+        After persisting, fires a transactional email to the customer informing them
+        of the status change (via background thread to avoid blocking the response).
+
+        Args:
+            order_id: The internal order identifier.
+            update_data: FulfillmentStatusUpdate schema with new status and optional tracking.
+        """
+        try:
+            from sqlalchemy import update as sa_update
+
+            from src.models.orders import OrdersOrm
+
+            # Fetch order for email notification
+            order = await self.db.orders.get_one(id=order_id)
+
+            new_status = update_data.fulfillment_status.value
+
+            # Build the update values dict
+            values: dict = {"fulfillment_status": new_status}
+
+            # Auto-set the lifecycle timestamp for this transition
+            ts_field = FULFILLMENT_TIMESTAMP_MAP.get(new_status)
+            if ts_field:
+                values[ts_field] = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            # Revert original artworks back to inventory if the order is cancelled
+            if new_status == FulfillmentStatus.CANCELLED.value and order.fulfillment_status != FulfillmentStatus.CANCELLED.value:
+                await self._release_original_artworks(order)
+
+            # Persist tracking info when provided (typically on 'shipped')
+            if update_data.tracking_number is not None:
+                values["tracking_number"] = update_data.tracking_number
+
+            if update_data.carrier is not None:
+                values["carrier"] = update_data.carrier
+
+            # Auto-generate tracking URL from carrier template
+            resolved_carrier = update_data.carrier or order.carrier
+            resolved_tracking = update_data.tracking_number or order.tracking_number
+            auto_url = build_tracking_url(resolved_carrier, resolved_tracking)
+            if auto_url:
+                values["tracking_url"] = auto_url
+
+            # Persist admin notes if provided
+            if update_data.notes is not None:
+                values["notes"] = update_data.notes
+
+            update_stmt = (
+                sa_update(OrdersOrm)
+                .filter_by(id=order_id)
+                .values(**values)
+            )
+            await self.db.session.execute(update_stmt)
+            await self.db.commit()
+
+            logger.info(
+                "Order {} fulfillment status updated: {} → {}",
+                order_id,
+                order.fulfillment_status,
+                new_status,
+            )
+
+            # Send customer email notification in background thread
+            # (synchronous SMTP wrapped to avoid blocking the event loop)
+            self._fire_fulfillment_email(
+                order_id=order_id,
+                first_name=order.first_name,
+                customer_email=order.email,
+                fulfillment_status=new_status,
+                tracking_number=resolved_tracking,
+                carrier=resolved_carrier,
+                tracking_url=auto_url or order.tracking_url,
+            )
+
+        except ObjectNotFoundException:
+            raise
+        except SQLAlchemyError as e:
+            logger.error("Failed to update fulfillment status for order {}: {}", order_id, e)
+            await self.db.rollback()
+            raise DatabaseException
+
+    def _fire_fulfillment_email(
+        self,
+        order_id: int,
+        first_name: str,
+        customer_email: str,
+        fulfillment_status: str,
+        tracking_number: str | None,
+        carrier: str | None,
+        tracking_url: str | None,
+    ) -> None:
+        """
+        Sends a fulfillment notification email in a background thread.
+        Uses threading to avoid blocking the async event loop with SMTP I/O.
+        """
+        import threading
+
+        from src.services.email import send_fulfillment_status_email
+
+        thread = threading.Thread(
+            target=send_fulfillment_status_email,
+            kwargs={
+                "order_id": order_id,
+                "first_name": first_name,
+                "customer_email": customer_email,
+                "fulfillment_status": fulfillment_status,
+                "tracking_number": tracking_number,
+                "carrier": carrier,
+                "tracking_url": tracking_url,
+            },
+            daemon=True,
+        )
+        thread.start()
 
     async def link_payment_session(self, order_id: int, invoice_id: str, payment_url: str) -> None:
         """
@@ -240,6 +403,9 @@ class OrderService(BaseService):
         Used by the webhook handler to process asynchronous status callbacks.
         Terminal statuses ('paid', 'refunded') are protected from downgrade.
 
+        When payment transitions to 'paid', automatically advances the
+        fulfillment_status from 'pending' → 'confirmed'.
+
         Args:
             invoice_id: The Monobank invoice identifier.
             payment_status: The new internal payment status to set.
@@ -264,25 +430,54 @@ class OrderService(BaseService):
 
             from sqlalchemy import update as sa_update
 
+            values: dict = {"payment_status": payment_status}
+
+            # If payment is confirmed, auto-advance fulfillment to 'confirmed'
+            if payment_status == "paid" and order.fulfillment_status == "pending":
+                values["fulfillment_status"] = FulfillmentStatus.CONFIRMED.value
+                values["confirmed_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+                logger.info(
+                    "Auto-advancing fulfillment for order {} pending → confirmed on payment",
+                    order.id,
+                )
+            
+            # If payment failed/refunded, cancel fulfillment and release original artworks
+            if payment_status in ["failed", "refunded"] and order.fulfillment_status != "cancelled":
+                values["fulfillment_status"] = FulfillmentStatus.CANCELLED.value
+                await self._release_original_artworks(order)
+                logger.info("Auto-cancelled fulfillment and released originals for order {} due to payment failure", order.id)
+
             update_stmt = (
                 sa_update(self.db.orders.model)
                 .filter_by(id=order.id)
-                .values(payment_status=payment_status)
+                .values(**values)
             )
             await self.db.session.execute(update_stmt)
             await self.db.commit()
 
             logger.info(
-                "Order {} payment status updated: {} → {}",
+                "Order {} payment status updated by webhook: {} → {}",
                 order.id,
                 order.payment_status,
                 payment_status,
             )
+
+            # Notify customer when payment is confirmed
+            if payment_status == "paid" and order.payment_status not in terminal_statuses:
+                self._fire_fulfillment_email(
+                    order_id=order.id,
+                    first_name=order.first_name,
+                    customer_email=order.email,
+                    fulfillment_status="confirmed",
+                    tracking_number=None,
+                    carrier=None,
+                    tracking_url=None,
+                )
+
         except SQLAlchemyError as e:
             logger.error("Failed to update payment status for invoice {}: {}", invoice_id, e)
             await self.db.rollback()
             raise DatabaseException
-
 
     async def delete_order(self, order_id: int):
         """
@@ -291,21 +486,20 @@ class OrderService(BaseService):
         """
         try:
             order = await self.db.orders.get_one(id=order_id)
-            
+
             # Revert artwork status for originals
             for item in order.items:
                 if item.edition_type == EditionType.ORIGINAL:
                     await self.db.artworks.edit(
-                        ArtworkPatch(original_status="available"), 
-                        exclude_unset=True, 
+                        ArtworkPatch(original_status="available"),
+                        exclude_unset=True,
                         id=item.artwork_id
                     )
-            
-            # Delete order items first (due to FK constraints if any, 
-            # though SQLAlchemy might handle it depending on cascade)
+
+            # Delete order items first (due to FK constraints)
             await self.db.order_items.delete(order_id=order_id)
             await self.db.orders.delete(id=order_id)
-            
+
             await self.db.commit()
             logger.info("Order deleted successfully: {}", order_id)
         except ObjectNotFoundException:
@@ -327,3 +521,39 @@ class OrderService(BaseService):
             logger.error("Failed to patch order {}: {}", order_id, e)
             await self.db.rollback()
             raise DatabaseException
+
+    async def run_abandoned_orders_cleanup(self, timeout_hours: int = 2) -> int:
+        """
+        Finds orders stuck in 'pending' or 'awaiting_payment' older than `timeout_hours`,
+        cancels them, and releases any original artworks back to inventory.
+        Intended for cron / celery beat execution.
+        """
+        try:
+            abandoned_orders = await self.db.orders.get_abandoned_orders(timeout_hours=timeout_hours)
+            if not abandoned_orders:
+                return 0
+
+            count = 0
+            for order in abandoned_orders:
+                try:
+                    await self._release_original_artworks(order)
+                    await self.db.orders.edit(
+                        {
+                            "payment_status": "failed",
+                            "fulfillment_status": "cancelled",
+                            "notes": f"Auto-cancelled: Abandoned checkout timeout ({timeout_hours}h)"
+                        },
+                        exclude_unset=True,
+                        id=order.id
+                    )
+                    await self.db.commit()
+                    count += 1
+                except Exception as e:
+                    logger.error("Failed to release abandoned order {}: {}", order.id, e)
+                    await self.db.rollback()
+
+            logger.info("Abandoned orders cleanup complete. Cancelled {} orders.", count)
+            return count
+        except Exception as e:
+            logger.error("Error running abandoned orders cleanup: {}", e)
+            return 0

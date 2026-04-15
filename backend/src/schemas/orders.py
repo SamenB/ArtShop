@@ -20,6 +20,48 @@ class EditionType(str, Enum):
     PRINT = "print"
 
 
+class FulfillmentStatus(str, Enum):
+    """
+    Tracks the physical fulfillment pipeline for an order.
+    Updated manually by the admin via the dashboard.
+
+    Flow:
+        pending → confirmed → print_ordered → print_received → packaging → shipped → delivered
+        (any stage) → cancelled
+    """
+
+    PENDING = "pending"           # Order received, payment not yet confirmed
+    CONFIRMED = "confirmed"       # Payment confirmed, starting to process
+    PRINT_ORDERED = "print_ordered"   # Sent to print shop (you paid)
+    PRINT_RECEIVED = "print_received" # Print shop sent the artwork back to you
+    PACKAGING = "packaging"       # You are packaging the parcel
+    SHIPPED = "shipped"           # Parcel dispatched to client (TTN available)
+    DELIVERED = "delivered"       # Client confirmed receipt (optional)
+    CANCELLED = "cancelled"       # Order cancelled at any stage
+
+
+# Carriers with known tracking URL templates.
+# {tracking_number} is replaced by the actual number.
+CARRIER_TRACKING_URLS: dict[str, str] = {
+    "nova_poshta": "https://tracking.novaposhta.ua/#/uk/{tracking_number}",
+    "ukrposhta": "https://track.ukrposhta.ua/tracking_UA.html?barcode={tracking_number}",
+    "dhl": "https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id={tracking_number}",
+    "fedex": "https://www.fedex.com/apps/fedextrack/?action=track&tracknumbers={tracking_number}",
+    "ups": "https://www.ups.com/track?tracknum={tracking_number}",
+    "meest": "https://m.meest-group.com/en/track/{tracking_number}",
+}
+
+
+def build_tracking_url(carrier: str | None, tracking_number: str | None) -> str | None:
+    """Auto-generate a tracking URL for known carriers."""
+    if not carrier or not tracking_number:
+        return None
+    template = CARRIER_TRACKING_URLS.get(carrier.lower().replace(" ", "_").replace("-", "_"))
+    if template:
+        return template.replace("{tracking_number}", tracking_number.strip())
+    return None
+
+
 class ArtworkSummary(BaseModel):
     """
     Lightweight summary of an artwork for inclusion in orders.
@@ -137,6 +179,24 @@ class Order(OrderAdd):
     invoice_id: Optional[str] = None
     payment_url: Optional[str] = None
 
+    # Fulfillment tracking
+    fulfillment_status: str = FulfillmentStatus.PENDING
+
+    # Internal admin notes
+    notes: Optional[str] = None
+
+    # Shipping tracking
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_url: Optional[str] = None
+
+    # Lifecycle timestamps
+    confirmed_at: Optional[datetime] = None
+    print_ordered_at: Optional[datetime] = None
+    print_received_at: Optional[datetime] = None
+    shipped_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+
     # Override required shipping fields for backward compatibility with legacy orders
     shipping_country: Optional[str] = None  # type: ignore[assignment]
     shipping_country_code: Optional[str] = None  # type: ignore[assignment]
@@ -161,10 +221,22 @@ class OrderBulkRequest(OrderAdd):
 
 class OrderStatusUpdate(BaseModel):
     """
-    Schema for updating the payment or processing status of an order.
+    Schema for updating the payment status of an order (admin only).
     """
 
     payment_status: str
+
+
+class FulfillmentStatusUpdate(BaseModel):
+    """
+    Schema for updating the fulfillment status of an order (admin only).
+    Optionally includes tracking details when transitioning to 'shipped'.
+    """
+
+    fulfillment_status: FulfillmentStatus
+    tracking_number: Optional[str] = Field(None, max_length=200)
+    carrier: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = Field(None, max_length=2000)
 
 
 class OrderPatch(BaseModel):
@@ -190,11 +262,18 @@ class OrderPatch(BaseModel):
 
     # Meta
     payment_status: Optional[str] = None
+    fulfillment_status: Optional[str] = None
     newsletter_opt_in: Optional[bool] = None
     discovery_source: Optional[str] = None
     promo_code: Optional[str] = None
     invoice_id: Optional[str] = None
     payment_url: Optional[str] = None
+
+    # Fulfillment
+    notes: Optional[str] = None
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_url: Optional[str] = None
 
 
 Order.model_rebuild()

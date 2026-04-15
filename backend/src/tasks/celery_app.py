@@ -23,8 +23,8 @@ celery_instance = Celery(
 # Configuration for periodic/scheduled tasks (Celery Beat)
 # Usage for beat: celery -A src.tasks.celery_app:celery_instance beat --loglevel=info
 celery_instance.conf.beat_schedule = {
-    "send-emails-to-users-with-today-checkin": {
-        "task": "order_today_checkin",
-        "schedule": 5,  # Run every 5 seconds for demonstration/polling
+    "release-abandoned-orders": {
+        "task": "release_abandoned_orders",
+        "schedule": 3600,  # Run every hour
     },
 }

@@ -26,6 +26,7 @@ interface OrderItem {
     finish: string;
     size: string | null;
     price: number;
+    artwork?: { id: number; title: string; images?: (string | { thumb: string; medium: string; original: string })[] };
 }
 
 /** Represents a full order record. */
@@ -37,10 +38,20 @@ interface Order {
     phone: string;
     total_price: number;
     payment_status: string;
+    fulfillment_status: string;
     created_at: string;
     shipping_city: string | null;
     shipping_country: string | null;
     shipping_country_code: string | null;
+    // Tracking
+    tracking_number: string | null;
+    carrier: string | null;
+    tracking_url: string | null;
+    // Lifecycle timestamps
+    confirmed_at: string | null;
+    print_ordered_at: string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
     items: OrderItem[];
 }
 
@@ -62,38 +73,141 @@ interface Artwork {
     gradientTo?: string;
 }
 
-/** Status badge color mapping. */
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-    paid: { bg: "rgba(34,197,94,0.15)", text: "#22c55e", label: "Paid" },
-    pending: { bg: "rgba(250,204,21,0.15)", text: "#eab308", label: "Pending" },
-    awaiting_payment: { bg: "rgba(250,204,21,0.15)", text: "#eab308", label: "Awaiting Payment" },
-    processing: { bg: "rgba(96,165,250,0.15)", text: "#60a5fa", label: "Processing" },
-    failed: { bg: "rgba(239,68,68,0.15)", text: "#ef4444", label: "Failed" },
-    refunded: { bg: "rgba(168,85,247,0.15)", text: "#a855f7", label: "Refunded" },
-    mock_paid: { bg: "rgba(34,197,94,0.15)", text: "#22c55e", label: "Mock Paid" },
-    hold: { bg: "rgba(96,165,250,0.15)", text: "#60a5fa", label: "On Hold" },
+/** Payment status badge colors. */
+const PAYMENT_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+    paid:             { bg: "rgba(34,197,94,0.15)",   text: "#22c55e", label: "💳 Paid" },
+    pending:          { bg: "rgba(250,204,21,0.15)",  text: "#eab308", label: "💳 Pending" },
+    awaiting_payment: { bg: "rgba(250,204,21,0.15)",  text: "#eab308", label: "💳 Awaiting Payment" },
+    processing:       { bg: "rgba(96,165,250,0.15)",  text: "#60a5fa", label: "💳 Processing" },
+    failed:           { bg: "rgba(239,68,68,0.15)",   text: "#ef4444", label: "💳 Failed" },
+    refunded:         { bg: "rgba(168,85,247,0.15)",  text: "#a855f7", label: "💳 Refunded" },
+    mock_paid:        { bg: "rgba(34,197,94,0.15)",   text: "#22c55e", label: "💳 Paid" },
+    hold:             { bg: "rgba(96,165,250,0.15)",  text: "#60a5fa", label: "💳 On Hold" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-    const config = STATUS_COLORS[status] || { bg: "rgba(255,255,255,0.1)", text: "#999", label: status };
+    const config = PAYMENT_COLORS[status] || { bg: "rgba(255,255,255,0.1)", text: "#999", label: status };
     return (
-        <span
-            style={{
-                display: "inline-block",
-                padding: "0.2rem 0.65rem",
-                borderRadius: "999px",
-                fontSize: "0.65rem",
-                fontFamily: "var(--font-sans, system-ui)",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                backgroundColor: config.bg,
-                color: config.text,
-                whiteSpace: "nowrap",
-            }}
-        >
+        <span style={{
+            display: "inline-block",
+            padding: "0.2rem 0.65rem",
+            borderRadius: "999px",
+            fontSize: "0.65rem",
+            fontFamily: "var(--font-sans, system-ui)",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            backgroundColor: config.bg,
+            color: config.text,
+            whiteSpace: "nowrap",
+        }}>
             {config.label}
         </span>
+    );
+}
+
+/** Fulfillment progress steps for customer-facing display */
+const FULFILLMENT_STEPS: { key: string; icon: string; label: string }[] = [
+    { key: "pending",        icon: "🛒", label: "Order Placed" },
+    { key: "confirmed",      icon: "✅", label: "Confirmed" },
+    { key: "print_ordered",  icon: "🖨", label: "Being Printed" },
+    { key: "print_received", icon: "📦", label: "Print Ready" },
+    { key: "packaging",      icon: "🎁", label: "Packaging" },
+    { key: "shipped",        icon: "🚀", label: "Shipped" },
+    { key: "delivered",      icon: "🎨", label: "Delivered" },
+];
+
+const FULFILLMENT_ORDER = FULFILLMENT_STEPS.map(s => s.key);
+
+function FulfillmentProgressBar({ status, order }: { status: string; order: Order }) {
+    const isCancelled = status === "cancelled";
+    const currentIdx = isCancelled ? -1 : FULFILLMENT_ORDER.indexOf(status);
+
+    if (isCancelled) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem", background: "rgba(239,68,68,0.08)", borderRadius: "8px", border: "1px solid rgba(239,68,68,0.2)" }}>
+                <span style={{ fontSize: "1rem" }}>✗</span>
+                <span style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#ef4444" }}>Order Cancelled</span>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ overflowX: "auto", paddingBottom: "4px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", minWidth: "max-content" }}>
+                {FULFILLMENT_STEPS.map((step, idx) => {
+                    const isCompleted = idx < currentIdx;
+                    const isCurrent = idx === currentIdx;
+                    const isPending = idx > currentIdx;
+                    return (
+                        <div key={step.key} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <div style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: "3px",
+                                opacity: isPending ? 0.3 : 1,
+                            }}>
+                                <div style={{
+                                    width: isCurrent ? "2rem" : "1.75rem",
+                                    height: isCurrent ? "2rem" : "1.75rem",
+                                    borderRadius: "50%",
+                                    background: isCompleted ? "rgba(34,197,94,0.2)" : isCurrent ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
+                                    border: isCompleted ? "1.5px solid rgba(34,197,94,0.5)" : isCurrent ? "1.5px solid rgba(255,255,255,0.5)" : "1.5px solid rgba(255,255,255,0.1)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: isCurrent ? "1rem" : "0.8rem",
+                                    boxShadow: isCurrent ? "0 0 0 3px rgba(255,255,255,0.08)" : "none",
+                                    transition: "all 0.2s",
+                                }}>
+                                    {step.icon}
+                                </div>
+                                <span style={{
+                                    fontSize: "0.55rem",
+                                    fontWeight: isCurrent ? 700 : 500,
+                                    color: isCompleted ? "#22c55e" : isCurrent ? "#F7F3EC" : "#64748b",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    whiteSpace: "nowrap",
+                                }}>
+                                    {step.label}
+                                </span>
+                            </div>
+                            {idx < FULFILLMENT_STEPS.length - 1 && (
+                                <div style={{
+                                    width: "20px",
+                                    height: "1.5px",
+                                    background: isCompleted ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.08)",
+                                    flexShrink: 0,
+                                    marginBottom: "12px",
+                                }} />
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Tracking info (visible when shipped) */}
+            {(status === "shipped" || status === "delivered") && order.tracking_number && (
+                <div style={{ marginTop: "0.75rem", padding: "0.65rem 0.85rem", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "8px" }}>
+                    <p style={{ fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#22c55e", marginBottom: "0.3rem" }}>Tracking</p>
+                    <p style={{ fontSize: "0.75rem", color: "#d4d4d8", fontFamily: "monospace" }}>
+                        {order.carrier && <span style={{ fontWeight: 600, marginRight: "6px", textTransform: "capitalize" }}>{order.carrier.replace(/_/g, " ")}</span>}
+                        {order.tracking_number}
+                    </p>
+                    {order.tracking_url && (
+                        <a
+                            href={order.tracking_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: "inline-block", marginTop: "0.35rem", fontSize: "0.65rem", color: "#22c55e", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: "2px" }}>
+                            Track your parcel →
+                        </a>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -198,77 +312,74 @@ export default function ProfilePage() {
                                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                                         .map((order) => {
                                             const isExpanded = expandedOrder === order.id;
+                                            const fulfillmentStatus = order.fulfillment_status || "pending";
                                             return (
                                                 <div
                                                     key={order.id}
                                                     className="border border-white/10 rounded-xl bg-white/[0.02] overflow-hidden transition-all hover:border-white/20"
                                                 >
-                                                    {/* Order Header (clickable) */}
+                                                    {/* Order Header */}
                                                     <button
                                                         onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
                                                         className="w-full p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-left"
                                                     >
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-3 flex-wrap mb-1.5">
-                                                                <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
-                                                                    Order #{order.id}
-                                                                </p>
+                                                                <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">Order #{order.id}</p>
                                                                 <StatusBadge status={order.payment_status} />
                                                             </div>
-                                                            <p className="font-sans text-sm text-zinc-300">
-                                                                {new Date(order.created_at).toLocaleDateString("en-US", {
-                                                                    year: "numeric", month: "long", day: "numeric"
-                                                                })}
+                                                            <p className="font-sans text-sm text-zinc-300 mb-3">
+                                                                {new Date(order.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
                                                                 {order.items && order.items.length > 0 && (
-                                                                    <span className="text-zinc-500 ml-2">
-                                                                        · {order.items.length} {order.items.length === 1 ? "item" : "items"}
-                                                                    </span>
+                                                                    <span className="text-zinc-500 ml-2">· {order.items.length} {order.items.length === 1 ? "item" : "items"}</span>
                                                                 )}
                                                             </p>
+                                                            {/* Fulfillment progress bar */}
+                                                            <FulfillmentProgressBar status={fulfillmentStatus} order={order} />
                                                         </div>
-                                                        <div className="flex items-center gap-4">
-                                                            <p className="font-serif italic text-xl text-[#EAE5D9]">
-                                                                {convertPrice(order.total_price)}
-                                                            </p>
-                                                            <span
-                                                                className="text-zinc-500 text-xs transition-transform"
-                                                                style={{ transform: isExpanded ? "rotate(180deg)" : "none" }}
-                                                            >
-                                                                ▼
-                                                            </span>
+                                                        <div className="flex items-center gap-4 ml-4 flex-shrink-0">
+                                                            <p className="font-serif italic text-xl text-[#EAE5D9]">{convertPrice(order.total_price)}</p>
+                                                            <span className="text-zinc-500 text-xs transition-transform" style={{ transform: isExpanded ? "rotate(180deg)" : "none" }}>▼</span>
                                                         </div>
                                                     </button>
 
                                                     {/* Expanded Details */}
                                                     {isExpanded && (
-                                                        <div className="border-t border-white/5 px-5 py-4 space-y-4" style={{ animation: "fadeIn 0.2s ease" }}>
-                                                            {/* Items */}
+                                                        <div className="border-t border-white/5 px-5 py-5 space-y-5" style={{ animation: "fadeIn 0.2s ease" }}>
+
+                                                            {/* Items with artwork info */}
                                                             {order.items && order.items.length > 0 && (
                                                                 <div>
-                                                                    <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Items</p>
+                                                                    <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-3">Items</p>
                                                                     <div className="space-y-2">
-                                                                        {order.items.map((item, idx) => (
-                                                                            <div key={idx} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
-                                                                                <div>
-                                                                                    <p className="font-sans text-sm text-zinc-200">
-                                                                                        Artwork #{item.artwork_id}
-                                                                                    </p>
-                                                                                    <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">
-                                                                                        {item.edition_type === "original" ? "Original" : "Print"}
-                                                                                        {item.size && ` · ${item.size}`}
-                                                                                        {item.finish && ` · ${item.finish}`}
-                                                                                    </p>
+                                                                        {order.items.map((item, idx) => {
+                                                                            const imgSrc = item.artwork?.images?.[0]
+                                                                                ? getImageUrl(item.artwork.images[0], "thumb")
+                                                                                : null;
+                                                                            return (
+                                                                                <div key={idx} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+                                                                                    {imgSrc && (
+                                                                                        <img src={imgSrc} alt="" className="w-10 h-10 rounded object-cover border border-white/10 flex-shrink-0" />
+                                                                                    )}
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <p className="font-sans text-sm text-zinc-200 truncate">
+                                                                                            {item.artwork?.title || `Artwork #${item.artwork_id}`}
+                                                                                        </p>
+                                                                                        <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">
+                                                                                            {item.edition_type === "original" ? "Original" : "Print"}
+                                                                                            {item.size && ` · ${item.size}`}
+                                                                                            {item.finish && ` · ${item.finish}`}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <p className="font-sans text-sm text-zinc-300 font-medium flex-shrink-0">{convertPrice(item.price)}</p>
                                                                                 </div>
-                                                                                <p className="font-sans text-sm text-zinc-300 font-medium">
-                                                                                    {convertPrice(item.price)}
-                                                                                </p>
-                                                                            </div>
-                                                                        ))}
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                 </div>
                                                             )}
 
-                                                            {/* Shipping Info */}
+                                                            {/* Shipping */}
                                                             {(order.shipping_city || order.shipping_country) && (
                                                                 <div>
                                                                     <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Shipping To</p>

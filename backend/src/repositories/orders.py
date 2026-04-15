@@ -54,8 +54,13 @@ class OrdersRepository(BaseRepository):
             logger.warning("IntegrityError bulk in {}: {}", self.model.__tablename__, str(ex))
             raise ObjectAlreadyExistsException() from ex
 
-    async def get_orders_today(self):
-        query = select(self.model).where(func.date(self.model.created_at) == date.today())
+    async def get_abandoned_orders(self, timeout_hours: int = 2):
+        from datetime import datetime, timedelta, timezone
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=timeout_hours)
+        query = select(self.model).where(
+            self.model.payment_status.in_(["pending", "awaiting_payment"]),
+            self.model.created_at < cutoff_time
+        )
         res = await self.session.execute(query)
         return [self.mapper.map_to_schema(model) for model in res.scalars().all()]
 
