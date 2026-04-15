@@ -243,7 +243,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                 WebkitTapHighlightColor: "transparent",
             }}
         >
-            <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%", position: "relative", zIndex: 10 }}>
+            <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%", position: "relative", zIndex: 10, pointerEvents: "none" }}>
                 <div
                     ref={containerRef}
                     className="art-card-container"
