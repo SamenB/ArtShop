@@ -34,7 +34,6 @@ interface Artwork {
     has_prints: boolean;
     orientation?: string;
     base_print_price?: number;
-    collection_id?: number;
     width_cm?: number;
     height_cm?: number;
     width_in?: number;
@@ -44,7 +43,7 @@ interface Artwork {
     gradientFrom?: string;
     /** UI fallback gradient end color. */
     gradientTo?: string;
-    tags?: Array<{ title: string; category: string; id: number }>;
+    labels?: Array<{ title: string; category_id?: number; id: number }>;
 }
 
 /** 
@@ -110,7 +109,7 @@ interface ArtCardProps {
     isMobile: boolean;
     liked?: boolean;
     onLike?: (id: number, newState: boolean) => void;
-    onAuthRequired?: (id: number) => void;
+    onAuthRequired?: (id: number, newState: boolean) => void;
 }
 
 /**
@@ -346,11 +345,17 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         onClick={e => {
                             e.stopPropagation();
                             e.preventDefault();
-                            if (onAuthRequired) { onAuthRequired(work.id); return; }
                             const newState = !liked;
+                            
                             setLiked(newState);
                             setLikeAnimating(true);
                             setTimeout(() => setLikeAnimating(false), 400);
+
+                            if (onAuthRequired) { 
+                                onAuthRequired(work.id, newState); 
+                                return; 
+                            }
+                            
                             onLike?.(work.id, newState);
                         }}
                         onPointerDown={e => e.stopPropagation()}
@@ -397,7 +402,6 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
 export default function GalleryPage() {
     const { user } = useUser();
     const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
-    const [allCollections, setAllCollections] = useState<CollectionData[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortKey, setSortKey] = useState<SortKey>("default");
     const [groupBy, setGroupBy] = useState<"collection" | "year" | "medium">("collection");
@@ -431,7 +435,7 @@ export default function GalleryPage() {
     const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
-    const { addPendingLike } = usePreferences();
+    const { pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
 
     // Initial page load: Reset scroll to ensure consistent exhibition entry.
     useEffect(() => {
@@ -440,10 +444,20 @@ export default function GalleryPage() {
         }
     }, []);
 
-    /** Opens the authentication prompt and records which item was being liked. */
-    const handleAuthRequired = (id: number) => {
-        addPendingLike(id);
-        setShowAuthPrompt(true);
+    /** Updates pending likes locally, and occasionally prompts the user. */
+    const handleAuthRequired = (id: number, isLiked: boolean) => {
+        if (isLiked) {
+            addPendingLike(id);
+        } else {
+            removePendingLike(id);
+        }
+        
+        incrementUnauthLikeCount();
+        const nextCount = unauthLikeCount + 1;
+
+        if ((nextCount - 1) % 3 === 0) {
+            setTimeout(() => setShowAuthPrompt(true), 1000);
+        }
     };
 
     // Initialize layout state based on device capability.
@@ -454,13 +468,9 @@ export default function GalleryPage() {
         return () => window.removeEventListener("resize", update);
     }, []);
 
-    // Primary data fetch: Artworks and Collections.
     useEffect(() => {
-        Promise.all([
-            apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json()),
-            apiFetch(`${getApiUrl()}/collections`).then(res => res.json())
-        ])
-            .then(([artworksData, collectionsData]) => {
+        apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json())
+            .then(artworksData => {
                 const rawData = artworksData.items || artworksData.data || artworksData;
                 if (!Array.isArray(rawData)) {
                     setError("Unable to initialize gallery structure.");
@@ -473,12 +483,6 @@ export default function GalleryPage() {
                     gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1]
                 }));
                 setAllArtworks(items);
-
-                const cData = collectionsData.items || collectionsData.data || collectionsData;
-                if (Array.isArray(cData)) {
-                    setAllCollections(cData);
-                }
-
                 setLoading(false);
             })
             .catch(err => {
@@ -491,7 +495,7 @@ export default function GalleryPage() {
     // Fetch user likes
     useEffect(() => {
         if (!user) {
-            setLikedIds(new Set());
+            setLikedIds(new Set(pendingLikes));
             return;
         }
         apiFetch(`${getApiUrl()}/users/me/likes`)
@@ -513,12 +517,12 @@ export default function GalleryPage() {
 
             if (groupBy === "collection") {
                 groupName = "Original Paintings";
-                if (a.collection_id) {
-                    const comp = allCollections.find(c => c.id === a.collection_id);
-                    if (comp) {
-                        groupName = comp.title;
-                        groupId = comp.id;
-                    }
+                // Look for labels that likely belong to the Collections category.
+                // In this implementation, we can check for labels from a category named 'Collections'.
+                const colLabel = a.labels?.find(l => (l as any).category?.title === "Collections" || (l as any).category_id === 3); // 3 was the ID in my migration but better to use title logic if available or just fallback to first label if needed
+                if (colLabel) {
+                    groupName = colLabel.title;
+                    groupId = colLabel.id;
                 }
             } else if (groupBy === "year") {
                 if ((a as any).year) {
@@ -531,8 +535,8 @@ export default function GalleryPage() {
                     groupName = "Unknown Year";
                 }
             } else if (groupBy === "medium") {
-                const mediumTag = a.tags?.find((t) => t.category === "medium");
-                groupName = mediumTag?.title || a.medium || a.style || a.materials || "Other";
+                const firstLabel = a.labels?.[0];
+                groupName = firstLabel?.title || a.medium || a.style || a.materials || "Other";
                 // Capitalize properly if it exists, or provide safe fallback
                 if (groupName !== "Other") {
                     groupName = groupName.charAt(0).toUpperCase() + groupName.slice(1);
@@ -543,7 +547,7 @@ export default function GalleryPage() {
             acc[groupName].works.push(a);
             return acc;
         }, {});
-    }, [allArtworks, allCollections, groupBy]);
+    }, [allArtworks, groupBy]);
 
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
@@ -645,6 +649,8 @@ export default function GalleryPage() {
         if (gridMode === "2") return "3rem 16px";
         return "2rem 10px";
     };
+
+    const effectiveLikedIds = user ? likedIds : new Set(pendingLikes);
 
     return (
         <div style={{ overflowX: "clip", maxWidth: "100vw", width: "100%" }}>
@@ -834,7 +840,8 @@ export default function GalleryPage() {
                                             gap: getGap(),
                                             alignItems: "start",
                                         }}>
-                                            {works.map((work, i) => (
+                                            {works.map((work, i) => {
+                                                return (
                                                 <ArtCard
                                                     key={work.id}
                                                     work={work}
@@ -842,7 +849,7 @@ export default function GalleryPage() {
                                                     zoneH={IMAGE_ZONE[gridMode] || 380}
                                                     gridMode={gridMode}
                                                     isMobile={isMobile}
-                                                    liked={likedIds?.has(work.id)}
+                                                    liked={effectiveLikedIds.has(work.id)}
                                                     onLike={async (id, newState) => {
                                                         try {
                                                             if (newState) {
@@ -860,7 +867,7 @@ export default function GalleryPage() {
                                                     }}
                                                     onAuthRequired={!user ? handleAuthRequired : undefined}
                                                 />
-                                            ))}
+                                            )})}
                                         </div>
                                     </div>
                                 </div>
@@ -899,8 +906,36 @@ export default function GalleryPage() {
                             width: "100%",
                             textAlign: "center",
                             boxShadow: "0 32px 80px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)",
+                            position: "relative",
                         }}
                     >
+                        {/* Close button */}
+                        <button
+                            onClick={() => setShowAuthPrompt(false)}
+                            aria-label="Close"
+                            style={{
+                                position: "absolute",
+                                top: "1rem",
+                                right: "1rem",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: "0.25rem",
+                                color: "#999",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transition: "color 0.2s",
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = "#333"}
+                            onMouseLeave={e => e.currentTarget.style.color = "#999"}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+
                         <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>♡</div>
                         <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 400, fontStyle: "italic", color: "#1a1a18", marginBottom: "0.5rem" }}>
                             Save to your collection

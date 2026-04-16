@@ -91,8 +91,8 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
         <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
             <div className="relative w-full max-w-4xl h-[80vh] flex flex-col rounded-2xl bg-white border border-gray-200 shadow-2xl overflow-hidden">
                 <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-white">
-                    <h2 className="text-2xl font-serif text-black italic">Crop Background Image</h2>
-                    <button onClick={onClose} className="text-zinc-400 hover:text-black transition-colors">
+                    <h2 className="text-2xl font-serif text-[#31323E] italic">Crop Background Image</h2>
+                    <button onClick={onClose} className="text-zinc-400 hover:text-[#31323E] transition-colors">
                         <X size={24} />
                     </button>
                 </div>
@@ -102,8 +102,8 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
                         onClick={() => setActiveTab("desktop")}
                         className={`px-5 py-2.5 text-[10px] font-bold font-mono tracking-widest uppercase transition-all rounded-full ${
                             activeTab === "desktop" 
-                            ? "bg-black text-white shadow-sm" 
-                            : "bg-white border border-gray-200 text-zinc-500 hover:border-black hover:text-black"
+                            ? "bg-[#31323E] text-white shadow-sm" 
+                            : "bg-white border border-gray-200 text-zinc-500 hover:border-[#31323E] hover:text-[#31323E]"
                         }`}
                     >
                         Desktop (16:9)
@@ -112,8 +112,8 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
                         onClick={() => setActiveTab("mobile")}
                         className={`px-5 py-2.5 text-[10px] font-bold font-mono tracking-widest uppercase transition-all rounded-full ${
                             activeTab === "mobile" 
-                            ? "bg-black text-white shadow-sm" 
-                            : "bg-white border border-gray-200 text-zinc-500 hover:border-black hover:text-black"
+                            ? "bg-[#31323E] text-white shadow-sm" 
+                            : "bg-white border border-gray-200 text-zinc-500 hover:border-[#31323E] hover:text-[#31323E]"
                         }`}
                     >
                         Mobile (9:16)
@@ -153,7 +153,7 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
                 </div>
 
                 <div className="p-6 border-t border-gray-100 bg-white flex justify-between items-center">
-                    <div className="w-1/2 flex items-center gap-4 text-[11px] font-bold font-mono tracking-widest text-black uppercase">
+                    <div className="w-1/2 flex items-center gap-4 text-[11px] font-bold font-mono tracking-widest text-[#31323E] uppercase">
                         <span>Zoom</span>
                         <input
                             type="range"
@@ -172,7 +172,7 @@ export default function ImageCropperModal({ isOpen, imageSrc, onClose, onSaveCro
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-8 py-3.5 bg-black text-white font-mono text-[11px] font-bold tracking-widest uppercase rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm"
+                        className="px-8 py-3.5 bg-[#31323E] text-white font-mono text-[11px] font-bold tracking-widest uppercase rounded-lg hover:bg-[#434455] transition-colors disabled:opacity-50 shadow-sm"
                     >
                         {saving ? "Processing..." : "Save Crops"}
                     </button>

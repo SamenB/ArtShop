@@ -354,7 +354,7 @@ function FulfillmentPhase({
                                 {/* Step indicator */}
                                 <span
                                     className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 border-2 ${
-                                        isCurrent ? "bg-zinc-900 text-white border-zinc-900"
+                                        isCurrent ? "bg-[#31323E] text-white border-[#31323E]"
                                         : isPast ? "bg-zinc-100 text-zinc-600 border-zinc-400"
                                         : "bg-white text-zinc-300 border-zinc-200"
                                     }`}
@@ -370,7 +370,7 @@ function FulfillmentPhase({
                                             </span>
                                         )}
                                         {isCurrent && (
-                                            <span className="text-[8px] uppercase tracking-wider font-bold bg-zinc-900 text-white px-1.5 py-0.5 rounded">
+                                            <span className="text-[8px] uppercase tracking-wider font-bold bg-[#31323E] text-white px-1.5 py-0.5 rounded">
                                                 Current
                                             </span>
                                         )}
@@ -388,7 +388,7 @@ function FulfillmentPhase({
                 <button
                     onClick={handleAdvance}
                     disabled={saving}
-                    className="w-full py-3 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-lg hover:bg-black transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                    className="w-full py-3 bg-[#31323E] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-lg hover:bg-[#31323E] transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                 >
                     {saving ? "Updating..." : `→ Advance to: ${nextStep.label}`}
                 </button>
@@ -657,12 +657,12 @@ export default function OrdersTab() {
     );
 
     return (
-        <div className="max-w-6xl mx-auto py-8 px-4 font-sans text-zinc-900 min-h-screen">
+        <div className="max-w-6xl mx-auto py-8 px-4 font-sans text-[#31323E] min-h-screen">
 
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-zinc-200 pb-8 mb-8">
                 <div>
-                    <h1 className="text-4xl lg:text-5xl font-serif italic text-zinc-900 leading-tight mb-2">Orders</h1>
+                    <h1 className="text-4xl lg:text-5xl font-serif italic text-[#31323E] leading-tight mb-2">Orders</h1>
                     <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">
                         {orders.length} total · {paidCount} paid · {activeCount} active · {shippedCount} shipped
                     </p>
@@ -676,12 +676,12 @@ export default function OrdersTab() {
                                 key={tab}
                                 onClick={() => { setMainTab(tab); setShowAdvanced(false); }}
                                 className={`px-5 py-2 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all ${
-                                    mainTab === tab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                                    mainTab === tab ? "bg-white text-[#31323E] shadow-sm" : "text-zinc-500 hover:text-zinc-800"
                                 }`}
                             >
                                 {tab}
                                 {tab === "active" && activeCount > 0 && (
-                                    <span className="ml-1.5 bg-zinc-900 text-white text-[8px] px-1.5 py-0.5 rounded-full">
+                                    <span className="ml-1.5 bg-[#31323E] text-white text-[8px] px-1.5 py-0.5 rounded-full">
                                         {activeCount}
                                     </span>
                                 )}
@@ -690,7 +690,7 @@ export default function OrdersTab() {
                         <button
                             onClick={() => { setMainTab("advanced"); setShowAdvanced(!showAdvanced); }}
                             className={`px-4 py-2 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all flex items-center gap-2 ${
-                                mainTab === "advanced" ? "bg-zinc-900 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                                mainTab === "advanced" ? "bg-[#31323E] text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
                             }`}
                         >
                             Filters
@@ -708,7 +708,7 @@ export default function OrdersTab() {
                                         key={ft}
                                         onClick={() => { setFilterType(ft); setStatusFilter("all"); }}
                                         className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-full border transition-all ${
-                                            filterType === ft ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400"
+                                            filterType === ft ? "bg-[#31323E] text-white border-[#31323E]" : "bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400"
                                         }`}
                                     >
                                         {ft}
@@ -782,7 +782,7 @@ export default function OrdersTab() {
                                             <div className="w-full h-full bg-zinc-100 rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-400">Ø</div>
                                         )}
                                         {order.items?.length > 1 && (
-                                            <span className="absolute -bottom-1 -right-1 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow ring-2 ring-white">
+                                            <span className="absolute -bottom-1 -right-1 bg-[#31323E] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow ring-2 ring-white">
                                                 +{order.items.length - 1}
                                             </span>
                                         )}
@@ -795,7 +795,7 @@ export default function OrdersTab() {
                                             <PaymentBadge status={order.payment_status} />
                                             <FulfillmentBadge status={order.fulfillment_status || "pending"} />
                                         </div>
-                                        <h3 className="font-sans font-bold text-lg text-zinc-900 truncate leading-tight">
+                                        <h3 className="font-sans font-bold text-lg text-[#31323E] truncate leading-tight">
                                             {order.first_name} {order.last_name}
                                         </h3>
                                         <p className="text-[9px] uppercase tracking-[0.1em] text-zinc-400 font-bold mt-0.5 truncate">
@@ -813,7 +813,7 @@ export default function OrdersTab() {
                                         </div>
                                         <div className="text-right min-w-[80px]">
                                             <p className="text-[9px] uppercase tracking-wider text-zinc-400 font-bold mb-0.5">Total</p>
-                                            <p className="text-xl font-bold text-zinc-900">${order.total_price}</p>
+                                            <p className="text-xl font-bold text-[#31323E]">${order.total_price}</p>
                                         </div>
                                         <div className={`transition-transform duration-300 text-zinc-300 ${isExpanded ? "rotate-180" : ""}`}>
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -845,7 +845,7 @@ export default function OrdersTab() {
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-0.5">
-                                                            <p className="font-sans font-bold text-base text-zinc-900">{order.first_name} {order.last_name}</p>
+                                                            <p className="font-sans font-bold text-base text-[#31323E]">{order.first_name} {order.last_name}</p>
                                                             <p className="text-xs text-zinc-500">{order.email}</p>
                                                             <p className="text-xs text-zinc-400">{order.phone}</p>
                                                         </div>
@@ -866,14 +866,14 @@ export default function OrdersTab() {
                                                                     />
                                                                 )}
                                                                 <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-bold text-zinc-900 truncate">{item.artwork?.title || "Untitled"}</p>
+                                                                    <p className="text-sm font-bold text-[#31323E] truncate">{item.artwork?.title || "Untitled"}</p>
                                                                     <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mt-0.5">
                                                                         {item.edition_type === "original" ? "Original" : "Print"}
                                                                         {item.size ? ` · ${item.size}` : ""}
                                                                         {item.finish ? ` · ${item.finish}` : ""}
                                                                     </p>
                                                                 </div>
-                                                                <p className="text-sm font-bold text-zinc-900 flex-shrink-0">${item.price}</p>
+                                                                <p className="text-sm font-bold text-[#31323E] flex-shrink-0">${item.price}</p>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -936,7 +936,7 @@ export default function OrdersTab() {
                                                 {/* Phase 1 — Payment */}
                                                 <div>
                                                     <div className="flex items-center gap-2 mb-3">
-                                                        <span className="w-5 h-5 rounded-full bg-zinc-900 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                                                        <span className="w-5 h-5 rounded-full bg-[#31323E] text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">1</span>
                                                         <SectionLabel text="Payment Phase" />
                                                     </div>
                                                     <PaymentPhase
@@ -958,7 +958,7 @@ export default function OrdersTab() {
                                                     <div className="flex items-center gap-2 mb-3">
                                                         <span className={`w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
                                                             PAID_STATUSES.has(order.payment_status)
-                                                                ? "bg-zinc-900 text-white"
+                                                                ? "bg-[#31323E] text-white"
                                                                 : "bg-zinc-200 text-zinc-400"
                                                         }`}>2</span>
                                                         <SectionLabel text="Fulfillment Phase" />
@@ -983,7 +983,7 @@ export default function OrdersTab() {
                                                             <button
                                                                 onClick={handlePatch}
                                                                 disabled={saving}
-                                                                className="bg-zinc-900 text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg shadow hover:bg-black transition-all disabled:opacity-50"
+                                                                className="bg-[#31323E] text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg shadow hover:bg-[#31323E] transition-all disabled:opacity-50"
                                                             >
                                                                 {saving ? "Saving..." : "Save Changes"}
                                                             </button>
@@ -998,7 +998,7 @@ export default function OrdersTab() {
                                                         <>
                                                             <button
                                                                 onClick={() => { setEditData({ ...order }); setIsEditing(order.id); }}
-                                                                className="w-full bg-zinc-900 text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg shadow hover:shadow-lg hover:bg-black transition-all"
+                                                                className="w-full bg-[#31323E] text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg shadow hover:shadow-lg hover:bg-[#31323E] transition-all"
                                                             >
                                                                 Edit Order Data
                                                             </button>

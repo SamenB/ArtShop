@@ -4,7 +4,7 @@ SQLAlchemy database models for orders and their constituent items.
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -100,7 +100,7 @@ class OrderItemOrm(Base):
     artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
 
     edition_type: Mapped[str] = mapped_column(String(20))  # 'original' | 'print'
-    finish: Mapped[str] = mapped_column(String(50))         # 'Rolled' | 'Framed' | 'Unframed' | etc.
+    finish: Mapped[str] = mapped_column(String(50))  # 'Rolled' | 'Framed' | 'Unframed' | etc.
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     price: Mapped[int] = mapped_column(Integer)

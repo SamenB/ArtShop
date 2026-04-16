@@ -16,12 +16,12 @@ interface Artwork {
     has_prints?: boolean;
     orientation?: string;
     base_print_price?: number;
-    collection_id?: number | null;
-    tags?: { id: number; title: string; category?: string }[];
+    labels?: { id: number; title: string; category_id?: number }[];
 }
 
-interface Collection { id: number; title: string; }
-interface Tag { id: number; title: string; category?: string; }
+
+interface Label { id: number; title: string; category_id?: number; }
+interface LabelCategory { id: number; title: string; accent_color?: string; }
 
 const STATUS_OPTIONS = [
     { value: "available", label: "Available" },
@@ -139,8 +139,8 @@ function ImageReorderGrid({
     );
 }
 
-function TagMultiSelect({ tags, selected, onChange, placeholder }: {
-    tags: Tag[];
+function LabelMultiSelect({ labels, selected, onChange, placeholder }: {
+    labels: Label[];
     selected: number[];
     onChange: (ids: number[]) => void;
     placeholder: string;
@@ -150,7 +150,7 @@ function TagMultiSelect({ tags, selected, onChange, placeholder }: {
 
     return (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {tags.map(t => {
+            {labels.map(t => {
                 const active = selected.includes(t.id);
                 return (
                     <button key={t.id} type="button" onClick={() => toggle(t.id)}
@@ -167,7 +167,7 @@ function TagMultiSelect({ tags, selected, onChange, placeholder }: {
                     </button>
                 );
             })}
-            {tags.length === 0 && (
+            {labels.length === 0 && (
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "rgba(0,0,0,0.4)", fontStyle: "italic" }}>
                     {placeholder}
                 </span>
@@ -190,7 +190,7 @@ function FieldLabel({ text, required = false, valid = true }: { text: string; re
 function FormSection({ title }: { title: string }) {
     return (
         <div className="flex items-center gap-4 mb-5">
-            <h3 className="text-lg font-serif italic text-black shrink-0">{title}</h3>
+            <h3 className="text-lg font-serif italic text-[#31323E] shrink-0">{title}</h3>
             <div className="flex-1 h-px bg-zinc-200"></div>
         </div>
     );
@@ -198,8 +198,8 @@ function FormSection({ title }: { title: string }) {
 
 export default function ArtworksTab() {
     const [artworks, setArtworks] = useState<Artwork[]>([]);
-    const [collections, setCollections] = useState<Collection[]>([]);
-    const [mediumTags, setMediumTags] = useState<Tag[]>([]);
+    const [categories, setCategories] = useState<LabelCategory[]>([]);
+    const [labels, setLabels] = useState<Label[]>([]);
     const [loading, setLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -218,8 +218,7 @@ export default function ArtworksTab() {
         has_prints: false,
         orientation: "Horizontal",
         base_print_price: 100,
-        tags: [] as number[],
-        collection_id: null as number | null,
+        labels: [] as number[],
         original_status: "available",
     };
     const [formData, setFormData] = useState<any>(defaultForm);
@@ -232,14 +231,14 @@ export default function ArtworksTab() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [artRes, collRes, tagRes] = await Promise.all([
+            const [artRes, catRes, lblRes] = await Promise.all([
                 apiFetch(`${getApiUrl()}/artworks?limit=100`),
-                apiFetch(`${getApiUrl()}/collections`),
-                apiFetch(`${getApiUrl()}/tags?category=medium`),
+                apiFetch(`${getApiUrl()}/labels/categories`),
+                apiFetch(`${getApiUrl()}/labels`),
             ]);
             if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
-            if (collRes.ok) { const d = await collRes.json(); setCollections(d); }
-            if (tagRes.ok) { const d = await tagRes.json(); setMediumTags(d); }
+            if (catRes.ok) { const d = await catRes.json(); setCategories(d); }
+            if (lblRes.ok) { const d = await lblRes.json(); setLabels(d); }
         } catch (e) { console.error("Fetch error:", e); }
         finally { setLoading(false); }
     };
@@ -368,8 +367,7 @@ export default function ArtworksTab() {
                 has_prints: full.has_prints || false,
                 orientation: full.orientation || "Horizontal",
                 base_print_price: full.base_print_price || 0,
-                tags: (full.tags || []).map((t: any) => typeof t === "number" ? t : t.id),
-                collection_id: full.collection_id || null,
+                labels: (full.labels || []).map((t: any) => typeof t === "number" ? t : t.id),
                 original_status: full.original_status || "available",
             });
             const existing: DragItem[] = (full.images || []).map((img: ImageEntry) => ({
@@ -393,20 +391,20 @@ export default function ArtworksTab() {
         else alert("Delete failed");
     };
 
-    const inp = "w-full bg-white border border-gray-200 rounded-md p-3 text-sm text-black focus:outline-none focus:border-black focus:ring-1 focus:ring-black placeholder-gray-400 transition-all";
+    const inp = "w-full bg-white border border-gray-200 rounded-md p-3 text-sm text-[#31323E] focus:outline-none focus:border-[#31323E] focus:ring-1 focus:ring-black placeholder-gray-400 transition-all";
 
     if (loading) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Synchronizing catalog database...</div>;
 
     return (
-        <div className="space-y-6 text-black">
+        <div className="space-y-6 text-[#31323E]">
             <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-serif italic text-black">Artworks ({artworks.length})</h2>
+                <h2 className="text-3xl font-serif italic text-[#31323E]">Artworks ({artworks.length})</h2>
                 <button
                     onClick={() => {
                         if (isFormOpen) { setIsFormOpen(false); setEditingId(null); setFormData({ ...defaultForm }); setImageItems([]); }
                         else setIsFormOpen(true);
                     }}
-                    className="px-5 py-2.5 bg-black text-white hover:bg-gray-800 rounded-full font-mono text-xs uppercase tracking-widest transition-colors font-medium shadow-sm"
+                    className="px-5 py-2.5 bg-[#31323E] text-white hover:bg-[#434455] rounded-full font-mono text-xs uppercase tracking-widest transition-colors font-medium shadow-sm"
                 >
                     {isFormOpen ? "Cancel" : "Add New Artwork"}
                 </button>
@@ -430,14 +428,6 @@ export default function ArtworksTab() {
 
                     <div>
                         <FormSection title="Classification" />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-                            <div>
-                                <FieldLabel text="Collection" valid={!!formData.collection_id} />
-                                <select value={formData.collection_id || ""} onChange={e => setFormData({ ...formData, collection_id: e.target.value ? Number(e.target.value) : null })} className={inp}>
-                                    <option value="">Uncategorised</option>
-                                    {collections.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                                </select>
-                            </div>
                             <div>
                                 <FieldLabel text="Orientation" valid={!!formData.orientation} />
                                 <select value={formData.orientation} onChange={e => setFormData({ ...formData, orientation: e.target.value })} className={inp}>
@@ -446,7 +436,6 @@ export default function ArtworksTab() {
                                     <option value="Square">Square</option>
                                 </select>
                             </div>
-                        </div>
                     </div>
 
                     <div>
@@ -503,16 +492,21 @@ export default function ArtworksTab() {
                     )}
 
                     <div>
-                        <FormSection title="Description" />
-                        <div className="mt-4">
-                            <FieldLabel text="Medium / Materials" valid={formData.tags?.length > 0} />
-                            <TagMultiSelect
-                                tags={mediumTags}
-                                selected={formData.tags}
-                                onChange={ids => setFormData({ ...formData, tags: ids })}
-                                placeholder="No medium tags yet — create them in the Tags tab with category = medium"
-                            />
-                        </div>
+                        <FormSection title="Labels & Categorization" />
+                        {categories.map(cat => {
+                            const catLabels = labels.filter(l => l.category_id === cat.id);
+                            return (
+                                <div key={cat.id} className="mt-4">
+                                    <FieldLabel text={cat.title} valid={formData.labels?.some((l: number) => catLabels.find(cl => cl.id === l))} />
+                                    <LabelMultiSelect
+                                        labels={catLabels}
+                                        selected={formData.labels}
+                                        onChange={ids => setFormData({ ...formData, labels: ids })}
+                                        placeholder={`No ${cat.title} labels yet — create them in the Labels tab.`}
+                                    />
+                                </div>
+                            );
+                        })}
                         <div className="mt-4">
                             <FieldLabel text="Description" valid={formData.description?.trim().length > 0} />
                             <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} rows={4} className={inp} placeholder="Artwork description..." />
@@ -531,7 +525,7 @@ export default function ArtworksTab() {
                         />
                     </div>
 
-                    <button type="submit" disabled={uploading} className="w-full bg-black text-white py-3.5 rounded-md uppercase tracking-widest font-mono text-sm font-semibold disabled:opacity-50 hover:bg-gray-800 transition-colors shadow-lg shadow-black/10">
+                    <button type="submit" disabled={uploading} className="w-full bg-[#31323E] text-white py-3.5 rounded-md uppercase tracking-widest font-mono text-sm font-semibold disabled:opacity-50 hover:bg-[#434455] transition-colors shadow-lg shadow-black/10">
                         {uploading ? "Saving Asset..." : editingId ? "Update Artwork" : "Create Artwork"}
                     </button>
                 </form>
@@ -555,11 +549,11 @@ export default function ArtworksTab() {
                             )}
                         </div>
                         <div className="px-1">
-                            <h3 className="font-serif italic text-lg text-black truncate">{art.title}</h3>
+                            <h3 className="font-serif italic text-lg text-[#31323E] truncate">{art.title}</h3>
                             <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mt-1">${art.original_price}</p>
                         </div>
                         <div className="absolute top-5 right-5 flex gap-2">
-                            <button onClick={() => handleEditClick(art)} className="bg-black/80 backdrop-blur text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-black font-semibold shadow-sm">Edit</button>
+                            <button onClick={() => handleEditClick(art)} className="bg-black/80 backdrop-blur text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-[#31323E] font-semibold shadow-sm">Edit</button>
                             <button onClick={() => handleDelete(art.id)} className="bg-red-500/90 backdrop-blur text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-red-500 font-semibold shadow-sm">Delete</button>
                         </div>
                     </div>

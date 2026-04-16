@@ -6,13 +6,10 @@ automated customer replies, and order fulfillment status updates.
 
 import smtplib
 from email.message import EmailMessage
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from loguru import logger
 
 from src.config import settings
-
 
 # ── Human-friendly labels for fulfillment statuses ──────────────────────────
 
@@ -231,11 +228,7 @@ def send_fulfillment_status_email(
         )
 
         # Append standard footer
-        footer = (
-            "\n\nWith gratitude,\n"
-            "Samen Bondarenko\n"
-            "samen-bondarenko.com\n"
-        )
+        footer = "\n\nWith gratitude,\nSamen Bondarenko\nsamen-bondarenko.com\n"
         full_body = body + footer
 
         # Build and send message
@@ -259,7 +252,5 @@ def send_fulfillment_status_email(
         return True
 
     except Exception as e:
-        logger.error(
-            "Failed to send fulfillment email for order {}: {}", order_id, e
-        )
+        logger.error("Failed to send fulfillment email for order {}: {}", order_id, e)
         return False

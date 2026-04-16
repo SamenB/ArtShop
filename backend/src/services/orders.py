@@ -30,7 +30,6 @@ from src.schemas.orders import (
 )
 from src.services.base import BaseService
 
-
 # Maps fulfillment_status → which timestamp column to set
 FULFILLMENT_TIMESTAMP_MAP: dict[str, str] = {
     FulfillmentStatus.CONFIRMED: "confirmed_at",
@@ -215,7 +214,7 @@ class OrderService(BaseService):
                 await self.db.artworks.edit(
                     ArtworkPatch(original_status="available"),
                     exclude_unset=True,
-                    id=item.artwork_id
+                    id=item.artwork_id,
                 )
                 logger.info("Released original artwork {} back to inventory", item.artwork_id)
 
@@ -246,16 +245,24 @@ class OrderService(BaseService):
                             exclude_unset=True,
                             id=item.artwork_id,
                         )
-                        logger.info("Re-locked artwork {} as 'sold' on manual payment override for order {}", item.artwork_id, order_id)
+                        logger.info(
+                            "Re-locked artwork {} as 'sold' on manual payment override for order {}",
+                            item.artwork_id,
+                            order_id,
+                        )
 
             # Use a direct SA update — values is a plain dict, not a Pydantic model.
             from sqlalchemy import update as sa_update
+
             from src.models.orders import OrdersOrm
+
             update_stmt = sa_update(OrdersOrm).filter_by(id=order_id).values(**values)
             await self.db.session.execute(update_stmt)
             await self.db.commit()
-            logger.info("Admin updated payment status of {} to {} (forced)", order_id, payment_status)
-        except SQLAlchemyError as e:
+            logger.info(
+                "Admin updated payment status of {} to {} (forced)", order_id, payment_status
+            )
+        except SQLAlchemyError:
             await self.db.rollback()
             raise DatabaseException
 
@@ -297,7 +304,10 @@ class OrderService(BaseService):
                 values[ts_field] = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # Revert original artworks back to inventory if the order is cancelled
-            if new_status == FulfillmentStatus.CANCELLED.value and order.fulfillment_status != FulfillmentStatus.CANCELLED.value:
+            if (
+                new_status == FulfillmentStatus.CANCELLED.value
+                and order.fulfillment_status != FulfillmentStatus.CANCELLED.value
+            ):
                 await self._release_original_artworks(order)
 
             # Persist tracking info when provided (typically on 'shipped')
@@ -318,11 +328,7 @@ class OrderService(BaseService):
             if update_data.notes is not None:
                 values["notes"] = update_data.notes
 
-            update_stmt = (
-                sa_update(OrdersOrm)
-                .filter_by(id=order_id)
-                .values(**values)
-            )
+            update_stmt = sa_update(OrdersOrm).filter_by(id=order_id).values(**values)
             await self.db.session.execute(update_stmt)
             await self.db.commit()
 
@@ -482,13 +488,12 @@ class OrderService(BaseService):
             if payment_status in ["failed", "refunded"] and order.fulfillment_status != "cancelled":
                 values["fulfillment_status"] = FulfillmentStatus.CANCELLED.value
                 await self._release_original_artworks(order)
-                logger.info("Auto-cancelled fulfillment and released originals for order {} due to payment failure", order.id)
+                logger.info(
+                    "Auto-cancelled fulfillment and released originals for order {} due to payment failure",
+                    order.id,
+                )
 
-            update_stmt = (
-                sa_update(self.db.orders.model)
-                .filter_by(id=order.id)
-                .values(**values)
-            )
+            update_stmt = sa_update(self.db.orders.model).filter_by(id=order.id).values(**values)
             await self.db.session.execute(update_stmt)
             await self.db.commit()
 
@@ -530,7 +535,7 @@ class OrderService(BaseService):
                     await self.db.artworks.edit(
                         ArtworkPatch(original_status="available"),
                         exclude_unset=True,
-                        id=item.artwork_id
+                        id=item.artwork_id,
                     )
 
             # Delete order items first (due to FK constraints)
@@ -559,8 +564,13 @@ class OrderService(BaseService):
                 payment_status = data.payment_status
                 # Create a copy without payment_status for the generic patch
                 patch_without_payment = data.model_copy(update={"payment_status": None})
-                if any(v is not None for k, v in patch_without_payment.model_dump(exclude_unset=True).items()):
-                    await self.db.orders.edit(patch_without_payment, exclude_unset=True, id=order_id)
+                if any(
+                    v is not None
+                    for k, v in patch_without_payment.model_dump(exclude_unset=True).items()
+                ):
+                    await self.db.orders.edit(
+                        patch_without_payment, exclude_unset=True, id=order_id
+                    )
                 # Delegate payment_status change to the method with full business logic
                 await self.update_payment_status(order_id, payment_status)
                 return
@@ -580,7 +590,9 @@ class OrderService(BaseService):
         Intended for cron / celery beat execution.
         """
         try:
-            abandoned_orders = await self.db.orders.get_abandoned_orders(timeout_hours=timeout_hours)
+            abandoned_orders = await self.db.orders.get_abandoned_orders(
+                timeout_hours=timeout_hours
+            )
             if not abandoned_orders:
                 return 0
 
@@ -592,10 +604,10 @@ class OrderService(BaseService):
                         OrderPatch(
                             payment_status="failed",
                             fulfillment_status="cancelled",
-                            notes=f"Auto-cancelled: Abandoned checkout timeout ({timeout_hours}h)"
+                            notes=f"Auto-cancelled: Abandoned checkout timeout ({timeout_hours}h)",
                         ),
                         exclude_unset=True,
-                        id=order.id
+                        id=order.id,
                     )
                     await self.db.commit()
                     count += 1

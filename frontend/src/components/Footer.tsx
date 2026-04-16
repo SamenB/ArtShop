@@ -54,7 +54,7 @@ export default function Footer() {
         <footer className="footer-container">
             <style>{`
                 .footer-container {
-                    background: #111111;
+                    background: #31323E; /* Dark gray-blue matching the header aesthetic */
                     color: rgba(255, 255, 255, 0.9);
                     font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                     border-top: 1px solid rgba(255,255,255,0.05);

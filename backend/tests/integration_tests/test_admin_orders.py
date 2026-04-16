@@ -1,5 +1,5 @@
 import pytest
-from src.schemas.orders import EditionType
+
 
 class TestAdminOrders:
     """
@@ -32,7 +32,7 @@ class TestAdminOrders:
         patch_payload = {
             "first_name": "Updated",
             "shipping_city": "NewCity",
-            "payment_status": "processing"
+            "payment_status": "processing",
         }
         patch_resp = await authenticated_ac.patch(f"/orders/{order_id}", json=patch_payload)
         assert patch_resp.status_code == 200
@@ -76,8 +76,8 @@ class TestAdminOrders:
         assert delete_resp.status_code == 200
 
         # 3. Verify order is gone
-        with pytest.raises(Exception): # ObjectNotFoundException
-             await db.orders.get_one(id=order_id)
+        with pytest.raises(Exception):  # ObjectNotFoundException
+            await db.orders.get_one(id=order_id)
 
         # 4. Verify artwork is "available" again
         artwork_reverted = await db.artworks.get_one(id=7)

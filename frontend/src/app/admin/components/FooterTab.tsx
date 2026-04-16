@@ -50,17 +50,17 @@ export default function FooterTab() {
 
     if (loading || !settings) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Loading footer settings...</div>;
 
-    const inputClasses = "w-full bg-white border border-gray-300 rounded-md p-4 text-black focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none placeholder-gray-400 transition-all font-serif resize-y";
+    const inputClasses = "w-full bg-white border border-gray-300 rounded-md p-4 text-[#31323E] focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none placeholder-gray-400 transition-all font-serif resize-y";
     const labelClasses = "block text-xs font-bold font-sans tracking-wider uppercase text-gray-600 mb-2";
 
     return (
         <div className="space-y-10 max-w-3xl pb-12">
             <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
-                <h2 className="text-3xl font-serif italic text-black">Footer Formatting</h2>
+                <h2 className="text-3xl font-serif italic text-[#31323E]">Footer Formatting</h2>
                 <button 
                     onClick={handleSave} 
                     disabled={saving}
-                    className="bg-black text-white px-6 py-2.5 rounded-full uppercase tracking-wider font-sans text-xs disabled:opacity-50 hover:bg-gray-800 transition-all font-bold shadow-sm"
+                    className="bg-[#31323E] text-white px-6 py-2.5 rounded-full uppercase tracking-wider font-sans text-xs disabled:opacity-50 hover:bg-[#434455] transition-all font-bold shadow-sm"
                 >
                     {saving ? "Saving..." : "Save Config"}
                 </button>
@@ -105,7 +105,7 @@ export default function FooterTab() {
             </div>
 
             <div className="pt-8 border-t border-gray-100">
-                <h2 className="text-xl font-serif italic text-black mb-6">Social Media Links</h2>
+                <h2 className="text-xl font-serif italic text-[#31323E] mb-6">Social Media Links</h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 border border-gray-100 p-8 rounded-2xl shadow-sm">
                     <div>
@@ -148,7 +148,7 @@ export default function FooterTab() {
                 <button 
                     onClick={handleSave} 
                     disabled={saving}
-                    className="w-full bg-black text-white rounded-lg py-4 uppercase tracking-[0.15em] font-sans text-sm font-bold disabled:opacity-50 hover:bg-gray-800 transition-colors shadow-lg shadow-black/10"
+                    className="w-full bg-[#31323E] text-white rounded-lg py-4 uppercase tracking-[0.15em] font-sans text-sm font-bold disabled:opacity-50 hover:bg-[#434455] transition-colors shadow-lg shadow-black/10"
                 >
                     {saving ? "Saving Changes..." : "Deploy Footer Revisions"}
                 </button>

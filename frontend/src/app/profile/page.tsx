@@ -240,14 +240,17 @@ export default function ProfilePage() {
     if (loading || (!user && !loading)) return <div className="min-h-screen pt-[150px] flex justify-center text-[var(--color-charcoal)] bg-[var(--color-cream)]">Loading profile...</div>;
 
     return (
-        <div className="min-h-screen bg-[var(--color-cream)] pt-[150px] pb-24 text-[var(--color-charcoal)]">
-            <main className="max-w-[1000px] mx-auto px-6 lg:px-12">
-                <header className="mb-12 border-b border-[rgba(26,26,24,0.06)] pb-8">
-                    <h1 className="text-4xl lg:text-5xl font-serif tracking-widest mb-4">My Orders</h1>
-                    <p className="text-[rgba(26,26,24,0.5)] font-mono text-[0.8rem] tracking-widest uppercase">
+        <div className="min-h-screen bg-[var(--color-cream)] pb-24 text-[var(--color-charcoal)] font-sans selection:bg-[#31323E] selection:text-white">
+            <div className="w-full bg-[#31323E] pt-[150px] pb-24 px-6 lg:px-12">
+                <div className="max-w-[1000px] mx-auto">
+                    <h1 className="text-4xl lg:text-5xl font-serif italic tracking-widest mb-4 text-white">My Orders</h1>
+                    <p className="text-white/60 font-mono text-[0.8rem] tracking-widest uppercase">
                         Welcome back, {user.username}
                     </p>
-                </header>
+                </div>
+            </div>
+
+            <main className="max-w-[1000px] mx-auto px-6 lg:px-12 -mt-12 relative z-10">
 
                 {dataLoading ? (
                     <div className="text-center py-20 text-[rgba(26,26,24,0.4)] font-mono text-sm tracking-widest animate-pulse">

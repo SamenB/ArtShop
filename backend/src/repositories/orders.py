@@ -1,9 +1,8 @@
-from datetime import date
 from typing import Sequence
 
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import func, insert, select
+from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 
 from src.exeptions import ObjectAlreadyExistsException
@@ -56,10 +55,11 @@ class OrdersRepository(BaseRepository):
 
     async def get_abandoned_orders(self, timeout_hours: int = 2):
         from datetime import datetime, timedelta, timezone
+
         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=timeout_hours)
         query = select(self.model).where(
             self.model.payment_status.in_(["pending", "awaiting_payment"]),
-            self.model.created_at < cutoff_time
+            self.model.created_at < cutoff_time,
         )
         res = await self.session.execute(query)
         return [self.mapper.map_to_schema(model) for model in res.scalars().all()]

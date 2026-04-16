@@ -166,17 +166,17 @@ export default function SettingsTab() {
     }));
 
     const filledCount = coverSlots.filter(s => s.hasImage).length;
-    const inputClasses = "w-full bg-white border border-gray-300 rounded-md p-3.5 text-black focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none placeholder-gray-400 font-sans transition-all text-sm";
+    const inputClasses = "w-full bg-white border border-gray-300 rounded-md p-3.5 text-[#31323E] focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none placeholder-gray-400 font-sans transition-all text-sm";
     const labelClasses = "block text-xs font-bold font-sans tracking-wider uppercase text-gray-600 mb-2";
 
     return (
         <div className="space-y-10 max-w-3xl pb-12">
             <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
-                <h2 className="text-3xl font-serif italic text-black">Global Settings</h2>
+                <h2 className="text-3xl font-serif italic text-[#31323E]">Global Settings</h2>
                 <button 
                     onClick={handleSave} 
                     disabled={saving}
-                    className="bg-black text-white px-6 py-2.5 rounded-full uppercase tracking-wider font-sans text-xs disabled:opacity-50 hover:bg-gray-800 transition-all font-bold shadow-sm"
+                    className="bg-[#31323E] text-white px-6 py-2.5 rounded-full uppercase tracking-wider font-sans text-xs disabled:opacity-50 hover:bg-[#434455] transition-all font-bold shadow-sm"
                 >
                     {saving ? "Saving..." : "Save Settings"}
                 </button>
@@ -250,7 +250,7 @@ export default function SettingsTab() {
                     {/* Artist Photo (Home Page) */}
                     <div>
                         <label className={labelClasses}>Artist Photo (Home)</label>
-                        <div className="border border-gray-200 bg-white border-dashed rounded-xl p-4 text-center relative group transition-all hover:border-black">
+                        <div className="border border-gray-200 bg-white border-dashed rounded-xl p-4 text-center relative group transition-all hover:border-[#31323E]">
                             {settings.artist_home_photo_url && (
                                 <button
                                     onClick={() => setSettings(prev => prev ? { ...prev, artist_home_photo_url: null } : null)}
@@ -264,14 +264,14 @@ export default function SettingsTab() {
                             ) : (
                                 <div className="h-32 bg-gray-50/50 mb-4 flex items-center justify-center text-zinc-400 font-mono text-xs rounded-md border border-gray-100">No image</div>
                             )}
-                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_home_photo_url")} className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-gray-100 file:text-black hover:file:bg-gray-200 cursor-pointer" />
+                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_home_photo_url")} className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-gray-100 file:text-[#31323E] hover:file:bg-gray-200 cursor-pointer" />
                         </div>
                     </div>
 
                     {/* Artist Photo (About Page) */}
                     <div>
                         <label className={labelClasses}>Artist Photo (About)</label>
-                        <div className="border border-gray-200 bg-white border-dashed rounded-xl p-4 text-center relative group transition-all hover:border-black">
+                        <div className="border border-gray-200 bg-white border-dashed rounded-xl p-4 text-center relative group transition-all hover:border-[#31323E]">
                             {settings.artist_about_photo_url && (
                                 <button
                                     onClick={() => setSettings(prev => prev ? { ...prev, artist_about_photo_url: null } : null)}
@@ -285,21 +285,21 @@ export default function SettingsTab() {
                             ) : (
                                 <div className="h-32 bg-gray-50/50 mb-4 flex items-center justify-center text-zinc-400 font-mono text-xs rounded-md border border-gray-100">No image</div>
                             )}
-                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_about_photo_url")} className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-gray-100 file:text-black hover:file:bg-gray-200 cursor-pointer" />
+                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_about_photo_url")} className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-gray-100 file:text-[#31323E] hover:file:bg-gray-200 cursor-pointer" />
                         </div>
                     </div>
                 </div>
             </div>
 
             <div className="pt-8 border-t border-gray-100">
-                <label className="block text-sm font-bold font-sans tracking-wider uppercase text-black mb-1">Hero Slideshow Covers (up to 3)</label>
+                <label className="block text-sm font-bold font-sans tracking-wider uppercase text-[#31323E] mb-1">Hero Slideshow Covers (up to 3)</label>
                 <p className="text-xs text-gray-500 mb-6">Upload 1-3 images. Each is cropped for desktop (16:9) and mobile (9:16). Multiple images create an auto-rotating slideshow on the homepage.</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {coverSlots.map((slot) => (
-                        <div key={slot.index} className="border border-gray-200 bg-white rounded-xl p-5 shadow-sm hover:border-black transition-colors">
+                        <div key={slot.index} className="border border-gray-200 bg-white rounded-xl p-5 shadow-sm hover:border-[#31323E] transition-colors">
                             <div className="flex items-center justify-between mb-4">
-                                <span className="text-xs font-bold font-sans text-black uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded">
+                                <span className="text-xs font-bold font-sans text-[#31323E] uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded">
                                     Cover {slot.index + 1}
                                     {slot.index === 0 && !slot.hasImage && " (Req)"}
                                 </span>
@@ -349,7 +349,7 @@ export default function SettingsTab() {
                             {/* Upload button */}
                             {(slot.index === 0 || coverSlots[slot.index - 1]?.hasImage) && (
                                 <div className="text-center">
-                                    <label className="cursor-pointer inline-block w-full bg-black hover:bg-gray-800 text-white font-sans text-xs uppercase font-bold tracking-wider px-4 py-2.5 rounded transition-colors shadow-sm">
+                                    <label className="cursor-pointer inline-block w-full bg-[#31323E] hover:bg-[#434455] text-white font-sans text-xs uppercase font-bold tracking-wider px-4 py-2.5 rounded transition-colors shadow-sm">
                                         {slot.hasImage ? "Replace Image" : "Upload Image"}
                                         <input type="file" accept="image/*" onChange={(e) => handleBgFileSelect(e, slot.index)} className="hidden" />
                                     </label>
@@ -361,7 +361,7 @@ export default function SettingsTab() {
 
                 {filledCount > 1 && (
                     <div className="mt-8 p-6 bg-gray-50 border border-gray-200 rounded-xl">
-                        <h4 className="text-xs font-bold font-sans tracking-wider uppercase text-black mb-4">Slideshow Settings</h4>
+                        <h4 className="text-xs font-bold font-sans tracking-wider uppercase text-[#31323E] mb-4">Slideshow Settings</h4>
                         
                         <label className="flex items-start gap-3 cursor-pointer group">
                             <input
@@ -371,15 +371,15 @@ export default function SettingsTab() {
                                 className="mt-1 w-4 h-4 accent-black cursor-pointer"
                             />
                             <div>
-                                <span className="text-[12px] font-bold text-black uppercase tracking-widest">Ken Burns Effect</span>
+                                <span className="text-[12px] font-bold text-[#31323E] uppercase tracking-widest">Ken Burns Effect</span>
                                 <p className="text-[11px] text-zinc-500 mt-1">Enable dramatic slow pan & zoom motion on hero covers</p>
                             </div>
                         </label>
 
                         <div className="mt-6">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold font-sans text-black uppercase tracking-wider">Slide Duration</span>
-                                <span className="text-xs font-sans font-bold text-black px-2 py-1 bg-white border border-gray-200 rounded">{settings.hero_slide_duration}s</span>
+                                <span className="text-xs font-bold font-sans text-[#31323E] uppercase tracking-wider">Slide Duration</span>
+                                <span className="text-xs font-sans font-bold text-[#31323E] px-2 py-1 bg-white border border-gray-200 rounded">{settings.hero_slide_duration}s</span>
                             </div>
                             <input
                                 type="range"
@@ -403,7 +403,7 @@ export default function SettingsTab() {
                 <button 
                     onClick={handleSave} 
                     disabled={saving}
-                    className="w-full bg-black text-white rounded-lg py-4 uppercase tracking-[0.15em] font-sans text-sm font-bold disabled:opacity-50 hover:bg-gray-800 transition-colors shadow-lg shadow-black/10"
+                    className="w-full bg-[#31323E] text-white rounded-lg py-4 uppercase tracking-[0.15em] font-sans text-sm font-bold disabled:opacity-50 hover:bg-[#434455] transition-colors shadow-lg shadow-black/10"
                 >
                     {saving ? "Saving Changes..." : "Save All Settings"}
                 </button>

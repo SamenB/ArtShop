@@ -42,15 +42,15 @@ interface Product {
     aspectRatio?: string;
     gradientFrom?: string;
     gradientTo?: string;
-    tags?: { id: number; title: string; category?: string }[];
-    collection_id?: number;
+    labels?: { id: number; title: string; category_id?: number }[];
 }
 
 /** Collection metadata. */
-interface Collection { id: number; title: string; }
 
-/** Tag metadata for filtering (mediums, styles, etc.). */
-interface Tag { id: number; title: string; category?: string; }
+
+/** Label and Category metadata. */
+interface Label { id: number; title: string; category_id?: number; }
+interface LabelCategory { id: number; title: string; }
 
 /** Aesthetic fallback color pairs. */
 const DEFAULT_GRADIENTS = [
@@ -137,7 +137,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     product: Product; zoneH: number; gridMode: string; isMobile: boolean;
     initialLiked?: boolean;
     likedIds?: Set<number>;
-    onAuthRequired?: (id: number) => void;
+    onAuthRequired?: (id: number, newState: boolean) => void;
     listIndex?: number;
     onLikeChange?: (id: number, liked: boolean) => void;
 }) {
@@ -206,8 +206,6 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     const handleLike = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        // If not authenticated, show sign-in prompt instead
-        if (onAuthRequired) { onAuthRequired(product.id); return; }
         
         const newState = !liked;
         
@@ -217,6 +215,13 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
         
         setLikeAnimating(true);
         setTimeout(() => setLikeAnimating(false), 400);
+
+        // If not authenticated, we handle it locally via Context and prompt conditionally
+        if (onAuthRequired) { 
+            onAuthRequired(product.id, newState);
+            return; // Skip failing API call
+        }
+
         
         try {
             if (newState) {
@@ -757,7 +762,7 @@ function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max:
 /**
  * Main Shop catalog page.
  * Manages complex filtering state, multi-unit dimension handling,
- * responsive layout transitions, and dynamic data fetching for artworks and tags.
+ * responsive layout transitions, and dynamic data fetching for artworks and labels.
  */
 export default function ShopPage() {
     return (
@@ -771,8 +776,8 @@ function ShopPageContent() {
     const searchParams = useSearchParams();
     const { user } = useUser();
     const [allProducts, setAllProducts] = useState<Product[]>([]);
-    const [collections, setCollections] = useState<Collection[]>([]);
-    const [mediumTags, setMediumTags] = useState<Tag[]>([]);
+    const [categories, setCategories] = useState<LabelCategory[]>([]);
+    const [labels, setLabels] = useState<Label[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -791,8 +796,7 @@ function ShopPageContent() {
     const [heightMax, setHeightMax] = useState(0);
     const [activeYears, setActiveYears] = useState<number[]>([]);
     const [activeOrientations, setActiveOrientations] = useState<string[]>([]);
-    const [activeCollections, setActiveCollections] = useState<number[]>([]);
-    const [activeMediums, setActiveMediums] = useState<number[]>([]);
+    const [activeLabels, setActiveLabels] = useState<number[]>([]);
     const [filterLiked, setFilterLiked] = useState(searchParams.get("liked") === "true");
 
     useEffect(() => {
@@ -806,7 +810,7 @@ function ShopPageContent() {
     const [gridMode, setGridMode] = useState<"1" | "2" | "3">("2");
     const [gridLoaded, setGridLoaded] = useState(false);
 
-    const { globalPrintPrice, convertPrice, units, addPendingLike } = usePreferences();
+    const { globalPrintPrice, convertPrice, units, pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
     const itemsPerPage = gridMode === "3" ? 36 : gridMode === "2" ? 24 : 12;
     const [visibleCount, setVisibleCount] = useState(12);
 
@@ -831,9 +835,9 @@ function ShopPageContent() {
         const apiUrl = getApiUrl();
         Promise.all([
             apiFetch(`${apiUrl}/artworks?limit=1000`).then(r => r.json()),
-            apiFetch(`${apiUrl}/collections`).then(r => r.json()),
-            apiFetch(`${apiUrl}/tags?category=medium`).then(r => r.json()),
-        ]).then(([artData, collData, tagData]) => {
+            apiFetch(`${apiUrl}/labels/categories`).then(r => r.json()),
+            apiFetch(`${apiUrl}/labels`).then(r => r.json()),
+        ]).then(([artData, catData, lblData]) => {
             const rawData = artData.items || artData.data || artData;
             if (Array.isArray(rawData)) {
                 const items = rawData.map((item: any, idx: number) => ({
@@ -845,8 +849,8 @@ function ShopPageContent() {
             } else {
                 setError("Failed to load artworks.");
             }
-            if (Array.isArray(collData)) setCollections(collData);
-            if (Array.isArray(tagData)) setMediumTags(tagData);
+            if (Array.isArray(catData)) setCategories(catData);
+            if (Array.isArray(lblData)) setLabels(lblData);
         }).catch(err => {
             console.error("Shop initialization failed:", err);
             setError("Network error.");
@@ -856,7 +860,7 @@ function ShopPageContent() {
     /** Fetch the authenticated user's liked artwork IDs for UI state init. */
     useEffect(() => {
         if (!user) {
-            setLikedIds(new Set()); // Clear hearts when logged out
+            setLikedIds(new Set(pendingLikes)); // Fallback initialization
             return;
         }
         apiFetch(`${getApiUrl()}/users/me/likes`)
@@ -964,6 +968,8 @@ function ShopPageContent() {
      * Aggregates all active UI filters (type, price, size, tech info) into a 
      * single high-performance memoized list.
      */
+    const effectiveLikedIds = user ? likedIds : new Set(pendingLikes);
+
     const filtered = useMemo(() => {
         let list = allProducts;
 
@@ -978,8 +984,8 @@ function ShopPageContent() {
 
         // Liked constraint
         if (filterLiked) {
-            if (!likedIds) return []; // Return empty array while loading
-            list = list.filter(p => likedIds.has(p.id));
+            if (!effectiveLikedIds) return []; // Return empty array while loading
+            list = list.filter(p => effectiveLikedIds.has(p.id));
         }
 
         // Budgetary constraints (Originals only).
@@ -1020,22 +1026,30 @@ function ShopPageContent() {
             });
         }
 
-        // Structural and Thematic constraints.
-        if (activeCollections.length > 0) {
-            list = list.filter(p => p.collection_id && activeCollections.includes(p.collection_id));
-        }
 
-        if (activeMediums.length > 0) {
-            list = list.filter(p => (p.tags || []).some(t => activeMediums.includes(typeof t === "number" ? t : (t as any).id)));
+
+        if (activeLabels.length > 0) {
+            list = list.filter(p => (p.labels || []).some(t => activeLabels.includes(typeof t === "number" ? t : (t as any).id)));
         }
 
         return list;
-    }, [allProducts, categoryFilter, filterLiked, likedIds, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeCollections, activeMediums, globalPrintPrice, getUnitVal]);
+    }, [allProducts, categoryFilter, filterLiked, likedIds, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeLabels, globalPrintPrice, getUnitVal]);
 
-    /** Opens the authentication prompt and records which item was being liked. */
-    const handleAuthRequired = (id: number) => {
-        addPendingLike(id);
-        setShowAuthPrompt(true);
+    /** Updates pending likes locally, and occasionally prompts the user. */
+    const handleAuthRequired = (id: number, isLiked: boolean) => {
+        if (isLiked) {
+            addPendingLike(id);
+        } else {
+            removePendingLike(id);
+        }
+        
+        incrementUnauthLikeCount();
+        const nextCount = unauthLikeCount + 1;
+
+        // Display the auth prompt on the 1st like, and then every 3rd like (4th, 7th...)
+        if ((nextCount - 1) % 3 === 0) {
+            setTimeout(() => setShowAuthPrompt(true), 1000);
+        }
     };
 
     /** Synchronizes like state from child to parent, useful for live filtering. */
@@ -1061,7 +1075,7 @@ function ShopPageContent() {
         + (priceMin > 0 || priceMax < 999999 ? 1 : 0)
         + (widthActive ? 1 : 0) + (heightActive ? 1 : 0)
         + activeYears.length + activeOrientations.length
-        + activeCollections.length + (activeMediums?.length ?? 0);
+        + (activeLabels?.length ?? 0);
 
     /** Resets the entire filter matrix to the default exhibition state. */
     const clearAll = () => {
@@ -1069,7 +1083,7 @@ function ShopPageContent() {
         setWidthMin(wGlobalMin); setWidthMax(wGlobalMax);
         setHeightMin(hGlobalMin); setHeightMax(hGlobalMax);
         setActiveYears([]); setActiveOrientations([]);
-        setActiveCollections([]); setActiveMediums([]);
+        setActiveLabels([]);
         setFilterLiked(false);
     };
 
@@ -1086,7 +1100,7 @@ function ShopPageContent() {
     // Handle initial pagination and reacts to filter changes by resetting the visible offset.
     useEffect(() => {
         setVisibleCount(itemsPerPage);
-    }, [categoryFilter, priceMin, priceMax, widthMin, widthMax, heightMin, heightMax, activeYears, activeOrientations, activeCollections, activeMediums, sortIdx, itemsPerPage]);
+    }, [categoryFilter, priceMin, priceMax, widthMin, widthMax, heightMin, heightMax, activeYears, activeOrientations, activeLabels, sortIdx, itemsPerPage]);
 
     // Infinite scroll trigger: Increments display quota when the user approaches the end of the results.
     useEffect(() => {
@@ -1202,23 +1216,20 @@ function ShopPageContent() {
                 <FilterCheckbox label="Square" active={activeOrientations.includes("square")} onClick={() => toggleStr(setActiveOrientations, "square")} isMobile={isMobile} />
             </SidebarSection>
 
-            {/* 6. Structural collection filtering. */}
-            {collections.length > 0 && (
-                <SidebarSection title="Collections" defaultOpen={false} isMobile={isMobile}>
-                    {collections.map(c => (
-                        <FilterCheckbox key={c.id} label={c.title} active={activeCollections.includes(c.id)} onClick={() => toggleNum(setActiveCollections, c.id)} isMobile={isMobile} />
-                    ))}
-                </SidebarSection>
-            )}
 
-            {/* 7. Material/Medium tag filtering. */}
-            <SidebarSection title="Medium" defaultOpen={false} isMobile={isMobile}>
-                {mediumTags.length > 0 ? mediumTags.map(t => (
-                    <FilterCheckbox key={t.id} label={t.title} active={activeMediums.includes(t.id)} onClick={() => toggleNum(setActiveMediums, t.id)} isMobile={isMobile} />
-                )) : (
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#bbb", fontStyle: "italic" }}>Add medium tags in dashboard → Labels & Tags</span>
-                )}
-            </SidebarSection>
+
+            {/* 7. Dynamic Label filtering. */}
+            {categories.map(cat => {
+                const catLabels = labels.filter(l => l.category_id === cat.id);
+                if (catLabels.length === 0) return null;
+                return (
+                    <SidebarSection key={cat.id} title={cat.title} defaultOpen={false} isMobile={isMobile}>
+                        {catLabels.map(l => (
+                            <FilterCheckbox key={l.id} label={l.title} active={activeLabels.includes(l.id)} onClick={() => toggleNum(setActiveLabels, l.id)} isMobile={isMobile} />
+                        ))}
+                    </SidebarSection>
+                );
+            })}
         </>
     );
 
@@ -1321,7 +1332,7 @@ function ShopPageContent() {
                                 zoneH={IMAGE_ZONE[gridMode] || 380}
                                 gridMode={gridMode}
                                 isMobile={isMobile}
-                                likedIds={likedIds}
+                                likedIds={effectiveLikedIds}
                                 listIndex={i}
                                 onAuthRequired={!user ? handleAuthRequired : undefined}
                                 onLikeChange={handleLikeChange}
@@ -1363,8 +1374,36 @@ function ShopPageContent() {
                             width: "100%",
                             textAlign: "center",
                             boxShadow: "0 32px 80px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)",
+                            position: "relative",
                         }}
                     >
+                        {/* Close button */}
+                        <button
+                            onClick={() => setShowAuthPrompt(false)}
+                            aria-label="Close"
+                            style={{
+                                position: "absolute",
+                                top: "1rem",
+                                right: "1rem",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: "0.25rem",
+                                color: "#999",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transition: "color 0.2s",
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = "#333"}
+                            onMouseLeave={e => e.currentTarget.style.color = "#999"}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+
                         <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>♡</div>
                         <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 400, fontStyle: "italic", color: "#1a1a18", marginBottom: "0.5rem" }}>
                             Save to your collection

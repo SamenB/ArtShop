@@ -140,6 +140,7 @@ async def release_abandoned_orders_helper():
     Helper for releasing artworks stuck in pending/awaiting_payment.
     """
     from src.services.orders import OrderService
+
     logger.info("Running abandoned orders cleanup...")
     async with DBManager(session_factory=new_session_null_pool) as db:
         await OrderService(db).run_abandoned_orders_cleanup(timeout_hours=2)

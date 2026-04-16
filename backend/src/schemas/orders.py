@@ -30,14 +30,14 @@ class FulfillmentStatus(str, Enum):
         (any stage) → cancelled
     """
 
-    PENDING = "pending"           # Order received, payment not yet confirmed
-    CONFIRMED = "confirmed"       # Payment confirmed, starting to process
-    PRINT_ORDERED = "print_ordered"   # Sent to print shop (you paid)
-    PRINT_RECEIVED = "print_received" # Print shop sent the artwork back to you
-    PACKAGING = "packaging"       # You are packaging the parcel
-    SHIPPED = "shipped"           # Parcel dispatched to client (TTN available)
-    DELIVERED = "delivered"       # Client confirmed receipt (optional)
-    CANCELLED = "cancelled"       # Order cancelled at any stage
+    PENDING = "pending"  # Order received, payment not yet confirmed
+    CONFIRMED = "confirmed"  # Payment confirmed, starting to process
+    PRINT_ORDERED = "print_ordered"  # Sent to print shop (you paid)
+    PRINT_RECEIVED = "print_received"  # Print shop sent the artwork back to you
+    PACKAGING = "packaging"  # You are packaging the parcel
+    SHIPPED = "shipped"  # Parcel dispatched to client (TTN available)
+    DELIVERED = "delivered"  # Client confirmed receipt (optional)
+    CANCELLED = "cancelled"  # Order cancelled at any stage
 
 
 # Carriers with known tracking URL templates.

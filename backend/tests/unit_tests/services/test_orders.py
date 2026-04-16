@@ -6,7 +6,7 @@ from src.exeptions import (
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
-from src.schemas.artworks import ArtworkWithTags
+from src.schemas.artworks import ArtworkWithLabels
 from src.schemas.orders import EditionType, OrderAddRequest
 from src.services.orders import OrderService
 
@@ -17,6 +17,7 @@ class MockDBManager:
         self.artworks = AsyncMock()
         self.orders = AsyncMock()
         from src.models.orders import OrdersOrm
+
         self.orders.model = OrdersOrm
         self.order_items = AsyncMock()
         self.commit = AsyncMock()
@@ -34,7 +35,7 @@ def order_service():
 @pytest.mark.asyncio
 async def test_create_order_original_sold_out_fails(order_service):
     # Setup mock artwork that has original already sold
-    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
     mock_artwork.original_status = "sold"
 
@@ -62,7 +63,7 @@ async def test_create_order_original_sold_out_fails(order_service):
 @pytest.mark.asyncio
 async def test_create_order_print_sold_out_fails(order_service):
     # Setup mock artwork that has 0 prints available
-    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
     mock_artwork.has_prints = False
 
@@ -89,7 +90,7 @@ async def test_create_order_print_sold_out_fails(order_service):
 
 @pytest.mark.asyncio
 async def test_create_order_original_success(order_service):
-    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
     mock_artwork.original_status = "available"
     mock_artwork.original_price = 1000
@@ -132,7 +133,7 @@ async def test_create_order_original_success(order_service):
 
 @pytest.mark.asyncio
 async def test_create_order_print_success(order_service):
-    mock_artwork = MagicMock(spec=ArtworkWithTags)
+    mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
     mock_artwork.has_prints = True
     mock_artwork.base_print_price = 50
@@ -169,10 +170,11 @@ async def test_create_order_print_success(order_service):
     order_service.db.orders.add.assert_awaited_once()
     order_service.db.commit.assert_awaited_once()
 
+
 @pytest.mark.asyncio
 async def test_update_payment_status_releases_artwork_on_failure(order_service):
     """
-    If admin updates payment status to 'failed', the order fulfillment should cancel 
+    If admin updates payment status to 'failed', the order fulfillment should cancel
     and original artworks should be released back to inventory.
     """
     mock_order = MagicMock()
@@ -209,7 +211,7 @@ async def test_update_payment_status_by_webhook_releases_artwork_on_refund(order
     mock_order.id = 56
     mock_order.fulfillment_status = "shipped"  # Not cancelled yet
     mock_order.payment_status = "paid"
-    
+
     mock_item = MagicMock()
     mock_item.edition_type = "original"
     mock_item.artwork_id = 100
@@ -239,7 +241,8 @@ async def test_update_fulfillment_status_releases_artwork_on_cancel(order_servic
 
     order_service.db.orders.get_one.return_value = mock_order
 
-    from src.schemas.orders import FulfillmentStatusUpdate, FulfillmentStatus
+    from src.schemas.orders import FulfillmentStatus, FulfillmentStatusUpdate
+
     update_data = FulfillmentStatusUpdate(fulfillment_status=FulfillmentStatus.CANCELLED)
 
     await order_service.update_fulfillment_status(57, update_data)
@@ -253,12 +256,12 @@ async def test_update_fulfillment_status_releases_artwork_on_cancel(order_servic
 @pytest.mark.asyncio
 async def test_run_abandoned_orders_cleanup(order_service):
     """
-    Ensures that the automated scheduled task queries the DB for abandoned orders, 
+    Ensures that the automated scheduled task queries the DB for abandoned orders,
     cancels them, and releases their artworks.
     """
     mock_order_1 = MagicMock()
     mock_order_1.id = 80
-    
+
     mock_item_1 = MagicMock()
     mock_item_1.edition_type = "original"
     mock_item_1.artwork_id = 200
@@ -270,7 +273,7 @@ async def test_run_abandoned_orders_cleanup(order_service):
     processed_count = await order_service.run_abandoned_orders_cleanup(timeout_hours=2)
 
     assert processed_count == 1
-    
+
     # Assert artwork was released
     order_service.db.artworks.edit.assert_awaited_once()
     art_args, art_kwargs = order_service.db.artworks.edit.call_args

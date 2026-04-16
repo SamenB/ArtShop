@@ -151,9 +151,7 @@ async def update_order_fulfillment(
 
 
 @router.patch("/{order_id}")
-async def patch_order(
-    order_id: int, admin_id: AdminDep, db: DBDep, order_patch: OrderPatch
-):
+async def patch_order(order_id: int, admin_id: AdminDep, db: DBDep, order_patch: OrderPatch):
     """
     Applies partial updates to a specific order. Requires admin privileges.
     """

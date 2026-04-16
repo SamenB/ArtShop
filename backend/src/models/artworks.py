@@ -6,14 +6,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, BigInteger, ForeignKey, String
+from sqlalchemy import JSON, BigInteger, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
 
 if TYPE_CHECKING:
-    from src.models.collections import CollectionsOrm
-    from src.models.tags import TagsOrm
+    from src.models.labels import LabelsOrm
     from src.models.users import UsersOrm
 
 
@@ -49,15 +48,9 @@ class ArtworksOrm(Base):
     orientation: Mapped[str] = mapped_column(String(20), default="vertical")
     base_print_price: Mapped[int | None] = mapped_column(default=None)
     images: Mapped[list[str | dict] | None] = mapped_column(JSON, nullable=True)
-    collection_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("collections.id"), nullable=True
-    )
-
     # Relationships
-    collection: Mapped["CollectionsOrm"] = relationship(back_populates="artworks")
-
-    tags: Mapped[list["TagsOrm"]] = relationship(
-        secondary="artwork_tags", back_populates="artworks"
+    labels: Mapped[list["LabelsOrm"]] = relationship(
+        secondary="artwork_labels", back_populates="artworks"
     )
 
     liked_by_users: Mapped[list["UsersOrm"]] = relationship(

@@ -1,0 +1,12 @@
+[
+    { "id": 1, "title": "Oil Painting", "category_id": 1 },
+    { "id": 2, "title": "Watercolor", "category_id": 1 },
+    { "id": 3, "title": "Digital", "category_id": 1 },
+    { "id": 4, "title": "Photography", "category_id": 1 },
+    { "id": 5, "title": "Sculpture", "category_id": 1 },
+    { "id": 6, "title": "Mixed Media", "category_id": 1 },
+    { "id": 7, "title": "Abstract", "category_id": 2 },
+    { "id": 8, "title": "Portrait", "category_id": 2 },
+    { "id": 9, "title": "Landscape", "category_id": 2 },
+    { "id": 10, "title": "Street Art", "category_id": 2 }
+]

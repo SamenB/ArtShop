@@ -19,12 +19,11 @@ from loguru import logger
 from src.api.artworks import bulk_router as artworks_bulk_router
 from src.api.artworks import router as artworks_router
 from src.api.auth import router as auth_router
-from src.api.collections import router as collections_router
 from src.api.contact import router as contact_router
+from src.api.labels import router as labels_router
 from src.api.orders import router as orders_router
 from src.api.payments import router as payments_router
 from src.api.settings import router as settings_router
-from src.api.tags import router as tags_router
 from src.api.upload import router as upload_router
 from src.api.users import router as users_router
 from src.config import settings
@@ -112,13 +111,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(artworks_router)
 app.include_router(artworks_bulk_router)
-app.include_router(tags_router)
+app.include_router(labels_router)
 app.include_router(orders_router)
 app.include_router(payments_router)
 app.include_router(users_router)
 app.include_router(settings_router)
 app.include_router(upload_router)
-app.include_router(collections_router)
 app.include_router(contact_router)
 
 if __name__ == "__main__":

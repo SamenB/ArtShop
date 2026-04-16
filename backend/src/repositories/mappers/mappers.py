@@ -4,15 +4,14 @@ These mappers link SQLAlchemy ORM models to their corresponding Pydantic schemas
 """
 
 from src.models.artworks import ArtworksOrm
-from src.models.collections import CollectionsOrm
+from src.models.label_categories import LabelCategoriesOrm
+from src.models.labels import ArtworkLabelsOrm, LabelsOrm
 from src.models.orders import OrderItemOrm, OrdersOrm
-from src.models.tags import ArtworkTagsOrm, TagsOrm
 from src.models.users import UsersOrm
 from src.repositories.mappers.base import DataMapper
 from src.schemas.artworks import Artwork
-from src.schemas.collections import Collection
+from src.schemas.labels import ArtworkLabel, Label, LabelCategory
 from src.schemas.orders import Order, OrderItem
-from src.schemas.tags import ArtworkTag, Tag
 from src.schemas.users import User
 
 
@@ -30,18 +29,19 @@ class ArtworkMapper(DataMapper):
     schema = Artwork
 
 
-class TagMapper(DataMapper):
-    """Mapper for Tag entities."""
-
-    db_model = TagsOrm
-    schema = Tag
+class LabelCategoryMapper(DataMapper):
+    db_model = LabelCategoriesOrm
+    schema = LabelCategory
 
 
-class ArtworkTagMapper(DataMapper):
-    """Mapper for ArtworkTag association entities."""
+class LabelMapper(DataMapper):
+    db_model = LabelsOrm
+    schema = Label
 
-    db_model = ArtworkTagsOrm
-    schema = ArtworkTag
+
+class ArtworkLabelMapper(DataMapper):
+    db_model = ArtworkLabelsOrm
+    schema = ArtworkLabel
 
 
 class OrderMapper(DataMapper):
@@ -56,10 +56,3 @@ class OrderItemMapper(DataMapper):
 
     db_model = OrderItemOrm
     schema = OrderItem
-
-
-class CollectionMapper(DataMapper):
-    """Mapper for Collection entities."""
-
-    db_model = CollectionsOrm
-    schema = Collection

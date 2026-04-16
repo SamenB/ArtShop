@@ -171,7 +171,7 @@ export default function ArtworkDetailPage() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    const { addPendingLike } = usePreferences();
+    const { pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
 
     // Fetch all artwork slugs for prev/next navigation
     useEffect(() => {
@@ -212,6 +212,7 @@ export default function ArtworkDetailPage() {
     const images = work.images || [];
     const currentCanvasPrice = Math.round(globalPrintPrice * selectedCanvas.multiplier);
     const currentPaperPrice = Math.round((globalPrintPrice * 0.8) * selectedPaper.multiplier);
+    const effectiveLiked = user ? liked : pendingLikes.includes(work.id);
 
     // Compute prev/next slugs
     const currentSlugIdx = allSlugs.indexOf(slug);
@@ -462,20 +463,29 @@ export default function ArtworkDetailPage() {
                     <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                     <button
                         onClick={async () => {
-                            if (!user) { 
-                                if (work) addPendingLike(work.id);
-                                setShowAuthPrompt(true); 
-                                return; 
-                            }
-                            const newState = !liked;
-                            setLiked(newState);
+                            const newState = !effectiveLiked;
+                            setLiked(newState); // Optimistic UI for animation
                             setLikeAnimating(true);
                             setTimeout(() => setLikeAnimating(false), 400);
+
+                            if (!user) { 
+                                if (work) {
+                                    if (newState) addPendingLike(work.id);
+                                    else removePendingLike(work.id);
+                                }
+                                incrementUnauthLikeCount();
+                                const nextCount = unauthLikeCount + 1;
+                                if ((nextCount - 1) % 3 === 0) {
+                                    setTimeout(() => setShowAuthPrompt(true), 1000);
+                                }
+                                return; 
+                            }
+                            
                             try {
                                 await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
                             } catch {}
                         }}
-                        aria-label={liked ? "Unlike" : "Like"}
+                        aria-label={effectiveLiked ? "Unlike" : "Like"}
                         style={{
                             background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
                             width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center",
@@ -487,7 +497,7 @@ export default function ArtworkDetailPage() {
                             WebkitTapHighlightColor: "transparent",
                         }}
                     >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill={liked ? "#e84057" : "none"} stroke={liked ? "#e84057" : "#999"} strokeWidth={liked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s", pointerEvents: "none" }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill={effectiveLiked ? "#e84057" : "none"} stroke={effectiveLiked ? "#e84057" : "#999"} strokeWidth={effectiveLiked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s", pointerEvents: "none" }}>
                             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                         </svg>
                     </button>
@@ -795,16 +805,29 @@ export default function ArtworkDetailPage() {
                             <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                             <button
                                 onClick={async () => {
-                                    if (!user) { if (work) addPendingLike(work.id); setShowAuthPrompt(true); return; }
-                                    const newState = !liked;
-                                    setLiked(newState);
+                                    const newState = !effectiveLiked;
+                                    setLiked(newState); // Optimistic UI for animation
                                     setLikeAnimating(true);
                                     setTimeout(() => setLikeAnimating(false), 400);
+
+                                    if (!user) { 
+                                        if (work) {
+                                            if (newState) addPendingLike(work.id);
+                                            else removePendingLike(work.id);
+                                        }
+                                        incrementUnauthLikeCount();
+                                        const nextCount = unauthLikeCount + 1;
+                                        if ((nextCount - 1) % 3 === 0) {
+                                            setTimeout(() => setShowAuthPrompt(true), 1000);
+                                        }
+                                        return; 
+                                    }
+                                    
                                     try {
                                         await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
                                     } catch {}
                                 }}
-                                aria-label={liked ? "Unlike" : "Like"}
+                                aria-label={effectiveLiked ? "Unlike" : "Like"}
                                 style={{
                                     background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
                                     width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center",
@@ -816,7 +839,7 @@ export default function ArtworkDetailPage() {
                                 onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)"}
                                 onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"}
                             >
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill={liked ? "#e84057" : "none"} stroke={liked ? "#e84057" : "#999"} strokeWidth={liked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill={effectiveLiked ? "#e84057" : "none"} stroke={effectiveLiked ? "#e84057" : "#999"} strokeWidth={effectiveLiked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
                                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                                 </svg>
                             </button>
