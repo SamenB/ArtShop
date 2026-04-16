@@ -84,7 +84,8 @@ async def setup_database(check_test_mode):
     # We use DROP SCHEMA CASCADE to ensure orphaned tables from legacy code (like artwork_tags)
     # are removed even if they are not present in the current Base.metadata.
     async with engine_null_pool.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+        await conn.execute(text("DROP SCHEMA public CASCADE;"))
+        await conn.execute(text("CREATE SCHEMA public;"))
         await conn.run_sync(Base.metadata.create_all)
 
     # 2. Load mock data from JSON
