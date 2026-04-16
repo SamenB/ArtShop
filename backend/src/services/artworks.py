@@ -20,7 +20,7 @@ from src.schemas.artworks import (
     ArtworkPatch,
     ArtworkPatchRequest,
 )
-from src.schemas.tags import ArtworkTagAdd
+from src.schemas.labels import ArtworkLabelAdd
 from src.services.base import BaseService
 
 
@@ -69,8 +69,7 @@ class ArtworkService(BaseService):
         limit: int = 10,
         offset: int = 0,
         title: str | None = None,
-        tags: list[int] | None = None,
-        collection_id: int | None = None,
+        labels: list[int] | None = None,
         year_from: int | None = None,
         year_to: int | None = None,
         price_min: int | None = None,
@@ -87,8 +86,7 @@ class ArtworkService(BaseService):
                 limit=limit,
                 offset=offset,
                 title=title,
-                tags=tags,
-                collection_id=collection_id,
+                labels=labels,
                 year_from=year_from,
                 year_to=year_to,
                 price_min=price_min,
@@ -98,36 +96,27 @@ class ArtworkService(BaseService):
             )
         except SQLAlchemyError:
             raise DatabaseException
-        logger.info(f"Artworks retrieved: count={len(artworks)}, title={title}, tags={tags}")
+        logger.info(f"Artworks retrieved: count={len(artworks)}, title={title}, labels={labels}")
         return artworks
 
     async def create_artwork(self, artwork_data: ArtworkAddRequest):
         """
-        Stores a new artwork record and its associated tags.
+        Stores a new artwork record and its associated labels.
         Handles default collection assignment ('Sketch') and unique slug generation.
         """
         try:
-            # Handle collection assignment
-            collection_id = artwork_data.collection_id
-            if collection_id is None:
-                sketch_coll = await self.db.collections.get_one_or_none(title="Sketch")
-                if not sketch_coll:
-                    # Creating a default 'Sketch' collection if missing
-                    sketch_coll = await self.db.collections.add(ArtworkAdd(title="Sketch"))
-                collection_id = sketch_coll.id
-
             artwork_dict = artwork_data.model_dump()
-            artwork_dict["collection_id"] = collection_id
             artwork_dict["slug"] = await self.generate_unique_slug(artwork_data.title)
 
             artwork = await self.db.artworks.add(ArtworkAdd(**artwork_dict))
 
-            # Map tag associations
-            artwork_tags = [
-                ArtworkTagAdd(artwork_id=artwork.id, tag_id=tag_id) for tag_id in artwork_data.tags
+            # Map label associations
+            artwork_labels = [
+                ArtworkLabelAdd(artwork_id=artwork.id, label_id=label_id)
+                for label_id in artwork_data.labels
             ]
-            if artwork_tags:
-                await self.db.artwork_tags.add_bulk(artwork_tags)
+            if artwork_labels:
+                await self.db.artwork_labels.add_bulk(artwork_labels)
 
             await self.db.commit()
         except ObjectAlreadyExistsException:
@@ -142,7 +131,7 @@ class ArtworkService(BaseService):
         """
         Performs a full update of an artwork record.
         Maintains immutable fields like images (via separate API) and slugs.
-        Synchronizes tag associations.
+        Synchronizes label associations.
         """
         # Verify artwork exists
         existing = await self.db.artworks.get_one(id=artwork_id)
@@ -151,7 +140,7 @@ class ArtworkService(BaseService):
             # Exclude fields managed by specialized endpoints or immutable logic
             artwork_dict = artwork_data.model_dump()
             artwork_dict.pop("images", None)
-            artwork_dict.pop("tags", None)
+            artwork_dict.pop("labels", None)
             artwork_dict.pop("slug", None)
 
             # Reattach preserved fields
@@ -159,7 +148,7 @@ class ArtworkService(BaseService):
             artwork_dict["images"] = existing.images
 
             await self.db.artworks.edit(ArtworkAdd(**artwork_dict), id=artwork_id)
-            await self.db.artwork_tags.set_artwork_tags(artwork_id, artwork_data.tags)
+            await self.db.artwork_labels.set_artwork_labels(artwork_id, artwork_data.labels)
             await self.db.commit()
         except SQLAlchemyError:
             await self.db.rollback()
@@ -169,7 +158,7 @@ class ArtworkService(BaseService):
     async def update_artwork_partially(self, artwork_id: int, artwork_data: ArtworkPatchRequest):
         """
         Updates only the specified fields of an artwork record.
-        Handles partial metadata and tag updates.
+        Handles partial metadata and label updates.
         """
         artwork_data_dict = artwork_data.model_dump(exclude_unset=True)
         # Verify artwork existence
@@ -178,8 +167,8 @@ class ArtworkService(BaseService):
         try:
             _artwork_data = ArtworkPatch(**artwork_data_dict)
             await self.db.artworks.edit(_artwork_data, exclude_unset=True, id=artwork_id)
-            if "tags" in artwork_data_dict:
-                await self.db.artwork_tags.set_artwork_tags(artwork_id, artwork_data.tags)
+            if "labels" in artwork_data_dict:
+                await self.db.artwork_labels.set_artwork_labels(artwork_id, artwork_data.labels)
             await self.db.commit()
         except SQLAlchemyError:
             await self.db.rollback()

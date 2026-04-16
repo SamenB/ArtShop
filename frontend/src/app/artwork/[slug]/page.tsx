@@ -171,7 +171,7 @@ export default function ArtworkDetailPage() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    const { addPendingLike } = usePreferences();
+    const { pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
 
     // Fetch all artwork slugs for prev/next navigation
     useEffect(() => {
@@ -212,6 +212,7 @@ export default function ArtworkDetailPage() {
     const images = work.images || [];
     const currentCanvasPrice = Math.round(globalPrintPrice * selectedCanvas.multiplier);
     const currentPaperPrice = Math.round((globalPrintPrice * 0.8) * selectedPaper.multiplier);
+    const effectiveLiked = user ? liked : pendingLikes.includes(work.id);
 
     // Compute prev/next slugs
     const currentSlugIdx = allSlugs.indexOf(slug);
@@ -404,6 +405,7 @@ export default function ArtworkDetailPage() {
                                 textDecoration: "none",
                                 transition: "color 0.2s",
                                 whiteSpace: "nowrap",
+                                WebkitTapHighlightColor: "transparent",
                             }}
                             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-charcoal)"; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-muted)"; }}
@@ -461,20 +463,29 @@ export default function ArtworkDetailPage() {
                     <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                     <button
                         onClick={async () => {
-                            if (!user) { 
-                                if (work) addPendingLike(work.id);
-                                setShowAuthPrompt(true); 
-                                return; 
-                            }
-                            const newState = !liked;
-                            setLiked(newState);
+                            const newState = !effectiveLiked;
+                            setLiked(newState); // Optimistic UI for animation
                             setLikeAnimating(true);
                             setTimeout(() => setLikeAnimating(false), 400);
+
+                            if (!user) { 
+                                if (work) {
+                                    if (newState) addPendingLike(work.id);
+                                    else removePendingLike(work.id);
+                                }
+                                incrementUnauthLikeCount();
+                                const nextCount = unauthLikeCount + 1;
+                                if ((nextCount - 1) % 3 === 0) {
+                                    setTimeout(() => setShowAuthPrompt(true), 1000);
+                                }
+                                return; 
+                            }
+                            
                             try {
                                 await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
                             } catch {}
                         }}
-                        aria-label={liked ? "Unlike" : "Like"}
+                        aria-label={effectiveLiked ? "Unlike" : "Like"}
                         style={{
                             background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
                             width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center",
@@ -486,7 +497,7 @@ export default function ArtworkDetailPage() {
                             WebkitTapHighlightColor: "transparent",
                         }}
                     >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill={liked ? "#e84057" : "none"} stroke={liked ? "#e84057" : "#999"} strokeWidth={liked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s", pointerEvents: "none" }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill={effectiveLiked ? "#e84057" : "none"} stroke={effectiveLiked ? "#e84057" : "#999"} strokeWidth={effectiveLiked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s", pointerEvents: "none" }}>
                             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                         </svg>
                     </button>
@@ -680,7 +691,8 @@ export default function ArtworkDetailPage() {
                                             transition: "background 0.3s ease, color 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                                             willChange: "transform, background",
                                             backdropFilter: "blur(4px)",
-                                            boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                                            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                                            WebkitTapHighlightColor: "transparent",
                                         }}
                                         onMouseEnter={e => {
                                             e.currentTarget.style.background = "rgba(255,255,255,0.95)";
@@ -750,6 +762,7 @@ export default function ArtworkDetailPage() {
                                                             opacity: isActive ? 1 : 0.55,
                                                             boxShadow: isActive ? (layoutMetrics.winW < 768 ? "0 2px 6px rgba(0,0,0,0.15)" : "var(--shadow-card-deep)") : (layoutMetrics.winW < 768 ? "0 1px 3px rgba(0,0,0,0.08)" : "var(--shadow-thumb)"),
                                                             transition: "margin 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+                                                            WebkitTapHighlightColor: "transparent",
                                                         }}
                                                         onMouseEnter={e => {
                                                             if (!isActive) {
@@ -792,16 +805,29 @@ export default function ArtworkDetailPage() {
                             <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
                             <button
                                 onClick={async () => {
-                                    if (!user) { if (work) addPendingLike(work.id); setShowAuthPrompt(true); return; }
-                                    const newState = !liked;
-                                    setLiked(newState);
+                                    const newState = !effectiveLiked;
+                                    setLiked(newState); // Optimistic UI for animation
                                     setLikeAnimating(true);
                                     setTimeout(() => setLikeAnimating(false), 400);
+
+                                    if (!user) { 
+                                        if (work) {
+                                            if (newState) addPendingLike(work.id);
+                                            else removePendingLike(work.id);
+                                        }
+                                        incrementUnauthLikeCount();
+                                        const nextCount = unauthLikeCount + 1;
+                                        if ((nextCount - 1) % 3 === 0) {
+                                            setTimeout(() => setShowAuthPrompt(true), 1000);
+                                        }
+                                        return; 
+                                    }
+                                    
                                     try {
                                         await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
                                     } catch {}
                                 }}
-                                aria-label={liked ? "Unlike" : "Like"}
+                                aria-label={effectiveLiked ? "Unlike" : "Like"}
                                 style={{
                                     background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
                                     width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center",
@@ -813,7 +839,7 @@ export default function ArtworkDetailPage() {
                                 onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)"}
                                 onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"}
                             >
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill={liked ? "#e84057" : "none"} stroke={liked ? "#e84057" : "#999"} strokeWidth={liked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill={effectiveLiked ? "#e84057" : "none"} stroke={effectiveLiked ? "#e84057" : "#999"} strokeWidth={effectiveLiked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
                                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                                 </svg>
                             </button>
@@ -1270,7 +1296,7 @@ export default function ArtworkDetailPage() {
                                                         {work.original_status === "available" && (
                                                             <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
                                                                 <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.5rem" }}>Purchase Details</h3>
-                                                                <p style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-charcoal)" }}>{convertPrice(work.original_price)}</p>
+                                                                <p className="font-price" style={{ fontSize: "1.65rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(work.original_price)}</p>
                                                                 <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>Original Artwork • Certificate of Authenticity included</p>
                                                             </div>
                                                         )}
@@ -1299,7 +1325,7 @@ export default function ArtworkDetailPage() {
                                                                 }}>
                                                                     <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.68rem", fontWeight: 600, color: "var(--color-charcoal)", marginBottom: "0.2rem" }}>Flat crate available on request</p>
                                                                     <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>
-                                                                        Custom crates from {convertPrice(1000)}+. Contact us for details.
+                                                                        Custom crates from <span className="font-price font-medium">{convertPrice(1000)}</span>+. Contact us for details.
                                                                     </p>
                                                                 </div>
                                                             </>
@@ -1392,7 +1418,7 @@ export default function ArtworkDetailPage() {
                                                                     onClick={() => setOpenDropdown(openDropdown === "canvas-size" ? null : "canvas-size")}
                                                                     type="button"
                                                                 >
-                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span>
+                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
                                                                     <span className="step-chevron" />
                                                                 </button>
                                                                 <div className={`step-options ${openDropdown === "canvas-size" ? "open" : ""}`}>
@@ -1403,7 +1429,7 @@ export default function ArtworkDetailPage() {
                                                                             className={`step-option ${selectedCanvas === ps ? "active" : ""}`}
                                                                             onClick={() => { setSelectedCanvas(ps); setOpenDropdown(null); }}
                                                                         >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span>
+                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
                                                                             <span className="opt-check" />
                                                                         </button>
                                                                     ))}
@@ -1466,7 +1492,7 @@ export default function ArtworkDetailPage() {
                                                         <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                                             <div>
                                                                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 400, color: "var(--color-charcoal)" }}>
+                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>
                                                                     {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}
                                                                 </span>
                                                             </div>
@@ -1507,7 +1533,7 @@ export default function ArtworkDetailPage() {
                                                                     onClick={() => setOpenDropdown(openDropdown === "paper-size" ? null : "paper-size")}
                                                                     type="button"
                                                                 >
-                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span>
+                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span></span>
                                                                     <span className="step-chevron" />
                                                                 </button>
                                                                 <div className={`step-options ${openDropdown === "paper-size" ? "open" : ""}`}>
@@ -1518,7 +1544,7 @@ export default function ArtworkDetailPage() {
                                                                             className={`step-option ${selectedPaper === ps ? "active" : ""}`}
                                                                             onClick={() => { setSelectedPaper(ps); setOpenDropdown(null); }}
                                                                         >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  {convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span>
+                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span></span>
                                                                             <span className="opt-check" />
                                                                         </button>
                                                                     ))}
@@ -1540,7 +1566,7 @@ export default function ArtworkDetailPage() {
                                                         <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                                             <div>
                                                                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: 400, color: "var(--color-charcoal)" }}>{convertPrice(currentPaperPrice)}</span>
+                                                                <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(currentPaperPrice)}</span>
                                                             </div>
                                                             <button
                                                                 className="premium-cta-btn"

@@ -6,7 +6,13 @@ Includes order creation, tracking, and administrative management.
 from fastapi import APIRouter, Body
 
 from src.api.dependencies import AdminDep, DBDep, UserDep, UserDepOptional
-from src.schemas.orders import OrderAddRequest, OrderBulkRequest, OrderStatusUpdate
+from src.schemas.orders import (
+    FulfillmentStatusUpdate,
+    OrderAddRequest,
+    OrderBulkRequest,
+    OrderPatch,
+    OrderStatusUpdate,
+)
 from src.services.orders import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -46,11 +52,21 @@ async def track_orders_by_email(email: str, db: DBDep):
                 "id": order.id,
                 "created_at": str(order.created_at) if order.created_at else None,
                 "payment_status": order.payment_status,
+                "fulfillment_status": order.fulfillment_status,
                 "total_price": order.total_price,
                 "first_name": order.first_name,
                 "last_name": order.last_name,
                 "shipping_city": order.shipping_city,
                 "shipping_country": order.shipping_country,
+                # Tracking info (visible when shipped)
+                "tracking_number": order.tracking_number,
+                "carrier": order.carrier,
+                "tracking_url": order.tracking_url,
+                # Lifecycle timestamps for progress bar
+                "confirmed_at": str(order.confirmed_at) if order.confirmed_at else None,
+                "print_ordered_at": str(order.print_ordered_at) if order.print_ordered_at else None,
+                "shipped_at": str(order.shipped_at) if order.shipped_at else None,
+                "delivered_at": str(order.delivered_at) if order.delivered_at else None,
                 "items": [
                     {
                         "artwork_id": item.artwork_id,
@@ -104,4 +120,49 @@ async def update_order_status(
     Updates the payment status of a specific order. Requires admin privileges.
     """
     await OrderService(db).update_payment_status(order_id, status_data.payment_status)
+    return {"status": "OK"}
+
+
+@router.patch("/{order_id}/fulfillment")
+async def update_order_fulfillment(
+    order_id: int,
+    admin_id: AdminDep,
+    db: DBDep,
+    fulfillment_data: FulfillmentStatusUpdate,
+):
+    """
+    Updates the fulfillment status of a specific order. Requires admin privileges.
+
+    Side effects:
+    - Auto-sets the corresponding lifecycle timestamp (e.g., shipped_at).
+    - Auto-generates tracking_url from carrier template when tracking_number is provided.
+    - Sends a transactional email to the customer notifying them of the status change.
+
+    Body example (shipping):
+        {
+            "fulfillment_status": "shipped",
+            "tracking_number": "20450000000001",
+            "carrier": "nova_poshta",
+            "notes": "Packed with bubble wrap, fragile sticker attached"
+        }
+    """
+    await OrderService(db).update_fulfillment_status(order_id, fulfillment_data)
+    return {"status": "OK"}
+
+
+@router.patch("/{order_id}")
+async def patch_order(order_id: int, admin_id: AdminDep, db: DBDep, order_patch: OrderPatch):
+    """
+    Applies partial updates to a specific order. Requires admin privileges.
+    """
+    await OrderService(db).patch_order(order_id, order_patch)
+    return {"status": "OK"}
+
+
+@router.delete("/{order_id}")
+async def delete_order(order_id: int, admin_id: AdminDep, db: DBDep):
+    """
+    Permanently deletes a specific order record. Requires admin privileges.
+    """
+    await OrderService(db).delete_order(order_id)
     return {"status": "OK"}

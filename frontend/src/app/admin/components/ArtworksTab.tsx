@@ -1,26 +1,12 @@
 "use client";
 
-/**
- * Artworks Management Tab.
- * Provides comprehensive CRUD operations for the art catalog.
- * Features:
- * - Drag-and-drop image reordering.
- * - Multi-image upload with background processing (Celery).
- * - Inline image cropping for new uploads.
- * - Advanced metadata tagging (medium, collection, status).
- */
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
 import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
 
-/** Details for a processed image variant. */
 interface ArtworkImage { thumb: string; medium: string; original: string; }
-
-/** Union type for image representations: simple path or structured object. */
 type ImageEntry = string | ArtworkImage;
 
-/** core artwork entity used in the administrative dashboard. */
 interface Artwork {
     id: number;
     title: string;
@@ -30,17 +16,13 @@ interface Artwork {
     has_prints?: boolean;
     orientation?: string;
     base_print_price?: number;
-    collection_id?: number | null;
-    tags?: { id: number; title: string; category?: string }[];
+    labels?: { id: number; title: string; category_id?: number }[];
 }
 
-/** Structural collection metadata. */
-interface Collection { id: number; title: string; }
 
-/** Generic tag metadata (Medium, Technique, etc.). */
-interface Tag { id: number; title: string; category?: string; }
+interface Label { id: number; title: string; category_id?: number; }
+interface LabelCategory { id: number; title: string; accent_color?: string; }
 
-/** Standard availability and classification states for artworks. */
 const STATUS_OPTIONS = [
     { value: "available", label: "Available" },
     { value: "sold", label: "Sold" },
@@ -51,21 +33,13 @@ const STATUS_OPTIONS = [
     { value: "digital", label: "Digital" },
 ];
 
-/** 
- * Virtual representation of an image in the upload/edit queue.
- * Tracks whether the image is already persisted or pending upload.
- */
 interface DragItem {
     type: "existing" | "new";
-    url: string;           // Preview URL (fully resolved for existing; object URL for new).
+    url: string;
     existingData?: ImageEntry;
     file?: File;
 }
 
-/**
- * Interactive grid for managing artwork photos.
- * Implements native HTML5 drag-and-drop for intuitive reordering.
- */
 function ImageReorderGrid({
     items,
     onReorder,
@@ -106,51 +80,47 @@ function ImageReorderGrid({
                         onDrop={() => handleDrop(i)}
                         style={{
                             position: "relative", width: "100px", height: "100px",
-                            border: "1px solid rgba(255,255,255,0.2)", borderRadius: "3px",
+                            border: "1px solid rgba(0,0,0,0.1)", borderRadius: "6px",
                             overflow: "hidden", cursor: "grab", flexShrink: 0,
-                            boxShadow: i === 0 ? "0 0 0 2px #EAE5D9" : "none",
+                            boxShadow: i === 0 ? "0 0 0 2px #111" : "none",
                             transition: "box-shadow 0.2s",
                         }}
                     >
                         <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
-                        {/* Cover badge: Indicates the primary thumbnail for gallery views. */}
                         {i === 0 && (
-                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(234,229,217,0.9)", color: "#111", fontSize: "8px", padding: "2px 5px", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "#111", color: "#fff", fontSize: "8px", padding: "3px 6px", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.05em", borderBottomRightRadius: "4px" }}>
                                 Cover
                             </div>
                         )}
-                        {/* Order identifier. */}
                         {i > 0 && (
-                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(0,0,0,0.5)", color: "#fff", fontSize: "8px", padding: "2px 5px", fontFamily: "var(--font-mono)" }}>
+                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(255,255,255,0.8)", color: "#111", fontSize: "8px", padding: "3px 6px", fontFamily: "var(--font-mono)", borderBottomRightRadius: "4px", fontWeight: 600 }}>
                                 #{i + 1}
                             </div>
                         )}
                         <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(i); }}
-                            style={{ position: "absolute", top: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "rgba(200,50,50,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+                            style={{ position: "absolute", top: "4px", right: "4px", width: "20px", height: "20px", borderRadius: "50%", backgroundColor: "rgba(239,68,68,1)", border: "none", color: "#fff", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
                             title="Remove"
                         >×</button>
-                        {/* Entry point for the SimpleArtworkCropperModal (New files only). */}
                         {item.type === "new" && onCropClick && (
                             <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); onCropClick(i); }}
-                                style={{ position: "absolute", bottom: "3px", right: "3px", width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "rgba(50,150,250,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+                                style={{ position: "absolute", bottom: "4px", right: "4px", width: "22px", height: "22px", borderRadius: "50%", backgroundColor: "rgba(0,0,0,0.9)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
                                 title="Crop Image"
                             >◩</button>
                         )}
                     </div>
                 ))}
 
-                {/* Add more button: Triggers standard file picker. */}
                 {items.length < maxItems && (
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); inputRef.current?.click(); }}
-                        style={{ width: "100px", height: "100px", border: "1px dashed rgba(255,255,255,0.25)", borderRadius: "3px", backgroundColor: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)", fontSize: "2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.2s, color 0.2s" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}
+                        style={{ width: "100px", height: "100px", border: "1px dashed rgba(0,0,0,0.2)", borderRadius: "6px", backgroundColor: "rgba(0,0,0,0.02)", color: "rgba(0,0,0,0.4)", fontSize: "2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(0,0,0,0.5)"; e.currentTarget.style.color = "rgba(0,0,0,0.7)"; e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.04)" }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(0,0,0,0.2)"; e.currentTarget.style.color = "rgba(0,0,0,0.4)"; e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.02)" }}
                     >+</button>
                 )}
                 <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: "none" }}
@@ -162,18 +132,15 @@ function ImageReorderGrid({
                     }}
                 />
             </div>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "rgba(255,255,255,0.3)", marginTop: "8px", letterSpacing: "0.05em" }}>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "rgba(0,0,0,0.5)", marginTop: "8px", letterSpacing: "0.05em" }}>
                 Drag to reorder · First image is cover · Up to {maxItems} photos
             </p>
         </div>
     );
 }
 
-/**
- * Chip-based multi-selection interface for artwork tags.
- */
-function TagMultiSelect({ tags, selected, onChange, placeholder }: {
-    tags: Tag[];
+function LabelMultiSelect({ labels, selected, onChange, placeholder }: {
+    labels: Label[];
     selected: number[];
     onChange: (ids: number[]) => void;
     placeholder: string;
@@ -183,24 +150,25 @@ function TagMultiSelect({ tags, selected, onChange, placeholder }: {
 
     return (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {tags.map(t => {
+            {labels.map(t => {
                 const active = selected.includes(t.id);
                 return (
                     <button key={t.id} type="button" onClick={() => toggle(t.id)}
                         style={{
                             padding: "4px 10px", borderRadius: "20px",
-                            border: `1px solid ${active ? "#EAE5D9" : "rgba(255,255,255,0.2)"}`,
-                            backgroundColor: active ? "rgba(234,229,217,0.15)" : "transparent",
-                            color: active ? "#EAE5D9" : "rgba(255,255,255,0.45)",
+                            border: `1px solid ${active ? "#111" : "rgba(0,0,0,0.1)"}`,
+                            backgroundColor: active ? "#111" : "#f4f4f5",
+                            color: active ? "#fff" : "#52525b",
                             fontFamily: "var(--font-sans)", fontSize: "0.72rem",
                             cursor: "pointer", transition: "all 0.15s",
+                            fontWeight: active ? 500 : 400
                         }}>
                         {t.title}
                     </button>
                 );
             })}
-            {tags.length === 0 && (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "rgba(255,255,255,0.3)", fontStyle: "italic" }}>
+            {labels.length === 0 && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "rgba(0,0,0,0.4)", fontStyle: "italic" }}>
                     {placeholder}
                 </span>
             )}
@@ -208,49 +176,35 @@ function TagMultiSelect({ tags, selected, onChange, placeholder }: {
     );
 }
 
-/**
- * Standardized form field title with validation dots.
- */
 function FieldLabel({ text, required = false, valid = true }: { text: string; required?: boolean; valid?: boolean }) {
     return (
         <div className="flex items-center gap-2 mb-2">
             <div className={`w-2 h-2 rounded-full shrink-0 ${valid ? "bg-green-500" : "bg-orange-500"}`} />
-            <label className="block text-[10px] uppercase font-mono text-zinc-500 tracking-widest">
+            <label className="block text-[10px] uppercase font-mono text-zinc-500 tracking-widest font-semibold">
                 {text} {required && "*"}
             </label>
         </div>
     );
 }
 
-/**
- * Semantic divider for the artwork creation form.
- */
 function FormSection({ title }: { title: string }) {
     return (
-        <div className="flex items-center gap-4 mb-4">
-            <h3 className="text-lg font-serif italic text-[#F7F3EC] shrink-0">{title}</h3>
-            <div className="flex-1 h-px bg-white/10"></div>
+        <div className="flex items-center gap-4 mb-5">
+            <h3 className="text-lg font-serif italic text-[#31323E] shrink-0">{title}</h3>
+            <div className="flex-1 h-px bg-zinc-200"></div>
         </div>
     );
 }
 
-/**
- * Main administrative interface for curated artwork management.
- * Orchestrates metadata editing, collection assignment, and visual asset reordering.
- */
 export default function ArtworksTab() {
     const [artworks, setArtworks] = useState<Artwork[]>([]);
-    const [collections, setCollections] = useState<Collection[]>([]);
-    const [mediumTags, setMediumTags] = useState<Tag[]>([]);
+    const [categories, setCategories] = useState<LabelCategory[]>([]);
+    const [labels, setLabels] = useState<Label[]>([]);
     const [loading, setLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
-
-    // List of images currently being edited or queued for upload.
     const [imageItems, setImageItems] = useState<DragItem[]>([]);
-    
-    // Tracks which image is currently being processed in the cropper modal.
     const [cropImageIndex, setCropImageIndex] = useState<number | null>(null);
 
     const defaultForm = {
@@ -264,37 +218,33 @@ export default function ArtworksTab() {
         has_prints: false,
         orientation: "Horizontal",
         base_print_price: 100,
-        tags: [] as number[],
-        collection_id: null as number | null,
+        labels: [] as number[],
         original_status: "available",
     };
     const [formData, setFormData] = useState<any>(defaultForm);
 
-    /** Safe utility to resolve absolute image URLs from relative backend paths. */
     const resolveImageUrl = useCallback((img: ImageEntry): string => {
         if (typeof img === "string") return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
         return getImageUrl(img, "thumb") || "";
     }, []);
 
-    /** Populates local state with fresh data from the API. */
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [artRes, collRes, tagRes] = await Promise.all([
+            const [artRes, catRes, lblRes] = await Promise.all([
                 apiFetch(`${getApiUrl()}/artworks?limit=100`),
-                apiFetch(`${getApiUrl()}/collections`),
-                apiFetch(`${getApiUrl()}/tags?category=medium`),
+                apiFetch(`${getApiUrl()}/labels/categories`),
+                apiFetch(`${getApiUrl()}/labels`),
             ]);
             if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
-            if (collRes.ok) { const d = await collRes.json(); setCollections(d); }
-            if (tagRes.ok) { const d = await tagRes.json(); setMediumTags(d); }
+            if (catRes.ok) { const d = await catRes.json(); setCategories(d); }
+            if (lblRes.ok) { const d = await lblRes.json(); setLabels(d); }
         } catch (e) { console.error("Fetch error:", e); }
         finally { setLoading(false); }
     };
 
     useEffect(() => { fetchData(); }, []);
 
-    /** Queues selected files for upload and generates local preview URLs. */
     const addFiles = (files: File[]) => {
         const newItems: DragItem[] = files.map(f => ({
             type: "new", url: URL.createObjectURL(f), file: f,
@@ -304,7 +254,6 @@ export default function ArtworksTab() {
 
     const removeImage = (idx: number) => setImageItems(prev => prev.filter((_, i) => i !== idx));
 
-    /** Commits cropped image data back to the upload queue as a high-quality WebP file. */
     const handleSaveCrop = async (croppedBlob: Blob) => {
         if (cropImageIndex === null) return;
         const newFile = new File([croppedBlob], `cropped-${Date.now()}.webp`, { type: "image/webp" });
@@ -320,14 +269,6 @@ export default function ArtworksTab() {
         setCropImageIndex(null);
     };
 
-    /** 
-     * Handles the complex multi-step save operation:
-     * 1. Validates business constraints (price, status, image count).
-     * 2. Calculates metric-to-imperial dimension conversions.
-     * 3. Syncs primary metadata (title, description, tags).
-     * 4. Syncs existing image reordering/removals.
-     * 5. Uploads new binary assets for asynchronous background processing.
-     */
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -342,11 +283,9 @@ export default function ArtworksTab() {
         if (payload.width_cm) payload.width_in = Number((parseFloat(payload.width_cm) * 0.393701).toFixed(2));
         if (payload.height_cm) payload.height_in = Number((parseFloat(payload.height_cm) * 0.393701).toFixed(2));
 
-        // Sanitize prices based on availability toggles.
         if (payload.original_status !== "available") payload.original_price = null;
         if (!payload.has_prints) payload.base_print_price = null;
         
-        // Sanitize dimensions for digital-only assets.
         if (payload.original_status === "digital") {
             payload.width_cm = null;
             payload.height_cm = null;
@@ -381,11 +320,6 @@ export default function ArtworksTab() {
             const data = await res.json();
             const targetId = editingId || data.data?.id;
 
-            /** 
-             * Sync current reorder state of persistent images.
-             * This must precede new uploads to ensure background processing can
-             * append new variants to the correct list.
-             */
             if (editingId) {
                 const existingOrdered = imageItems
                     .filter(it => it.type === "existing")
@@ -397,7 +331,6 @@ export default function ArtworksTab() {
                 });
             }
 
-            /** Upload new binary assets for variant generation. */
             const newFiles = imageItems.filter(it => it.type === "new" && it.file).map(it => it.file!);
             if (newFiles.length > 0 && targetId) {
                 const fd = new FormData();
@@ -418,7 +351,6 @@ export default function ArtworksTab() {
         }
     };
 
-    /** Pre-hydrates the form with existing artwork data for modification. */
     const handleEditClick = async (art: Artwork) => {
         try {
             const res = await apiFetch(`${getApiUrl()}/artworks/${art.id}`);
@@ -435,8 +367,7 @@ export default function ArtworksTab() {
                 has_prints: full.has_prints || false,
                 orientation: full.orientation || "Horizontal",
                 base_print_price: full.base_print_price || 0,
-                tags: (full.tags || []).map((t: any) => typeof t === "number" ? t : t.id),
-                collection_id: full.collection_id || null,
+                labels: (full.labels || []).map((t: any) => typeof t === "number" ? t : t.id),
                 original_status: full.original_status || "available",
             });
             const existing: DragItem[] = (full.images || []).map((img: ImageEntry) => ({
@@ -453,7 +384,6 @@ export default function ArtworksTab() {
         }
     };
 
-    /** Removes an artwork and its associated assets from the permanent record. */
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this artwork?")) return;
         const res = await apiFetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE" });
@@ -461,28 +391,27 @@ export default function ArtworksTab() {
         else alert("Delete failed");
     };
 
-    const inp = "w-full bg-black border border-white/20 p-3 text-sm focus:outline-none focus:border-white/50 text-white";
+    const inp = "w-full bg-white border border-gray-200 rounded-md p-3 text-sm text-[#31323E] focus:outline-none focus:border-[#31323E] focus:ring-1 focus:ring-black placeholder-gray-400 transition-all";
 
     if (loading) return <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Synchronizing catalog database...</div>;
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-serif italic">Artworks ({artworks.length})</h2>
+        <div className="space-y-6 text-[#31323E]">
+            <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-serif italic text-[#31323E]">Artworks ({artworks.length})</h2>
                 <button
                     onClick={() => {
                         if (isFormOpen) { setIsFormOpen(false); setEditingId(null); setFormData({ ...defaultForm }); setImageItems([]); }
                         else setIsFormOpen(true);
                     }}
-                    className="px-4 py-2 border border-[#EAE5D9] text-[#EAE5D9] uppercase font-mono text-xs hover:bg-[#EAE5D9] hover:text-[#111111] transition-colors"
+                    className="px-5 py-2.5 bg-[#31323E] text-white hover:bg-[#434455] rounded-full font-mono text-xs uppercase tracking-widest transition-colors font-medium shadow-sm"
                 >
                     {isFormOpen ? "Cancel" : "Add New Artwork"}
                 </button>
             </div>
 
             {isFormOpen && (
-                <form onSubmit={handleCreate} className="p-6 border border-white/10 bg-[#151515] rounded-xl shadow-2xl space-y-6 mb-8">
-                    {/* ── Identity ── */}
+                <form onSubmit={handleCreate} className="p-8 border border-gray-100 bg-gray-50 rounded-2xl shadow-sm space-y-8 mb-10">
                     <div>
                         <FormSection title="Identity" />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
@@ -497,17 +426,8 @@ export default function ArtworksTab() {
                         </div>
                     </div>
 
-                    {/* ── Classification ── */}
                     <div>
                         <FormSection title="Classification" />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-                            <div>
-                                <FieldLabel text="Collection" valid={!!formData.collection_id} />
-                                <select value={formData.collection_id || ""} onChange={e => setFormData({ ...formData, collection_id: e.target.value ? Number(e.target.value) : null })} className={inp}>
-                                    <option value="">Uncategorised</option>
-                                    {collections.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                                </select>
-                            </div>
                             <div>
                                 <FieldLabel text="Orientation" valid={!!formData.orientation} />
                                 <select value={formData.orientation} onChange={e => setFormData({ ...formData, orientation: e.target.value })} className={inp}>
@@ -516,10 +436,8 @@ export default function ArtworksTab() {
                                     <option value="Square">Square</option>
                                 </select>
                             </div>
-                        </div>
                     </div>
 
-                    {/* ── Original ── */}
                     <div>
                         <FormSection title="Original" />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
@@ -538,7 +456,6 @@ export default function ArtworksTab() {
                         </div>
                     </div>
 
-                    {/* ── Prints ── */}
                     <div>
                         <FormSection title="Prints" />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4 h-full">
@@ -558,7 +475,6 @@ export default function ArtworksTab() {
                         </div>
                     </div>
 
-                    {/* ── Dimensions ── */}
                     {formData.original_status !== "digital" && (
                         <div>
                             <FormSection title="Dimensions (cm)" />
@@ -575,25 +491,28 @@ export default function ArtworksTab() {
                         </div>
                     )}
 
-                    {/* ── Description ── */}
                     <div>
-                        <FormSection title="Description" />
-                        <div className="mt-4">
-                            <FieldLabel text="Medium / Materials" valid={formData.tags?.length > 0} />
-                            <TagMultiSelect
-                                tags={mediumTags}
-                                selected={formData.tags}
-                                onChange={ids => setFormData({ ...formData, tags: ids })}
-                                placeholder="No medium tags yet — create them in the Tags tab with category = medium"
-                            />
-                        </div>
+                        <FormSection title="Labels & Categorization" />
+                        {categories.map(cat => {
+                            const catLabels = labels.filter(l => l.category_id === cat.id);
+                            return (
+                                <div key={cat.id} className="mt-4">
+                                    <FieldLabel text={cat.title} valid={formData.labels?.some((l: number) => catLabels.find(cl => cl.id === l))} />
+                                    <LabelMultiSelect
+                                        labels={catLabels}
+                                        selected={formData.labels}
+                                        onChange={ids => setFormData({ ...formData, labels: ids })}
+                                        placeholder={`No ${cat.title} labels yet — create them in the Labels tab.`}
+                                    />
+                                </div>
+                            );
+                        })}
                         <div className="mt-4">
                             <FieldLabel text="Description" valid={formData.description?.trim().length > 0} />
                             <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} rows={4} className={inp} placeholder="Artwork description..." />
                         </div>
                     </div>
 
-                    {/* ── Images ── */}
                     <div>
                         <FormSection title="Photos (up to 10)" />
                         <ImageReorderGrid
@@ -606,7 +525,7 @@ export default function ArtworksTab() {
                         />
                     </div>
 
-                    <button type="submit" disabled={uploading} className="w-full bg-[#EAE5D9] text-[#111111] py-3 uppercase tracking-widest font-mono text-sm disabled:opacity-50 hover:bg-white transition-colors">
+                    <button type="submit" disabled={uploading} className="w-full bg-[#31323E] text-white py-3.5 rounded-md uppercase tracking-widest font-mono text-sm font-semibold disabled:opacity-50 hover:bg-[#434455] transition-colors shadow-lg shadow-black/10">
                         {uploading ? "Saving Asset..." : editingId ? "Update Artwork" : "Create Artwork"}
                     </button>
                 </form>
@@ -619,22 +538,23 @@ export default function ArtworksTab() {
                 onSaveCrop={handleSaveCrop}
             />
 
-            {/* Artwork catalog grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                 {artworks.map(art => (
-                    <div key={art.id} className="border border-white/10 p-4 relative group bg-white/5">
-                        <div className="aspect-4/5 bg-zinc-900 mb-4 overflow-hidden rounded-sm relative">
+                    <div key={art.id} className="border border-gray-100 p-3 rounded-xl relative group bg-white shadow-sm hover:shadow-md transition-shadow">
+                        <div className="aspect-4/5 bg-gray-100 mb-4 overflow-hidden rounded-lg relative">
                             {art.images && art.images.length > 0 ? (
-                                <img src={getImageUrl(art.images[0], "thumb")} alt={art.title} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                <img src={getImageUrl(art.images[0], "thumb")} alt={art.title} className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                             ) : (
-                                <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600 font-mono">Image Missing</div>
+                                <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-mono bg-gray-50">Image Missing</div>
                             )}
                         </div>
-                        <h3 className="font-serif italic text-lg text-[#F7F3EC] truncate">{art.title}</h3>
-                        <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mt-1">${art.original_price}</p>
-                        <div className="absolute top-6 right-6 flex gap-2">
-                            <button onClick={() => handleEditClick(art)} className="bg-blue-500/90 text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity rounded-sm hover:bg-blue-400">Edit</button>
-                            <button onClick={() => handleDelete(art.id)} className="bg-red-500/90 text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity rounded-sm hover:bg-red-400">Delete</button>
+                        <div className="px-1">
+                            <h3 className="font-serif italic text-lg text-[#31323E] truncate">{art.title}</h3>
+                            <p className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mt-1">${art.original_price}</p>
+                        </div>
+                        <div className="absolute top-5 right-5 flex gap-2">
+                            <button onClick={() => handleEditClick(art)} className="bg-black/80 backdrop-blur text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-[#31323E] font-semibold shadow-sm">Edit</button>
+                            <button onClick={() => handleDelete(art.id)} className="bg-red-500/90 backdrop-blur text-white text-[10px] font-mono px-3 py-1.5 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all rounded-md hover:bg-red-500 font-semibold shadow-sm">Delete</button>
                         </div>
                     </div>
                 ))}

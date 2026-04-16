@@ -7,11 +7,11 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import joinedload
 
 from src.models.artworks import ArtworksOrm
-from src.models.tags import TagsOrm
+from src.models.labels import LabelsOrm
 from src.repositories.base import BaseRepository
 from src.repositories.mappers.mappers import ArtworkMapper
 from src.repositories.utils import available_artwork_ids
-from src.schemas.artworks import ArtworkWithTags
+from src.schemas.artworks import ArtworkWithLabels
 
 
 class ArtworksRepository(BaseRepository):
@@ -28,8 +28,7 @@ class ArtworksRepository(BaseRepository):
         limit: int = 10,
         offset: int = 0,
         title: str | None = None,
-        tags: list[int] | None = None,
-        collection_id: int | None = None,
+        labels: list[int] | None = None,
         year_from: int | None = None,
         year_to: int | None = None,
         price_min: int | None = None,
@@ -39,25 +38,22 @@ class ArtworksRepository(BaseRepository):
     ):
         """
         Retrieves a list of available artworks based on various filters.
-        Filters include title (fuzzy), tags, collection, production year, price range,
+        Filters include title (fuzzy), labels, collection, production year, price range,
         aspect ratio (orientation), and surface area (size category).
         """
         artworks_ids_to_get = available_artwork_ids()
 
         query = (
             select(self.model)
-            .options(joinedload(self.model.tags))
+            .options(joinedload(self.model.labels))
             .filter(self.model.id.in_(artworks_ids_to_get))
         )
 
         if title:
             query = query.filter(self.model.title.ilike(f"%{title}%"))
 
-        if tags:
-            query = query.filter(self.model.tags.any(TagsOrm.id.in_(tags)))
-
-        if collection_id is not None:
-            query = query.filter(self.model.collection_id == collection_id)
+        if labels:
+            query = query.filter(self.model.labels.any(LabelsOrm.id.in_(labels)))
 
         if year_from is not None:
             query = query.filter(self.model.year >= year_from)
@@ -128,18 +124,18 @@ class ArtworksRepository(BaseRepository):
 
         result = await self.session.execute(query)
         return [
-            ArtworkWithTags.model_validate(model, from_attributes=True)
+            ArtworkWithLabels.model_validate(model, from_attributes=True)
             for model in result.unique().scalars().all()
         ]
 
     async def get_one_or_none(self, **filter_by):
         """
         Retrieves a single artwork by its fields or returns None if not found.
-        Eagerly loads associated tags.
+        Eagerly loads associated labels.
         """
-        query = select(self.model).options(joinedload(self.model.tags)).filter_by(**filter_by)
+        query = select(self.model).options(joinedload(self.model.labels)).filter_by(**filter_by)
         result = await self.session.execute(query)
         model = result.unique().scalars().one_or_none()
         if model is None:
             return None
-        return ArtworkWithTags.model_validate(model, from_attributes=True)
+        return ArtworkWithLabels.model_validate(model, from_attributes=True)

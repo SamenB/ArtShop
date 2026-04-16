@@ -54,7 +54,7 @@ export default function Footer() {
         <footer className="footer-container">
             <style>{`
                 .footer-container {
-                    background: #111111;
+                    background: #31323E; /* Dark gray-blue matching the header aesthetic */
                     color: rgba(255, 255, 255, 0.9);
                     font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                     border-top: 1px solid rgba(255,255,255,0.05);
@@ -141,7 +141,7 @@ export default function Footer() {
                 }
                 
                 .footer-brand img {
-                    height: clamp(34px, 4vw, 54px);
+                    height: clamp(28px, 3.2vw, 42px);
                     width: auto;
                     filter: brightness(0) invert(1);
                     display: block;
@@ -478,7 +478,7 @@ export default function Footer() {
                 <div className="footer-bottom">
                     <Link href="/" className="footer-brand" aria-label="Home">
                         <Image
-                            src="/logo-v4.png"
+                            src="/logo-v5.png"
                             alt="Samen Bondarenko"
                             width={340}
                             height={80}

@@ -35,7 +35,10 @@ interface PreferencesContextType {
     /** IDs of artworks liked while anonymous, waiting for login to sync. */
     pendingLikes: number[];
     addPendingLike: (id: number) => void;
+    removePendingLike: (id: number) => void;
     clearPendingLikes: () => void;
+    unauthLikeCount: number;
+    incrementUnauthLikeCount: () => void;
 }
 
 /** UI labels for the language selector. */
@@ -85,6 +88,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     
     const [globalPrintPrice, setGlobalPrintPrice] = useState<number>(150);
     const [pendingLikes, setPendingLikes] = useState<number[]>([]);
+    const [unauthLikeCount, setUnauthLikeCount] = useState<number>(0);
 
     // Fetch administrative site settings on initialization.
     useEffect(() => {
@@ -187,7 +191,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         });
     };
 
+    const removePendingLike = (id: number) => {
+        setPendingLikes(prev => prev.filter(x => x !== id));
+    };
+
     const clearPendingLikes = () => setPendingLikes([]);
+
+    const incrementUnauthLikeCount = () => setUnauthLikeCount(prev => prev + 1);
 
     /** Converts a base USD price to the active currency and formats it for display. */
     const convertPrice = (usdPrice: number) => {
@@ -217,7 +227,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             globalPrintPrice,
             pendingLikes,
             addPendingLike,
-            clearPendingLikes
+            removePendingLike,
+            clearPendingLikes,
+            unauthLikeCount,
+            incrementUnauthLikeCount
         }}>
             {children}
         </PreferencesContext.Provider>

@@ -152,10 +152,8 @@ export default function Lightbox({
             className="lb-root"
             style={{
                 position: "fixed", inset: 0, zIndex: 2000,
-                // Blur backdrop — show the blurred page behind
-                backgroundColor: "rgba(252, 252, 252, 0.75)",
-                backdropFilter: "blur(22px)",
-                WebkitBackdropFilter: "blur(22px)",
+                // Dark brand background matching the header spacer
+                backgroundColor: "#4D4E5C",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 overflow: "hidden",
             }}
@@ -187,9 +185,8 @@ export default function Lightbox({
                     fontFamily: "var(--font-artwork-title)",
                     fontStyle: "normal",
                     fontWeight: 400,
-                    color: "rgba(20,20,18,0.9)",
+                    color: "rgba(255,255,255,0.95)",
                     margin: 0,
-                    textShadow: "0 2px 10px rgba(255,255,255,0.8)",
                 }}>
                     {w.title}
                 </h2>
@@ -318,62 +315,7 @@ export default function Lightbox({
                 )}
             </div>
 
-            {/* ── Artwork Details (Bottom Scrollable) ────────────────────────── */}
-            <div
-                className="lb-details"
-                onPointerDown={e => e.stopPropagation()}
-                onWheel={e => e.stopPropagation()}
-                onTouchStart={e => e.stopPropagation()}
-                onTouchMove={e => e.stopPropagation()}
-                onTouchEnd={e => e.stopPropagation()}
-                style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    maxHeight: "35vh",
-                    overflowY: "auto",
-                    padding: "0 1.5rem 2.5rem",
-                    zIndex: 26,
-                    background: "transparent",
-                    opacity: zoom > 1 ? 0 : 1,
-                    transition: "opacity 0.2s ease",
-                    pointerEvents: "auto",
-                    touchAction: "pan-y",
-                    WebkitOverflowScrolling: "touch",
-                    overscrollBehavior: "contain",
-                    display: "flex",
-                    flexDirection: "column",
-                }}
-            >
-                <div style={{
-                    fontFamily: "var(--font-mono, monospace)",
-                    fontSize: "0.8rem",
-                    color: "rgba(20,20,18,0.9)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    marginBottom: "0.75rem",
-                    textShadow: "0 2px 10px rgba(255,255,255,0.8)",
-                    fontWeight: 500,
-                }}>
-                    {w.size && <span>{w.size}</span>}
-                    {w.size && w.original_status && <span style={{ margin: "0 10px", opacity: 0.5 }}>|</span>}
-                    {w.original_status && <span>{w.original_status.replace(/_/g, ' ')}</span>}
-                </div>
-                {w.description && (
-                    <div style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: "0.95rem",
-                        lineHeight: 1.6,
-                        color: "rgba(20,20,18,0.85)",
-                        textShadow: "0 2px 10px rgba(255,255,255,0.8)",
-                        maxWidth: "800px",
-                        whiteSpace: "pre-wrap",
-                    }}>
-                        {w.description}
-                    </div>
-                )}
-            </div>
+
 
             {/* ── Close button (only UI element) ─────────────────────────────── */}
             <button

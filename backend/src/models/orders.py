@@ -13,7 +13,10 @@ from src.database import Base
 class OrdersOrm(Base):
     """
     Represents a customer order.
-    Stores contact information, billing details, marketing preferences, and payment status.
+
+    Tracks two independent status axes:
+    - payment_status: reflects the payment gateway state (auto-updated by Monobank webhook).
+    - fulfillment_status: reflects the physical order pipeline (manually updated by admin).
     """
 
     __tablename__ = "orders"
@@ -46,10 +49,34 @@ class OrdersOrm(Base):
     total_price: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
-    # Payment status options: pending, paid, failed, mock_paid
+    # ── Payment Status ──────────────────────────────────────────────────────────
+    # Auto-managed by Monobank webhook. Do not change manually unless necessary.
+    # Values: pending | awaiting_payment | paid | failed | refunded | hold | mock_paid
     payment_status: Mapped[str] = mapped_column(String(20), default="pending")
     invoice_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     payment_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # ── Fulfillment Status ──────────────────────────────────────────────────────
+    # Manually managed by admin via the dashboard.
+    # Values: pending | confirmed | print_ordered | print_received | packaging | shipped | delivered | cancelled
+    fulfillment_status: Mapped[str] = mapped_column(String(30), default="pending")
+
+    # Internal admin notes (not visible to customers)
+    notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+
+    # ── Shipping Tracking ───────────────────────────────────────────────────────
+    tracking_number: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    carrier: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Auto-generated from carrier+tracking_number or set manually
+    tracking_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # ── Lifecycle Timestamps ────────────────────────────────────────────────────
+    # Automatically set by OrderService.update_fulfillment_status() on each transition.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    print_ordered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    print_received_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     user: Mapped["UsersOrm"] = relationship("UsersOrm")
@@ -72,8 +99,8 @@ class OrderItemOrm(Base):
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"))
     artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
 
-    edition_type: Mapped[str] = mapped_column(String(20))  # 'original' or 'print'
-    finish: Mapped[str] = mapped_column(String(50))  # 'Rolled' or 'Framed'
+    edition_type: Mapped[str] = mapped_column(String(20))  # 'original' | 'print'
+    finish: Mapped[str] = mapped_column(String(50))  # 'Rolled' | 'Framed' | 'Unframed' | etc.
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     price: Mapped[int] = mapped_column(Integer)

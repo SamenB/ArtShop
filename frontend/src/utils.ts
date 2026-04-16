@@ -12,12 +12,10 @@ const ENV_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 export const getApiUrl = (serverHost?: string): string => {
     // 1. Browser context (Client-Side Rendering)
     if (typeof window !== "undefined") {
-        // In production or behind a secure proxy, use relative paths to avoid CORS issues.
-        if (process.env.NODE_ENV === "production") {
-            return "/api"; 
-        }
-        // Local development: connect to the FastAPI instance using the same hostname.
-        return `http://${window.location.hostname}:8000`;
+        // Always use the Next.js /api proxy in the browser — both dev and prod.
+        // This avoids CORS issues and browser extension interference (VPN/AdBlock).
+        // next.config.ts rewrites /api/* → backend (dev: localhost:8000, prod: container).
+        return "/api";
     }
 
     // 2. Server context (Server-Side Rendering)

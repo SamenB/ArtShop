@@ -5,9 +5,9 @@ Pydantic schemas for artwork data validation and serialization.
 import enum
 import re
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.schemas.tags import Tag
+from src.schemas.labels import Label
 
 
 class OriginalStatus(str, enum.Enum):
@@ -31,6 +31,8 @@ class ArtworkAddRequest(BaseModel):
     Includes tag IDs for relationship management.
     """
 
+    model_config = ConfigDict(use_enum_values=True)
+
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")
     original_price: int | None = Field(None, description="Price of the original artwork")
@@ -50,8 +52,7 @@ class ArtworkAddRequest(BaseModel):
     has_prints: bool = Field(False, description="Whether prints are available for purchase")
     orientation: str = Field(..., description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
-    tags: list[int] = Field([], description="List of tag IDs")
-    collection_id: int | None = Field(None, description="ID of the collection")
+    labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
@@ -83,7 +84,6 @@ class ArtworkAdd(BaseModel):
     has_prints: bool = Field(False, description="Whether prints are available for purchase")
     orientation: str = Field(..., description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
-    collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
@@ -105,12 +105,12 @@ class Artwork(ArtworkAdd):
         return self
 
 
-class ArtworkWithTags(Artwork):
+class ArtworkWithLabels(Artwork):
     """
-    Represents an artwork entity including its associated tags.
+    Represents an artwork entity including its associated labels.
     """
 
-    tags: list[Tag]
+    labels: list[Label]
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs or image objects."
     )
@@ -139,8 +139,7 @@ class ArtworkPatchRequest(BaseModel):
     has_prints: bool | None = Field(None, description="Whether prints are available for purchase")
     orientation: str | None = Field(None, description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
-    tags: list[int] = Field([], description="List of tag IDs")
-    collection_id: int | None = Field(None, description="ID of the collection")
+    labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
@@ -150,6 +149,8 @@ class ArtworkPatch(BaseModel):
     """
     Schema for applying partial updates to an artwork record in the database.
     """
+
+    model_config = ConfigDict(use_enum_values=True)
 
     title: str | None = Field(None, description="Title of the artwork")
     slug: str | None = Field(None, description="Unique slug for the artwork")
@@ -170,7 +171,6 @@ class ArtworkPatch(BaseModel):
     has_prints: bool | None = Field(None, description="Whether prints are available for purchase")
     orientation: str | None = Field(None, description="Orientation of the artwork")
     base_print_price: int | None = Field(None, description="Base price for print")
-    collection_id: int | None = Field(None, description="ID of the collection")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
@@ -180,6 +180,8 @@ class ArtworkAddBulk(BaseModel):
     """
     Schema for high-performance bulk artwork creation.
     """
+
+    model_config = ConfigDict(use_enum_values=True)
 
     title: str = Field(..., description="Title of the artwork")
     description: str | None = Field(None, description="Description of the artwork")

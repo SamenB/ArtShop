@@ -11,11 +11,11 @@ def test_artwork_add_request_valid():
         "has_prints": False,
         "orientation": "Horizontal",
         "base_print_price": 100,
-        "tags": [1, 2],
+        "labels": [1, 2],
     }
     artwork = ArtworkAddRequest(**data)
     assert artwork.has_prints is False
-    assert artwork.tags == [1, 2]
+    assert artwork.labels == [1, 2]
     assert artwork.original_status == "available"
 
 
@@ -26,7 +26,7 @@ def test_artwork_add_request_defaults():
     assert artwork.has_prints is False
     assert artwork.base_print_price is None
     assert artwork.orientation == "Vertical"
-    assert artwork.tags == []
+    assert artwork.labels == []
 
 
 def test_artwork_add_request_missing_title():

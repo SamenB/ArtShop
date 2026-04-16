@@ -34,7 +34,6 @@ interface Artwork {
     has_prints: boolean;
     orientation?: string;
     base_print_price?: number;
-    collection_id?: number;
     width_cm?: number;
     height_cm?: number;
     width_in?: number;
@@ -44,7 +43,7 @@ interface Artwork {
     gradientFrom?: string;
     /** UI fallback gradient end color. */
     gradientTo?: string;
-    tags?: Array<{ title: string; category: string; id: number }>;
+    labels?: Array<{ title: string; category_id?: number; id: number }>;
 }
 
 /** 
@@ -110,7 +109,7 @@ interface ArtCardProps {
     isMobile: boolean;
     liked?: boolean;
     onLike?: (id: number, newState: boolean) => void;
-    onAuthRequired?: (id: number) => void;
+    onAuthRequired?: (id: number, newState: boolean) => void;
 }
 
 /**
@@ -128,6 +127,9 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
     const containerRef = useRef<HTMLDivElement>(null);
     const [textPad, setTextPad] = useState(0);
     const [emptyBottom, setEmptyBottom] = useState(0);
+    const [measuredImgH, setMeasuredImgH] = useState(0); // Track exact image height safely
+    const [measuredImgW, setMeasuredImgW] = useState(0); // Track exact image width safely
+    const [imgHovered, setImgHovered] = useState(false);
     const [liked, setLiked] = useState(initialLiked || false);
     const [likeAnimating, setLikeAnimating] = useState(false);
 
@@ -160,6 +162,8 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
         }
         setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
         setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
+        setMeasuredImgH(inner.offsetHeight);
+        setMeasuredImgW(inner.offsetWidth);
     }, []);
 
     useEffect(() => {
@@ -185,6 +189,11 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                 cursor: "pointer", width: "100%",
                 background: "none", border: "none", margin: 0,
                 textAlign: "left", pointerEvents: "auto", padding: 0,
+                /* Unified scale: image + text move as one glass plate */
+                transform: imgHovered && !isMobile ? "scale(1.03)" : "scale(1)",
+                transformOrigin: "center center",
+                transition: "transform 0.2s ease-out",
+                WebkitTapHighlightColor: "transparent",
             }}
         >
             <div
@@ -198,6 +207,8 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
+                    zIndex: 10,
+                    pointerEvents: "none",
                 }}
             >
                 {imgSrc ? (
@@ -206,23 +217,32 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         alt={work.title}
                         className="art-card-inner"
                         onLoad={recalc}
+                        onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
+                        onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}
                         style={{
                             display: "block",
-                            maxWidth: "78%",
-                            maxHeight: isHorizontal ? `${zoneH * 0.78}px` : `${zoneH * 0.92}px`,
+                            maxWidth: "76%",
+                            maxHeight: isHorizontal || isSquare ? `${zoneH * 0.76}px` : `${zoneH * 0.90}px`,
                             width: "auto", height: "auto",
-                            borderRadius: "1px",
+                            borderRadius: "4px",
                             alignSelf: "center",
                             flexShrink: 0,
-                            boxShadow: "2px 10px 28px rgba(28,25,22,0.72), 0 3px 8px rgba(28,25,22,0.40)",
+                            boxShadow: imgHovered && !isMobile
+                                ? "4px 16px 40px rgba(28,25,22,0.58), 0 4px 12px rgba(28,25,22,0.35)"
+                                : "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
+                            transition: "box-shadow 0.2s ease-out, transform 0.2s ease-out",
+                            WebkitTouchCallout: "none",
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
+                            pointerEvents: "auto",
                         }}
                     />
                 ) : (
                     <div className="art-card-inner" style={{
-                        width: isHorizontal || isSquare ? "78%" : "55%",
+                        width: isHorizontal || isSquare ? "76%" : "55%",
                         height: isHorizontal ? "55%" : "85%",
                         backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
-                        borderRadius: "1px",
+                        borderRadius: "4px",
                         alignSelf: "center",
                         flexShrink: 0,
                         boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
@@ -230,22 +250,41 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                 )}
             </div>
 
-            {/* Metadata overlay: Bottom-anchored and horizontally aligned to the image's vertical edge. */}
+            {/* Metadata overlay: sits behind the image, text below. Uses frosted glass style. */}
             {(gridMode !== "3" || !isMobile) && (
                 <div style={{
-                    marginTop: `-${emptyBottom}px`,
-                    paddingTop: gridMode === "3" ? "0.4rem" : "0.6rem",
-                    paddingLeft: `${textPad}px`,
-                    paddingRight: `${textPad}px`,
+                    position: "relative",
+                    zIndex: 5,
+                    marginTop: measuredImgH > 0
+                        ? `-${emptyBottom + measuredImgH + 4}px`
+                        : `-${emptyBottom - (isMobile ? 10 : 8)}px`,
+                    marginLeft: `${textPad - 4}px`,
+                    marginRight: `${textPad - 4}px`,
+                    paddingTop: measuredImgH > 0
+                        ? `${measuredImgH + (isMobile ? 10 : 8) + 4}px`
+                        : "0.15rem",
+                    paddingBottom: "0.5rem",
+                    paddingLeft: "0.55rem",
+                    paddingRight: "0.55rem",
+                    backgroundColor: "rgba(235, 235, 237, 0.82)",
+                    backdropFilter: "blur(12px) saturate(1.3)",
+                    WebkitBackdropFilter: "blur(12px) saturate(1.3)",
+                    borderTop: "1px solid rgba(255,255,255,0.75)",
+                    borderLeft: "1px solid rgba(255,255,255,0.55)",
+                    borderRight: "1px solid rgba(200,200,205,0.38)",
+                    borderBottom: "1px solid rgba(180,180,190,0.3)",
+                    borderRadius: "4px",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.6) inset",
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "space-between",
-                    gap: "0.5rem",
+                    gap: "0.3rem",
                 }}>
                     {/* Left: text info */}
                     <div style={{
-                        display: "flex", flexDirection: "column", gap: "0rem",
+                        display: "flex", flexDirection: "column", gap: "0.05rem",
                         flex: 1, minWidth: 0,
+                        pointerEvents: "auto",
                     }}>
                         <p style={{
                             fontFamily: "var(--font-sans)",
@@ -306,11 +345,17 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         onClick={e => {
                             e.stopPropagation();
                             e.preventDefault();
-                            if (onAuthRequired) { onAuthRequired(work.id); return; }
                             const newState = !liked;
+                            
                             setLiked(newState);
                             setLikeAnimating(true);
                             setTimeout(() => setLikeAnimating(false), 400);
+
+                            if (onAuthRequired) { 
+                                onAuthRequired(work.id, newState); 
+                                return; 
+                            }
+                            
                             onLike?.(work.id, newState);
                         }}
                         onPointerDown={e => e.stopPropagation()}
@@ -323,6 +368,7 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                             transform: likeAnimating ? "scale(1.35)" : "scale(1)",
                             transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
                             outline: "none",
+                            pointerEvents: "auto",
                         }}
                     >
                         <svg
@@ -356,7 +402,6 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
 export default function GalleryPage() {
     const { user } = useUser();
     const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
-    const [allCollections, setAllCollections] = useState<CollectionData[]>([]);
     const [loading, setLoading] = useState(true);
     const [sortKey, setSortKey] = useState<SortKey>("default");
     const [groupBy, setGroupBy] = useState<"collection" | "year" | "medium">("collection");
@@ -390,7 +435,7 @@ export default function GalleryPage() {
     const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
     const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
-    const { addPendingLike } = usePreferences();
+    const { pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
 
     // Initial page load: Reset scroll to ensure consistent exhibition entry.
     useEffect(() => {
@@ -399,10 +444,20 @@ export default function GalleryPage() {
         }
     }, []);
 
-    /** Opens the authentication prompt and records which item was being liked. */
-    const handleAuthRequired = (id: number) => {
-        addPendingLike(id);
-        setShowAuthPrompt(true);
+    /** Updates pending likes locally, and occasionally prompts the user. */
+    const handleAuthRequired = (id: number, isLiked: boolean) => {
+        if (isLiked) {
+            addPendingLike(id);
+        } else {
+            removePendingLike(id);
+        }
+        
+        incrementUnauthLikeCount();
+        const nextCount = unauthLikeCount + 1;
+
+        if ((nextCount - 1) % 3 === 0) {
+            setTimeout(() => setShowAuthPrompt(true), 1000);
+        }
     };
 
     // Initialize layout state based on device capability.
@@ -413,13 +468,9 @@ export default function GalleryPage() {
         return () => window.removeEventListener("resize", update);
     }, []);
 
-    // Primary data fetch: Artworks and Collections.
     useEffect(() => {
-        Promise.all([
-            apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json()),
-            apiFetch(`${getApiUrl()}/collections`).then(res => res.json())
-        ])
-            .then(([artworksData, collectionsData]) => {
+        apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json())
+            .then(artworksData => {
                 const rawData = artworksData.items || artworksData.data || artworksData;
                 if (!Array.isArray(rawData)) {
                     setError("Unable to initialize gallery structure.");
@@ -432,12 +483,6 @@ export default function GalleryPage() {
                     gradientTo: DEFAULT_GRADIENTS[idx % DEFAULT_GRADIENTS.length][1]
                 }));
                 setAllArtworks(items);
-
-                const cData = collectionsData.items || collectionsData.data || collectionsData;
-                if (Array.isArray(cData)) {
-                    setAllCollections(cData);
-                }
-
                 setLoading(false);
             })
             .catch(err => {
@@ -450,7 +495,7 @@ export default function GalleryPage() {
     // Fetch user likes
     useEffect(() => {
         if (!user) {
-            setLikedIds(new Set());
+            setLikedIds(new Set(pendingLikes));
             return;
         }
         apiFetch(`${getApiUrl()}/users/me/likes`)
@@ -472,12 +517,12 @@ export default function GalleryPage() {
 
             if (groupBy === "collection") {
                 groupName = "Original Paintings";
-                if (a.collection_id) {
-                    const comp = allCollections.find(c => c.id === a.collection_id);
-                    if (comp) {
-                        groupName = comp.title;
-                        groupId = comp.id;
-                    }
+                // Look for labels that likely belong to the Collections category.
+                // In this implementation, we can check for labels from a category named 'Collections'.
+                const colLabel = a.labels?.find(l => (l as any).category?.title === "Collections" || (l as any).category_id === 3); // 3 was the ID in my migration but better to use title logic if available or just fallback to first label if needed
+                if (colLabel) {
+                    groupName = colLabel.title;
+                    groupId = colLabel.id;
                 }
             } else if (groupBy === "year") {
                 if ((a as any).year) {
@@ -490,8 +535,8 @@ export default function GalleryPage() {
                     groupName = "Unknown Year";
                 }
             } else if (groupBy === "medium") {
-                const mediumTag = a.tags?.find((t) => t.category === "medium");
-                groupName = mediumTag?.title || a.medium || a.style || a.materials || "Other";
+                const firstLabel = a.labels?.[0];
+                groupName = firstLabel?.title || a.medium || a.style || a.materials || "Other";
                 // Capitalize properly if it exists, or provide safe fallback
                 if (groupName !== "Other") {
                     groupName = groupName.charAt(0).toUpperCase() + groupName.slice(1);
@@ -502,7 +547,7 @@ export default function GalleryPage() {
             acc[groupName].works.push(a);
             return acc;
         }, {});
-    }, [allArtworks, allCollections, groupBy]);
+    }, [allArtworks, groupBy]);
 
     const { ref: loadMoreRef, inView } = useInView({ rootMargin: "200px" });
 
@@ -596,14 +641,16 @@ export default function GalleryPage() {
     /** Returns dynamic CSS gap spacing based on current grid intensity and device. */
     const getGap = () => {
         if (isMobile) {
-            if (gridMode === "1") return "3.2rem";
-            if (gridMode === "2") return "1rem";
-            if (gridMode === "3") return "0.5rem";
+            if (gridMode === "1") return "3.2rem 1rem";
+            if (gridMode === "2") return "1.5rem 1.25rem";
+            if (gridMode === "3") return "0.5rem 0.5rem";
         }
-        if (gridMode === "1") return "4rem 100px";
-        if (gridMode === "2") return "3rem 80px";
-        return "2rem 50px";
+        if (gridMode === "1") return "4rem 24px";
+        if (gridMode === "2") return "3rem 16px";
+        return "2rem 10px";
     };
+
+    const effectiveLikedIds = user ? likedIds : new Set(pendingLikes);
 
     return (
         <div style={{ overflowX: "clip", maxWidth: "100vw", width: "100%" }}>
@@ -745,7 +792,7 @@ export default function GalleryPage() {
                     return (
                         <section key={name} style={{ paddingBottom: "1.25rem", marginBottom: 0 }}>
                             {/* Visual hierarchy header: Full-width ribbon styled collection title. */}
-                            <div className="magnetic-scroll-header" style={{ width: "100%", margin: isMobile ? "0 0 0.5rem 0" : "0 0 1rem 0" }}>
+                            <div style={{ width: "100%", margin: isMobile ? "0 0 0.5rem 0" : "0 0 1rem 0" }}>
                                 <div
                                     style={{
                                         maxWidth: "1600px", margin: "0 auto",
@@ -793,7 +840,8 @@ export default function GalleryPage() {
                                             gap: getGap(),
                                             alignItems: "start",
                                         }}>
-                                            {works.map((work, i) => (
+                                            {works.map((work, i) => {
+                                                return (
                                                 <ArtCard
                                                     key={work.id}
                                                     work={work}
@@ -801,7 +849,7 @@ export default function GalleryPage() {
                                                     zoneH={IMAGE_ZONE[gridMode] || 380}
                                                     gridMode={gridMode}
                                                     isMobile={isMobile}
-                                                    liked={likedIds?.has(work.id)}
+                                                    liked={effectiveLikedIds.has(work.id)}
                                                     onLike={async (id, newState) => {
                                                         try {
                                                             if (newState) {
@@ -819,7 +867,7 @@ export default function GalleryPage() {
                                                     }}
                                                     onAuthRequired={!user ? handleAuthRequired : undefined}
                                                 />
-                                            ))}
+                                            )})}
                                         </div>
                                     </div>
                                 </div>
@@ -858,8 +906,36 @@ export default function GalleryPage() {
                             width: "100%",
                             textAlign: "center",
                             boxShadow: "0 32px 80px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)",
+                            position: "relative",
                         }}
                     >
+                        {/* Close button */}
+                        <button
+                            onClick={() => setShowAuthPrompt(false)}
+                            aria-label="Close"
+                            style={{
+                                position: "absolute",
+                                top: "1rem",
+                                right: "1rem",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: "0.25rem",
+                                color: "#999",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transition: "color 0.2s",
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = "#333"}
+                            onMouseLeave={e => e.currentTarget.style.color = "#999"}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+
                         <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>♡</div>
                         <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 400, fontStyle: "italic", color: "#1a1a18", marginBottom: "0.5rem" }}>
                             Save to your collection

@@ -275,13 +275,13 @@ export default function Navbar() {
                         <div style={{ display: "flex", alignItems: "center" }}>
                             <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none", flexShrink: 0, marginLeft: isMobile ? "-5px" : "-15px" }}>
                                 <Image
-                                    src="/logo-v4.png"
+                                    src="/logo-v5.png"
                                     alt="Samen Bondarenko"
                                     width={600}
                                     height={200}
                                     priority
                                     style={{
-                                        height: isMobile ? "49px" : "clamp(49px, 34px + 1.5vw, 90px)",
+                                        height: isMobile ? "43px" : "clamp(40px, 32px + 1vw, 72px)",
                                         width: "auto",
                                         objectFit: "contain",
                                         display: "block",
@@ -297,7 +297,6 @@ export default function Navbar() {
                             display: "flex",
                             alignItems: "center",
                             gap: "clamp(1.5rem, 1rem + 0.8vw, 3rem)",
-                            // removed translateY hack to restore true flex center
                         }}>
                             {NAV_LINKS.map((link) => {
                                 const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
@@ -312,9 +311,9 @@ export default function Navbar() {
                                             letterSpacing: "0.08em",
                                             textTransform: "uppercase",
                                             textDecoration: "none",
-                                            color: isActive ? "#FFFFFF" : "rgba(244,244,244,0.85)", // brighter
+                                            color: isActive ? "#FFFFFF" : "rgba(244,244,244,0.85)",
                                             borderBottom: isActive ? "1px solid rgba(244,244,244,0.4)" : "1px solid transparent",
-                                            padding: "4px 0", // equal top/bottom padding fixes vertical alignment with icons
+                                            padding: "4px 0",
                                             transition: "color 0.2s ease, border-color 0.2s ease",
                                         }}
                                         onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.color = "#FFFFFF"; e.currentTarget.style.borderColor = "rgba(244,244,244,0.2)"; } }}
@@ -367,15 +366,38 @@ export default function Navbar() {
                                                 {user.email}
                                             </span>
                                         </div>
-                                        <Link
-                                            href="/profile"
-                                            onClick={() => setProfileMenuOpen(false)}
-                                            style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                                        >
-                                            {user.is_admin ? "Admin Dashboard" : "Dashboard"}
-                                        </Link>
+                                        {user.is_admin ? (
+                                            <Link
+                                                href="/admin"
+                                                onClick={() => setProfileMenuOpen(false)}
+                                                style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                            >
+                                                Admin Dashboard
+                                            </Link>
+                                        ) : (
+                                            <>
+                                                <Link
+                                                    href="/shop?liked=true"
+                                                    onClick={() => setProfileMenuOpen(false)}
+                                                    style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                                >
+                                                    My Likes
+                                                </Link>
+                                                <Link
+                                                    href="/profile"
+                                                    onClick={() => setProfileMenuOpen(false)}
+                                                    style={{ padding: "8px 12px", fontSize: "0.85rem", color: "var(--color-charcoal)", textDecoration: "none", borderRadius: "8px" }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                                >
+                                                    My Orders
+                                                </Link>
+                                            </>
+                                        )}
                                         <button
                                             onClick={() => { logout(); setProfileMenuOpen(false); }}
                                             style={{ textAlign: "left", padding: "8px 12px", fontSize: "0.85rem", color: "#E53E3E", background: "none", border: "none", cursor: "pointer", borderRadius: "8px" }}
@@ -475,7 +497,7 @@ export default function Navbar() {
                 }}
             />
             {/* Drawer */}
-<div
+            <div
                 style={{
                     position: "fixed",
                     top: "63px", right: 0, bottom: 0,
@@ -555,26 +577,77 @@ export default function Navbar() {
                     {/* Profile / Login */}
                     {user ? (
                         <>
-                            <Link
-                                href="/profile"
-                                onClick={() => setMenuOpen(false)}
-                                style={{
-                                    display: "block",
-                                    padding: "0.55rem 0",
-                                    fontFamily: "var(--font-sans)",
-                                    fontSize: "1.15rem",
-                                    fontWeight: 300,
-                                    letterSpacing: "0.01em",
-                                    textDecoration: "none",
-                                    color: "rgba(26,26,24,0.55)",
-                                    borderBottom: "1px solid rgba(26,26,24,0.06)",
-                                    transform: menuOpen ? "translateX(0)" : "translateX(18px)",
-                                    opacity: menuOpen ? 1 : 0,
-                                    transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
-                                }}
-                            >
-                                {user.is_admin ? "Admin Dashboard" : "Dashboard"}
-                            </Link>
+                            {user.is_admin ? (
+                                <Link
+                                    href="/admin"
+                                    onClick={() => setMenuOpen(false)}
+                                    style={{
+                                        display: "block",
+                                        padding: "0.55rem 0",
+                                        fontFamily: "var(--font-sans)",
+                                        fontSize: "1.15rem",
+                                        fontWeight: 300,
+                                        letterSpacing: "0.01em",
+                                        textDecoration: "none",
+                                        color: "rgba(26,26,24,0.55)",
+                                        borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                        transform: menuOpen ? "translateX(0)" : "translateX(18px)",
+                                        opacity: menuOpen ? 1 : 0,
+                                        transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
+                                >
+                                    Admin Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link
+                                        href="/shop?liked=true"
+                                        onClick={() => setMenuOpen(false)}
+                                        style={{
+                                            display: "block",
+                                            padding: "0.55rem 0",
+                                            fontFamily: "var(--font-sans)",
+                                            fontSize: "1.15rem",
+                                            fontWeight: 300,
+                                            letterSpacing: "0.01em",
+                                            textDecoration: "none",
+                                            color: "rgba(26,26,24,0.55)",
+                                            borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                            transform: menuOpen ? "translateX(0)" : "translateX(18px)",
+                                            opacity: menuOpen ? 1 : 0,
+                                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.15}s`,
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
+                                    >
+                                        My Likes
+                                    </Link>
+                                    <Link
+                                        href="/profile"
+                                        onClick={() => setMenuOpen(false)}
+                                        style={{
+                                            display: "block",
+                                            padding: "0.55rem 0",
+                                            fontFamily: "var(--font-sans)",
+                                            fontSize: "1.15rem",
+                                            fontWeight: 300,
+                                            letterSpacing: "0.01em",
+                                            textDecoration: "none",
+                                            color: "rgba(26,26,24,0.55)",
+                                            borderBottom: "1px solid rgba(26,26,24,0.06)",
+                                            transform: menuOpen ? "translateX(0)" : "translateX(18px)",
+                                            opacity: menuOpen ? 1 : 0,
+                                            transition: `opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.18}s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${NAV_LINKS.length * 0.05 + 0.18}s`,
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-charcoal)"; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(26,26,24,0.55)"; }}
+                                    >
+                                        My Orders
+                                    </Link>
+                                </>
+                            )}
                             <button
                                 onClick={() => { setMenuOpen(false); logout(); }}
                                 style={{
@@ -693,28 +766,18 @@ export default function Navbar() {
             {/* Auth Modal */}
             <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
-            {/* 
-                SPACER / TRACKING BACKGROUND
-                This behaves as normal document flow. It pushes the page content down 
-                so it doesn't hide behind the fixed navbar on load.
-                Because it sits at y=0, the fixed Navbar overlays it perfectly.
-                When the user scrolls, this spacer scrolls UP and away, revealing the 
-                page content under the semi-transparent Navbar.
+            {/*
+                SPACER
+                ─ "/" (homepage): no spacer — hero fills from y=0 behind the navbar.
+                ─ All other pages: solid slate-gray band that matches the lighter
+                  silver regions of the previous ambient animation.
             */}
-            {/* 
-                SPACER / TRACKING BACKGROUND
-                This behaves as normal document flow. It pushes the page content down 
-                so it doesn't hide behind the fixed navbar on load.
-            */}
-            <div 
-                style={{ 
-                    width: "100%",
-                    backgroundColor: "rgba(35, 35, 35, 0.75)", // 7.5 out of 10 grey background
-                }} 
+            <div
                 className="navbar-spacer-bg"
+                style={{ backgroundColor: "#4D4E5C" }}
             />
             <style dangerouslySetInnerHTML={{__html: `
-                .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); }
+                .navbar-spacer-bg { height: clamp(63px, 42px + 2vw, 117px); width: 100%; }
                 @media (max-width: 768px) { .navbar-spacer-bg { height: 63px; } }
             `}} />
         </>

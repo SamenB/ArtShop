@@ -1,246 +1,281 @@
 "use client";
 
-/**
- * Labels Management Tab.
- * Centralized interface for managing collections, medium-specific tags, and general tags.
- * Ensures consistent taxonomy across the entire artwork catalog.
- */
-
 import { useState, useEffect } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 
-/** Represents a collection grouping for artworks. */
-interface Collection { id: number; title: string; }
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-/** Represents a metadata tag for filtering and classification. */
-interface Tag { id: number; title: string; category?: string | null; }
+interface Category { id: number; title: string; accent_color?: string; }
+interface Tag      { id: number; title: string; category_id?: number | null; }
 
-/**
- * Compact inline form for adding new taxonomy entries.
- */
-function AddItemRow({
+
+
+// ─── Subcomponents ────────────────────────────────────────────────────────────
+
+function AddTagRow({
     placeholder,
     onAdd,
 }: {
-    /** Input placeholder text guiding the user on naming conventions. */
     placeholder: string;
-    /** Async callback triggered upon submission of a valid, non-empty string. */
     onAdd: (title: string) => Promise<void>;
 }) {
-    const [title, setTitle] = useState("");
-    const [saving, setSaving] = useState(false);
+    const [value, setValue] = useState("");
+    const [busy, setBusy] = useState(false);
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim()) return;
-        setSaving(true);
-        await onAdd(title.trim());
-        setTitle("");
-        setSaving(false);
+        if (!value.trim()) return;
+        setBusy(true);
+        await onAdd(value.trim());
+        setValue("");
+        setBusy(false);
     };
 
     return (
-        <form onSubmit={submit} className="flex gap-2 mt-3">
+        <form onSubmit={submit} className="flex gap-2 mt-4">
             <input
                 type="text"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
+                value={value}
+                onChange={e => setValue(e.target.value)}
                 placeholder={placeholder}
-                className="flex-1 min-w-0 bg-black border border-white/15 px-3 py-2 text-sm focus:outline-none focus:border-white/40 text-white rounded-sm"
+                className="flex-1 min-w-0 bg-white border border-gray-200 px-3.5 py-2.5 text-sm focus:outline-none focus:border-[#31323E] focus:ring-1 focus:ring-black text-[#31323E] rounded-md shadow-sm placeholder-gray-400 transition-all text-[13px]"
             />
             <button
-                disabled={saving || !title.trim()}
-                className="px-4 py-2 bg-white/10 text-white uppercase font-mono text-[10px] tracking-widest hover:bg-white/20 transition-colors disabled:opacity-40 rounded-sm whitespace-nowrap"
+                disabled={busy || !value.trim()}
+                className="px-5 py-2.5 bg-[#31323E] text-white font-sans text-xs font-bold tracking-wider hover:bg-[#434455] transition-all disabled:opacity-40 rounded-md shadow-sm whitespace-nowrap uppercase"
             >
-                {saving ? "Adding..." : "+ Add"}
+                {busy ? "Adding…" : "+ Add Tag"}
             </button>
         </form>
     );
 }
 
-/**
- * Visual pill representation of a taxonomy entry, with a deletion control.
- */
 function TagChip({ label, onDelete }: { label: string; onDelete: () => void }) {
     return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-white/15 rounded-full text-[11px] font-mono text-zinc-300 bg-white/3 group">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-full text-xs font-sans text-gray-800 font-semibold bg-gray-50 hover:bg-gray-100 hover:border-gray-300 transition-all group">
             {label}
             <button
                 onClick={onDelete}
-                title="Delete"
-                className="text-zinc-600 hover:text-red-400 transition-colors leading-none"
-            >×</button>
+                type="button"
+                title="Remove tag"
+                className="text-zinc-400 group-hover:text-red-500 transition-colors leading-none ml-1 pb-px"
+            >
+                ×
+            </button>
         </span>
     );
 }
 
-/**
- * Structural wrapper for cohesive grouping of related taxonomy editors.
- */
-function Section({
+function CategoryCard({
     title,
     accent,
-    description,
+    onDelete,
+    deleteLabel = "Delete Category",
     children,
 }: {
-    /** Heading of the taxonomy domain. */
     title: string;
-    /** Hex color code for the visual bullet indicator. */
     accent: string;
-    /** Clarifying text guiding the administrator on usage. */
-    description: string;
-    /** Child components (Chips and AddItemRow). */
+    onDelete?: () => void;
+    deleteLabel?: string;
     children: React.ReactNode;
 }) {
     return (
-        <div className="border border-white/8 rounded-lg p-6 bg-white/2">
-            <div className="flex items-center gap-3 mb-1">
-                <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: accent }} />
-                <h3 className="font-mono text-xs uppercase tracking-widest text-white">{title}</h3>
+        <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm hover:border-gray-300 transition-colors relative group">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                    <span
+                        className="inline-block w-2.5 h-2.5 rounded-full ring-2 ring-offset-1 flex-shrink-0"
+                        style={{ backgroundColor: accent }}
+                    />
+                    <h3 className="font-sans text-sm uppercase font-bold tracking-wider text-[#31323E]">
+                        {title}
+                    </h3>
+                </div>
+                {onDelete && (
+                    <button
+                        onClick={onDelete}
+                        className="text-red-500 bg-red-50 hover:bg-red-500 hover:text-white px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                    >
+                        {deleteLabel}
+                    </button>
+                )}
             </div>
-            <p className="font-mono text-[10px] text-zinc-600 mb-4 pl-5">{description}</p>
             {children}
         </div>
     );
 }
 
-/**
- * Main component governing the global labels configuration.
- */
+// ─── Color palette for auto-assigned category accents ─────────────────────────
+
+const ACCENTS = ["#3b82f6", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function LabelsTab() {
-    const [collections, setCollections] = useState<Collection[]>([]);
-    const [mediumTags, setMediumTags] = useState<Tag[]>([]);
-    const [generalTags, setGeneralTags] = useState<Tag[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [categories,   setCategories]   = useState<Category[]>([]);
+    const [tags,         setTags]         = useState<Tag[]>([]);
+    const [loading,      setLoading]      = useState(true);
+    const [newCatName,   setNewCatName]   = useState("");
+    const [creatingCat,  setCreatingCat]  = useState(false);
 
-    const apiUrl = getApiUrl();
+    const api = getApiUrl();
 
-    /** Pulls all taxonomy datasets concurrently to build the interface state. */
-    const fetchAll = async () => {
+    // ── Fetch all data ──────────────────────────────────────────────────────
+    const reload = async () => {
         setLoading(true);
         try {
-            const [collRes, medRes, genRes] = await Promise.all([
-                apiFetch(`${apiUrl}/collections`),
-                apiFetch(`${apiUrl}/tags?category=medium`),
-                apiFetch(`${apiUrl}/tags?category=general`),
+            const [catR, tagR] = await Promise.all([
+                apiFetch(`${api}/labels/categories`),
+                apiFetch(`${api}/labels`),
             ]);
-            if (collRes.ok) setCollections(await collRes.json());
-            if (medRes.ok) setMediumTags(await medRes.json());
-            if (genRes.ok) setGeneralTags(await genRes.json());
+            if (catR.ok) setCategories(await catR.json());
+            if (tagR.ok) setTags(await tagR.json());
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchAll(); }, []);
+    useEffect(() => { reload(); }, []);
 
-    /** Adds a new curated collection domain. */
-    const addCollection = async (title: string) => {
-        const res = await apiFetch(`${apiUrl}/collections`, {
+    // ── Category CRUD ───────────────────────────────────────────────────────
+    const createCategory = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newCatName.trim()) return;
+        setCreatingCat(true);
+        const color = ACCENTS[categories.length % ACCENTS.length];
+        const res = await apiFetch(`${api}/labels/categories`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title }),
+            body: JSON.stringify({ title: newCatName.trim(), accent_color: color }),
         });
-        if (res.ok) fetchAll();
-        else { const e = await res.json(); alert(e.detail || "Failed to add collection"); }
+        setCreatingCat(false);
+        if (res.ok) { setNewCatName(""); reload(); }
+        else { const e = await res.json(); alert(e.detail || "Failed to create category"); }
     };
 
-    /** Obliterates a collection and cascades nullification to its artworks. */
-    const deleteCollection = async (id: number) => {
-        if (!confirm("Delete this collection? Artworks will lose this categorization.")) return;
-        await apiFetch(`${apiUrl}/collections/${id}`, { method: "DELETE" });
-        setCollections(c => c.filter(x => x.id !== id));
+    const deleteCategory = async (id: number) => {
+        if (!confirm("Delete this category? All tags inside it will also be removed from artworks.")) return;
+        await apiFetch(`${api}/labels/categories/${id}`, { method: "DELETE" });
+        reload();
     };
 
-    /** Persists a generalized or medium-specific tag. */
-    const addTag = async (title: string, category: string) => {
-        const res = await apiFetch(`${apiUrl}/tags`, {
+    // ── Tag CRUD ────────────────────────────────────────────────────────────
+    const addTag = async (title: string, category_id: number) => {
+        const res = await apiFetch(`${api}/labels`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title, category }),
+            body: JSON.stringify({ title, category_id }),
         });
-        if (res.ok) fetchAll();
+        if (res.ok) reload();
         else { const e = await res.json(); alert(e.detail || "Failed to add tag"); }
     };
 
-    /** Removes a tag, providing intelligent prompts regarding active usage. */
     const deleteTag = async (id: number, title: string) => {
-        let usageMsg = "";
+        // Fetch usage count first so the admin knows the impact
+        let usageNote = "";
         try {
-            const r = await apiFetch(`${apiUrl}/tags/${id}/usage`);
+            const r = await apiFetch(`${api}/labels/${id}/usage`);
             if (r.ok) {
-                const data = await r.json();
-                const n = data.artwork_count;
-                usageMsg = n > 0
-                    ? `\n\n⚠️ This tag is currently linked to ${n} artwork${n > 1 ? "s" : ""}. Proceeding will sever these links.`
-                    : "\n\nThis tag is currently unused.";
+                const { artwork_count: n } = await r.json();
+                usageNote = n > 0
+                    ? `\n\n⚠️ This tag is used by ${n} artwork${n > 1 ? "s" : ""}. All links will be removed.`
+                    : "\n\nThis tag is not used by any artwork.";
             }
-        } catch { /* Silent fail is acceptable; fallback to standard confirmation */ }
-
-        if (!confirm(`Delete tag "${title}"?${usageMsg}`)) return;
-        await apiFetch(`${apiUrl}/tags/${id}`, { method: "DELETE" });
-        fetchAll();
+        } catch {}
+        if (!confirm(`Remove tag "${title}"?${usageNote}`)) return;
+        await apiFetch(`${api}/labels/${id}`, { method: "DELETE" });
+        reload();
     };
 
+
+
+    // ── Render ──────────────────────────────────────────────────────────────
     if (loading) return (
-        <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">Checking taxonomy dependencies...</div>
+        <div className="text-zinc-500 font-mono text-sm tracking-widest animate-pulse">
+            Loading taxonomy…
+        </div>
     );
 
     return (
-        <div className="max-w-3xl space-y-6">
-            <div className="mb-2">
-                <h2 className="text-2xl font-serif italic">Labels & Tags</h2>
-                <p className="text-zinc-600 font-mono text-xs mt-1 tracking-wide">
-                    Manage the global taxonomy for artwork clarification and shop filtering.
+        <div className="max-w-3xl space-y-6 pb-12">
+
+            {/* ── Page header ─────────────────────────────────────────────── */}
+            <div className="pb-4 border-b border-gray-100">
+                <h2 className="text-3xl font-serif italic text-[#31323E]">Labels &amp; Categorization</h2>
+                <p className="text-gray-500 font-sans text-sm mt-1.5 tracking-wide">
+                    Organize artworks with <strong>Categories</strong> (e.g. Medium, Style, Collections)
+                    and <strong>Tags</strong> inside each one (e.g. Oil, Charcoal, Figurative).
                 </p>
             </div>
 
-            <Section
-                title="Collections"
-                accent="#6B9AC4"
-                description="Primary structural series. Artworks are constrained to a single collection in the dashboard."
+            {/* ── New Category ─────────────────────────────────────────────── */}
+            <form
+                onSubmit={createCategory}
+                className="flex flex-col sm:flex-row sm:items-center gap-3 bg-[#31323E]/[0.03] border border-[#31323E]/10 rounded-xl px-6 py-5"
             >
-                <div className="flex flex-wrap gap-2 min-h-[32px]">
-                    {collections.map(c => (
-                        <TagChip key={c.id} label={c.title} onDelete={() => deleteCollection(c.id)} />
-                    ))}
-                    {collections.length === 0 && (
-                        <span className="text-zinc-700 font-mono text-[11px] italic">No collections registered</span>
-                    )}
+                <div className="flex-1">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
+                        New Category
+                    </p>
+                    <input
+                        type="text"
+                        value={newCatName}
+                        onChange={e => setNewCatName(e.target.value)}
+                        placeholder="e.g. Medium, Style, Materials, Mood…"
+                        className="w-full bg-white border border-gray-200 px-3.5 py-2.5 text-sm focus:outline-none focus:border-[#31323E] focus:ring-1 focus:ring-black text-[#31323E] rounded-md shadow-sm placeholder-gray-400 transition-all"
+                    />
                 </div>
-                <AddItemRow placeholder="e.g. Exhibitions, Archive, Ongoing..." onAdd={addCollection} />
-            </Section>
+                <button
+                    disabled={creatingCat || !newCatName.trim()}
+                    className="sm:mt-5 px-6 py-2.5 bg-[#31323E] text-white font-sans text-xs font-bold tracking-wider hover:bg-[#434455] transition-all disabled:opacity-40 rounded-md shadow-sm whitespace-nowrap uppercase"
+                >
+                    {creatingCat ? "Creating…" : "+ Create Category"}
+                </button>
+            </form>
 
-            <Section
-                title="Medium / Materials"
-                accent="#A47CC4"
-                description="Physical classification tools (e.g., Oil, Watercolor). Vital for shop filtering algorithms."
-            >
-                <div className="flex flex-wrap gap-2 min-h-[32px]">
-                    {mediumTags.map(t => (
-                        <TagChip key={t.id} label={t.title} onDelete={() => deleteTag(t.id, t.title)} />
-                    ))}
-                    {mediumTags.length === 0 && (
-                        <span className="text-zinc-700 font-mono text-[11px] italic">No medium tags registered</span>
-                    )}
+            {/* ── Dynamic categories (Medium, Style, etc.) ─────────────────── */}
+            {categories.length === 0 ? (
+                <div className="p-10 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-center">
+                    <p className="text-sm font-sans text-gray-500">
+                        No categories yet. Create your first one above.
+                    </p>
                 </div>
-                <AddItemRow placeholder="e.g. Oil on Canvas, Digital, Ceramics..." onAdd={t => addTag(t, "medium")} />
-            </Section>
-
-            <Section
-                title="General Tags"
-                accent="#6BB87A"
-                description="Auxiliary search handles and thematic descriptors."
-            >
-                <div className="flex flex-wrap gap-2 min-h-[32px]">
-                    {generalTags.map(t => (
-                        <TagChip key={t.id} label={t.title} onDelete={() => deleteTag(t.id, t.title)} />
-                    ))}
-                    {generalTags.length === 0 && (
-                        <span className="text-zinc-700 font-mono text-[11px] italic">No general tags registered</span>
-                    )}
+            ) : (
+                <div className="space-y-4">
+                    {categories.map((cat, i) => {
+                        const catTags = tags.filter(t => t.category_id === cat.id);
+                        return (
+                            <CategoryCard
+                                key={cat.id}
+                                title={cat.title}
+                                accent={cat.accent_color || ACCENTS[i % ACCENTS.length]}
+                                onDelete={() => deleteCategory(cat.id)}
+                            >
+                                <div className="flex flex-wrap gap-2 min-h-[28px]">
+                                    {catTags.map(t => (
+                                        <TagChip
+                                            key={t.id}
+                                            label={t.title}
+                                            onDelete={() => deleteTag(t.id, t.title)}
+                                        />
+                                    ))}
+                                    {catTags.length === 0 && (
+                                        <span className="text-zinc-400 font-mono text-[11px] italic">
+                                            No tags yet
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-gray-100">
+                                    <AddTagRow
+                                        placeholder={`Add ${cat.title.toLowerCase()} tag…`}
+                                        onAdd={title => addTag(title, cat.id)}
+                                    />
+                                </div>
+                            </CategoryCard>
+                        );
+                    })}
                 </div>
-                <AddItemRow placeholder="e.g. Surrealism, Monochromatic, Sketches..." onAdd={t => addTag(t, "general")} />
-            </Section>
+            )}
         </div>
     );
 }

@@ -6,7 +6,7 @@
    Inter         = clean sans-serif for body
    Licorice      = premium calligraphic script for artwork titles (self-hosted)
 ───────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400&family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 /* Licorice — self-hosted for guaranteed rendering */
 @font-face {
@@ -56,6 +56,8 @@
   /* body copy */
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
   /* typewriter labels — Le Labo printed form style */
+  --font-price: 'Space Grotesk', system-ui, sans-serif;
+  /* Trendy 2026 geometric font for numbers/prices */
   --font-artwork-title: 'Licorice', cursive;
   /* premium calligraphic script — artwork page titles */
 
@@ -86,7 +88,103 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* ─────────────────────────────────────────────
+   Premium Paper Texture Overlay
+   Uses SVG feTurbulence for organic grain on top of the base color.
+   Applied to the shop page wrapper via .premium-texture-bg
+───────────────────────────────────────────── */
+.premium-texture-bg {
+  position: relative;
+  background-color: var(--color-cream);
+}
+
+.premium-texture-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.28;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  mix-blend-mode: multiply;
+}
+
+/* Ensure all direct children sit above the texture overlay */
+.premium-texture-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─────────────────────────────────────────────
+   Liquid Glass — Apple-inspired frosted refraction card
+   Uses backdrop-filter blur + specular highlight pseudo-elements
+   to create a tactile, light-bending glass surface.
+   NOTE: overflow must NOT be hidden — the card uses paddingTop
+   taller than visible content to push text below the image.
+───────────────────────────────────────────── */
+.liquid-glass-card {
+  background: rgba(220, 220, 225, 0.45) !important;
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-right: 1px solid rgba(200, 200, 205, 0.4) !important;
+  border-bottom: 1px solid rgba(180, 180, 190, 0.35) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.04) inset;
+  isolation: isolate;
+}
+
+/* Top specular highlight — simulates light catching the upper rim of curved glass */
+.liquid-glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  border-radius: inherit;
+  background: linear-gradient(
+    178deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.18) 30%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Bottom edge refraction glow — prismatic rainbow shimmer along the lower rim */
+.liquid-glass-card::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 5%;
+  right: 5%;
+  height: 2px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(130, 180, 255, 0.4) 15%,
+    rgba(180, 140, 255, 0.35) 35%,
+    rgba(255, 170, 180, 0.3) 55%,
+    rgba(160, 255, 180, 0.35) 75%,
+    rgba(130, 180, 255, 0.3) 90%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
 
 /* ─────────────────────────────────────────────
    Typography helpers
@@ -101,6 +199,16 @@ h3 {
   letter-spacing: -0.01em;
   font-weight: 400;
   /* DM Serif Display looks best at regular weight */
+}
+
+/* ─────────────────────────────────────────────
+   Premium Numbers Font — Trendy 2026 Geometric
+───────────────────────────────────────────── */
+.font-price {
+  font-family: var(--font-price) !important;
+  font-style: normal !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
 }
 
 /* ─────────────────────────────────────────────
@@ -292,11 +400,11 @@ h3 {
    Apply via className="card-shadow" or boxShadow: "var(--shadow-card)"
 ───────────────────────────────────────────── */
 :root {
-  --shadow-card: 2px 10px 28px rgba(28, 25, 22, 0.55), 0 3px 8px rgba(28, 25, 22, 0.28);
-  --shadow-card-hover: 4px 18px 40px rgba(28, 25, 22, 0.72), 0 4px 10px rgba(28, 25, 22, 0.38);
-  --shadow-card-deep: 2px 10px 28px rgba(28, 25, 22, 0.72), 0 3px 8px rgba(28, 25, 22, 0.40);
-  --shadow-thumb: 1px 4px 10px rgba(28, 25, 22, 0.32), 0 1px 3px rgba(28, 25, 22, 0.18);
-  --shadow-panel: 0 8px 24px rgba(28, 25, 22, 0.22), 0 2px 8px rgba(28, 25, 22, 0.12);
+  --shadow-card: 2px 10px 28px rgba(28, 25, 22, 0.45), 0 3px 8px rgba(28, 25, 22, 0.22);
+  --shadow-card-hover: 4px 18px 40px rgba(28, 25, 22, 0.58), 0 4px 10px rgba(28, 25, 22, 0.32);
+  --shadow-card-deep: 2px 10px 28px rgba(28, 25, 22, 0.58), 0 3px 8px rgba(28, 25, 22, 0.32);
+  --shadow-thumb: 1px 4px 10px rgba(28, 25, 22, 0.28), 0 1px 3px rgba(28, 25, 22, 0.15);
+  --shadow-panel: 0 8px 24px rgba(28, 25, 22, 0.18), 0 2px 8px rgba(28, 25, 22, 0.10);
 }
 
 .card-shadow {
@@ -333,6 +441,10 @@ h3 {
 .art-card button:focus-visible {
   outline: none !important;
   box-shadow: inherit !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 /* Also suppress on plain <img> focus states */
 img:focus { outline: none; }
@@ -424,7 +536,7 @@ img:focus { outline: none; }
   user-select: none;
   border-radius: 4px;
   transition: background-color 0.12s ease;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 .filter-item:hover {
@@ -451,7 +563,7 @@ img:focus { outline: none; }
   cursor: pointer;
   border-radius: 3px;
   transition: background-color 0.12s ease;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 .filter-section-btn:hover {
@@ -511,12 +623,6 @@ img:focus { outline: none; }
       transform: translateY(0) !important;
       opacity: 1 !important;
     }
-
-    .magnetic-scroll-header {
-      animation: magnetic-pull linear both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 20%;
-    }
   }
 }
 
@@ -572,4 +678,15 @@ img:focus { outline: none; }
     padding: 3px 30px;
     font-size: 0.55rem;
   }
-}
+}
+
+/* Aggressive Link Sanitization for Mobile */
+a, button, img {
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+a:active, a:focus {
+  background-color: transparent !important;
+}

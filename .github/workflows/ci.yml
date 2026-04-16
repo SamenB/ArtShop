@@ -8,9 +8,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: ['**']
   pull_request:
-    branches: [main, develop]
+    branches: ['**']
 
 # Cancel redundant runs for the same branch/PR
 concurrency:
