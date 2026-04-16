@@ -281,10 +281,6 @@ class OrderService(BaseService):
             update_data: FulfillmentStatusUpdate schema with new status and optional tracking.
         """
         try:
-            from sqlalchemy import update as sa_update
-
-            from src.models.orders import OrdersOrm
-
             # Fetch order for email notification
             order = await self.db.orders.get_one(id=order_id)
 
@@ -448,8 +444,6 @@ class OrderService(BaseService):
                     order.payment_status,
                 )
                 return
-
-            from sqlalchemy import update as sa_update
 
             values: dict = {"payment_status": payment_status}
 

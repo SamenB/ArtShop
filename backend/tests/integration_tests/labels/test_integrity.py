@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from src.models.labels import ArtworkLabelsOrm, LabelsOrm
+from src.models.labels import LabelsOrm
 
 
 @pytest.mark.asyncio
