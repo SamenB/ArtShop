@@ -11,8 +11,7 @@ class MockDBManager:
     def __init__(self):
         self.artworks = AsyncMock()
         self.artworks.get_one_or_none.return_value = None
-        self.artwork_tags = AsyncMock()
-        self.collections = AsyncMock()
+        self.artwork_labels = AsyncMock()
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
 
@@ -46,7 +45,7 @@ async def test_create_artwork(artwork_service):
         "title": "A new painting",
         "description": "...",
         "orientation": "Vertical",
-        "tags": [1, 2],
+        "labels": [1, 2],
     }
     artwork_data = ArtworkAddRequest(**data)
 
@@ -54,7 +53,7 @@ async def test_create_artwork(artwork_service):
 
     assert result.id == 5
     artwork_service.db.artworks.add.assert_awaited_once()
-    artwork_service.db.artwork_tags.add_bulk.assert_awaited_once()  # two tags
+    artwork_service.db.artwork_labels.add_bulk.assert_awaited_once()  # two labels
     artwork_service.db.commit.assert_awaited_once()
 
 
@@ -63,7 +62,7 @@ async def test_create_artwork_duplicate_fails(artwork_service):
     # Setup mock to raise ObjectAlreadyExistsException
     artwork_service.db.artworks.add.side_effect = ObjectAlreadyExistsException()
 
-    data = {"title": "Duplicate", "description": "...", "orientation": "Horizontal", "tags": []}
+    data = {"title": "Duplicate", "description": "...", "orientation": "Horizontal", "labels": []}
     artwork_data = ArtworkAddRequest(**data)
 
     with pytest.raises(ObjectAlreadyExistsException):

@@ -30,7 +30,7 @@ class LabelsOrm(Base):
 
     # Optional foreign key to a category (e.g. Medium, General)
     category_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("label_categories.id", ondelete="SET NULL"), nullable=True
+        BigInteger, ForeignKey("label_categories.id", ondelete="CASCADE"), nullable=True
     )
 
     # Relationships

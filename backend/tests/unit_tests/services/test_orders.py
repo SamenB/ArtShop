@@ -192,8 +192,8 @@ async def test_update_payment_status_releases_artwork_on_failure(order_service):
     # Assert db.orders.edit was called with payment_status=failed and fulfillment_status=cancelled
     order_service.db.orders.edit.assert_awaited_once()
     args, kwargs = order_service.db.orders.edit.call_args
-    assert args[0]["payment_status"] == "failed"
-    assert args[0]["fulfillment_status"] == "cancelled"
+    assert args[0].payment_status == "failed"
+    assert args[0].fulfillment_status == "cancelled"
 
     # Assert _release_original_artworks was triggered, changing original_status -> available
     order_service.db.artworks.edit.assert_awaited_once()
@@ -283,5 +283,5 @@ async def test_run_abandoned_orders_cleanup(order_service):
     # Assert order was marked failed/cancelled
     order_service.db.orders.edit.assert_awaited_once()
     ord_args, ord_kwargs = order_service.db.orders.edit.call_args
-    assert ord_args[0]["payment_status"] == "failed"
-    assert ord_args[0]["fulfillment_status"] == "cancelled"
+    assert ord_args[0].payment_status == "failed"
+    assert ord_args[0].fulfillment_status == "cancelled"

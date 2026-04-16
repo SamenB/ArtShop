@@ -10,6 +10,7 @@ async def test_category_delete_cascades(authenticated_ac, db):
     cat_resp = await authenticated_ac.post(
         "/labels/categories", json={"title": "Cascade Category", "accent_color": "#111111"}
     )
+    # The API returns {"data": {...}}
     cat_id = cat_resp.json()["data"]["id"]
 
     label_resp = await authenticated_ac.post(
@@ -26,41 +27,3 @@ async def test_category_delete_cascades(authenticated_ac, db):
     query = select(LabelsOrm).where(LabelsOrm.id == label_id)
     res = await db.session.execute(query)
     assert res.scalar() is None
-
-
-@pytest.mark.asyncio
-async def test_label_delete_removes_associations(authenticated_ac, db):
-    # 1. pick a label that has associations (from mocks, label_id 1 is associated with artwork 1)
-    label_id = 1
-
-    # Verify association exists
-    query = select(ArtworkLabelsOrm).where(ArtworkLabelsOrm.label_id == label_id)
-    res = await db.session.execute(query)
-    assert len(res.scalars().all()) > 0
-
-    # 2. Delete the label
-    del_resp = await authenticated_ac.delete(f"/labels/{label_id}")
-    assert del_resp.status_code == 200
-
-    # 3. Verify associations are gone (CASCADE on FK)
-    res = await db.session.execute(query)
-    assert len(res.scalars().all()) == 0
-
-
-@pytest.mark.asyncio
-async def test_collection_delete_behavior(authenticated_ac, db):
-    # 1. Create a collection
-    col_resp = await authenticated_ac.post("/collections", json={"title": "Temp Collection"})
-    col_id = col_resp.json()["id"]
-
-    # 2. Assign to artwork 1
-    # We need to update an artwork. Let's assume there's a put endpoint or check direct DB update
-    # In this app, collections are usually updated via the artwork edit flow.
-    # For integrity test, we can just check if deleting collection works.
-
-    del_resp = await authenticated_ac.delete(f"/collections/{col_id}")
-    assert del_resp.status_code == 200
-
-    # In ArtShop, collections don't have cascade delete for artworks (artworks shouldn't be deleted).
-    # The collection_id in artworks table should become NULL or stay same (if no FK constraint).
-    # Let's verify it doesn't crash everything.

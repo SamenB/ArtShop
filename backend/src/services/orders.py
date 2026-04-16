@@ -251,13 +251,8 @@ class OrderService(BaseService):
                             order_id,
                         )
 
-            # Use a direct SA update — values is a plain dict, not a Pydantic model.
-            from sqlalchemy import update as sa_update
-
-            from src.models.orders import OrdersOrm
-
-            update_stmt = sa_update(OrdersOrm).filter_by(id=order_id).values(**values)
-            await self.db.session.execute(update_stmt)
+            # Use repository edit instead of direct SA update for consistency and testability.
+            await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order_id)
             await self.db.commit()
             logger.info(
                 "Admin updated payment status of {} to {} (forced)", order_id, payment_status
@@ -328,8 +323,8 @@ class OrderService(BaseService):
             if update_data.notes is not None:
                 values["notes"] = update_data.notes
 
-            update_stmt = sa_update(OrdersOrm).filter_by(id=order_id).values(**values)
-            await self.db.session.execute(update_stmt)
+            # Use repository edit instead of direct SA update for consistency and testability.
+            await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order_id)
             await self.db.commit()
 
             logger.info(
@@ -493,8 +488,7 @@ class OrderService(BaseService):
                     order.id,
                 )
 
-            update_stmt = sa_update(self.db.orders.model).filter_by(id=order.id).values(**values)
-            await self.db.session.execute(update_stmt)
+            await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
             await self.db.commit()
 
             logger.info(
@@ -562,12 +556,11 @@ class OrderService(BaseService):
             # (artwork lock/release) via the dedicated method instead of raw edit.
             if data.payment_status is not None:
                 payment_status = data.payment_status
-                # Create a copy without payment_status for the generic patch
-                patch_without_payment = data.model_copy(update={"payment_status": None})
-                if any(
-                    v is not None
-                    for k, v in patch_without_payment.model_dump(exclude_unset=True).items()
-                ):
+                # Create a copy where payment_status is UNSET (not just None)
+                # to avoid accidental затирание in the next .edit() call.
+                update_dict = data.model_dump(exclude={"payment_status"}, exclude_unset=True)
+                if update_dict:
+                    patch_without_payment = OrderPatch(**update_dict)
                     await self.db.orders.edit(
                         patch_without_payment, exclude_unset=True, id=order_id
                     )

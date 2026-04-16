@@ -38,6 +38,7 @@ def test_order_mapper():
         shipping_postal_code="01001",
         total_price=1000,
         payment_status="pending",
+        fulfillment_status="pending",
         created_at=datetime(2026, 1, 1, 12, 0, 0),
         items=[],
     )

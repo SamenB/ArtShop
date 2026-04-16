@@ -180,7 +180,7 @@ class Order(OrderAdd):
     payment_url: Optional[str] = None
 
     # Fulfillment tracking
-    fulfillment_status: str = FulfillmentStatus.PENDING
+    fulfillment_status: Optional[str] = FulfillmentStatus.PENDING
 
     # Internal admin notes
     notes: Optional[str] = None

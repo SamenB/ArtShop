@@ -140,18 +140,19 @@ async def register_user(ac, setup_database):
 
 
 @pytest.fixture(scope="session")
-async def authenticated_ac(register_user, ac):
-    """Fixture: returns AsyncClient with auth cookie (admin user)."""
-    response = await ac.post(
-        "/auth/login",
-        json={
-            "email": "test_admin@artshop.com",
-            "password": "password123",
-        },
-    )
-    assert response.status_code == 200
-    assert "access_token" in response.cookies
-    return ac
+async def authenticated_ac(register_user):
+    """Fixture: returns a fresh AsyncClient with auth cookie (admin user)."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/auth/login",
+            json={
+                "email": "test_admin@artshop.com",
+                "password": "password123",
+            },
+        )
+        assert response.status_code == 200
+        assert "access_token" in response.cookies
+        yield client
 
 
 @pytest.fixture
