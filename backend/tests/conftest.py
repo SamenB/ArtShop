@@ -18,6 +18,7 @@ from src.config import settings
 settings.MONOBANK_TOKEN = "dummy_test_token"
 # Ensure our test admin actually has admin privileges
 settings.ADMIN_EMAILS = ["test_admin@artshop.com"]
+from sqlalchemy import text
 from src.database import Base, engine_null_pool, new_session_null_pool
 from src.init import redis_manager
 from src.main import app
@@ -79,9 +80,11 @@ async def check_test_mode():
 
 @pytest.fixture(scope="session", autouse=True)
 async def setup_database(check_test_mode):
-    # 1. Drop and create tables
+    # 1. Clean and create tables
+    # We use DROP SCHEMA CASCADE to ensure orphaned tables from legacy code (like artwork_tags)
+    # are removed even if they are not present in the current Base.metadata.
     async with engine_null_pool.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
         await conn.run_sync(Base.metadata.create_all)
 
     # 2. Load mock data from JSON
