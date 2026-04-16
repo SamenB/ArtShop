@@ -127,16 +127,18 @@ async def ac():
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def register_user(ac, setup_database):
-    response = await ac.post(
-        url="/auth/register",
-        json={
-            "email": "test_admin@artshop.com",
-            "password": "password123",
-            "username": "testadmin",
-        },
-    )
-    assert response.status_code == 201
+async def register_user(setup_database):
+    """Ensure the test admin exists in DB without polluting the global client."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            url="/auth/register",
+            json={
+                "email": "test_admin@artshop.com",
+                "password": "password123",
+                "username": "testadmin",
+            },
+        )
+        assert response.status_code == 201
 
 
 @pytest.fixture(scope="session")
