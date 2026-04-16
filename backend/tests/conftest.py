@@ -11,14 +11,9 @@ import pytest
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
 from src.config import settings
-
-# Provide a dummy token so MonobankService initialization passes tests.
-settings.MONOBANK_TOKEN = "dummy_test_token"
-# Ensure our test admin actually has admin privileges
-settings.ADMIN_EMAILS = ["test_admin@artshop.com"]
-from sqlalchemy import text
 from src.database import Base, engine_null_pool, new_session_null_pool
 from src.init import redis_manager
 from src.main import app
@@ -29,6 +24,11 @@ from src.schemas.labels import ArtworkLabelAdd, LabelAdd, LabelCategoryAdd
 from src.schemas.orders import OrderAdd
 from src.schemas.users import UserAdd
 from src.utils.db_manager import DBManager
+
+# Provide a dummy token so MonobankService initialization passes tests.
+settings.MONOBANK_TOKEN = "dummy_test_token"
+# Ensure our test admin actually has admin privileges
+settings.ADMIN_EMAILS = ["test_admin@artshop.com"]
 
 
 class MockRedis:
