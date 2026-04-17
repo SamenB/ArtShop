@@ -3,6 +3,7 @@ Repository for print pricing and aspect ratio data access.
 """
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.models.print_pricing import PrintAspectRatioOrm, PrintPricingOrm
 from src.repositories.base import BaseRepository
@@ -19,11 +20,13 @@ class PrintAspectRatioRepository(BaseRepository):
     mapper = AspectRatioMapper
 
     async def get_all_ordered(self) -> list:
-        """Returns all aspect ratios sorted by sort_order, then label."""
+        """Returns all aspect ratios sorted by sort_order, then label, with pricing rows."""
         result = await self.session.execute(
-            select(self.model).order_by(self.model.sort_order, self.model.label)
+            select(self.model)
+            .options(selectinload(self.model.pricing_rows))
+            .order_by(self.model.sort_order, self.model.label)
         )
-        return list(result.scalars().all())
+        return list(result.scalars().unique().all())
 
     async def get_with_pricing(self, aspect_ratio_id: int) -> PrintAspectRatioOrm | None:
         """
@@ -31,7 +34,9 @@ class PrintAspectRatioRepository(BaseRepository):
         Used by the admin pricing tab to render the full nested grid.
         """
         result = await self.session.execute(
-            select(self.model).where(self.model.id == aspect_ratio_id)
+            select(self.model)
+            .options(selectinload(self.model.pricing_rows))
+            .where(self.model.id == aspect_ratio_id)
         )
         return result.scalars().one_or_none()
 
