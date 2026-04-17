@@ -10,11 +10,13 @@ import { usePreferences } from "@/context/PreferencesContext";
 import Link from "next/link";
 import { artworkUrl } from "@/utils";
 import { useEffect } from "react";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 /** Global Cart Drawer floating over the active DOM. Utilizes simple CSS animations. */
 export default function CartDrawer() {
     const { items, isCartOpen, setIsCartOpen, removeItem, updateQuantity, cartTotal } = useCart();
-    const { convertPrice } = usePreferences();
+    const { convertPrice, currency } = usePreferences();
+    const { track } = useAnalytics();
 
     /** Actively locks global body scroll interactions while the drawer remains overlayed. */
     useEffect(() => {
@@ -159,6 +161,12 @@ export default function CartDrawer() {
                         </p>
                         <button
                             onClick={() => {
+                                // Track checkout intent before navigating
+                                track("checkout_started", {
+                                    items_count: items.length,
+                                    total: cartTotal,
+                                    currency: currency ?? "USD",
+                                });
                                 setIsCartOpen(false);
                                 window.location.href = "/checkout";
                             }}

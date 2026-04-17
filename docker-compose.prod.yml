@@ -154,6 +154,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: http://api:8000
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY}
+        NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST}
     container_name: artshop_frontend
     restart: unless-stopped
     env_file:

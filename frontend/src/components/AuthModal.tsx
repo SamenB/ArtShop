@@ -11,6 +11,7 @@ import { useUser } from "@/context/UserContext";
 import { X } from "lucide-react";
 import { getApiUrl } from "@/utils";
 import { GoogleLogin } from "@react-oauth/google";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 /** Props regulating the overlay's display state mapped from parent components. */
 interface AuthModalProps {
@@ -44,6 +45,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const { refreshUser } = useUser();
+    const { track } = useAnalytics();
 
     if (!isOpen) return null;
 
@@ -83,6 +85,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             if (resp.ok) {
                 // Login and Registration automatically attach robust session cookies for auto-login
                 await refreshUser();
+                // Track the authentication event with the method used
+                track(isLogin ? "user_logged_in" : "user_registered", { method: "email" });
                 resetForm();
                 onClose();
             } else {
@@ -109,6 +113,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             });
             if (res.ok) {
                 await refreshUser();
+                // Track Google OAuth login
+                track("user_logged_in", { method: "google" });
                 resetForm();
                 onClose();
             } else {
