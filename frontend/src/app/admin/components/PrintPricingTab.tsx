@@ -369,9 +369,9 @@ export default function PrintPricingTab() {
                                     </div>
                                 </div>
                             ) : (
-                                <button
+                                <div
                                     onClick={() => setSelectedId(r.id)}
-                                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all group ${
+                                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all group cursor-pointer ${
                                         selectedId === r.id
                                             ? "bg-[#31323E] border-[#31323E] text-white shadow-md"
                                             : "bg-white border-[#31323E]/10 text-[#31323E] hover:border-[#31323E]/30"
@@ -404,7 +404,7 @@ export default function PrintPricingTab() {
                                             </button>
                                         </div>
                                     </div>
-                                </button>
+                                </div>
                             )}
                         </div>
                     ))}
