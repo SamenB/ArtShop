@@ -97,6 +97,13 @@ class Settings(BaseSettings):
     # URL to redirect the buyer after payment completion (success or failure).
     MONOBANK_REDIRECT_URL: str | None = None
 
+    # --- Telegram Bot Integration ---
+    # Bot token from @BotFather — used for both admin notifications and print partner orders.
+    TELEGRAM_BOT_TOKEN: str | None = None
+    # Your personal or group chat_id where new order alerts are delivered.
+    # Obtain your chat_id by messaging @userinfobot in Telegram.
+    TELEGRAM_ADMIN_CHAT_ID: str | None = None
+
     # CORS Policy Configuration
     # Whitelist of allowed origins for browser-based requests.
     CORS_ORIGINS: list[str] = [

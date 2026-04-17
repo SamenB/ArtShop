@@ -41,7 +41,6 @@ class ArtworkAddRequest(BaseModel):
         description="Status of the original: available, sold, or not_for_sale",
     )
     year: int | None = Field(None, description="Year created")
-    materials: str | None = Field(None, description="Materials used")
     style: str | None = Field(None, description="Artwork style")
     width_cm: float | None = Field(None, description="Width in cm")
     height_cm: float | None = Field(None, description="Height in cm")
@@ -68,6 +67,17 @@ class ArtworkAddRequest(BaseModel):
         None, description="Total number of prints in the paper limited edition series (e.g. 30)"
     )
 
+    # ── Print configuration ────────────────────────────────────────────────────
+    print_aspect_ratio_id: int | None = Field(
+        None, description="ID of the print aspect ratio category to apply for this artwork"
+    )
+    print_min_size_label: str | None = Field(
+        None, description="Minimum available print size label (e.g. '30×40 cm')"
+    )
+    print_max_size_label: str | None = Field(
+        None, description="Maximum available print size label (e.g. '60×80 cm')"
+    )
+
     labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
@@ -89,7 +99,6 @@ class ArtworkAdd(BaseModel):
         description="Status of the original: available, sold, or not_for_sale",
     )
     year: int | None = Field(None)
-    materials: str | None = Field(None)
     style: str | None = Field(None)
     width_cm: float | None = Field(None)
     height_cm: float | None = Field(None)
@@ -111,6 +120,11 @@ class ArtworkAdd(BaseModel):
     canvas_print_limited_quantity: int | None = Field(None)
     paper_print_limited_quantity: int | None = Field(None)
 
+    # Print configuration
+    print_aspect_ratio_id: int | None = Field(None)
+    print_min_size_label: str | None = Field(None)
+    print_max_size_label: str | None = Field(None)
+
 
 class Artwork(ArtworkAdd):
     """
@@ -130,13 +144,15 @@ class Artwork(ArtworkAdd):
 
 class ArtworkWithLabels(Artwork):
     """
-    Represents an artwork entity including its associated labels.
+    Represents an artwork entity including its associated labels and print ratio info.
     """
 
     labels: list[Label]
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs or image objects."
     )
+    # Nested aspect ratio object (serialized from the SQLAlchemy relationship)
+    print_aspect_ratio: dict | None = None
 
 
 class ArtworkPatchRequest(BaseModel):
@@ -151,7 +167,6 @@ class ArtworkPatchRequest(BaseModel):
         None, description="Status of the original: available, sold, or not_for_sale"
     )
     year: int | None = Field(None)
-    materials: str | None = Field(None)
     style: str | None = Field(None)
     width_cm: float | None = Field(None)
     height_cm: float | None = Field(None)
@@ -169,6 +184,11 @@ class ArtworkPatchRequest(BaseModel):
     has_paper_print_limited: bool | None = Field(None)
     canvas_print_limited_quantity: int | None = Field(None)
     paper_print_limited_quantity: int | None = Field(None)
+
+    # Print configuration (optional for partial updates)
+    print_aspect_ratio_id: int | None = Field(None)
+    print_min_size_label: str | None = Field(None)
+    print_max_size_label: str | None = Field(None)
 
     labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
@@ -189,7 +209,6 @@ class ArtworkPatch(BaseModel):
     original_price: int | None = Field(None)
     original_status: OriginalStatus | None = Field(None)
     year: int | None = Field(None)
-    materials: str | None = Field(None)
     style: str | None = Field(None)
     width_cm: float | None = Field(None)
     height_cm: float | None = Field(None)
@@ -208,6 +227,11 @@ class ArtworkPatch(BaseModel):
     has_paper_print_limited: bool | None = Field(None)
     canvas_print_limited_quantity: int | None = Field(None)
     paper_print_limited_quantity: int | None = Field(None)
+
+    # Print configuration
+    print_aspect_ratio_id: int | None = Field(None)
+    print_min_size_label: str | None = Field(None)
+    print_max_size_label: str | None = Field(None)
 
 
 class ArtworkAddBulk(BaseModel):

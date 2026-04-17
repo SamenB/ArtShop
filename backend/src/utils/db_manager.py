@@ -16,7 +16,7 @@ from src.repositories.labels import (
     LabelsRepository,
 )
 from src.repositories.orders import OrderItemsRepository, OrdersRepository
-from src.repositories.print_pricing import PrintPricingRepository
+from src.repositories.print_pricing import PrintAspectRatioRepository, PrintPricingRepository
 from src.repositories.users import UsersRepository
 
 
@@ -46,6 +46,7 @@ class DBManager:
         self.artwork_labels = ArtworkLabelsRepository(self.session)
         self.label_categories = LabelCategoriesRepository(self.session)
         self.email_templates = EmailTemplatesRepository(self.session)
+        self.aspect_ratios = PrintAspectRatioRepository(self.session)
         self.print_pricing = PrintPricingRepository(self.session)
         return self
 

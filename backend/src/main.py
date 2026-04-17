@@ -26,6 +26,7 @@ from src.api.orders import router as orders_router
 from src.api.payments import router as payments_router
 from src.api.print_pricing import router as print_pricing_router
 from src.api.settings import router as settings_router
+from src.api.telegram import router as telegram_router
 from src.api.upload import router as upload_router
 from src.api.users import router as users_router
 from src.config import settings
@@ -122,6 +123,7 @@ app.include_router(upload_router)
 app.include_router(contact_router)
 app.include_router(email_templates_router)
 app.include_router(print_pricing_router)
+app.include_router(telegram_router)
 
 if __name__ == "__main__":
     # Local development server execution.

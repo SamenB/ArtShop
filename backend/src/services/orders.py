@@ -155,6 +155,24 @@ class OrderService(BaseService):
             order = await self.db.orders.get_one(id=order.id)
 
             logger.info("Order created successfully: {}", order)
+
+            # Fire admin Telegram notification in background (non-blocking)
+            import asyncio
+            from src.connectors.telegram import notify_admin_new_order
+
+            items_summary = "\n".join(
+                f"  • {it.edition_type} — ${it.price}"
+                for it in order.items
+            )
+            asyncio.create_task(
+                notify_admin_new_order(
+                    order_id=order.id,
+                    customer_name=f"{order.first_name} {order.last_name}",
+                    total=order.total_price,
+                    items_summary=items_summary,
+                )
+            )
+
             return order
 
         except (

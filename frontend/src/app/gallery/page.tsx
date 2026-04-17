@@ -26,7 +26,6 @@ interface Artwork {
     title: string;
     description: string;
     medium?: string;
-    materials?: string;
     style?: string;
     size: string;
     original_price: number;
@@ -360,6 +359,23 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                         }}
                         onPointerDown={e => e.stopPropagation()}
                         onMouseDown={e => e.stopPropagation()}
+                        onTouchStart={e => e.stopPropagation()}
+                        onTouchEnd={e => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const newState = !liked;
+
+                            setLiked(newState);
+                            setLikeAnimating(true);
+                            setTimeout(() => setLikeAnimating(false), 400);
+
+                            if (onAuthRequired) {
+                                onAuthRequired(work.id, newState);
+                                return;
+                            }
+
+                            onLike?.(work.id, newState);
+                        }}
                         aria-label={liked ? "Unlike" : "Like"}
                         style={{
                             background: "none", border: "none", cursor: "pointer",
@@ -369,6 +385,8 @@ function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked
                             transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
                             outline: "none",
                             pointerEvents: "auto",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
                         }}
                     >
                         <svg
@@ -536,7 +554,7 @@ export default function GalleryPage() {
                 }
             } else if (groupBy === "medium") {
                 const firstLabel = a.labels?.[0];
-                groupName = firstLabel?.title || a.medium || a.style || a.materials || "Other";
+                groupName = firstLabel?.title || a.medium || a.style || "Other";
                 // Capitalize properly if it exists, or provide safe fallback
                 if (groupName !== "Other") {
                     groupName = groupName.charAt(0).toUpperCase() + groupName.slice(1);

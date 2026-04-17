@@ -26,7 +26,6 @@ interface Product {
     title: string;
     description: string;
     medium: string;
-    materials?: string;
     size: string;
     original_price: number;
     original_status: OriginalStatus;
@@ -203,7 +202,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     }, [product, units]);
 
     /** Like toggle: requires auth, animates, calls API with optimistic update. */
-    const handleLike = async (e: React.MouseEvent) => {
+    const handleLike = async (e: React.MouseEvent | React.TouchEvent) => {
         e.preventDefault();
         e.stopPropagation();
         
@@ -418,10 +417,12 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                     {/* Right: Like button — prominent, stops card-hover propagation on pointer enter/leave */}
                     <button
                         onClick={handleLike}
+                        onTouchEnd={handleLike}
                         onMouseEnter={() => setImgHovered(false)}
                         onMouseLeave={() => setImgHovered(false)}
                         onPointerDown={e => e.stopPropagation()}
                         onMouseDown={e => e.stopPropagation()}
+                        onTouchStart={e => e.stopPropagation()}
                         aria-label={liked ? "Unlike artwork" : "Like artwork"}
                         style={{
                             background: "none",
@@ -437,6 +438,8 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                             transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
                             outline: "none",
                             pointerEvents: "auto",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
                         }}
                     >
                         <svg

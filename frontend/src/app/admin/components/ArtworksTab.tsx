@@ -20,9 +20,14 @@ interface Artwork {
     has_paper_print_limited?: boolean;
     canvas_print_limited_quantity?: number | null;
     paper_print_limited_quantity?: number | null;
+    print_aspect_ratio_id?: number | null;
+    print_min_size_label?: string | null;
+    print_max_size_label?: string | null;
     orientation?: string;
     labels?: { id: number; title: string; category_id?: number }[];
 }
+
+interface AspectRatio { id: number; label: string; description: string | null; }
 
 interface Label { id: number; title: string; category_id?: number; }
 interface LabelCategory { id: number; title: string; accent_color?: string; }
@@ -206,7 +211,6 @@ export default function ArtworksTab() {
     const defaultForm = {
         title: "",
         description: "",
-        materials: "",
         year: new Date().getFullYear(),
         width_cm: "" as string | number,
         height_cm: "" as string | number,
@@ -218,11 +222,15 @@ export default function ArtworksTab() {
         has_paper_print_limited: false,
         canvas_print_limited_quantity: "" as string | number,
         paper_print_limited_quantity: "" as string | number,
+        print_aspect_ratio_id: null as number | null,
+        print_min_size_label: "",
+        print_max_size_label: "",
         orientation: "Horizontal",
         labels: [] as number[],
         original_status: "available",
     };
     const [formData, setFormData] = useState<any>(defaultForm);
+    const [aspectRatios, setAspectRatios] = useState<AspectRatio[]>([]);
 
     const resolveImageUrl = useCallback((img: ImageEntry): string => {
         if (typeof img === "string") return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
@@ -232,14 +240,16 @@ export default function ArtworksTab() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [artRes, catRes, lblRes] = await Promise.all([
+            const [artRes, catRes, lblRes, ratioRes] = await Promise.all([
                 apiFetch(`${getApiUrl()}/artworks?limit=100`),
                 apiFetch(`${getApiUrl()}/labels/categories`),
                 apiFetch(`${getApiUrl()}/labels`),
+                apiFetch(`${getApiUrl()}/print-pricing/aspect-ratios`),
             ]);
             if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
             if (catRes.ok) { const d = await catRes.json(); setCategories(d); }
             if (lblRes.ok) { const d = await lblRes.json(); setLabels(d); }
+            if (ratioRes.ok) { const d = await ratioRes.json(); setAspectRatios(d); }
         } catch (e) { console.error("Fetch error:", e); }
         finally { setLoading(false); }
     };
@@ -318,7 +328,7 @@ export default function ArtworksTab() {
             if (!res.ok) return;
             const full = await res.json();
             setFormData({
-                title: full.title || "", description: full.description || "", materials: full.materials || "",
+                title: full.title || "", description: full.description || "",
                 year: full.year || new Date().getFullYear(),
                 width_cm: full.width_cm || "", height_cm: full.height_cm || "",
                 original_price: full.original_price || 0,
@@ -327,6 +337,9 @@ export default function ArtworksTab() {
                 has_paper_print: full.has_paper_print || false, has_paper_print_limited: full.has_paper_print_limited || false,
                 canvas_print_limited_quantity: full.canvas_print_limited_quantity || "",
                 paper_print_limited_quantity: full.paper_print_limited_quantity || "",
+                print_aspect_ratio_id: full.print_aspect_ratio_id || null,
+                print_min_size_label: full.print_min_size_label || "",
+                print_max_size_label: full.print_max_size_label || "",
                 orientation: full.orientation || "Horizontal",
                 labels: (full.labels || []).map((t: any) => typeof t === "number" ? t : t.id),
                 original_status: full.original_status || "available",
@@ -398,10 +411,6 @@ export default function ArtworksTab() {
                                 <div>
                                     <FieldLabel text="Year" valid={!!formData.year} />
                                     <input type="number" value={formData.year} onChange={e => setFormData({ ...formData, year: Number(e.target.value) })} className={inp} />
-                                </div>
-                                <div>
-                                    <FieldLabel text="Materials" valid={!!formData.materials} />
-                                    <input value={formData.materials} onChange={e => setFormData({ ...formData, materials: e.target.value })} className={inp} placeholder="e.g. Oil on linen" />
                                 </div>
                                 <div>
                                     <FieldLabel text="Orientation" valid={!!formData.orientation} />
@@ -490,6 +499,50 @@ export default function ArtworksTab() {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Print Config */}
+                        {(formData.has_canvas_print || formData.has_canvas_print_limited || formData.has_paper_print || formData.has_paper_print_limited) && (
+                        <div>
+                            <FormSection title="Print Configuration" desc="Link this artwork to a pricing grid and optionally restrict the available size range." />
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Aspect Ratio</label>
+                                    <select
+                                        value={formData.print_aspect_ratio_id || ""}
+                                        onChange={e => setFormData({ ...formData, print_aspect_ratio_id: e.target.value ? Number(e.target.value) : null })}
+                                        className={inp}
+                                    >
+                                        <option value="">— No ratio selected (all sizes available) —</option>
+                                        {aspectRatios.map(r => (
+                                            <option key={r.id} value={r.id}>{r.label}{r.description ? ` — ${r.description}` : ""}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {formData.print_aspect_ratio_id && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Min Size Label</label>
+                                            <input
+                                                value={formData.print_min_size_label || ""}
+                                                onChange={e => setFormData({ ...formData, print_min_size_label: e.target.value })}
+                                                placeholder='e.g. "30×40 cm"'
+                                                className={inp}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Max Size Label</label>
+                                            <input
+                                                value={formData.print_max_size_label || ""}
+                                                onChange={e => setFormData({ ...formData, print_max_size_label: e.target.value })}
+                                                placeholder='e.g. "80×100 cm"'
+                                                className={inp}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        )}
 
                         {/* Labels */}
                         <div>

@@ -22,15 +22,39 @@ const PAYMENT_STATUSES = [
 
 const PAYMENT_STATUS_MAP = Object.fromEntries(PAYMENT_STATUSES.map(s => [s.value, s]));
 
-const FULFILLMENT_STEPS = [
-    { value: "confirmed",       label: "Confirmed",     icon: "✓",  auto: true,  desc: "Auto-set when payment received" },
-    { value: "print_ordered",   label: "Print Ordered", icon: "🖨", auto: false, desc: "Sent to print studio" },
-    { value: "print_received",  label: "Print Received",icon: "📦", auto: false, desc: "Artwork back from studio" },
-    { value: "packaging",       label: "Packaging",     icon: "📦", auto: false, desc: "Preparing parcel" },
-    { value: "shipped",         label: "Shipped",       icon: "🚀", auto: false, desc: "Dispatched with TTN" },
-    { value: "delivered",       label: "Delivered",     icon: "✓",  auto: false, desc: "Received by buyer" },
+// Print edition types that trigger print-specific fulfillment steps
+const PRINT_EDITION_TYPES = new Set(["canvas_print", "canvas_print_limited", "paper_print", "paper_print_limited"]);
+
+function orderHasPrints(order: any): boolean {
+    return order.items?.some((item: any) => PRINT_EDITION_TYPES.has(item.edition_type)) ?? false;
+}
+
+// Base fulfillment steps (always present)
+const BASE_STEPS = [
+    { value: "confirmed",      label: "Confirmed",     icon: "✓",  auto: true,  desc: "Auto-set when payment received" },
+    { value: "packaging",      label: "Packaging",     icon: "📦", auto: false, desc: "Preparing parcel" },
+    { value: "shipped",        label: "Shipped",       icon: "🚀", auto: false, desc: "Dispatched with TTN" },
+    { value: "delivered",      label: "Delivered",     icon: "✓",  auto: false, desc: "Received by buyer" },
 ];
 
+// Extra steps inserted after "confirmed" when prints are present
+const PRINT_STEPS = [
+    { value: "print_ordered",  label: "Print Ordered", icon: "🖨", auto: false, desc: "Sent to print studio" },
+    { value: "print_received", label: "Print Received", icon: "🎨", auto: false, desc: "Artwork back from studio" },
+];
+
+function getFulfillmentSteps(hasPrints: boolean) {
+    if (!hasPrints) return BASE_STEPS;
+    // Insert print steps between "confirmed" and "packaging"
+    return [
+        BASE_STEPS[0],          // confirmed
+        ...PRINT_STEPS,         // print_ordered, print_received
+        ...BASE_STEPS.slice(1), // packaging, shipped, delivered
+    ];
+}
+
+// Legacy flat array (used only for filter pills in the advanced filter UI)
+const FULFILLMENT_STEPS = getFulfillmentSteps(true); // show all possible statuses in filter
 const FULFILLMENT_STEP_VALUES = FULFILLMENT_STEPS.map(s => s.value);
 
 const CARRIERS = [
@@ -189,6 +213,10 @@ function FulfillmentPhase({ order, onStatusChange, saving }: {
     onStatusChange: (status: string, extra?: { tracking_number?: string; carrier?: string; notes?: string }) => void;
     saving: boolean;
 }) {
+    const hasPrints = orderHasPrints(order);
+    const steps = getFulfillmentSteps(hasPrints);
+    const stepValues = steps.map(s => s.value);
+
     const [notes, setNotes] = useState(order.notes || "");
     const [trackingNum, setTrackingNum] = useState(order.tracking_number || "");
     const [carrier, setCarrier] = useState(order.carrier || "nova_poshta");
@@ -196,9 +224,9 @@ function FulfillmentPhase({ order, onStatusChange, saving }: {
 
     const isPaid = PAID_STATUSES.has(order.payment_status);
     const isCancelled = order.fulfillment_status === "cancelled";
-    const currentIdx = FULFILLMENT_STEP_VALUES.indexOf(order.fulfillment_status);
-    const nextStep = currentIdx >= 0 && currentIdx < FULFILLMENT_STEP_VALUES.length - 1
-        ? FULFILLMENT_STEPS[currentIdx + 1]
+    const currentIdx = stepValues.indexOf(order.fulfillment_status);
+    const nextStep = currentIdx >= 0 && currentIdx < stepValues.length - 1
+        ? steps[currentIdx + 1]
         : null;
 
     const handleAdvance = () => {
@@ -244,11 +272,15 @@ function FulfillmentPhase({ order, onStatusChange, saving }: {
             {/* Pipeline steps rail */}
             <div>
                 <SectionLabel text="Fulfillment Steps" />
+                {!hasPrints && (
+                    <p className="text-[10px] text-[#31323E]/40 font-medium mb-2 leading-relaxed">
+                        Original-only order — print steps skipped.
+                    </p>
+                )}
                 <div className="space-y-1.5">
-                    {FULFILLMENT_STEPS.map((step, idx) => {
+                    {steps.map((step, idx) => {
                         const isCurrent = step.value === order.fulfillment_status;
                         const isPast = currentIdx > idx;
-                        const isFuture = currentIdx < idx;
                         const isClickable = !step.auto && !saving;
 
                         return (
@@ -368,7 +400,185 @@ function FulfillmentPhase({ order, onStatusChange, saving }: {
     );
 }
 
-// ── Order Timeline ─────────────────────────────────────────────────────────────
+// ── Telegram Send Panel ────────────────────────────────────────────────────────
+
+interface TelegramPartner {
+    id: string;
+    name: string;
+    chatId: string;
+    messageTemplate: string;
+    isActive: boolean;
+}
+
+const DEFAULT_TELEGRAM_TEMPLATE = `🖨 <b>New Print Order #{{order_id}}</b>
+
+👤 <b>Customer:</b> {{customer_name}}
+📧 {{customer_email}}
+📱 {{customer_phone}}
+
+📦 <b>Items:</b>
+{{items}}
+
+📍 <b>Ship to:</b>
+{{shipping_address}}
+
+💬 <b>Notes:</b> {{notes}}`;
+
+function buildTelegramMessage(template: string, order: any): string {
+    const printItems = (order.items || [])
+        .filter((i: any) => PRINT_EDITION_TYPES.has(i.edition_type))
+        .map((i: any) =>
+            `  • ${i.artwork?.title || "Artwork"} — ${i.edition_type.replace(/_/g, " ")}` +
+            `${i.size ? ` — ${i.size}` : ""}${i.finish ? ` (${i.finish})` : ""}`
+        );
+
+    const addr = [
+        order.shipping_address_line1,
+        order.shipping_address_line2,
+        order.shipping_city,
+        order.shipping_postal_code,
+        order.shipping_country,
+    ].filter(Boolean).join(", ");
+
+    return template
+        .replace(/{{order_id}}/g, String(order.id))
+        .replace(/{{customer_name}}/g, `${order.first_name} ${order.last_name}`)
+        .replace(/{{customer_email}}/g, order.email || "")
+        .replace(/{{customer_phone}}/g, order.phone || "")
+        .replace(/{{items}}/g, printItems.join("\n") || "(no print items)")
+        .replace(/{{shipping_address}}/g, addr || "(no address)")
+        .replace(/{{notes}}/g, order.shipping_notes || order.notes || "(none)");
+}
+
+function TelegramSendPanel({ order, onPrintOrdered }: { order: any; onPrintOrdered: () => void }) {
+    const [partners, setPartners] = useState<TelegramPartner[]>([]);
+    const [selectedId, setSelectedId] = useState<string>("");
+    const [sending, setSending] = useState(false);
+    const [sent, setSent] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem("artshop_telegram_partners");
+            if (raw) {
+                const parsed: TelegramPartner[] = JSON.parse(raw);
+                const active = parsed.filter(p => p.isActive);
+                setPartners(active);
+                if (active.length > 0) setSelectedId(active[0].id);
+            }
+        } catch { /**/ }
+    }, []);
+
+    const partner = partners.find(p => p.id === selectedId);
+    const message = partner ? buildTelegramMessage(partner.messageTemplate || DEFAULT_TELEGRAM_TEMPLATE, order) : "";
+
+    const handleSend = async () => {
+        if (!partner) return;
+        setSending(true);
+        setError(null);
+        try {
+            const res = await apiFetch(`${getApiUrl()}/telegram/send-print-order`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: partner.chatId, message }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSent(true);
+                onPrintOrdered();
+            } else {
+                setError(data.detail || "Send failed");
+            }
+        } catch {
+            setError("Network error. Check bot token configuration.");
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleCopy = () => { navigator.clipboard.writeText(message).catch(() => {}); };
+
+    if (partners.length === 0) {
+        return (
+            <div className="p-4 rounded-xl border border-dashed border-[#31323E]/15 bg-[#31323E]/2 text-center">
+                <p className="text-[11px] text-[#31323E]/40 font-semibold">No active Telegram partners configured.</p>
+                <p className="text-[10px] text-[#31323E]/30 mt-0.5">
+                    Add partners in the <span className="font-bold">Print Partners</span> tab.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            {partners.length > 1 && (
+                <div>
+                    <SectionLabel text="Select Partner" />
+                    <select
+                        value={selectedId}
+                        onChange={e => setSelectedId(e.target.value)}
+                        className={inputCls}
+                        disabled={sending || sent}
+                    >
+                        {partners.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} — {p.chatId}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            {partners.length === 1 && partner && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-[#31323E]/4 rounded-lg">
+                    <span className="text-sm">🤝</span>
+                    <span className="text-[11px] font-bold text-[#31323E]">{partner.name}</span>
+                    <span className="text-[10px] text-[#31323E]/40 font-mono ml-1">{partner.chatId}</span>
+                </div>
+            )}
+
+            {message && (
+                <div>
+                    <SectionLabel text="Message Preview" />
+                    <pre className="text-[10px] text-[#31323E]/70 bg-white border border-[#31323E]/10 rounded-xl p-3 whitespace-pre-wrap font-mono leading-relaxed max-h-40 overflow-y-auto">
+                        {message}
+                    </pre>
+                </div>
+            )}
+
+            {error && (
+                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-[10px] font-bold text-red-600">{error}</p>
+                </div>
+            )}
+
+            {sent ? (
+                <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <span className="text-emerald-500">✅</span>
+                    <p className="text-[11px] font-bold text-emerald-700">Sent! Fulfillment → Print Ordered.</p>
+                </div>
+            ) : (
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleSend}
+                        disabled={sending || !partner}
+                        className="flex-1 py-2.5 bg-[#31323E] text-white text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-[#434455] transition-all shadow-sm disabled:opacity-40"
+                    >
+                        {sending ? "Sending…" : "✈️ Send via Telegram"}
+                    </button>
+                    <button
+                        onClick={handleCopy}
+                        disabled={!message}
+                        className="px-3 py-2.5 border border-[#31323E]/15 text-[#31323E] text-[10px] font-bold rounded-xl hover:bg-[#31323E]/5 transition-colors"
+                        title="Copy message to clipboard"
+                    >
+                        📋
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Order Timeline ─────────────────────────────────────────────────────────────────
 
 function OrderTimeline({ order }: { order: any }) {
     const steps = [
@@ -669,7 +879,7 @@ export default function OrdersTab() {
 
                                 {/* Expanded Detail */}
                                 {isExpanded && (
-                                    <div className="px-5 py-6 bg-[#FAFAF9] border-t border-[#31323E]/8">
+                                    <div className="px-5 py-6 bg-[#EAEAEE] border-t border-[#31323E]/15 shadow-inner">
                                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                                             {/* ── Col 1: Customer + Items + Address ── */}
@@ -795,11 +1005,25 @@ export default function OrdersTab() {
                                                 </div>
                                             </div>
 
-                                            {/* ── Col 3: Timeline + Actions ── */}
+                                            {/* ── Col 3: Timeline + Print Order + Actions ── */}
                                             <div className="space-y-6">
                                                 <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                                                     <OrderTimeline order={order} />
                                                 </div>
+
+                                                {/* Telegram Print Order Panel (prints only, before print_ordered) */}
+                                                {orderHasPrints(order) && order.fulfillment_status !== "cancelled" && order.fulfillment_status !== "print_ordered" && order.fulfillment_status !== "print_received" && order.fulfillment_status !== "packaging" && order.fulfillment_status !== "shipped" && order.fulfillment_status !== "delivered" && (
+                                                    <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <span className="text-base">🖨</span>
+                                                            <h4 className="text-xs font-bold uppercase tracking-wider text-[#31323E]">Order Print via Telegram</h4>
+                                                        </div>
+                                                        <TelegramSendPanel
+                                                            order={order}
+                                                            onPrintOrdered={() => handleFulfillmentChange(order.id, "print_ordered")}
+                                                        />
+                                                    </div>
+                                                )}
 
                                                 {/* Admin Actions */}
                                                 <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">

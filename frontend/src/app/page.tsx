@@ -21,7 +21,6 @@ interface Artwork {
   title: string;
   description: string;
   medium: string;
-  materials?: string;
   size: string;
   orientation?: string;
   original_price: number;

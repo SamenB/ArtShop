@@ -10,13 +10,15 @@ import LabelsTab from "@/app/admin/components/LabelsTab";
 import FooterTab from "@/app/admin/components/FooterTab";
 import EmailTemplatesTab from "@/app/admin/components/EmailTemplatesTab";
 import PrintPricingTab from "@/app/admin/components/PrintPricingTab";
+import PrintPartnersTab from "@/app/admin/components/PrintPartnersTab";
 
-type Tab = "artwork" | "orders" | "print-pricing" | "email-templates" | "label" | "setting" | "footer";
+type Tab = "artwork" | "orders" | "print-pricing" | "print-partners" | "email-templates" | "label" | "setting" | "footer";
 
 const TAB_LABELS: Record<Tab, string> = {
     "artwork": "Artworks",
     "orders": "Orders",
     "print-pricing": "Print Pricing",
+    "print-partners": "Print Partners",
     "email-templates": "Email Templates",
     "label": "Labels",
     "setting": "Settings",
@@ -85,6 +87,7 @@ export default function AdminDashboardPage() {
                         {activeTab === "artwork" && <ArtworksTab />}
                         {activeTab === "orders" && <OrdersTab />}
                         {activeTab === "print-pricing" && <PrintPricingTab />}
+                        {activeTab === "print-partners" && <PrintPartnersTab />}
                         {activeTab === "email-templates" && <EmailTemplatesTab />}
                         {activeTab === "label" && <LabelsTab />}
                         {activeTab === "setting" && <SettingsTab />}

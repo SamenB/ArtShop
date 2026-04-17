@@ -6,13 +6,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, BigInteger, String
+from sqlalchemy import JSON, BigInteger, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
 
 if TYPE_CHECKING:
     from src.models.labels import LabelsOrm
+    from src.models.print_pricing import PrintAspectRatioOrm
     from src.models.users import UsersOrm
 
 
@@ -44,7 +45,6 @@ class ArtworksOrm(Base):
         server_default="available",
     )
     year: Mapped[int | None] = mapped_column(default=None)
-    materials: Mapped[str | None] = mapped_column(String(200), default=None)
     style: Mapped[str | None] = mapped_column(String(100), default=None)
     width_cm: Mapped[float | None] = mapped_column(default=None)
     height_cm: Mapped[float | None] = mapped_column(default=None)
@@ -69,7 +69,28 @@ class ArtworksOrm(Base):
     canvas_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
     paper_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
 
+    # ── Print configuration ────────────────────────────────────────────────────
+    # References the aspect ratio category for this artwork's print price grid.
+    # If null, no specific ratio is assigned and all sizes are available.
+    print_aspect_ratio_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("print_aspect_ratios.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+        index=True,
+    )
+    # Restricts which sizes from the ratio's grid are offered for this artwork.
+    # Sizes are matched by exact size_label string comparison.
+    # e.g. print_min_size_label="30×40 cm" means nothing smaller is offered.
+    print_min_size_label: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    print_max_size_label: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+
     # Relationships
+    print_aspect_ratio: Mapped["PrintAspectRatioOrm | None"] = relationship(
+        "PrintAspectRatioOrm",
+        foreign_keys=[print_aspect_ratio_id],
+        lazy="selectin",
+    )
     labels: Mapped[list["LabelsOrm"]] = relationship(
         secondary="artwork_labels", back_populates="artworks"
     )
