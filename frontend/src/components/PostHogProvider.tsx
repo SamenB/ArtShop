@@ -52,8 +52,10 @@ function PageViewTracker() {
  */
 export default function PostHogProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
-        // Guard: only initialize if key is provided and not already initialized
+        // Only initialize in production — prevents local dev traffic from
+        // polluting the production analytics dashboard.
         if (typeof window === "undefined" || !POSTHOG_KEY || posthog.__loaded) return;
+        if (process.env.NODE_ENV !== "production") return;
 
         posthog.init(POSTHOG_KEY, {
             api_host: POSTHOG_HOST,
