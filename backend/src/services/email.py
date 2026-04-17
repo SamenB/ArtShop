@@ -2,6 +2,9 @@
 Service for handling email communications.
 Integrates with SMTP to send transactional emails: contact notifications,
 automated customer replies, and order fulfillment status updates.
+
+Email content (subjects and bodies) is loaded from the database EmailTemplateOrm table,
+making it fully editable via the admin panel without code deployments.
 """
 
 import smtplib
@@ -10,68 +13,6 @@ from email.message import EmailMessage
 from loguru import logger
 
 from src.config import settings
-
-# ── Human-friendly labels for fulfillment statuses ──────────────────────────
-
-FULFILLMENT_EMAIL_SUBJECT: dict[str, str] = {
-    "confirmed": "Your order has been confirmed — Order #{}",
-    "print_ordered": "Your artwork is being printed — Order #{}",
-    "print_received": "Your artwork print is ready — Order #{}",
-    "packaging": "Your order is being packaged — Order #{}",
-    "shipped": "🎨 Your artwork is on its way! — Order #{}",
-    "delivered": "We hope you love it! — Order #{}",
-    "cancelled": "Your order has been cancelled — Order #{}",
-}
-
-FULFILLMENT_EMAIL_BODY: dict[str, str] = {
-    "confirmed": (
-        "Hello {first_name},\n\n"
-        "Great news — your order #{order_id} has been confirmed and we are "
-        "now beginning to prepare your artwork.\n\n"
-        "We will keep you updated at every step of the journey.\n\n"
-        "Thank you for supporting independent art!\n"
-    ),
-    "print_ordered": (
-        "Hello {first_name},\n\n"
-        "Your order #{order_id} is at the printers!\n\n"
-        "We've sent your artwork to our professional print studio. "
-        "Once it's back in our hands, we'll pack it carefully and ship it to you.\n\n"
-        "Thank you for your patience!\n"
-    ),
-    "print_received": (
-        "Hello {first_name},\n\n"
-        "Your print for order #{order_id} has arrived from the studio "
-        "and it looks absolutely beautiful.\n\n"
-        "We're now preparing to carefully package it for shipping.\n"
-    ),
-    "packaging": (
-        "Hello {first_name},\n\n"
-        "Your order #{order_id} is being packaged right now.\n\n"
-        "We take great care to protect every piece for its journey to you. "
-        "You'll receive a tracking number as soon as it's dispatched.\n"
-    ),
-    "shipped": (
-        "Hello {first_name},\n\n"
-        "Your artwork is on its way! 🚀\n\n"
-        "Order: #{order_id}\n"
-        "{tracking_block}"
-        "\nPlease allow a few days for delivery depending on your location.\n\n"
-        "We hope you'll love it as much as we loved creating it.\n"
-    ),
-    "delivered": (
-        "Hello {first_name},\n\n"
-        "We hope you've received and are enjoying your order #{order_id}!\n\n"
-        "If you have a moment, we'd love to hear your thoughts. "
-        "Feel free to reply to this email or reach out on our website.\n\n"
-        "Thank you for being a collector of original art.\n"
-    ),
-    "cancelled": (
-        "Hello {first_name},\n\n"
-        "Your order #{order_id} has been cancelled.\n\n"
-        "If you have any questions or believe this was done in error, "
-        "please reply to this email and we'll sort it out immediately.\n"
-    ),
-}
 
 
 def _build_smtp_connection():
@@ -85,73 +26,94 @@ def _build_smtp_connection():
     return server
 
 
-def send_contact_emails(
-    name: str, email: str, message: str, admin_email: str | None = None
-) -> bool:
+def _send_single_email(*, to: str, subject: str, body: str) -> bool:
     """
-    Orchestrates the sending of contact form notification emails.
-
-    Logic:
-    1. Sends an alert to the site administrator with the customer's details and message.
-    2. Sends an automated acknowledgment (auto-reply) to the customer.
-
-    Note: This function is synchronous and should be executed in a background task
-    to avoid blocking the main API response.
+    Low-level helper to send a single plain-text email via SMTP.
 
     Returns:
-        bool: True if both emails were sent successfully, False otherwise.
+        bool: True if sent successfully, False otherwise.
     """
     if not all([settings.SMTP_HOST, settings.SMTP_USER, settings.SMTP_PASSWORD]):
         logger.warning("SMTP configuration is incomplete. Skipping email send.")
         return False
 
     try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = settings.SMTP_USER
+        msg["To"] = to
+        msg["Reply-To"] = settings.SMTP_USER
+        msg.set_content(body)
+
         server = _build_smtp_connection()
-        sender = settings.SMTP_USER
-
-        # 1. SEND NOTIFICATION TO THE SITE OWNER (ADMIN)
-        owner_msg = EmailMessage()
-        owner_msg["Subject"] = f"New Inquiry from {name} (The Samen Bondarenko Gallery)"
-        owner_msg["From"] = sender
-
-        # Determine recipient: specified admin_email or first configured admin.
-        target_email = admin_email or (
-            settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else sender
-        )
-        owner_msg["To"] = target_email
-
-        # Set Reply-To to the customer's email for direct follow-up convenience.
-        owner_msg["Reply-To"] = email
-        owner_msg.set_content(
-            f"You have a new message from The Samen Bondarenko Gallery website:\n\n"
-            f"Name: {name}\n"
-            f"Email: {email}\n\n"
-            f"Message:\n{message}"
-        )
-        server.send_message(owner_msg)
-
-        # 2. SEND AUTO-REPLY TO THE CUSTOMER
-        customer_msg = EmailMessage()
-        customer_msg["Subject"] = "Thank you for getting in touch!"
-        customer_msg["From"] = sender
-        customer_msg["To"] = email
-        customer_msg.set_content(
-            f"Hello {name},\n\n"
-            f"Thank you for contacting The Samen Bondarenko Gallery. This is an automated message to confirm that we have received your inquiry.\n\n"
-            f"Message received:\n"
-            f'"{message}"\n\n'
-            f"Best regards,\n"
-            f"The Samen Bondarenko Gallery"
-        )
-        server.send_message(customer_msg)
-
+        server.send_message(msg)
         server.quit()
-        logger.info(f"Successfully sent contact emails for {email}")
         return True
-
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error("Failed to send email to {}: {}", to, e)
         return False
+
+
+def send_contact_emails(
+    name: str,
+    email: str,
+    message: str,
+    admin_email: str | None = None,
+    # Templates are fetched before entering the thread and passed in as plain strings
+    admin_subject: str | None = None,
+    admin_body_template: str | None = None,
+    autoreply_subject: str | None = None,
+    autoreply_body_template: str | None = None,
+) -> bool:
+    """
+    Sends contact form notification emails.
+
+    Logic:
+    1. Sends an alert to the site administrator with the customer's details and message.
+    2. Sends an automated acknowledgment (auto-reply) to the customer.
+
+    Template strings are passed in pre-rendered from the caller's async context
+    (already loaded from the DB) so this sync function can run safely in a thread.
+
+    Returns:
+        bool: True if both emails were sent successfully, False otherwise.
+    """
+    target_email = admin_email or (settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else settings.SMTP_USER)
+
+    # ── 1. Admin notification ─────────────────────────────────────────────────
+    admin_subj = (admin_subject or "New Inquiry from {name} (The Samen Bondarenko Gallery)").format(
+        name=name, email=email, message=message
+    )
+    admin_body = (
+        admin_body_template
+        or (
+            "You have a new message from The Samen Bondarenko Gallery website:\n\n"
+            "Name: {name}\nEmail: {email}\n\nMessage:\n{message}"
+        )
+    ).format(name=name, email=email, message=message)
+
+    ok1 = _send_single_email(to=target_email, subject=admin_subj, body=admin_body)
+
+    # ── 2. Customer auto-reply ────────────────────────────────────────────────
+    reply_subj = (autoreply_subject or "Thank you for getting in touch!").format(
+        name=name, email=email
+    )
+    reply_body = (
+        autoreply_body_template
+        or (
+            "Hello {name},\n\n"
+            "Thank you for contacting The Samen Bondarenko Gallery. "
+            "This is an automated message to confirm that we have received your inquiry.\n\n"
+            'Message received:\n"{message}"\n\n'
+            "Best regards,\nThe Samen Bondarenko Gallery"
+        )
+    ).format(name=name, email=email, message=message)
+
+    ok2 = _send_single_email(to=email, subject=reply_subj, body=reply_body)
+
+    if ok1 and ok2:
+        logger.info("Successfully sent contact emails for {}", email)
+    return ok1 and ok2
 
 
 def send_fulfillment_status_email(
@@ -162,52 +124,36 @@ def send_fulfillment_status_email(
     tracking_number: str | None = None,
     carrier: str | None = None,
     tracking_url: str | None = None,
+    # Pre-rendered template content from DB (loaded in async context before threading)
+    subject_template: str | None = None,
+    body_template: str | None = None,
 ) -> bool:
     """
     Sends a transactional email to the customer when their order's
     fulfillment status changes.
 
-    Not all status transitions trigger an email — only meaningful
-    customer-facing milestones are communicated:
-        confirmed, print_ordered, packaging, shipped, delivered, cancelled.
-
-    The 'print_received' status is an internal workflow step and does not
-    send a customer notification.
+    Template strings are fetched from the DB in the async context and passed in
+    so this synchronous SMTP call can run safely in a background thread.
 
     Args:
-        order_id: The internal order ID.
-        first_name: Customer's first name for personalization.
-        customer_email: Customer's email address.
+        order_id:           The internal order ID.
+        first_name:         Customer's first name for personalization.
+        customer_email:     Customer's email address.
         fulfillment_status: The new fulfillment status string.
-        tracking_number: Optional carrier tracking number (for 'shipped').
-        carrier: Optional carrier name (for 'shipped').
-        tracking_url: Optional direct tracking page URL (for 'shipped').
+        tracking_number:    Optional carrier tracking number (for 'shipped').
+        carrier:            Optional carrier name (for 'shipped').
+        tracking_url:       Optional direct tracking page URL (for 'shipped').
+        subject_template:   Subject string with {order_id} placeholder.
+        body_template:      Body string with {first_name}, {order_id}, {tracking_block} placeholders.
 
     Returns:
         bool: True if sent successfully, False otherwise.
     """
-    # 'print_received' is an internal step — no customer notification needed.
-    SILENT_STATUSES = {"print_received", "packaging"}
-    if fulfillment_status in SILENT_STATUSES:
-        logger.debug(
-            "Suppressing customer email for internal status '{}' on order {}",
-            fulfillment_status,
-            order_id,
-        )
-        return True
-
-    subject_template = FULFILLMENT_EMAIL_SUBJECT.get(fulfillment_status)
-    body_template = FULFILLMENT_EMAIL_BODY.get(fulfillment_status)
-
     if not subject_template or not body_template:
         logger.warning(
-            "No email template for fulfillment_status '{}', skipping.", fulfillment_status
+            "No email template provided for fulfillment_status '{}', skipping.", fulfillment_status
         )
-        return True
-
-    if not all([settings.SMTP_HOST, settings.SMTP_USER, settings.SMTP_PASSWORD]):
-        logger.warning("SMTP not configured. Skipping fulfillment email for order {}.", order_id)
-        return False
+        return True  # Not an error — template may be intentionally inactive
 
     try:
         # Build tracking block for 'shipped' emails
@@ -220,36 +166,24 @@ def send_fulfillment_status_email(
                     tracking_block += f"Track your parcel: {tracking_url}\n"
             tracking_block += "\n"
 
-        subject = subject_template.format(order_id)
+        footer = "\n\nWith gratitude,\nSamen Bondarenko\nsamen-bondarenko.com\n"
+
+        subject = subject_template.format(order_id=order_id, first_name=first_name)
         body = body_template.format(
             first_name=first_name,
             order_id=order_id,
             tracking_block=tracking_block,
-        )
+        ) + footer
 
-        # Append standard footer
-        footer = "\n\nWith gratitude,\nSamen Bondarenko\nsamen-bondarenko.com\n"
-        full_body = body + footer
-
-        # Build and send message
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = settings.SMTP_USER
-        msg["To"] = customer_email
-        msg["Reply-To"] = settings.SMTP_USER
-        msg.set_content(full_body)
-
-        server = _build_smtp_connection()
-        server.send_message(msg)
-        server.quit()
-
-        logger.info(
-            "Fulfillment email sent: order={} status={} to={}",
-            order_id,
-            fulfillment_status,
-            customer_email,
-        )
-        return True
+        ok = _send_single_email(to=customer_email, subject=subject, body=body)
+        if ok:
+            logger.info(
+                "Fulfillment email sent: order={} status={} to={}",
+                order_id,
+                fulfillment_status,
+                customer_email,
+            )
+        return ok
 
     except Exception as e:
         logger.error("Failed to send fulfillment email for order {}: {}", order_id, e)

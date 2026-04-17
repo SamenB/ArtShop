@@ -13,11 +13,48 @@ from pydantic import BaseModel, Field, field_validator
 
 class EditionType(str, Enum):
     """
-    Specifies whether an item in the order is an original artwork or a print.
+    Specifies the edition type of an item in the order.
+
+    Supports five distinct product types:
+        original              — One-of-a-kind original artwork
+        canvas_print          — Open edition canvas print
+        canvas_print_limited  — Signed & numbered limited edition canvas print
+        paper_print           — Open edition paper print
+        paper_print_limited   — Signed & numbered limited edition paper print
     """
 
     ORIGINAL = "original"
-    PRINT = "print"
+    CANVAS_PRINT = "canvas_print"
+    CANVAS_PRINT_LIMITED = "canvas_print_limited"
+    PAPER_PRINT = "paper_print"
+    PAPER_PRINT_LIMITED = "paper_print_limited"
+
+    @property
+    def label(self) -> str:
+        """Human-readable label for admin UI and customer emails."""
+        return {
+            "original": "Original",
+            "canvas_print": "Canvas Print",
+            "canvas_print_limited": "Canvas Print — Limited Edition",
+            "paper_print": "Paper Print",
+            "paper_print_limited": "Paper Print — Limited Edition",
+        }[self.value]
+
+    @property
+    def is_print(self) -> bool:
+        """Returns True for all non-original edition types."""
+        return self != EditionType.ORIGINAL
+
+    @property
+    def artwork_availability_flag(self) -> str:
+        """Returns the corresponding ArtworksOrm boolean field name."""
+        return {
+            "original": "has_original",
+            "canvas_print": "has_canvas_print",
+            "canvas_print_limited": "has_canvas_print_limited",
+            "paper_print": "has_paper_print",
+            "paper_print_limited": "has_paper_print_limited",
+        }[self.value]
 
 
 class FulfillmentStatus(str, Enum):

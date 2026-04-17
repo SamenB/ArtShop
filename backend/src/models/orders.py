@@ -91,7 +91,8 @@ class OrdersOrm(Base):
 class OrderItemOrm(Base):
     """
     Represents an individual item within an order.
-    Can be an original artwork or a specific print edition.
+    Supports all edition types: original, canvas print, limited canvas,
+    paper print, and limited paper print.
     """
 
     __tablename__ = "order_items"
@@ -99,7 +100,9 @@ class OrderItemOrm(Base):
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"))
     artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
 
-    edition_type: Mapped[str] = mapped_column(String(20))  # 'original' | 'print'
+    # Edition type — one of EditionType enum values (String(30) to accommodate all variants)
+    # original | canvas_print | canvas_print_limited | paper_print | paper_print_limited
+    edition_type: Mapped[str] = mapped_column(String(30))
     finish: Mapped[str] = mapped_column(String(50))  # 'Rolled' | 'Framed' | 'Unframed' | etc.
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

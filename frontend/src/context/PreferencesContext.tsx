@@ -30,8 +30,6 @@ interface PreferencesContextType {
     rates: Record<Currency, number>;
     /** Utility to convert and format a USD price into the user's preferred currency. */
     convertPrice: (usdPrice: number) => string;
-    /** Global administrative setting for base print pricing. */
-    globalPrintPrice: number;
     /** IDs of artworks liked while anonymous, waiting for login to sync. */
     pendingLikes: number[];
     addPendingLike: (id: number) => void;
@@ -86,28 +84,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         UAH: 39.5,
     });
     
-    const [globalPrintPrice, setGlobalPrintPrice] = useState<number>(150);
+    const [globalPrintPrice] = useState<number>(0); // Deprecated — kept for backward compat until all call sites are removed
     const [pendingLikes, setPendingLikes] = useState<number[]>([]);
     const [unauthLikeCount, setUnauthLikeCount] = useState<number>(0);
 
-    // Fetch administrative site settings on initialization.
-    useEffect(() => {
-        async function fetchSettings() {
-            try {
-                const res = await apiFetch(`${getApiUrl()}/settings`);
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data && data.global_print_price) {
-                    setGlobalPrintPrice(data.global_print_price);
-                }
-            } catch (err) {
-                console.warn("Backend settings unavailable, using local defaults.");
-            }
-        }
-        fetchSettings();
-    }, []);
+    // Exchange rates fetch
 
-    // Fetch real-time exchange rates.
     useEffect(() => {
         async function fetchRates() {
             try {

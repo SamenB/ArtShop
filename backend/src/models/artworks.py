@@ -20,7 +20,15 @@ class ArtworksOrm(Base):
     """
     Represents an artwork in the store.
     Includes metadata like title, description, physical dimensions, and pricing.
-    Supports both original sales and print options.
+
+    Print availability is controlled by five independent boolean flags:
+        has_original            — Original painting is offered for sale
+        has_canvas_print        — Open edition canvas print is available
+        has_canvas_print_limited — Limited edition canvas print (signed/numbered)
+        has_paper_print         — Open edition paper print is available
+        has_paper_print_limited — Limited edition paper print (signed/numbered)
+
+    Pricing for prints lives in the PrintPricingOrm table (shared catalog).
     """
 
     __tablename__ = "artworks"
@@ -44,10 +52,17 @@ class ArtworksOrm(Base):
     width_in: Mapped[float | None] = mapped_column(default=None)
     height_in: Mapped[float | None] = mapped_column(default=None)
     depth_in: Mapped[float | None] = mapped_column(default=None)
-    has_prints: Mapped[bool] = mapped_column(default=False)
     orientation: Mapped[str] = mapped_column(String(20), default="vertical")
-    base_print_price: Mapped[int | None] = mapped_column(default=None)
     images: Mapped[list[str | dict] | None] = mapped_column(JSON, nullable=True)
+
+    # ── Print availability flags ──────────────────────────────────────────────
+    # Each flag independently controls whether a given print type is purchasable.
+    has_original: Mapped[bool] = mapped_column(default=False, server_default="false")
+    has_canvas_print: Mapped[bool] = mapped_column(default=False, server_default="false")
+    has_canvas_print_limited: Mapped[bool] = mapped_column(default=False, server_default="false")
+    has_paper_print: Mapped[bool] = mapped_column(default=False, server_default="false")
+    has_paper_print_limited: Mapped[bool] = mapped_column(default=False, server_default="false")
+
     # Relationships
     labels: Mapped[list["LabelsOrm"]] = relationship(
         secondary="artwork_labels", back_populates="artworks"

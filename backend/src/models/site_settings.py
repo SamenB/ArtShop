@@ -12,7 +12,9 @@ class SiteSettingsOrm(Base):
     """
     Stores global configuration for the application.
     Includes technical contacts, about texts, background images for the landing page,
-    slideshow parameters, and global pricing for prints.
+    and slideshow parameters.
+
+    Note: Print pricing is managed separately via PrintPricingOrm.
     """
 
     __tablename__ = "site_settings"
@@ -47,6 +49,3 @@ class SiteSettingsOrm(Base):
         Boolean, default=True, server_default="true"
     )
     hero_slide_duration: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
-
-    # Financials
-    global_print_price: Mapped[int] = mapped_column(Integer, default=150)

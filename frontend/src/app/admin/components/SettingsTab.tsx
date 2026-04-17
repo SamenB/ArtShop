@@ -17,7 +17,6 @@ interface SiteSettings {
     cover_3_mobile_url: string | null;
     social_link: string | null;
     studio_address: string | null;
-    global_print_price: number;
     hero_ken_burns_enabled: boolean;
     hero_slide_duration: number;
 }
@@ -234,17 +233,12 @@ export default function SettingsTab() {
                 </div>
 
                 <div className="space-y-8 p-6 bg-gray-50 border border-gray-100 rounded-2xl h-fit">
-                    <div>
-                        <label className={labelClasses}>Global Print Price ($)</label>
-                        <input 
-                            type="number"
-                            name="global_print_price"
-                            value={settings.global_print_price}
-                            onChange={(e) => setSettings({ ...settings, global_print_price: parseInt(e.target.value) || 0 })}
-                            className={inputClasses}
-                            placeholder="150"
-                        />
-                        <p className="text-[10px] text-zinc-400 mt-2">Will be used as default base price for prints if artwork does not specify one.</p>
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-4">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-blue-700 font-semibold mb-1">Print Pricing</p>
+                        <p className="font-mono text-xs text-blue-800">
+                            Print prices are now managed in the <strong>Print Pricing</strong> tab.
+                            Each print type (Canvas, Paper, Limited) has its own size → price grid.
+                        </p>
                     </div>
 
                     {/* Artist Photo (Home Page) */}

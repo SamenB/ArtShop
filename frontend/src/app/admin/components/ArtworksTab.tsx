@@ -13,9 +13,12 @@ interface Artwork {
     original_price: number;
     images?: ImageEntry[];
     description?: string;
-    has_prints?: boolean;
+    has_original?: boolean;
+    has_canvas_print?: boolean;
+    has_canvas_print_limited?: boolean;
+    has_paper_print?: boolean;
+    has_paper_print_limited?: boolean;
     orientation?: string;
-    base_print_price?: number;
     labels?: { id: number; title: string; category_id?: number }[];
 }
 
@@ -215,9 +218,12 @@ export default function ArtworksTab() {
         width_cm: "" as string | number,
         height_cm: "" as string | number,
         original_price: 1000,
-        has_prints: false,
+        has_original: false,
+        has_canvas_print: false,
+        has_canvas_print_limited: false,
+        has_paper_print: false,
+        has_paper_print_limited: false,
         orientation: "Horizontal",
-        base_print_price: 100,
         labels: [] as number[],
         original_status: "available",
     };
@@ -274,7 +280,6 @@ export default function ArtworksTab() {
         
         if (!formData.title?.trim()) return alert("Title is required.");
         if (formData.original_status === "available" && Number(formData.original_price) <= 0) return alert("Original Price is required and must be > 0 when status is Available.");
-        if (formData.has_prints && Number(formData.base_print_price) <= 0) return alert("Base Print Price is required and must be > 0 when Prints are available.");
         if (imageItems.length === 0) return alert("At least one photo is required.");
 
         setUploading(true);
@@ -284,7 +289,6 @@ export default function ArtworksTab() {
         if (payload.height_cm) payload.height_in = Number((parseFloat(payload.height_cm) * 0.393701).toFixed(2));
 
         if (payload.original_status !== "available") payload.original_price = null;
-        if (!payload.has_prints) payload.base_print_price = null;
         
         if (payload.original_status === "digital") {
             payload.width_cm = null;
@@ -364,9 +368,12 @@ export default function ArtworksTab() {
                 width_cm: full.width_cm || "",
                 height_cm: full.height_cm || "",
                 original_price: full.original_price || 0,
-                has_prints: full.has_prints || false,
+                has_original: full.has_original || false,
+                has_canvas_print: full.has_canvas_print || false,
+                has_canvas_print_limited: full.has_canvas_print_limited || false,
+                has_paper_print: full.has_paper_print || false,
+                has_paper_print_limited: full.has_paper_print_limited || false,
                 orientation: full.orientation || "Horizontal",
-                base_print_price: full.base_print_price || 0,
                 labels: (full.labels || []).map((t: any) => typeof t === "number" ? t : t.id),
                 original_status: full.original_status || "available",
             });
@@ -457,21 +464,27 @@ export default function ArtworksTab() {
                     </div>
 
                     <div>
-                        <FormSection title="Prints" />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4 h-full">
-                            <div className="flex flex-col justify-end">
-                                <FieldLabel text="Prints Available" valid={true} />
-                                <select value={formData.has_prints ? "yes" : "no"} onChange={e => setFormData({ ...formData, has_prints: e.target.value === "yes" })} className={inp}>
-                                    <option value="yes">Available</option>
-                                    <option value="no">Not Available</option>
-                                </select>
-                            </div>
-                            {formData.has_prints && (
-                                <div>
-                                    <FieldLabel text="Base Print Price ($)" required valid={Number(formData.base_print_price) > 0} />
-                                    <input type="number" value={formData.base_print_price || ""} onChange={e => setFormData({ ...formData, base_print_price: Number(e.target.value) })} className={inp} />
-                                </div>
-                            )}
+                        <FormSection title="Print Availability" />
+                        <p className="text-zinc-400 font-mono text-[10px] uppercase tracking-widest mb-4">
+                            Select which print formats are available. Pricing is configured in the Print Pricing tab.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {([
+                                { key: "has_canvas_print",          label: "Canvas Print" },
+                                { key: "has_canvas_print_limited",  label: "Canvas Print — Limited Edition" },
+                                { key: "has_paper_print",           label: "Paper Print" },
+                                { key: "has_paper_print_limited",   label: "Paper Print — Limited Edition" },
+                            ] as const).map(({ key, label }) => (
+                                <label key={key} className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-gray-100 hover:bg-zinc-50 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!formData[key]}
+                                        onChange={e => setFormData({ ...formData, [key]: e.target.checked })}
+                                        className="w-4 h-4 accent-[#31323E] cursor-pointer"
+                                    />
+                                    <span className="font-sans text-sm text-[#31323E]">{label}</span>
+                                </label>
+                            ))}
                         </div>
                     </div>
 

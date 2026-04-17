@@ -39,6 +39,9 @@ FULFILLMENT_TIMESTAMP_MAP: dict[str, str] = {
     FulfillmentStatus.DELIVERED: "delivered_at",
 }
 
+# Statuses where we suppress customer email (internal pipeline steps)
+_SILENT_FULFILLMENT_STATUSES = {"print_received", "packaging"}
+
 
 class OrderService(BaseService):
     """
@@ -127,9 +130,11 @@ class OrderService(BaseService):
                         ArtworkPatch(original_status="sold"), exclude_unset=True, id=artwork.id
                     )
 
-                elif item_data.edition_type == EditionType.PRINT:
-                    # Prints must be explicitly enabled for the artwork
-                    if not artwork.has_prints:
+                else:
+                    # Prints — verify the specific print type is enabled for this artwork.
+                    # EditionType.artwork_availability_flag maps type → model flag name.
+                    flag_name = item_data.edition_type.artwork_availability_flag
+                    if not getattr(artwork, flag_name, False):
                         raise PrintsSoldOutException()
 
                 # 3. Create the linked order item entry
@@ -330,6 +335,10 @@ class OrderService(BaseService):
                 new_status,
             )
 
+            # Load email template from DB *before* spawning a thread
+            # (DB session is async and cannot be used inside a sync thread).
+            subject_tpl, body_tpl = await self._load_fulfillment_template(new_status)
+
             # Send customer email notification in background thread
             # (synchronous SMTP wrapped to avoid blocking the event loop)
             self._fire_fulfillment_email(
@@ -340,6 +349,8 @@ class OrderService(BaseService):
                 tracking_number=resolved_tracking,
                 carrier=resolved_carrier,
                 tracking_url=auto_url or order.tracking_url,
+                subject_template=subject_tpl,
+                body_template=body_tpl,
             )
 
         except ObjectNotFoundException:
@@ -348,6 +359,29 @@ class OrderService(BaseService):
             logger.error("Failed to update fulfillment status for order {}: {}", order_id, e)
             await self.db.rollback()
             raise DatabaseException
+
+    async def _load_fulfillment_template(
+        self, fulfillment_status: str
+    ) -> tuple[str | None, str | None]:
+        """
+        Fetches subject and body templates for a given fulfillment status from the DB.
+        Returns (None, None) for silent/internal statuses or inactive templates.
+        """
+        if fulfillment_status in _SILENT_FULFILLMENT_STATUSES:
+            logger.debug(
+                "Suppressing customer email for internal status '{}'", fulfillment_status
+            )
+            return None, None
+
+        template = await self.db.email_templates.get_by_key(f"fulfillment_{fulfillment_status}")
+        if not template or not template.is_active:
+            logger.debug(
+                "Email template 'fulfillment_{}' not found or inactive — skipping.",
+                fulfillment_status,
+            )
+            return None, None
+
+        return template.subject, template.body
 
     def _fire_fulfillment_email(
         self,
@@ -358,10 +392,13 @@ class OrderService(BaseService):
         tracking_number: str | None,
         carrier: str | None,
         tracking_url: str | None,
+        subject_template: str | None,
+        body_template: str | None,
     ) -> None:
         """
         Sends a fulfillment notification email in a background thread.
-        Uses threading to avoid blocking the async event loop with SMTP I/O.
+        Template strings are pre-loaded from DB in async context and passed in
+        to avoid running async code inside a sync thread.
         """
         import threading
 
@@ -377,6 +414,8 @@ class OrderService(BaseService):
                 "tracking_number": tracking_number,
                 "carrier": carrier,
                 "tracking_url": tracking_url,
+                "subject_template": subject_template,
+                "body_template": body_template,
             },
             daemon=True,
         )
@@ -494,6 +533,7 @@ class OrderService(BaseService):
 
             # Notify customer when payment is confirmed
             if payment_status == "paid" and order.payment_status not in terminal_statuses:
+                subject_tpl, body_tpl = await self._load_fulfillment_template("confirmed")
                 self._fire_fulfillment_email(
                     order_id=order.id,
                     first_name=order.first_name,
@@ -502,6 +542,8 @@ class OrderService(BaseService):
                     tracking_number=None,
                     carrier=None,
                     tracking_url=None,
+                    subject_template=subject_tpl,
+                    body_template=body_tpl,
                 )
 
         except SQLAlchemyError as e:

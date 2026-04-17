@@ -10,7 +10,9 @@ from pydantic import BaseModel
 class SiteSettingsBase(BaseModel):
     """
     Base schema for site configuration.
-    Includes branding texts, image URLs, slideshow settings, and global print prices.
+    Includes branding texts, image URLs, and slideshow settings.
+
+    Note: Print pricing is managed separately via the /print-pricing API.
     """
 
     about_text: Optional[str] = None
@@ -33,7 +35,6 @@ class SiteSettingsBase(BaseModel):
     cover_3_mobile_url: Optional[str] = None
     hero_ken_burns_enabled: bool = True
     hero_slide_duration: int = 15
-    global_print_price: int = 150
 
 
 class SiteSettingsResponse(SiteSettingsBase):
