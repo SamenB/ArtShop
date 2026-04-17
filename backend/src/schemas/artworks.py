@@ -61,6 +61,12 @@ class ArtworkAddRequest(BaseModel):
     has_paper_print_limited: bool = Field(
         False, description="Limited edition paper print available"
     )
+    canvas_print_limited_quantity: int | None = Field(
+        None, description="Total number of prints in the canvas limited edition series (e.g. 30)"
+    )
+    paper_print_limited_quantity: int | None = Field(
+        None, description="Total number of prints in the paper limited edition series (e.g. 30)"
+    )
 
     labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
@@ -102,6 +108,8 @@ class ArtworkAdd(BaseModel):
     has_canvas_print_limited: bool = Field(False)
     has_paper_print: bool = Field(False)
     has_paper_print_limited: bool = Field(False)
+    canvas_print_limited_quantity: int | None = Field(None)
+    paper_print_limited_quantity: int | None = Field(None)
 
 
 class Artwork(ArtworkAdd):
@@ -159,6 +167,8 @@ class ArtworkPatchRequest(BaseModel):
     has_canvas_print_limited: bool | None = Field(None)
     has_paper_print: bool | None = Field(None)
     has_paper_print_limited: bool | None = Field(None)
+    canvas_print_limited_quantity: int | None = Field(None)
+    paper_print_limited_quantity: int | None = Field(None)
 
     labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
@@ -196,6 +206,8 @@ class ArtworkPatch(BaseModel):
     has_canvas_print_limited: bool | None = Field(None)
     has_paper_print: bool | None = Field(None)
     has_paper_print_limited: bool | None = Field(None)
+    canvas_print_limited_quantity: int | None = Field(None)
+    paper_print_limited_quantity: int | None = Field(None)
 
 
 class ArtworkAddBulk(BaseModel):
@@ -218,3 +230,5 @@ class ArtworkAddBulk(BaseModel):
     has_canvas_print_limited: bool = Field(False)
     has_paper_print: bool = Field(False)
     has_paper_print_limited: bool = Field(False)
+    canvas_print_limited_quantity: int | None = Field(None)
+    paper_print_limited_quantity: int | None = Field(None)

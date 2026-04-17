@@ -27,30 +27,90 @@ const COVER_FIELDS: { desktop: keyof SiteSettings; mobile: keyof SiteSettings }[
     { desktop: "cover_3_desktop_url", mobile: "cover_3_mobile_url" },
 ];
 
+// ── Shared Primitives ─────────────────────────────────────────────────────────
+
+const inp = "w-full bg-white border border-[#31323E]/15 rounded-lg px-4 py-3 text-sm font-medium text-[#31323E] focus:border-[#31323E]/50 focus:ring-2 focus:ring-[#31323E]/10 focus:outline-none placeholder-[#31323E]/30 transition-all shadow-sm";
+const labelCls = "block text-[10px] font-bold uppercase tracking-[0.18em] text-[#31323E]/50 mb-1.5";
+
+function SectionCard({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+    return (
+        <div className="bg-white border border-[#31323E]/10 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#31323E]/8 bg-[#FAFAF9]">
+                <h3 className="font-bold text-sm tracking-wide text-[#31323E]">{title}</h3>
+                {desc && <p className="text-xs text-[#31323E]/40 font-medium mt-0.5">{desc}</p>}
+            </div>
+            <div className="p-6 space-y-5">{children}</div>
+        </div>
+    );
+}
+
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div>
+            <label className={labelCls}>{label}</label>
+            {children}
+        </div>
+    );
+}
+
+function PhotoUploadSlot({
+    label,
+    url,
+    onUpload,
+    onRemove,
+}: {
+    label: string;
+    url: string | null;
+    onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onRemove: () => void;
+}) {
+    return (
+        <div>
+            <label className={labelCls}>{label}</label>
+            <div className="border border-dashed border-[#31323E]/20 rounded-xl p-4 text-center relative group transition-all hover:border-[#31323E]/40 bg-[#FAFAF9]">
+                {url && (
+                    <button
+                        type="button"
+                        onClick={onRemove}
+                        className="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg px-2.5 py-1 transition-all z-10 shadow-sm"
+                    >
+                        Remove
+                    </button>
+                )}
+                {url ? (
+                    <img src={getImageUrl(url)} alt={label} className="mx-auto mb-3 h-28 w-auto object-contain rounded-lg" />
+                ) : (
+                    <div className="h-28 mb-3 flex flex-col items-center justify-center text-[#31323E]/30 rounded-lg">
+                        <span className="text-3xl mb-2">📷</span>
+                        <span className="text-xs font-semibold uppercase tracking-wider">No image</span>
+                    </div>
+                )}
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={onUpload}
+                    className="text-[11px] font-medium text-[#31323E]/50 file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#31323E] file:text-white hover:file:bg-[#434455] file:transition-colors file:uppercase file:tracking-wider cursor-pointer"
+                />
+            </div>
+        </div>
+    );
+}
+
 export default function SettingsTab() {
     const [settings, setSettings] = useState<SiteSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
 
     const [cropperOpen, setCropperOpen] = useState(false);
     const [cropperImageSrc, setCropperImageSrc] = useState("");
     const [activeCoverSlot, setActiveCoverSlot] = useState<number>(0);
 
     useEffect(() => {
-        const url = `${getApiUrl()}/settings`;
-        apiFetch(url)
-            .then((res) => {
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                return res.json();
-            })
-            .then((data) => {
-                setSettings(data);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Settings fetch error:", err);
-                setLoading(false);
-            });
+        apiFetch(`${getApiUrl()}/settings`)
+            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+            .then(data => { setSettings(data); setLoading(false); })
+            .catch(() => setLoading(false));
     }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -61,24 +121,17 @@ export default function SettingsTab() {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: keyof SiteSettings) => {
         if (!e.target.files || !e.target.files[0]) return;
         const file = e.target.files[0];
-        
         const formData = new FormData();
         formData.append("file", file);
-        
         try {
-            const res = await apiFetch(`${getApiUrl()}/upload/image`, {
-                method: "POST",
-                body: formData,
-            });
+            const res = await apiFetch(`${getApiUrl()}/upload/image`, { method: "POST", body: formData });
             if (res.ok) {
                 const data = await res.json();
                 setSettings(prev => prev ? { ...prev, [fieldName]: data.url } : null);
             } else {
                 alert("Failed to upload image.");
             }
-        } catch (err) {
-            console.error("Upload error", err);
-        }
+        } catch (err) { console.error("Upload error", err); }
     };
 
     const handleBgFileSelect = (e: React.ChangeEvent<HTMLInputElement>, coverIndex: number) => {
@@ -95,43 +148,26 @@ export default function SettingsTab() {
     const handleSaveCrops = async (desktopBlob: Blob, mobileBlob: Blob) => {
         try {
             const fields = COVER_FIELDS[activeCoverSlot];
-
             const desktopForm = new FormData();
             desktopForm.append("file", desktopBlob, `cover_${activeCoverSlot + 1}_desktop.webp`);
-            const resDesktop = await apiFetch(`${getApiUrl()}/upload/image`, {
-                method: "POST", body: desktopForm,
-            });
+            const resDesktop = await apiFetch(`${getApiUrl()}/upload/image`, { method: "POST", body: desktopForm });
             const dData = await resDesktop.json();
 
             const mobileForm = new FormData();
             mobileForm.append("file", mobileBlob, `cover_${activeCoverSlot + 1}_mobile.webp`);
-            const resMobile = await apiFetch(`${getApiUrl()}/upload/image`, {
-                method: "POST", body: mobileForm,
-            });
+            const resMobile = await apiFetch(`${getApiUrl()}/upload/image`, { method: "POST", body: mobileForm });
             const mData = await resMobile.json();
 
-            setSettings(prev => prev ? { 
-                ...prev, 
-                [fields.desktop]: dData.url, 
-                [fields.mobile]: mData.url 
-            } : null);
+            setSettings(prev => prev ? { ...prev, [fields.desktop]: dData.url, [fields.mobile]: mData.url } : null);
             setCropperOpen(false);
-            
             URL.revokeObjectURL(cropperImageSrc);
             setCropperImageSrc("");
-        } catch (e) {
-            console.error(e);
-            alert("Upload failed");
-        }
+        } catch (e) { console.error(e); alert("Upload failed"); }
     };
 
     const handleRemoveCover = (coverIndex: number) => {
         const fields = COVER_FIELDS[coverIndex];
-        setSettings(prev => prev ? {
-            ...prev,
-            [fields.desktop]: null,
-            [fields.mobile]: null,
-        } : null);
+        setSettings(prev => prev ? { ...prev, [fields.desktop]: null, [fields.mobile]: null } : null);
     };
 
     const handleSave = async () => {
@@ -143,19 +179,18 @@ export default function SettingsTab() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(settings),
             });
-            if (res.ok) {
-                alert("Settings saved successfully!");
-            } else {
-                alert("Failed to save settings.");
-            }
-        } catch (err) {
-            console.error("Save error", err);
-        } finally {
-            setSaving(false);
-        }
+            if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+            else alert("Failed to save settings.");
+        } catch (err) { console.error("Save error", err); }
+        finally { setSaving(false); }
     };
 
-    if (loading || !settings) return <div className="text-zinc-500 font-sans text-sm tracking-wider animate-pulse">Loading settings...</div>;
+    if (loading || !settings) return (
+        <div className="flex items-center gap-3 py-10">
+            <div className="w-5 h-5 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
+            <span className="text-sm font-semibold text-[#31323E]/50 uppercase tracking-wider">Loading settings…</span>
+        </div>
+    );
 
     const coverSlots = COVER_FIELDS.map((fields, idx) => ({
         index: idx,
@@ -165,243 +200,184 @@ export default function SettingsTab() {
     }));
 
     const filledCount = coverSlots.filter(s => s.hasImage).length;
-    const inputClasses = "w-full bg-white border border-gray-300 rounded-md p-3.5 text-[#31323E] focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none placeholder-gray-400 font-sans transition-all text-sm";
-    const labelClasses = "block text-xs font-bold font-sans tracking-wider uppercase text-gray-600 mb-2";
 
     return (
-        <div className="space-y-10 max-w-3xl pb-12">
-            <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
-                <h2 className="text-3xl font-serif italic text-[#31323E]">Global Settings</h2>
-                <button 
-                    onClick={handleSave} 
+        <div className="space-y-8 max-w-3xl pb-12">
+            {/* Page Header */}
+            <div className="flex justify-between items-start pb-6 border-b border-[#31323E]/8">
+                <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-[#31323E] mb-1">Global Settings</h2>
+                    <p className="text-sm text-[#31323E]/50 font-medium">
+                        Core configuration, artist profile, and homepage appearance
+                    </p>
+                </div>
+                <button
+                    onClick={handleSave}
                     disabled={saving}
-                    className="bg-[#31323E] text-white px-6 py-2.5 rounded-full uppercase tracking-wider font-sans text-xs disabled:opacity-50 hover:bg-[#434455] transition-all font-bold shadow-sm"
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all shadow-sm disabled:opacity-50 ${
+                        saved ? "bg-emerald-500 text-white" : "bg-[#31323E] text-white hover:bg-[#434455]"
+                    }`}
                 >
-                    {saving ? "Saving..." : "Save Settings"}
+                    {saving ? "Saving…" : saved ? "✓ Saved" : "Save Settings"}
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-8">
-                    <div>
-                        <label className={labelClasses}>About The Artist</label>
-                        <textarea 
-                            name="about_text"
-                            value={settings.about_text || ""}
-                            onChange={handleChange}
-                            rows={6}
-                            className={`${inputClasses} font-serif text-base resize-y`}
-                            placeholder="Enter short bio..."
-                        />
-                    </div>
-
-                    <div>
-                        <label className={labelClasses}>Contact Email</label>
-                        <input 
-                            type="email"
-                            name="contact_email"
-                            value={settings.contact_email || ""}
-                            onChange={handleChange}
-                            className={inputClasses}
-                            placeholder="artist@example.com"
-                        />
-                    </div>
-
-                    <div>
-                        <label className={labelClasses}>Social Link Handle</label>
-                        <input 
-                            type="text"
-                            name="social_link"
-                            value={settings.social_link || ""}
-                            onChange={handleChange}
-                            className={inputClasses}
-                            placeholder="@artshop_studio"
-                        />
-                    </div>
-
-                    <div>
-                        <label className={labelClasses}>Studio Address</label>
-                        <textarea 
-                            name="studio_address"
-                            value={settings.studio_address || ""}
-                            onChange={handleChange}
-                            rows={3}
-                            className={`${inputClasses} resize-none`}
-                            placeholder={"Kiev, Ukraine\nBy appointment only"}
-                        />
-                    </div>
-                </div>
-
-                <div className="space-y-8 p-6 bg-gray-50 border border-gray-100 rounded-2xl h-fit">
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-4">
-                        <p className="font-mono text-[10px] uppercase tracking-widest text-blue-700 font-semibold mb-1">Print Pricing</p>
-                        <p className="font-mono text-xs text-blue-800">
-                            Print prices are now managed in the <strong>Print Pricing</strong> tab.
-                            Each print type (Canvas, Paper, Limited) has its own size → price grid.
-                        </p>
-                    </div>
-
-                    {/* Artist Photo (Home Page) */}
-                    <div>
-                        <label className={labelClasses}>Artist Photo (Home)</label>
-                        <div className="border border-gray-200 bg-white border-dashed rounded-xl p-4 text-center relative group transition-all hover:border-[#31323E]">
-                            {settings.artist_home_photo_url && (
-                                <button
-                                    onClick={() => setSettings(prev => prev ? { ...prev, artist_home_photo_url: null } : null)}
-                                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 shadow-sm text-white text-[10px] uppercase font-mono tracking-widest rounded px-2 py-1 transition-all z-10"
-                                >
-                                    Remove
-                                </button>
-                            )}
-                            {settings.artist_home_photo_url ? (
-                                <img src={getImageUrl(settings.artist_home_photo_url)} alt="Artist Home" className="mx-auto mb-4 h-32 w-auto object-contain rounded-md" />
-                            ) : (
-                                <div className="h-32 bg-gray-50/50 mb-4 flex items-center justify-center text-zinc-400 font-mono text-xs rounded-md border border-gray-100">No image</div>
-                            )}
-                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_home_photo_url")} className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-gray-100 file:text-[#31323E] hover:file:bg-gray-200 cursor-pointer" />
-                        </div>
-                    </div>
-
-                    {/* Artist Photo (About Page) */}
-                    <div>
-                        <label className={labelClasses}>Artist Photo (About)</label>
-                        <div className="border border-gray-200 bg-white border-dashed rounded-xl p-4 text-center relative group transition-all hover:border-[#31323E]">
-                            {settings.artist_about_photo_url && (
-                                <button
-                                    onClick={() => setSettings(prev => prev ? { ...prev, artist_about_photo_url: null } : null)}
-                                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 shadow-sm text-white text-[10px] uppercase font-mono tracking-widest rounded px-2 py-1 transition-all z-10"
-                                >
-                                    Remove
-                                </button>
-                            )}
-                            {settings.artist_about_photo_url ? (
-                                <img src={getImageUrl(settings.artist_about_photo_url)} alt="Artist About" className="mx-auto mb-4 h-32 w-auto object-contain rounded-md" />
-                            ) : (
-                                <div className="h-32 bg-gray-50/50 mb-4 flex items-center justify-center text-zinc-400 font-mono text-xs rounded-md border border-gray-100">No image</div>
-                            )}
-                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "artist_about_photo_url")} className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-gray-100 file:text-[#31323E] hover:file:bg-gray-200 cursor-pointer" />
-                        </div>
-                    </div>
-                </div>
+            {/* Info Banner */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-0.5">Print Pricing</p>
+                <p className="text-sm text-blue-700 font-medium">
+                    Print prices are now managed in the <span className="font-bold">Print Pricing</span> tab.
+                    Each print type has its own size → price grid.
+                </p>
             </div>
 
-            <div className="pt-8 border-t border-gray-100">
-                <label className="block text-sm font-bold font-sans tracking-wider uppercase text-[#31323E] mb-1">Hero Slideshow Covers (up to 3)</label>
-                <p className="text-xs text-gray-500 mb-6">Upload 1-3 images. Each is cropped for desktop (16:9) and mobile (9:16). Multiple images create an auto-rotating slideshow on the homepage.</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {coverSlots.map((slot) => (
-                        <div key={slot.index} className="border border-gray-200 bg-white rounded-xl p-5 shadow-sm hover:border-[#31323E] transition-colors">
-                            <div className="flex items-center justify-between mb-4">
-                                <span className="text-xs font-bold font-sans text-[#31323E] uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded">
-                                    Cover {slot.index + 1}
-                                    {slot.index === 0 && !slot.hasImage && " (Req)"}
+            {/* Artist Profile */}
+            <SectionCard title="Artist Profile" desc="Text and contact info used across the site">
+                <FieldGroup label="About the Artist">
+                    <textarea
+                        name="about_text"
+                        value={settings.about_text || ""}
+                        onChange={handleChange}
+                        rows={5}
+                        className={`${inp} resize-y leading-relaxed`}
+                        placeholder="Enter short bio…"
+                    />
+                </FieldGroup>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <FieldGroup label="Contact Email">
+                        <input type="email" name="contact_email" value={settings.contact_email || ""} onChange={handleChange} className={inp} placeholder="artist@example.com" />
+                    </FieldGroup>
+                    <FieldGroup label="Social Handle">
+                        <input type="text" name="social_link" value={settings.social_link || ""} onChange={handleChange} className={inp} placeholder="@artshop_studio" />
+                    </FieldGroup>
+                    <div className="md:col-span-2">
+                        <FieldGroup label="Studio Address">
+                            <textarea name="studio_address" value={settings.studio_address || ""} onChange={handleChange} rows={2} className={`${inp} resize-none`} placeholder={"Kiev, Ukraine\nBy appointment only"} />
+                        </FieldGroup>
+                    </div>
+                </div>
+            </SectionCard>
+
+            {/* Artist Photos */}
+            <SectionCard title="Artist Photos" desc="Appears on Homepage and About page">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <PhotoUploadSlot
+                        label="Homepage Photo"
+                        url={settings.artist_home_photo_url}
+                        onUpload={e => handleFileUpload(e, "artist_home_photo_url")}
+                        onRemove={() => setSettings(prev => prev ? { ...prev, artist_home_photo_url: null } : null)}
+                    />
+                    <PhotoUploadSlot
+                        label="About Page Photo"
+                        url={settings.artist_about_photo_url}
+                        onUpload={e => handleFileUpload(e, "artist_about_photo_url")}
+                        onRemove={() => setSettings(prev => prev ? { ...prev, artist_about_photo_url: null } : null)}
+                    />
+                </div>
+            </SectionCard>
+
+            {/* Hero Covers */}
+            <SectionCard title="Hero Slideshow Covers" desc="1–3 images for the homepage hero. Each is cropped for desktop (16:9) and mobile (9:16).">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {coverSlots.map(slot => (
+                        <div key={slot.index} className="border border-[#31323E]/10 rounded-xl overflow-hidden bg-white shadow-sm">
+                            <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAF9] border-b border-[#31323E]/8">
+                                <span className="text-xs font-bold text-[#31323E] uppercase tracking-wider">
+                                    Cover {slot.index + 1}{slot.index === 0 && !slot.hasImage && " (Required)"}
                                 </span>
                                 {slot.hasImage && (
-                                    <button
-                                        onClick={() => handleRemoveCover(slot.index)}
-                                        className="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white text-[10px] uppercase font-mono tracking-widest rounded px-2 py-1 transition-colors"
-                                    >
-                                        Delete
+                                    <button onClick={() => handleRemoveCover(slot.index)} className="text-red-400 hover:text-red-600 text-[10px] font-bold uppercase tracking-wider transition-colors">
+                                        Remove
                                     </button>
                                 )}
                             </div>
-
-                            {slot.hasImage ? (
-                                <div className="flex justify-center gap-4 mb-5">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase">Desktop</span>
-                                        {slot.desktopUrl ? (
-                                            <img src={getImageUrl(slot.desktopUrl)} alt={`Cover ${slot.index + 1} Desktop`} className="h-16 w-full object-cover border border-gray-200 rounded overflow-hidden" />
-                                        ) : (
-                                            <div className="h-16 w-full bg-gray-50 border border-gray-100 flex items-center justify-center text-zinc-400 font-mono text-[9px] rounded">None</div>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-col items-center gap-2">
-                                        <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase">Mobile</span>
-                                        {slot.mobileUrl ? (
-                                            <img src={getImageUrl(slot.mobileUrl)} alt={`Cover ${slot.index + 1} Mobile`} className="h-16 w-10 object-cover border border-gray-200 rounded overflow-hidden" />
-                                        ) : (
-                                            <div className="h-16 w-10 bg-gray-50 border border-gray-100 flex items-center justify-center text-zinc-400 font-mono text-[9px] rounded">—</div>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                /* Empty slot logic */
-                                (slot.index === 0 || coverSlots[slot.index - 1]?.hasImage) ? (
-                                    <div className="h-[92px] bg-gray-50 border border-gray-200 border-dashed rounded-lg flex flex-col items-center justify-center text-zinc-400 mb-5">
-                                        <span className="text-xl mb-1">+</span>
-                                        <span className="font-mono text-[9px] uppercase tracking-widest">No Image</span>
+                            <div className="p-4">
+                                {slot.hasImage ? (
+                                    <div className="flex gap-3 mb-4">
+                                        <div className="flex-1 flex flex-col items-center gap-1.5">
+                                            <span className="text-[9px] font-bold uppercase tracking-widest text-[#31323E]/40">Desktop</span>
+                                            {slot.desktopUrl
+                                                ? <img src={getImageUrl(slot.desktopUrl)} alt="" className="h-16 w-full object-cover rounded-lg border border-[#31323E]/10" />
+                                                : <div className="h-16 w-full bg-[#31323E]/5 rounded-lg flex items-center justify-center text-[#31323E]/20 text-xs">—</div>
+                                            }
+                                        </div>
+                                        <div className="w-12 flex flex-col items-center gap-1.5">
+                                            <span className="text-[9px] font-bold uppercase tracking-widest text-[#31323E]/40">Mobile</span>
+                                            {slot.mobileUrl
+                                                ? <img src={getImageUrl(slot.mobileUrl)} alt="" className="h-16 w-10 object-cover rounded-lg border border-[#31323E]/10" />
+                                                : <div className="h-16 w-10 bg-[#31323E]/5 rounded-lg flex items-center justify-center text-[#31323E]/20 text-xs">—</div>
+                                            }
+                                        </div>
                                     </div>
                                 ) : (
-                                    <div className="h-[92px] bg-gray-50/50 border border-gray-100 rounded-lg flex items-center justify-center text-zinc-300 font-mono text-[10px] mb-5 text-center px-4">
-                                        Upload cover {slot.index} first
+                                    <div className="h-24 mb-4 border border-dashed border-[#31323E]/15 rounded-lg flex flex-col items-center justify-center text-[#31323E]/25 bg-[#31323E]/2">
+                                        {slot.index === 0 || coverSlots[slot.index - 1]?.hasImage ? (
+                                            <>
+                                                <span className="text-2xl mb-1">+</span>
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider">No Image</span>
+                                            </>
+                                        ) : (
+                                            <span className="text-xs font-medium px-3 text-center">Add cover {slot.index} first</span>
+                                        )}
                                     </div>
-                                )
-                            )}
-
-                            {/* Upload button */}
-                            {(slot.index === 0 || coverSlots[slot.index - 1]?.hasImage) && (
-                                <div className="text-center">
-                                    <label className="cursor-pointer inline-block w-full bg-[#31323E] hover:bg-[#434455] text-white font-sans text-xs uppercase font-bold tracking-wider px-4 py-2.5 rounded transition-colors shadow-sm">
-                                        {slot.hasImage ? "Replace Image" : "Upload Image"}
-                                        <input type="file" accept="image/*" onChange={(e) => handleBgFileSelect(e, slot.index)} className="hidden" />
+                                )}
+                                {(slot.index === 0 || coverSlots[slot.index - 1]?.hasImage) && (
+                                    <label className="cursor-pointer flex items-center justify-center w-full bg-[#31323E] hover:bg-[#434455] text-white text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-lg transition-colors shadow-sm">
+                                        {slot.hasImage ? "Replace" : "Upload Image"}
+                                        <input type="file" accept="image/*" onChange={e => handleBgFileSelect(e, slot.index)} className="hidden" />
                                     </label>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     ))}
                 </div>
 
+                {/* Slideshow settings if multiple covers */}
                 {filledCount > 1 && (
-                    <div className="mt-8 p-6 bg-gray-50 border border-gray-200 rounded-xl">
-                        <h4 className="text-xs font-bold font-sans tracking-wider uppercase text-[#31323E] mb-4">Slideshow Settings</h4>
-                        
+                    <div className="border border-[#31323E]/10 rounded-xl p-5 bg-[#FAFAF9] space-y-5">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#31323E]">Slideshow Settings</h4>
                         <label className="flex items-start gap-3 cursor-pointer group">
                             <input
                                 type="checkbox"
                                 checked={settings.hero_ken_burns_enabled}
-                                onChange={(e) => setSettings(prev => prev ? { ...prev, hero_ken_burns_enabled: e.target.checked } : null)}
-                                className="mt-1 w-4 h-4 accent-black cursor-pointer"
+                                onChange={e => setSettings(prev => prev ? { ...prev, hero_ken_burns_enabled: e.target.checked } : null)}
+                                className="mt-0.5 w-4 h-4 accent-[#31323E] cursor-pointer rounded"
                             />
                             <div>
-                                <span className="text-[12px] font-bold text-[#31323E] uppercase tracking-widest">Ken Burns Effect</span>
-                                <p className="text-[11px] text-zinc-500 mt-1">Enable dramatic slow pan & zoom motion on hero covers</p>
+                                <span className="text-sm font-bold text-[#31323E]">Ken Burns Effect</span>
+                                <p className="text-xs text-[#31323E]/50 font-medium mt-0.5">Enable dramatic slow pan & zoom motion on hero covers</p>
                             </div>
                         </label>
-
-                        <div className="mt-6">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold font-sans text-[#31323E] uppercase tracking-wider">Slide Duration</span>
-                                <span className="text-xs font-sans font-bold text-[#31323E] px-2 py-1 bg-white border border-gray-200 rounded">{settings.hero_slide_duration}s</span>
+                        <div>
+                            <div className="flex items-center justify-between mb-2.5">
+                                <span className="text-xs font-bold uppercase tracking-wider text-[#31323E]">Slide Duration</span>
+                                <span className="text-sm font-bold text-[#31323E] bg-white px-3 py-1 rounded-lg border border-[#31323E]/15 shadow-sm">{settings.hero_slide_duration}s</span>
                             </div>
                             <input
-                                type="range"
-                                min={3}
-                                max={30}
-                                step={1}
+                                type="range" min={3} max={30} step={1}
                                 value={settings.hero_slide_duration}
-                                onChange={(e) => setSettings(prev => prev ? { ...prev, hero_slide_duration: parseInt(e.target.value) } : null)}
-                                className="w-full accent-black cursor-pointer h-1.5 bg-gray-200 rounded-lg appearance-none"
+                                onChange={e => setSettings(prev => prev ? { ...prev, hero_slide_duration: parseInt(e.target.value) } : null)}
+                                className="w-full accent-[#31323E] cursor-pointer h-1.5 bg-[#31323E]/15 rounded-full appearance-none"
                             />
-                            <div className="flex justify-between mt-2">
-                                <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-400">3s (Fast)</span>
-                                <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-400">30s (Slow)</span>
+                            <div className="flex justify-between mt-1.5">
+                                <span className="text-[10px] font-semibold text-[#31323E]/40 uppercase tracking-wider">3s (Fast)</span>
+                                <span className="text-[10px] font-semibold text-[#31323E]/40 uppercase tracking-wider">30s (Slow)</span>
                             </div>
                         </div>
                     </div>
                 )}
-            </div>
+            </SectionCard>
 
-            <div className="pt-6">
-                <button 
-                    onClick={handleSave} 
-                    disabled={saving}
-                    className="w-full bg-[#31323E] text-white rounded-lg py-4 uppercase tracking-[0.15em] font-sans text-sm font-bold disabled:opacity-50 hover:bg-[#434455] transition-colors shadow-lg shadow-black/10"
-                >
-                    {saving ? "Saving Changes..." : "Save All Settings"}
-                </button>
-            </div>
+            {/* Save All */}
+            <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-[0.15em] transition-colors shadow-md disabled:opacity-50 ${
+                    saved ? "bg-emerald-500 text-white" : "bg-[#31323E] text-white hover:bg-[#434455]"
+                }`}
+            >
+                {saving ? "Saving Changes…" : saved ? "✓ Settings Saved" : "Save All Settings"}
+            </button>
 
             {cropperOpen && (
                 <ImageCropperModal

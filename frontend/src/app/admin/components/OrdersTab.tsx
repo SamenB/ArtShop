@@ -2,12 +2,6 @@
 
 /**
  * Orders Management Tab — Two-Phase Lifecycle Dashboard.
- *
- * Architecture:
- * - Phase 1: Payment (auto-managed by Monobank webhook)
- * - Phase 2: Fulfillment (unlocks after payment confirmed)
- * - Confirmed step is auto-set by the server on payment success
- * - All status changes require confirmation dialogs
  */
 
 import { useState, useEffect } from "react";
@@ -16,26 +10,25 @@ import { getApiUrl, apiFetch, getImageUrl } from "@/utils";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PAYMENT_STATUSES = [
-    { value: "pending",          label: "Pending",         bg: "#fafafa",  border: "#e4e4e7", text: "#71717a", icon: "○" },
-    { value: "awaiting_payment", label: "Awaiting Bank",   bg: "#fefce8",  border: "#fde047", text: "#854d0e", icon: "⏳" },
-    { value: "processing",       label: "Processing",      bg: "#eff6ff",  border: "#93c5fd", text: "#1d4ed8", icon: "↻" },
-    { value: "hold",             label: "On Hold",         bg: "#f8fafc",  border: "#94a3b8", text: "#475569", icon: "⏸" },
-    { value: "paid",             label: "Paid",            bg: "#f0fdf4",  border: "#22c55e", text: "#15803d", icon: "✓" },
-    { value: "mock_paid",        label: "Mock Paid",       bg: "#f0fdf4",  border: "#86efac", text: "#15803d", icon: "✓" },
-    { value: "failed",           label: "Failed",          bg: "#fef2f2",  border: "#fca5a5", text: "#991b1b", icon: "✗" },
-    { value: "refunded",         label: "Refunded",        bg: "#faf5ff",  border: "#c4b5fd", text: "#6b21a8", icon: "↩" },
+    { value: "pending",            label: "Pending",       bg: "#F9F9F9", border: "#E4E4E7", text: "#71717A", icon: "○" },
+    { value: "awaiting_payment",   label: "Awaiting Bank", bg: "#FEFCE8", border: "#FDE047", text: "#854D0E", icon: "⏳" },
+    { value: "processing",         label: "Processing",    bg: "#EFF6FF", border: "#93C5FD", text: "#1D4ED8", icon: "↻" },
+    { value: "hold",               label: "On Hold",       bg: "#F8FAFC", border: "#94A3B8", text: "#475569", icon: "⏸" },
+    { value: "paid",               label: "Paid",          bg: "#F0FDF4", border: "#22C55E", text: "#15803D", icon: "✓" },
+    { value: "mock_paid",          label: "Mock Paid",     bg: "#F0FDF4", border: "#86EFAC", text: "#15803D", icon: "✓" },
+    { value: "failed",             label: "Failed",        bg: "#FEF2F2", border: "#FCA5A5", text: "#991B1B", icon: "✗" },
+    { value: "refunded",           label: "Refunded",      bg: "#FAF5FF", border: "#C4B5FD", text: "#6B21A8", icon: "↩" },
 ];
 
 const PAYMENT_STATUS_MAP = Object.fromEntries(PAYMENT_STATUSES.map(s => [s.value, s]));
 
-// Full pipeline including auto-confirmed checkpoint
 const FULFILLMENT_STEPS = [
-    { value: "confirmed",      label: "Confirmed",      icon: "✓",  auto: true,  desc: "Auto-set when payment received" },
-    { value: "print_ordered",  label: "Print Ordered",  icon: "🖨", auto: false, desc: "Sent to print studio" },
-    { value: "print_received", label: "Print Received", icon: "📦", auto: false, desc: "Artwork back from studio" },
-    { value: "packaging",      label: "Packaging",      icon: "📦", auto: false, desc: "Preparing parcel" },
-    { value: "shipped",        label: "Shipped",        icon: "🚀", auto: false, desc: "Dispatched with TTN" },
-    { value: "delivered",      label: "Delivered",      icon: "✓",  auto: false, desc: "Received by buyer" },
+    { value: "confirmed",       label: "Confirmed",     icon: "✓",  auto: true,  desc: "Auto-set when payment received" },
+    { value: "print_ordered",   label: "Print Ordered", icon: "🖨", auto: false, desc: "Sent to print studio" },
+    { value: "print_received",  label: "Print Received",icon: "📦", auto: false, desc: "Artwork back from studio" },
+    { value: "packaging",       label: "Packaging",     icon: "📦", auto: false, desc: "Preparing parcel" },
+    { value: "shipped",         label: "Shipped",       icon: "🚀", auto: false, desc: "Dispatched with TTN" },
+    { value: "delivered",       label: "Delivered",     icon: "✓",  auto: false, desc: "Received by buyer" },
 ];
 
 const FULFILLMENT_STEP_VALUES = FULFILLMENT_STEPS.map(s => s.value);
@@ -51,21 +44,25 @@ const CARRIERS = [
 
 const PAID_STATUSES = new Set(["paid", "mock_paid"]);
 
+// ── Shared Input Styles ───────────────────────────────────────────────────────
+
+const inputCls = "w-full bg-white border border-[#31323E]/15 rounded-lg px-3 py-2 text-sm font-medium text-[#31323E] focus:outline-none focus:border-[#31323E]/50 focus:ring-2 focus:ring-[#31323E]/10 placeholder-[#31323E]/30 transition-all";
+
 // ── Tiny helpers ──────────────────────────────────────────────────────────────
 
 function SectionLabel({ text }: { text: string }) {
     return (
-        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-400 mb-3 leading-none">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#31323E]/40 mb-2.5 leading-none">
             {text}
         </p>
     );
 }
 
 function PaymentBadge({ status, size = "sm" }: { status: string; size?: "sm" | "lg" }) {
-    const cfg = PAYMENT_STATUS_MAP[status] || { bg: "#fafafa", border: "#e4e4e7", text: "#71717a", label: status, icon: "?" };
+    const cfg = PAYMENT_STATUS_MAP[status] || { bg: "#F9F9F9", border: "#E4E4E7", text: "#71717A", label: status, icon: "?" };
     const cls = size === "lg"
-        ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider border-2"
-        : "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border";
+        ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border-2"
+        : "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border";
     return (
         <span className={cls} style={{ backgroundColor: cfg.bg, borderColor: cfg.border, color: cfg.text }}>
             {cfg.icon} {cfg.label}
@@ -74,17 +71,12 @@ function PaymentBadge({ status, size = "sm" }: { status: string; size?: "sm" | "
 }
 
 function FulfillmentBadge({ status }: { status: string }) {
-    const step = FULFILLMENT_STEPS.find(s => s.value === status);
-    const isCancelled = status === "cancelled";
-    if (isCancelled) {
-        return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border bg-red-50 border-red-200 text-red-600">
-                ✗ Cancelled
-            </span>
-        );
+    if (status === "cancelled") {
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-red-50 border border-red-200 text-red-600">✗ Cancelled</span>;
     }
+    const step = FULFILLMENT_STEPS.find(s => s.value === status);
     return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border bg-zinc-50 border-zinc-200 text-zinc-600">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#31323E]/5 border border-[#31323E]/15 text-[#31323E]">
             {step?.icon || "○"} {step?.label || status}
         </span>
     );
@@ -92,11 +84,7 @@ function FulfillmentBadge({ status }: { status: string }) {
 
 // ── Phase 1: Payment ──────────────────────────────────────────────────────────
 
-function PaymentPhase({
-    order,
-    onPaymentOverride,
-    overrideSaving,
-}: {
+function PaymentPhase({ order, onPaymentOverride, overrideSaving }: {
     order: any;
     onPaymentOverride: (status: string) => void;
     overrideSaving: boolean;
@@ -109,105 +97,67 @@ function PaymentPhase({
     const isAwaitingOrProcessing = ["awaiting_payment", "processing", "hold"].includes(order.payment_status);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {/* Status display */}
-            <div
-                className="p-4 rounded-xl border-2 flex items-start gap-4"
-                style={{ backgroundColor: cfg.bg, borderColor: cfg.border }}
-            >
-                <span className="text-2xl flex-shrink-0 mt-0.5" style={{ color: cfg.text }}>
-                    {cfg.icon}
-                </span>
+            <div className="p-4 rounded-xl border-2 flex items-start gap-3" style={{ backgroundColor: cfg.bg, borderColor: cfg.border }}>
+                <span className="text-xl flex-shrink-0 mt-0.5" style={{ color: cfg.text }}>{cfg.icon}</span>
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm" style={{ color: cfg.text }}>{cfg.label}</p>
-                    {isPaid && (
-                        <p className="text-[11px] text-green-700 mt-0.5">Payment confirmed by Monobank ✓</p>
-                    )}
-                    {isAwaitingOrProcessing && (
-                        <p className="text-[11px] text-amber-700 mt-0.5">Waiting for bank confirmation — server is listening</p>
-                    )}
-                    {order.payment_status === "failed" && (
-                        <p className="text-[11px] text-red-700 mt-0.5">Payment declined — fulfillment auto-cancelled</p>
-                    )}
-                    {order.payment_status === "refunded" && (
-                        <p className="text-[11px] text-purple-700 mt-0.5">Payment reversed — fulfillment auto-cancelled</p>
-                    )}
-                    {order.payment_status === "pending" && (
-                        <p className="text-[11px] text-zinc-500 mt-0.5">Payment session not yet initiated</p>
-                    )}
+                    {isPaid && <p className="text-[11px] text-emerald-700 mt-0.5 font-medium">Payment confirmed by Monobank ✓</p>}
+                    {isAwaitingOrProcessing && <p className="text-[11px] text-amber-700 mt-0.5 font-medium">Waiting for bank confirmation</p>}
+                    {order.payment_status === "failed" && <p className="text-[11px] text-red-700 mt-0.5 font-medium">Payment declined — fulfillment auto-cancelled</p>}
+                    {order.payment_status === "refunded" && <p className="text-[11px] text-purple-700 mt-0.5 font-medium">Payment reversed — fulfillment auto-cancelled</p>}
+                    {order.payment_status === "pending" && <p className="text-[11px] text-[#31323E]/50 mt-0.5 font-medium">Payment session not yet initiated</p>}
                 </div>
-                {/* Auto badge */}
-                <span className="flex-shrink-0 text-[8px] uppercase tracking-wider font-bold bg-white/60 border border-current/20 px-1.5 py-0.5 rounded" style={{ color: cfg.text }}>
-                    Auto
-                </span>
+                <span className="flex-shrink-0 text-[9px] uppercase tracking-wider font-bold bg-white/60 border border-current/20 px-2 py-0.5 rounded-full" style={{ color: cfg.text }}>Auto</span>
             </div>
 
             {/* Invoice info */}
             {order.invoice_id && (
-                <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-3 space-y-1.5">
-                    <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-400">Monobank Invoice</p>
-                    <p className="font-mono text-[10px] text-zinc-500 truncate">{order.invoice_id}</p>
+                <div className="bg-white border border-[#31323E]/10 rounded-xl p-3.5 space-y-1.5">
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-[#31323E]/40">Monobank Invoice</p>
+                    <p className="text-[11px] font-mono font-semibold text-[#31323E] truncate">{order.invoice_id}</p>
                     {order.payment_url && (
-                        <a
-                            href={order.payment_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-1"
-                        >
+                        <a href={order.payment_url} target="_blank" rel="noopener noreferrer"
+                            className="text-[11px] text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-1 font-medium">
                             Payment URL →
                         </a>
                     )}
                 </div>
             )}
 
-            {/* Manual override — danger zone */}
+            {/* Manual override */}
             <div className="border border-amber-200 rounded-xl overflow-hidden">
                 <button
                     onClick={() => setShowOverride(!showOverride)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-amber-50 hover:bg-amber-100 transition-colors"
                 >
                     <div className="flex items-center gap-2">
-                        <span className="text-amber-600 text-sm">⚠️</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                            Manual Payment Override
-                        </span>
+                        <span className="text-amber-500 text-sm">⚠️</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Manual Payment Override</span>
                     </div>
-                    <svg
-                        width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                        className={`text-amber-500 transition-transform ${showOverride ? "rotate-180" : ""}`}
-                    >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        className={`text-amber-400 transition-transform ${showOverride ? "rotate-180" : ""}`}>
                         <path d="M6 9l6 6 6-6" />
                     </svg>
                 </button>
 
                 {showOverride && (
-                    <div className="px-4 pb-4 pt-3 bg-amber-50/50 space-y-3">
-                        <div className="bg-amber-100 border border-amber-300 rounded-lg p-3">
+                    <div className="px-4 pb-4 pt-3 bg-white space-y-3">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                             <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">⚠️ Not recommended</p>
                             <p className="text-[11px] text-amber-700 leading-relaxed">
                                 Payment status is automatically managed by the Monobank webhook.
-                                Manual changes may conflict with bank data. Only use this if payment was received outside the payment system (e.g. bank transfer, cash).
+                                Only use this if payment was received outside the system (bank transfer, cash).
                             </p>
                         </div>
                         <div className="space-y-2">
-                            <p className="text-[9px] uppercase tracking-wider font-bold text-zinc-500">Force Payment Status</p>
+                            <p className="text-[9px] uppercase tracking-wider font-bold text-[#31323E]/50">Force Payment Status</p>
                             <div className="grid grid-cols-2 gap-1.5">
                                 {PAYMENT_STATUSES.map(s => (
-                                    <button
-                                        key={s.value}
-                                        onClick={() => setSelectedStatus(s.value)}
-                                        className={`px-3 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider border-2 transition-all text-left flex items-center gap-1.5 ${
-                                            selectedStatus === s.value
-                                                ? "ring-2 ring-offset-1 ring-zinc-800"
-                                                : "opacity-60 hover:opacity-100"
-                                        }`}
-                                        style={{
-                                            backgroundColor: s.bg,
-                                            borderColor: selectedStatus === s.value ? s.border : "#e4e4e7",
-                                            color: s.text,
-                                        }}
-                                    >
+                                    <button key={s.value} onClick={() => setSelectedStatus(s.value)}
+                                        className={`px-3 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider border-2 transition-all text-left flex items-center gap-1.5 ${selectedStatus === s.value ? "ring-2 ring-offset-1 ring-[#31323E]" : "opacity-60 hover:opacity-100"}`}
+                                        style={{ backgroundColor: s.bg, borderColor: selectedStatus === s.value ? s.border : "#E4E4E7", color: s.text }}>
                                         {s.icon} {s.label}
                                     </button>
                                 ))}
@@ -215,16 +165,14 @@ function PaymentPhase({
                             <button
                                 onClick={() => {
                                     if (selectedStatus === order.payment_status) return;
-                                    if (!window.confirm(
-                                        `⚠️ Force payment status to "${selectedStatus}"?\n\nThis overrides the Monobank webhook data. Only do this if you have received payment outside the system.`
-                                    )) return;
+                                    if (!window.confirm(`⚠️ Force payment status to "${selectedStatus}"?\n\nThis overrides the Monobank webhook data.`)) return;
                                     onPaymentOverride(selectedStatus);
                                     setShowOverride(false);
                                 }}
                                 disabled={overrideSaving || selectedStatus === order.payment_status}
-                                className="w-full py-2.5 bg-amber-700 hover:bg-amber-800 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="w-full py-2.5 bg-amber-700 hover:bg-amber-800 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all disabled:opacity-40"
                             >
-                                {overrideSaving ? "Saving..." : "Apply Override"}
+                                {overrideSaving ? "Saving…" : "Apply Override"}
                             </button>
                         </div>
                     </div>
@@ -236,11 +184,7 @@ function PaymentPhase({
 
 // ── Phase 2: Fulfillment ──────────────────────────────────────────────────────
 
-function FulfillmentPhase({
-    order,
-    onStatusChange,
-    saving,
-}: {
+function FulfillmentPhase({ order, onStatusChange, saving }: {
     order: any;
     onStatusChange: (status: string, extra?: { tracking_number?: string; carrier?: string; notes?: string }) => void;
     saving: boolean;
@@ -257,9 +201,6 @@ function FulfillmentPhase({
         ? FULFILLMENT_STEPS[currentIdx + 1]
         : null;
 
-    const inputCls = "w-full bg-white border border-zinc-200 px-3 py-2 text-[12px] font-sans text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-700 rounded-lg";
-    const selectCls = `${inputCls} cursor-pointer`;
-
     const handleAdvance = () => {
         if (!nextStep) return;
         if (nextStep.value === "shipped") { setShowShipping(true); return; }
@@ -269,39 +210,27 @@ function FulfillmentPhase({
 
     const handleConfirmShip = () => {
         if (!window.confirm(`Mark order as Shipped with carrier "${CARRIERS.find(c => c.value === carrier)?.label}"?`)) return;
-        onStatusChange("shipped", {
-            tracking_number: trackingNum || undefined,
-            carrier: carrier || undefined,
-            notes: notes || undefined,
-        });
+        onStatusChange("shipped", { tracking_number: trackingNum || undefined, carrier: carrier || undefined, notes: notes || undefined });
         setShowShipping(false);
     };
 
-    // Not paid yet — locked
     if (!isPaid && !isCancelled) {
         return (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 p-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-400">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                </div>
-                <p className="font-bold text-zinc-400 text-sm mb-1">Fulfillment Locked</p>
-                <p className="text-[11px] text-zinc-300 leading-relaxed">
-                    Awaiting payment confirmation.<br />
-                    Will unlock automatically when Monobank confirms payment.
+            <div className="rounded-xl border-2 border-dashed border-[#31323E]/10 p-6 text-center bg-[#31323E]/2">
+                <div className="text-3xl mb-2">🔒</div>
+                <p className="font-bold text-[#31323E] text-sm mb-1">Fulfillment Locked</p>
+                <p className="text-xs text-[#31323E]/40 font-medium leading-relaxed">
+                    Awaiting payment confirmation.<br />Unlocks automatically when Monobank confirms.
                 </p>
             </div>
         );
     }
 
-    // Cancelled
     if (isCancelled) {
         return (
             <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
-                <p className="text-red-500 text-sm font-bold mb-1">✗ Order Cancelled</p>
-                <p className="text-[11px] text-red-400">
+                <p className="text-red-600 text-sm font-bold mb-1">✗ Order Cancelled</p>
+                <p className="text-xs text-red-500 font-medium">
                     {order.payment_status === "failed" || order.payment_status === "refunded"
                         ? "Auto-cancelled due to payment failure. Original artwork released back to inventory."
                         : "This order has been cancelled."}
@@ -311,8 +240,7 @@ function FulfillmentPhase({
     }
 
     return (
-        <div className="space-y-5">
-
+        <div className="space-y-4">
             {/* Pipeline steps rail */}
             <div>
                 <SectionLabel text="Fulfillment Steps" />
@@ -324,8 +252,7 @@ function FulfillmentPhase({
                         const isClickable = !step.auto && !saving;
 
                         return (
-                            <button
-                                key={step.value}
+                            <button key={step.value}
                                 onClick={() => {
                                     if (!isClickable) return;
                                     if (step.value === "shipped") { setShowShipping(true); return; }
@@ -334,48 +261,29 @@ function FulfillmentPhase({
                                 }}
                                 disabled={saving || step.auto}
                                 title={step.auto ? `Auto-set: ${step.desc}` : step.desc}
-                                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border-2 text-left transition-all ${
-                                    isCurrent
-                                        ? "shadow-md"
-                                        : isPast
-                                        ? "opacity-80 hover:opacity-100"
-                                        : "opacity-35 hover:opacity-60"
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                                    isCurrent ? "shadow-sm" : isPast ? "opacity-80 hover:opacity-100" : "opacity-30 hover:opacity-50"
                                 } ${isClickable && !isCurrent ? "cursor-pointer" : "cursor-default"}`}
                                 style={{
-                                    backgroundColor: isCurrent
-                                        ? "#fff"
-                                        : isPast ? "#f8fafc" : "#fff",
-                                    borderColor: isCurrent
-                                        ? "#1d1d1d"
-                                        : isPast ? "#a1a1aa" : "#e4e4e7",
-                                    color: isCurrent ? "#1d1d1d" : isPast ? "#52525b" : "#a1a1aa",
+                                    backgroundColor: isCurrent ? "#fff" : isPast ? "#F8FAFC" : "#fff",
+                                    borderColor: isCurrent ? "#31323E" : isPast ? "#A1A1AA" : "#E4E4E7",
+                                    color: isCurrent ? "#31323E" : isPast ? "#52525B" : "#A1A1AA",
                                 }}
                             >
-                                {/* Step indicator */}
-                                <span
-                                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 border-2 ${
-                                        isCurrent ? "bg-[#31323E] text-white border-[#31323E]"
-                                        : isPast ? "bg-zinc-100 text-zinc-600 border-zinc-400"
-                                        : "bg-white text-zinc-300 border-zinc-200"
-                                    }`}
-                                >
+                                <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 border-2 ${
+                                    isCurrent ? "bg-[#31323E] text-white border-[#31323E]"
+                                    : isPast ? "bg-white text-[#31323E] border-[#A1A1AA]"
+                                    : "bg-white text-[#D4D4D8] border-[#E4E4E7]"
+                                }`}>
                                     {isPast ? "✓" : idx + 1}
                                 </span>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                         <span className="text-[12px] font-bold">{step.icon} {step.label}</span>
-                                        {step.auto && (
-                                            <span className="text-[8px] uppercase tracking-wider font-bold bg-blue-50 text-blue-500 border border-blue-200 px-1.5 py-0.5 rounded">
-                                                Auto
-                                            </span>
-                                        )}
-                                        {isCurrent && (
-                                            <span className="text-[8px] uppercase tracking-wider font-bold bg-[#31323E] text-white px-1.5 py-0.5 rounded">
-                                                Current
-                                            </span>
-                                        )}
+                                        {step.auto && <span className="text-[8px] uppercase tracking-wider font-bold bg-blue-50 text-blue-500 border border-blue-100 px-1.5 py-0.5 rounded-full">Auto</span>}
+                                        {isCurrent && <span className="text-[8px] uppercase tracking-wider font-bold bg-[#31323E] text-white px-1.5 py-0.5 rounded-full">Current</span>}
                                     </div>
-                                    <p className="text-[10px] opacity-70 mt-0.5">{step.desc}</p>
+                                    <p className="text-[10px] opacity-60 mt-0.5 font-medium">{step.desc}</p>
                                 </div>
                             </button>
                         );
@@ -385,63 +293,46 @@ function FulfillmentPhase({
 
             {/* Quick advance */}
             {nextStep && !showShipping && (
-                <button
-                    onClick={handleAdvance}
-                    disabled={saving}
-                    className="w-full py-3 bg-[#31323E] text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-lg hover:bg-[#31323E] transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-                >
-                    {saving ? "Updating..." : `→ Advance to: ${nextStep.label}`}
+                <button onClick={handleAdvance} disabled={saving}
+                    className="w-full py-3 bg-[#31323E] text-white text-[11px] font-bold uppercase tracking-wider rounded-xl hover:bg-[#434455] transition-all shadow-sm disabled:opacity-50">
+                    {saving ? "Updating…" : `→ Advance to: ${nextStep.label}`}
                 </button>
             )}
 
             {/* Shipping input panel */}
             {showShipping && (
-                <div className="p-4 bg-white border-2 border-zinc-200 rounded-xl space-y-3">
+                <div className="p-4 bg-white border-2 border-[#31323E]/15 rounded-xl space-y-3">
                     <SectionLabel text="Shipping Details" />
-                    <select value={carrier} onChange={e => setCarrier(e.target.value)} className={selectCls}>
+                    <select value={carrier} onChange={e => setCarrier(e.target.value)} className={inputCls}>
                         {CARRIERS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                         <option value="">Other / Manual</option>
                     </select>
-                    <input
-                        value={trackingNum}
-                        onChange={e => setTrackingNum(e.target.value)}
-                        placeholder="Tracking / TTN number"
-                        className={inputCls}
-                    />
+                    <input value={trackingNum} onChange={e => setTrackingNum(e.target.value)} placeholder="Tracking / TTN number" className={inputCls} />
                     <div className="flex gap-2">
-                        <button
-                            onClick={handleConfirmShip}
-                            disabled={saving}
-                            className="flex-1 py-2.5 bg-green-700 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-green-800 transition-all"
-                        >
-                            {saving ? "Saving..." : "🚀 Mark as Shipped"}
+                        <button onClick={handleConfirmShip} disabled={saving}
+                            className="flex-1 py-2.5 bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all shadow-sm">
+                            {saving ? "Saving…" : "🚀 Mark as Shipped"}
                         </button>
-                        <button
-                            onClick={() => setShowShipping(false)}
-                            className="px-4 py-2.5 border border-zinc-200 text-zinc-400 text-[10px] font-bold rounded-lg hover:bg-zinc-50"
-                        >
+                        <button onClick={() => setShowShipping(false)}
+                            className="px-4 py-2.5 border border-[#31323E]/15 text-[#31323E] text-[10px] font-bold rounded-lg hover:bg-[#31323E]/5 transition-colors">
                             Cancel
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* Tracking info (when already shipped) */}
+            {/* Tracking info */}
             {order.fulfillment_status === "shipped" && order.tracking_number && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-xl">
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl">
                     <SectionLabel text="Tracking Info" />
-                    <p className="text-[12px] text-zinc-700 font-medium">
+                    <p className="text-sm text-emerald-800 font-semibold">
                         {CARRIERS.find(c => c.value === order.carrier)?.label || order.carrier}
                         {" · "}
-                        <span className="font-mono font-bold">{order.tracking_number}</span>
+                        <span className="font-bold font-mono">{order.tracking_number}</span>
                     </p>
                     {order.tracking_url && (
-                        <a
-                            href={order.tracking_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-green-700 underline hover:text-green-900 mt-1.5 inline-block"
-                        >
+                        <a href={order.tracking_url} target="_blank" rel="noopener noreferrer"
+                            className="text-[11px] text-emerald-700 underline hover:text-emerald-900 mt-1.5 inline-block font-medium">
                             Track Parcel →
                         </a>
                     )}
@@ -456,7 +347,7 @@ function FulfillmentPhase({
                         onStatusChange("cancelled");
                     }}
                     disabled={saving}
-                    className="w-full text-[9px] uppercase tracking-widest font-bold text-red-300 hover:text-red-600 transition-colors py-1"
+                    className="w-full text-[10px] uppercase tracking-widest font-bold text-red-300 hover:text-red-600 transition-colors py-1.5"
                 >
                     Cancel Order
                 </button>
@@ -481,14 +372,13 @@ function FulfillmentPhase({
 
 function OrderTimeline({ order }: { order: any }) {
     const steps = [
-        { key: "created_at",        label: "Order Placed",   icon: "🛒" },
+        { key: "created_at",        label: "Order Placed",        icon: "🛒" },
         { key: "confirmed_at",      label: "Payment & Confirmed", icon: "✓" },
-        { key: "print_ordered_at",  label: "Print Ordered",  icon: "🖨" },
-        { key: "print_received_at", label: "Print Received", icon: "📦" },
-        { key: "shipped_at",        label: "Shipped",        icon: "🚀" },
-        { key: "delivered_at",      label: "Delivered",      icon: "🎨" },
+        { key: "print_ordered_at",  label: "Print Ordered",       icon: "🖨" },
+        { key: "print_received_at", label: "Print Received",      icon: "📦" },
+        { key: "shipped_at",        label: "Shipped",             icon: "🚀" },
+        { key: "delivered_at",      label: "Delivered",           icon: "🎨" },
     ];
-
     const activeSteps = steps.filter(s => order[s.key]);
     if (activeSteps.length === 0) return null;
 
@@ -496,17 +386,16 @@ function OrderTimeline({ order }: { order: any }) {
         <div>
             <SectionLabel text="Order Timeline" />
             <div className="relative pl-6 space-y-4">
-                {/* Vertical line */}
-                <div className="absolute left-[9px] top-1 bottom-1 w-px bg-zinc-100" />
+                <div className="absolute left-[9px] top-1 bottom-1 w-px bg-[#31323E]/10" />
                 {steps.map(step => {
                     const ts = order[step.key];
                     if (!ts) return null;
                     return (
                         <div key={step.key} className="relative flex items-start gap-3">
-                            <div className="absolute -left-6 w-4 h-4 rounded-full bg-white border-2 border-zinc-300 flex items-center justify-center text-[8px] flex-shrink-0 mt-0.5" />
+                            <div className="absolute -left-6 w-4 h-4 rounded-full bg-white border-2 border-[#31323E]/25 flex items-center justify-center text-[8px] flex-shrink-0 mt-0.5" />
                             <div>
-                                <p className="text-[11px] font-bold text-zinc-800">{step.label}</p>
-                                <p className="text-[10px] text-zinc-400 font-sans">
+                                <p className="text-[11px] font-bold text-[#31323E]">{step.label}</p>
+                                <p className="text-[10px] text-[#31323E]/50 font-medium">
                                     {new Date(ts).toLocaleString("en-GB", {
                                         day: "2-digit", month: "short", year: "numeric",
                                         hour: "2-digit", minute: "2-digit",
@@ -542,56 +431,36 @@ export default function OrdersTab() {
         try {
             const res = await apiFetch(`${getApiUrl()}/orders`);
             if (res.ok) setOrders(await res.json());
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
     };
 
     useEffect(() => { fetchOrders(); }, []);
 
-    // ── Handlers ──────────────────────────────────────────────────────────────
-
-    const handleFulfillmentChange = async (
-        orderId: number,
-        status: string,
-        extra?: { tracking_number?: string; carrier?: string; notes?: string }
-    ) => {
+    const handleFulfillmentChange = async (orderId: number, status: string, extra?: { tracking_number?: string; carrier?: string; notes?: string }) => {
         setFulfillmentSaving(orderId);
         try {
             const body: any = { fulfillment_status: status };
             if (extra?.tracking_number) body.tracking_number = extra.tracking_number;
             if (extra?.carrier) body.carrier = extra.carrier;
             if (extra?.notes) body.notes = extra.notes;
-
             const res = await apiFetch(`${getApiUrl()}/orders/${orderId}/fulfillment`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
+                method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
             });
             if (res.ok) await fetchOrders();
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setFulfillmentSaving(null);
-        }
+        } catch (e) { console.error(e); }
+        finally { setFulfillmentSaving(null); }
     };
 
     const handlePaymentOverride = async (orderId: number, payment_status: string) => {
         setPaymentSaving(orderId);
         try {
             const res = await apiFetch(`${getApiUrl()}/orders/${orderId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ payment_status }),
+                method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payment_status }),
             });
             if (res.ok) await fetchOrders();
-        } catch (e) {
-            console.error("Payment override failed:", e);
-        } finally {
-            setPaymentSaving(null);
-        }
+        } catch (e) { console.error("Payment override failed:", e); }
+        finally { setPaymentSaving(null); }
     };
 
     const handlePatch = async () => {
@@ -599,16 +468,11 @@ export default function OrdersTab() {
         setSaving(true);
         try {
             const res = await apiFetch(`${getApiUrl()}/orders/${editData.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(editData),
+                method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData),
             });
             if (res.ok) { await fetchOrders(); setIsEditing(null); setEditData(null); }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setSaving(false);
-        }
+        } catch (e) { console.error(e); }
+        finally { setSaving(false); }
     };
 
     const handleDelete = async (id: number) => {
@@ -617,120 +481,107 @@ export default function OrdersTab() {
             await apiFetch(`${getApiUrl()}/orders/${id}`, { method: "DELETE" });
             setOrders(orders.filter(o => o.id !== id));
             if (expandedId === id) setExpandedId(null);
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) { console.error(e); }
     };
 
-    // ── Filtering ─────────────────────────────────────────────────────────────
-
-    const sortedOrders = [...orders].sort((a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    const sortedOrders = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const filteredOrders = (() => {
-        if (mainTab === "active") {
-            return sortedOrders.filter(o => !["delivered", "cancelled"].includes(o.fulfillment_status));
-        }
-        if (mainTab === "completed") {
-            return sortedOrders.filter(o => ["delivered", "cancelled"].includes(o.fulfillment_status));
-        }
+        if (mainTab === "active") return sortedOrders.filter(o => !["delivered", "cancelled"].includes(o.fulfillment_status));
+        if (mainTab === "completed") return sortedOrders.filter(o => ["delivered", "cancelled"].includes(o.fulfillment_status));
         if (statusFilter === "all") return sortedOrders;
-        return sortedOrders.filter(o =>
-            filterType === "payment"
-                ? o.payment_status === statusFilter
-                : o.fulfillment_status === statusFilter
-        );
+        return sortedOrders.filter(o => filterType === "payment" ? o.payment_status === statusFilter : o.fulfillment_status === statusFilter);
     })();
-
-    const inputClasses = "w-full bg-zinc-50 border border-zinc-200 p-2.5 text-sm font-sans text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-800 transition-all rounded-lg";
 
     const paidCount = orders.filter(o => PAID_STATUSES.has(o.payment_status)).length;
     const shippedCount = orders.filter(o => ["shipped", "delivered"].includes(o.fulfillment_status)).length;
     const activeCount = orders.filter(o => !["delivered", "cancelled"].includes(o.fulfillment_status)).length;
 
     if (loading) return (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="w-10 h-10 border-2 border-zinc-200 border-t-zinc-800 rounded-full animate-spin" />
-            <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-zinc-400">Loading Orders</p>
+        <div className="flex items-center gap-3 py-10">
+            <div className="w-6 h-6 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
+            <span className="text-sm font-bold text-[#31323E]/50 uppercase tracking-wider">Loading Orders…</span>
         </div>
     );
 
     return (
-        <div className="max-w-6xl mx-auto py-8 px-4 font-sans text-[#31323E] min-h-screen">
+        <div className="max-w-6xl mx-auto font-sans text-[#31323E]">
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-zinc-200 pb-8 mb-8">
-                <div>
-                    <h1 className="text-4xl lg:text-5xl font-serif italic text-[#31323E] leading-tight mb-2">Orders</h1>
-                    <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                        {orders.length} total · {paidCount} paid · {activeCount} active · {shippedCount} shipped
-                    </p>
+            {/* ── Header ─────────────────────────────────────────────────── */}
+            <div className="pb-8 mb-8 border-b border-[#31323E]/8">
+                <div className="flex flex-col md:flex-row justify-between items-start gap-6">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-[#31323E] mb-1">Orders</h2>
+                        <p className="text-sm text-[#31323E]/50 font-medium">
+                            {orders.length} total orders · manage payment & fulfillment lifecycle
+                        </p>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="flex gap-3 flex-shrink-0">
+                        <div className="bg-[#31323E] text-white rounded-xl px-4 py-3 text-center shadow-sm min-w-[70px]">
+                            <div className="text-xl font-bold leading-none">{activeCount}</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-white/60 mt-1">Active</div>
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-center min-w-[70px]">
+                            <div className="text-xl font-bold text-emerald-600 leading-none">{paidCount}</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-500/80 mt-1">Paid</div>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-center min-w-[70px]">
+                            <div className="text-xl font-bold text-blue-600 leading-none">{shippedCount}</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-500/80 mt-1">Shipped</div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Filter controls */}
-                <div className="flex flex-col gap-3 items-end">
-                    <div className="flex bg-zinc-100 p-1.5 rounded-xl w-fit">
+                {/* Filter tabs */}
+                <div className="flex flex-col sm:flex-row gap-3 mt-6 items-start">
+                    <div className="flex bg-[#31323E]/5 rounded-xl p-1 gap-0.5">
                         {(["active", "completed"] as const).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => { setMainTab(tab); setShowAdvanced(false); }}
-                                className={`px-5 py-2 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all ${
-                                    mainTab === tab ? "bg-white text-[#31323E] shadow-sm" : "text-zinc-500 hover:text-zinc-800"
-                                }`}
-                            >
+                            <button key={tab} onClick={() => { setMainTab(tab); setShowAdvanced(false); }}
+                                className={`px-5 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all ${
+                                    mainTab === tab ? "bg-white text-[#31323E] shadow-sm" : "text-[#31323E]/50 hover:text-[#31323E]"
+                                }`}>
                                 {tab}
                                 {tab === "active" && activeCount > 0 && (
-                                    <span className="ml-1.5 bg-[#31323E] text-white text-[8px] px-1.5 py-0.5 rounded-full">
-                                        {activeCount}
-                                    </span>
+                                    <span className="ml-1.5 bg-[#31323E] text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold">{activeCount}</span>
                                 )}
                             </button>
                         ))}
-                        <button
-                            onClick={() => { setMainTab("advanced"); setShowAdvanced(!showAdvanced); }}
-                            className={`px-4 py-2 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all flex items-center gap-2 ${
-                                mainTab === "advanced" ? "bg-[#31323E] text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
-                            }`}
-                        >
+                        <button onClick={() => { setMainTab("advanced"); setShowAdvanced(!showAdvanced); }}
+                            className={`px-4 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 ${
+                                mainTab === "advanced" ? "bg-[#31323E] text-white shadow-sm" : "text-[#31323E]/50 hover:text-[#31323E]"
+                            }`}>
                             Filters
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`}>
                                 <path d="M6 9l6 6 6-6" />
                             </svg>
                         </button>
                     </div>
 
                     {mainTab === "advanced" && showAdvanced && (
-                        <div className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+                        <div className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-[#31323E]/10 shadow-sm">
                             <div className="flex gap-2">
                                 {(["fulfillment", "payment"] as const).map(ft => (
-                                    <button
-                                        key={ft}
-                                        onClick={() => { setFilterType(ft); setStatusFilter("all"); }}
-                                        className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-full border transition-all ${
-                                            filterType === ft ? "bg-[#31323E] text-white border-[#31323E]" : "bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400"
-                                        }`}
-                                    >
+                                    <button key={ft} onClick={() => { setFilterType(ft); setStatusFilter("all"); }}
+                                        className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg border transition-all ${
+                                            filterType === ft ? "bg-[#31323E] text-white border-[#31323E]" : "bg-white text-[#31323E]/60 border-[#31323E]/15 hover:border-[#31323E]/30"
+                                        }`}>
                                         {ft}
                                     </button>
                                 ))}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
-                                <button
-                                    onClick={() => setStatusFilter("all")}
-                                    className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest rounded border transition-all ${statusFilter === "all" ? "bg-zinc-800 text-white border-zinc-800" : "bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400"}`}
-                                >
+                                <button onClick={() => setStatusFilter("all")}
+                                    className={`px-3 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg border transition-all ${statusFilter === "all" ? "bg-[#31323E] text-white border-[#31323E]" : "bg-white text-[#31323E]/50 border-[#31323E]/12 hover:border-[#31323E]/25"}`}>
                                     All
                                 </button>
                                 {(filterType === "fulfillment"
                                     ? [...FULFILLMENT_STEPS.map(s => s.value), "cancelled", "pending"]
                                     : PAYMENT_STATUSES.map(s => s.value)
                                 ).map(st => (
-                                    <button
-                                        key={st}
-                                        onClick={() => setStatusFilter(st)}
-                                        className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest rounded border transition-all ${statusFilter === st ? "bg-zinc-800 text-white border-zinc-800" : "bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400"}`}
-                                    >
+                                    <button key={st} onClick={() => setStatusFilter(st)}
+                                        className={`px-3 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg border transition-all ${statusFilter === st ? "bg-[#31323E] text-white border-[#31323E]" : "bg-white text-[#31323E]/50 border-[#31323E]/12 hover:border-[#31323E]/25"}`}>
                                         {filterType === "fulfillment"
                                             ? (FULFILLMENT_STEPS.find(s => s.value === st)?.label || st)
                                             : (PAYMENT_STATUS_MAP[st]?.label || st)}
@@ -742,11 +593,12 @@ export default function OrdersTab() {
                 </div>
             </div>
 
-            {/* Order List */}
-            <div className="space-y-3 bg-zinc-50/70 p-4 md:p-6 rounded-2xl border border-zinc-100/50">
+            {/* ── Order List ─────────────────────────────────────────────── */}
+            <div className="space-y-3">
                 {filteredOrders.length === 0 ? (
-                    <div className="py-24 text-center bg-white border border-zinc-100 rounded-xl">
-                        <p className="font-sans font-medium text-zinc-400 text-sm">No orders match this filter.</p>
+                    <div className="py-20 text-center bg-[#31323E]/2 border border-dashed border-[#31323E]/12 rounded-2xl">
+                        <div className="text-4xl mb-3 opacity-20">📋</div>
+                        <p className="text-sm font-semibold text-[#31323E]/40">No orders match this filter.</p>
                     </div>
                 ) : (
                     filteredOrders.map(order => {
@@ -757,67 +609,59 @@ export default function OrdersTab() {
                         const thumbnail = order.items?.[0]?.artwork?.images?.[0];
 
                         return (
-                            <div
-                                key={order.id}
+                            <div key={order.id}
                                 className={`bg-white border transition-all duration-300 overflow-hidden rounded-xl ${
                                     isExpanded
-                                        ? "border-zinc-300 shadow-xl ring-1 ring-zinc-100"
-                                        : "border-zinc-100 shadow-sm hover:border-zinc-200 hover:shadow-md"
-                                }`}
-                            >
+                                        ? "border-[#31323E]/25 shadow-lg"
+                                        : "border-[#31323E]/10 shadow-sm hover:border-[#31323E]/20 hover:shadow-md"
+                                }`}>
                                 {/* Summary Row */}
                                 <button
                                     onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                                    className="w-full px-5 py-4 flex flex-col md:flex-row items-center gap-4 text-left"
+                                    className="w-full px-5 py-4 flex items-center gap-4 text-left hover:bg-[#31323E]/1 transition-colors"
                                 >
                                     {/* Thumbnail */}
                                     <div className="relative w-12 h-12 flex-shrink-0">
                                         {thumbnail ? (
-                                            <img
-                                                src={getImageUrl(thumbnail, "thumb")}
-                                                className="w-full h-full object-cover rounded-lg border border-zinc-200 shadow-sm"
-                                                alt=""
-                                            />
+                                            <img src={getImageUrl(thumbnail, "thumb")} className="w-full h-full object-cover rounded-lg border border-[#31323E]/10" alt="" />
                                         ) : (
-                                            <div className="w-full h-full bg-zinc-100 rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-400">Ø</div>
+                                            <div className="w-full h-full bg-[#31323E]/5 rounded-lg flex items-center justify-center text-[#31323E]/20 text-lg font-bold">Ø</div>
                                         )}
                                         {order.items?.length > 1 && (
-                                            <span className="absolute -bottom-1 -right-1 bg-[#31323E] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow ring-2 ring-white">
-                                                +{order.items.length - 1}
-                                            </span>
+                                            <span className="absolute -bottom-1 -right-1 bg-[#31323E] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow ring-2 ring-white">+{order.items.length - 1}</span>
                                         )}
                                     </div>
 
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                            <span className="font-mono font-bold text-[10px] text-zinc-400">#{order.id}</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#31323E]/40">#{order.id}</span>
                                             <PaymentBadge status={order.payment_status} />
                                             <FulfillmentBadge status={order.fulfillment_status || "pending"} />
                                         </div>
-                                        <h3 className="font-sans font-bold text-lg text-[#31323E] truncate leading-tight">
+                                        <h3 className="font-bold text-base text-[#31323E] truncate leading-tight">
                                             {order.first_name} {order.last_name}
                                         </h3>
-                                        <p className="text-[9px] uppercase tracking-[0.1em] text-zinc-400 font-bold mt-0.5 truncate">
+                                        <p className="text-[11px] text-[#31323E]/50 font-semibold mt-0.5 truncate">
                                             {order.items?.map((it: any) => it.artwork?.title || "Artwork").join(" · ")}
                                         </p>
                                     </div>
 
                                     {/* Right side */}
-                                    <div className="flex items-center gap-6">
+                                    <div className="flex items-center gap-5">
                                         <div className="text-right hidden lg:block">
-                                            <p className="text-[9px] uppercase tracking-wider text-zinc-400 font-bold mb-0.5">Date</p>
-                                            <p className="text-[12px] text-zinc-700 font-medium">
+                                            <p className="text-[9px] uppercase tracking-wider text-[#31323E]/40 font-bold mb-0.5">Date</p>
+                                            <p className="text-xs text-[#31323E] font-semibold">
                                                 {new Date(order.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                                             </p>
                                         </div>
-                                        <div className="text-right min-w-[80px]">
-                                            <p className="text-[9px] uppercase tracking-wider text-zinc-400 font-bold mb-0.5">Total</p>
-                                            <p className="text-xl font-bold text-[#31323E]">${order.total_price}</p>
+                                        <div className="text-right min-w-[70px]">
+                                            <p className="text-[9px] uppercase tracking-wider text-[#31323E]/40 font-bold mb-0.5">Total</p>
+                                            <p className="text-lg font-bold text-[#31323E]">${order.total_price}</p>
                                         </div>
-                                        <div className={`transition-transform duration-300 text-zinc-300 ${isExpanded ? "rotate-180" : ""}`}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                                        <div className={`transition-transform duration-300 text-[#31323E]/25 ${isExpanded ? "rotate-180" : ""}`}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M6 9l6 6 6-6" />
                                             </svg>
                                         </div>
                                     </div>
@@ -825,49 +669,44 @@ export default function OrdersTab() {
 
                                 {/* Expanded Detail */}
                                 {isExpanded && (
-                                    <div className="px-5 py-7 bg-zinc-50/50 border-t border-zinc-100">
+                                    <div className="px-5 py-6 bg-[#FAFAF9] border-t border-[#31323E]/8">
                                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-                                            {/* ── Col 1: Customer + Items + Shipping ── */}
-                                            <div className="space-y-7">
-
+                                            {/* ── Col 1: Customer + Items + Address ── */}
+                                            <div className="space-y-6">
                                                 {/* Customer */}
-                                                <div>
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                                                     <SectionLabel text="Customer" />
                                                     {isThisEditing ? (
                                                         <div className="space-y-2">
                                                             <div className="grid grid-cols-2 gap-2">
-                                                                <input className={inputClasses} value={editData.first_name || ""} onChange={e => setEditData({ ...editData, first_name: e.target.value })} placeholder="First Name" />
-                                                                <input className={inputClasses} value={editData.last_name || ""} onChange={e => setEditData({ ...editData, last_name: e.target.value })} placeholder="Last Name" />
+                                                                <input className={inputCls} value={editData.first_name || ""} onChange={e => setEditData({ ...editData, first_name: e.target.value })} placeholder="First Name" />
+                                                                <input className={inputCls} value={editData.last_name || ""} onChange={e => setEditData({ ...editData, last_name: e.target.value })} placeholder="Last Name" />
                                                             </div>
-                                                            <input className={inputClasses} value={editData.email || ""} onChange={e => setEditData({ ...editData, email: e.target.value })} placeholder="Email" />
-                                                            <input className={inputClasses} value={editData.phone || ""} onChange={e => setEditData({ ...editData, phone: e.target.value })} placeholder="Phone" />
+                                                            <input className={inputCls} value={editData.email || ""} onChange={e => setEditData({ ...editData, email: e.target.value })} placeholder="Email" />
+                                                            <input className={inputCls} value={editData.phone || ""} onChange={e => setEditData({ ...editData, phone: e.target.value })} placeholder="Phone" />
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-0.5">
-                                                            <p className="font-sans font-bold text-base text-[#31323E]">{order.first_name} {order.last_name}</p>
-                                                            <p className="text-xs text-zinc-500">{order.email}</p>
-                                                            <p className="text-xs text-zinc-400">{order.phone}</p>
+                                                            <p className="font-bold text-base text-[#31323E]">{order.first_name} {order.last_name}</p>
+                                                            <p className="text-xs text-[#31323E]/60 font-medium">{order.email}</p>
+                                                            <p className="text-xs text-[#31323E]/60 font-medium">{order.phone}</p>
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 {/* Items */}
-                                                <div>
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                                                     <SectionLabel text="Items Ordered" />
                                                     <div className="space-y-2">
                                                         {(order.items || []).map((item: any, idx: number) => (
-                                                            <div key={idx} className="flex gap-3 p-3 bg-white border border-zinc-100 rounded-xl">
+                                                            <div key={idx} className="flex gap-3 p-3 bg-[#31323E]/2 rounded-lg border border-[#31323E]/8">
                                                                 {item.artwork?.images?.[0] && (
-                                                                    <img
-                                                                        src={getImageUrl(item.artwork.images[0], "thumb")}
-                                                                        className="w-12 h-12 object-cover rounded-lg border border-zinc-100 flex-shrink-0"
-                                                                        alt=""
-                                                                    />
+                                                                    <img src={getImageUrl(item.artwork.images[0], "thumb")} className="w-11 h-11 object-cover rounded-lg border border-[#31323E]/10 flex-shrink-0" alt="" />
                                                                 )}
                                                                 <div className="flex-1 min-w-0">
                                                                     <p className="text-sm font-bold text-[#31323E] truncate">{item.artwork?.title || "Untitled"}</p>
-                                                                    <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mt-0.5">
+                                                                    <p className="text-[10px] font-semibold text-[#31323E]/50 uppercase tracking-wider mt-0.5">
                                                                         {item.edition_type === "original" ? "Original" : "Print"}
                                                                         {item.size ? ` · ${item.size}` : ""}
                                                                         {item.finish ? ` · ${item.finish}` : ""}
@@ -880,36 +719,36 @@ export default function OrdersTab() {
                                                 </div>
 
                                                 {/* Shipping Address */}
-                                                <div>
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                                                     <SectionLabel text="Shipping Address" />
                                                     {isThisEditing ? (
                                                         <div className="space-y-2">
-                                                            <input className={inputClasses} value={editData.shipping_address_line1 || ""} onChange={e => setEditData({ ...editData, shipping_address_line1: e.target.value })} placeholder="Street" />
-                                                            <input className={inputClasses} value={editData.shipping_address_line2 || ""} onChange={e => setEditData({ ...editData, shipping_address_line2: e.target.value })} placeholder="Apt / Suite" />
+                                                            <input className={inputCls} value={editData.shipping_address_line1 || ""} onChange={e => setEditData({ ...editData, shipping_address_line1: e.target.value })} placeholder="Street" />
+                                                            <input className={inputCls} value={editData.shipping_address_line2 || ""} onChange={e => setEditData({ ...editData, shipping_address_line2: e.target.value })} placeholder="Apt / Suite" />
                                                             <div className="grid grid-cols-2 gap-2">
-                                                                <input className={inputClasses} value={editData.shipping_city || ""} onChange={e => setEditData({ ...editData, shipping_city: e.target.value })} placeholder="City" />
-                                                                <input className={inputClasses} value={editData.shipping_postal_code || ""} onChange={e => setEditData({ ...editData, shipping_postal_code: e.target.value })} placeholder="Postal" />
+                                                                <input className={inputCls} value={editData.shipping_city || ""} onChange={e => setEditData({ ...editData, shipping_city: e.target.value })} placeholder="City" />
+                                                                <input className={inputCls} value={editData.shipping_postal_code || ""} onChange={e => setEditData({ ...editData, shipping_postal_code: e.target.value })} placeholder="Postal" />
                                                             </div>
-                                                            <input className={inputClasses} value={editData.shipping_country || ""} onChange={e => setEditData({ ...editData, shipping_country: e.target.value })} placeholder="Country" />
+                                                            <input className={inputCls} value={editData.shipping_country || ""} onChange={e => setEditData({ ...editData, shipping_country: e.target.value })} placeholder="Country" />
                                                         </div>
                                                     ) : (
-                                                        <div className="text-[12px] text-zinc-600 space-y-0.5">
+                                                        <div className="text-sm text-[#31323E] space-y-0.5">
                                                             {order.shipping_address_line1 ? (
                                                                 <>
-                                                                    <p className="text-zinc-800 font-medium">{order.shipping_address_line1}</p>
-                                                                    {order.shipping_address_line2 && <p className="text-zinc-500">{order.shipping_address_line2}</p>}
-                                                                    <p>{order.shipping_city}{order.shipping_postal_code ? `, ${order.shipping_postal_code}` : ""}</p>
-                                                                    <p className="uppercase text-[9px] tracking-widest text-zinc-400 font-bold pt-0.5">
+                                                                    <p className="font-semibold">{order.shipping_address_line1}</p>
+                                                                    {order.shipping_address_line2 && <p className="text-[#31323E]/60 font-medium">{order.shipping_address_line2}</p>}
+                                                                    <p className="text-[#31323E]/60 font-medium">{order.shipping_city}{order.shipping_postal_code ? `, ${order.shipping_postal_code}` : ""}</p>
+                                                                    <p className="text-[10px] uppercase tracking-widest text-[#31323E]/40 font-bold pt-0.5">
                                                                         {order.shipping_country} {order.shipping_country_code ? `(${order.shipping_country_code})` : ""}
                                                                     </p>
                                                                     {order.shipping_notes && (
-                                                                        <div className="mt-2 p-2.5 bg-white border border-zinc-100 rounded-lg italic text-zinc-500 text-[11px]">
-                                                                            "{order.shipping_notes}"
+                                                                        <div className="mt-2 p-2.5 bg-[#31323E]/4 rounded-lg text-[#31323E]/70 text-[11px] font-medium border border-[#31323E]/8">
+                                                                            &ldquo;{order.shipping_notes}&rdquo;
                                                                         </div>
                                                                     )}
                                                                 </>
                                                             ) : (
-                                                                <p className="italic text-zinc-300">No shipping address.</p>
+                                                                <p className="text-[#31323E]/25 font-medium italic">No shipping address.</p>
                                                             )}
                                                         </div>
                                                     )}
@@ -917,51 +756,36 @@ export default function OrdersTab() {
 
                                                 {/* Discovery */}
                                                 {order.discovery_source && (
-                                                    <div>
+                                                    <div className="bg-white border border-[#31323E]/10 rounded-xl p-4">
                                                         <SectionLabel text="Discovery Source" />
-                                                        <p className="text-[12px] text-zinc-600">{order.discovery_source}</p>
-                                                    </div>
-                                                )}
-                                                {order.promo_code && (
-                                                    <div>
-                                                        <SectionLabel text="Promo Code" />
-                                                        <p className="font-mono text-sm text-zinc-700">{order.promo_code}</p>
+                                                        <p className="text-sm text-[#31323E] font-medium">{order.discovery_source}</p>
+                                                        {order.promo_code && <p className="text-xs font-bold text-[#31323E]/50 uppercase tracking-wider mt-1">Promo: {order.promo_code}</p>}
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* ── Col 2: Payment Phase + Fulfillment Phase ── */}
-                                            <div className="space-y-7">
-
-                                                {/* Phase 1 — Payment */}
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-3">
-                                                        <span className="w-5 h-5 rounded-full bg-[#31323E] text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">1</span>
-                                                        <SectionLabel text="Payment Phase" />
+                                            {/* ── Col 2: Payment + Fulfillment ── */}
+                                            <div className="space-y-6">
+                                                {/* Phase 1 */}
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <span className="w-6 h-6 rounded-lg bg-[#31323E] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#31323E]">Payment Phase</h4>
                                                     </div>
                                                     <PaymentPhase
                                                         order={order}
-                                                        onPaymentOverride={(status) => handlePaymentOverride(order.id, status)}
+                                                        onPaymentOverride={status => handlePaymentOverride(order.id, status)}
                                                         overrideSaving={isPaymentSaving}
                                                     />
                                                 </div>
 
-                                                {/* Divider */}
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex-1 h-px bg-zinc-100" />
-                                                    <span className="text-[9px] uppercase tracking-widest text-zinc-300 font-bold flex-shrink-0">→</span>
-                                                    <div className="flex-1 h-px bg-zinc-100" />
-                                                </div>
-
-                                                {/* Phase 2 — Fulfillment */}
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-3">
-                                                        <span className={`w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
-                                                            PAID_STATUSES.has(order.payment_status)
-                                                                ? "bg-[#31323E] text-white"
-                                                                : "bg-zinc-200 text-zinc-400"
+                                                {/* Phase 2 */}
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <span className={`w-6 h-6 rounded-lg text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
+                                                            PAID_STATUSES.has(order.payment_status) ? "bg-[#31323E] text-white" : "bg-[#31323E]/10 text-[#31323E]/40"
                                                         }`}>2</span>
-                                                        <SectionLabel text="Fulfillment Phase" />
+                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#31323E]">Fulfillment Phase</h4>
                                                     </div>
                                                     <FulfillmentPhase
                                                         order={order}
@@ -971,47 +795,41 @@ export default function OrdersTab() {
                                                 </div>
                                             </div>
 
-                                            {/* ── Col 3: Timeline + Notes + Admin Actions ── */}
-                                            <div className="space-y-7">
+                                            {/* ── Col 3: Timeline + Actions ── */}
+                                            <div className="space-y-6">
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
+                                                    <OrderTimeline order={order} />
+                                                </div>
 
-                                                <OrderTimeline order={order} />
-
-                                                {/* Edit / Delete Actions */}
-                                                <div className="pt-5 border-t border-zinc-200 space-y-3">
+                                                {/* Admin Actions */}
+                                                <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
+                                                    <SectionLabel text="Admin Actions" />
                                                     {isThisEditing ? (
                                                         <div className="grid grid-cols-2 gap-2">
-                                                            <button
-                                                                onClick={handlePatch}
-                                                                disabled={saving}
-                                                                className="bg-[#31323E] text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg shadow hover:bg-[#31323E] transition-all disabled:opacity-50"
-                                                            >
-                                                                {saving ? "Saving..." : "Save Changes"}
+                                                            <button onClick={handlePatch} disabled={saving}
+                                                                className="bg-[#31323E] text-white font-bold text-[11px] uppercase tracking-wider py-3 rounded-xl shadow-sm hover:bg-[#434455] transition-all disabled:opacity-50">
+                                                                {saving ? "Saving…" : "Save Changes"}
                                                             </button>
-                                                            <button
-                                                                onClick={() => { setIsEditing(null); setEditData(null); }}
-                                                                className="bg-white border border-zinc-200 text-zinc-500 font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg hover:bg-zinc-50"
-                                                            >
+                                                            <button onClick={() => { setIsEditing(null); setEditData(null); }}
+                                                                className="bg-[#31323E]/5 border border-[#31323E]/15 text-[#31323E] font-bold text-[11px] uppercase tracking-wider py-3 rounded-xl hover:bg-[#31323E]/10 transition-colors">
                                                                 Cancel
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        <>
-                                                            <button
-                                                                onClick={() => { setEditData({ ...order }); setIsEditing(order.id); }}
-                                                                className="w-full bg-[#31323E] text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg shadow hover:shadow-lg hover:bg-[#31323E] transition-all"
-                                                            >
+                                                        <div className="space-y-2">
+                                                            <button onClick={() => { setEditData({ ...order }); setIsEditing(order.id); }}
+                                                                className="w-full bg-[#31323E] text-white font-bold text-[11px] uppercase tracking-wider py-3 rounded-xl shadow-sm hover:bg-[#434455] transition-all">
                                                                 Edit Order Data
                                                             </button>
-                                                            <button
-                                                                onClick={() => handleDelete(order.id)}
-                                                                className="w-full bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold text-[10px] uppercase tracking-[0.2em] py-3 rounded-lg border border-red-200 hover:border-red-600 transition-all shadow-sm hover:shadow"
-                                                            >
+                                                            <button onClick={() => handleDelete(order.id)}
+                                                                className="w-full bg-white text-red-500 hover:bg-red-500 hover:text-white font-bold text-[11px] uppercase tracking-wider py-3 rounded-xl border border-red-200 hover:border-red-500 transition-all shadow-sm">
                                                                 Delete Permanently
                                                             </button>
-                                                        </>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
+
                                         </div>
                                     </div>
                                 )}

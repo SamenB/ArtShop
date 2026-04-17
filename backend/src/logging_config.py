@@ -54,11 +54,13 @@ def setup_logging():
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
 
+    import os
     logger.add(
-        log_dir / "app.log",
+        log_dir / f"app_{os.getpid()}.log",
         level=settings.LOG_LEVEL,
         rotation="10 MB",
         retention="7 days",
         compression="zip",
         serialize=True,
+        enqueue=True,
     )

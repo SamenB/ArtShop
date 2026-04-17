@@ -79,40 +79,24 @@ def send_contact_emails(
         bool: True if both emails were sent successfully, False otherwise.
     """
     target_email = admin_email or (settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else settings.SMTP_USER)
+    
+    ok1 = True
+    ok2 = True
 
     # ── 1. Admin notification ─────────────────────────────────────────────────
-    admin_subj = (admin_subject or "New Inquiry from {name} (The Samen Bondarenko Gallery)").format(
-        name=name, email=email, message=message
-    )
-    admin_body = (
-        admin_body_template
-        or (
-            "You have a new message from The Samen Bondarenko Gallery website:\n\n"
-            "Name: {name}\nEmail: {email}\n\nMessage:\n{message}"
-        )
-    ).format(name=name, email=email, message=message)
-
-    ok1 = _send_single_email(to=target_email, subject=admin_subj, body=admin_body)
+    if admin_subject and admin_body_template:
+        admin_subj = admin_subject.format(name=name, email=email, message=message)
+        admin_body = admin_body_template.format(name=name, email=email, message=message)
+        ok1 = _send_single_email(to=target_email, subject=admin_subj, body=admin_body)
 
     # ── 2. Customer auto-reply ────────────────────────────────────────────────
-    reply_subj = (autoreply_subject or "Thank you for getting in touch!").format(
-        name=name, email=email
-    )
-    reply_body = (
-        autoreply_body_template
-        or (
-            "Hello {name},\n\n"
-            "Thank you for contacting The Samen Bondarenko Gallery. "
-            "This is an automated message to confirm that we have received your inquiry.\n\n"
-            'Message received:\n"{message}"\n\n'
-            "Best regards,\nThe Samen Bondarenko Gallery"
-        )
-    ).format(name=name, email=email, message=message)
-
-    ok2 = _send_single_email(to=email, subject=reply_subj, body=reply_body)
+    if autoreply_subject and autoreply_body_template:
+        reply_subj = autoreply_subject.format(name=name, email=email)
+        reply_body = autoreply_body_template.format(name=name, email=email, message=message)
+        ok2 = _send_single_email(to=email, subject=reply_subj, body=reply_body)
 
     if ok1 and ok2:
-        logger.info("Successfully sent contact emails for {}", email)
+        logger.info("Successfully processed contact emails for {}", email)
     return ok1 and ok2
 
 
@@ -166,14 +150,12 @@ def send_fulfillment_status_email(
                     tracking_block += f"Track your parcel: {tracking_url}\n"
             tracking_block += "\n"
 
-        footer = "\n\nWith gratitude,\nSamen Bondarenko\nsamen-bondarenko.com\n"
-
         subject = subject_template.format(order_id=order_id, first_name=first_name)
         body = body_template.format(
             first_name=first_name,
             order_id=order_id,
             tracking_block=tracking_block,
-        ) + footer
+        )
 
         ok = _send_single_email(to=customer_email, subject=subject, body=body)
         if ok:

@@ -63,6 +63,12 @@ class ArtworksOrm(Base):
     has_paper_print: Mapped[bool] = mapped_column(default=False, server_default="false")
     has_paper_print_limited: Mapped[bool] = mapped_column(default=False, server_default="false")
 
+    # ── Limited edition series sizes ───────────────────────────────────────────
+    # Total number of prints in the numbered series (e.g. 5 means "X/5").
+    # Only meaningful when the corresponding _limited flag is True.
+    canvas_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
+    paper_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
+
     # Relationships
     labels: Mapped[list["LabelsOrm"]] = relationship(
         secondary="artwork_labels", back_populates="artworks"

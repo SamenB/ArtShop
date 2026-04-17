@@ -7,6 +7,7 @@ from sqlalchemy import select
 from src.models.email_templates import EmailTemplateOrm
 from src.repositories.base import BaseRepository
 from src.schemas.email_templates import EmailTemplate
+from src.repositories.mappers.mappers import EmailTemplateMapper
 
 
 class EmailTemplatesRepository(BaseRepository):
@@ -17,6 +18,7 @@ class EmailTemplatesRepository(BaseRepository):
 
     model = EmailTemplateOrm
     schema = EmailTemplate
+    mapper = EmailTemplateMapper
 
     async def get_by_key(self, key: str) -> EmailTemplateOrm | None:
         """

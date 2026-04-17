@@ -34,31 +34,45 @@ export default function AdminDashboardPage() {
         }
     }, [user, loading, router]);
 
-    if (loading || !user) return <div className="min-h-screen pt-[150px] flex items-center justify-center text-[var(--color-charcoal)] text-sm uppercase tracking-widest font-sans bg-[var(--color-cream)]">Authenticating...</div>;
+    if (loading || !user) return (
+        <div className="min-h-screen pt-[150px] flex items-center justify-center font-sans bg-[#F4F4F2]">
+            <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-[#31323E]/30 border-t-[#31323E] rounded-full animate-spin" />
+                <span className="text-sm font-semibold tracking-widest uppercase text-[#31323E]">Authenticating…</span>
+            </div>
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-[var(--color-cream)] pb-24 text-[var(--color-charcoal)] font-sans selection:bg-[#31323E] selection:text-white">
-            <div className="w-full bg-[#31323E] pt-[150px] pb-24 px-6 lg:px-12">
+        <div className="min-h-screen bg-[#F4F4F2] pb-24 font-sans">
+            {/* Hero Header */}
+            <div className="w-full bg-[#31323E] pt-[150px] pb-20 px-6 lg:px-12">
                 <div className="max-w-[1400px] mx-auto">
-                    <h1 className="text-4xl lg:text-5xl font-serif italic mb-2 tracking-tight text-white">Dashboard</h1>
-                    <p className="text-white/60 font-sans text-sm font-medium tracking-widest uppercase">
-                        Admin Control Panel · {user.username}
+                    <p className="text-white/40 text-[10px] font-bold tracking-[0.25em] uppercase mb-3">
+                        Admin Control Panel
+                    </p>
+                    <h1 className="text-5xl lg:text-6xl font-bold tracking-tight text-white leading-none mb-3">
+                        Dashboard
+                    </h1>
+                    <p className="text-white/50 text-sm font-medium tracking-wider">
+                        {user.username} · ArtShop Management System
                     </p>
                 </div>
             </div>
 
-            <main className="max-w-[1400px] mx-auto px-6 lg:px-12 -mt-12">
-                <div className="bg-white border border-[rgba(26,26,24,0.06)] rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.08)] overflow-hidden">
+            <main className="max-w-[1400px] mx-auto px-6 lg:px-12 -mt-10">
+                <div className="bg-white border border-[#31323E]/8 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.10)] overflow-hidden">
                     {/* Tabs Navigation */}
-                    <div className="flex px-2 pt-2 border-b border-zinc-100 overflow-x-auto bg-zinc-50/50 hidden-scrollbar">
+                    <div className="flex border-b border-[#31323E]/10 overflow-x-auto bg-[#FAFAF9] hidden-scrollbar px-1 pt-1">
                         {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
                             <button
                                 key={tab}
+                                id={`admin-tab-${tab}`}
                                 onClick={() => setActiveTab(tab)}
-                                className={`px-6 py-4 text-xs sm:text-sm font-sans font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 relative ${
+                                className={`px-5 py-3.5 text-[11px] font-bold tracking-[0.15em] uppercase transition-all whitespace-nowrap border-b-2 relative flex-shrink-0 ${
                                     activeTab === tab
-                                    ? "text-[#31323E] border-[#31323E] font-semibold bg-white rounded-t-lg shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]"
-                                    : "text-zinc-500 border-transparent hover:text-[#31323E] hover:bg-zinc-100/50"
+                                    ? "text-[#31323E] border-[#31323E] bg-white rounded-t-lg -mb-px"
+                                    : "text-[#31323E]/40 border-transparent hover:text-[#31323E]/70 hover:bg-white/60"
                                 }`}
                             >
                                 {TAB_LABELS[tab]}
@@ -67,7 +81,7 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Tab Content Area */}
-                    <div className="p-6 md:p-10 min-h-[600px] bg-white">
+                    <div className="p-8 md:p-10 min-h-[600px] bg-white">
                         {activeTab === "artwork" && <ArtworksTab />}
                         {activeTab === "orders" && <OrdersTab />}
                         {activeTab === "print-pricing" && <PrintPricingTab />}

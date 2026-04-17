@@ -13,6 +13,8 @@ from src.schemas.artworks import Artwork
 from src.schemas.labels import ArtworkLabel, Label, LabelCategory
 from src.schemas.orders import Order, OrderItem
 from src.schemas.users import User
+from src.models.email_templates import EmailTemplateOrm
+from src.schemas.email_templates import EmailTemplate
 
 
 class UserMapper(DataMapper):
@@ -56,3 +58,10 @@ class OrderItemMapper(DataMapper):
 
     db_model = OrderItemOrm
     schema = OrderItem
+
+
+class EmailTemplateMapper(DataMapper):
+    """Mapper for EmailTemplate entities."""
+
+    db_model = EmailTemplateOrm
+    schema = EmailTemplate

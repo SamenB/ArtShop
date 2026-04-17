@@ -20,7 +20,7 @@
             },
             {
                 "artwork_id": 1,
-                "edition_type": "print",
+                "edition_type": "canvas_print",
                 "finish": "matte",
                 "price": 1000
             }
@@ -47,7 +47,7 @@
             },
             {
                 "artwork_id": 6,
-                "edition_type": "print",
+                "edition_type": "canvas_print",
                 "finish": "glossy",
                 "price": 800
             }
