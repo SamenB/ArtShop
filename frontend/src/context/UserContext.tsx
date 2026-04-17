@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { getApiUrl, apiFetch } from "@/utils";
 import { usePreferences } from "./PreferencesContext";
+import posthog from "posthog-js";
 
 /** Represents the authenticated user's profile data. */
 export interface User {
@@ -43,7 +44,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             // apiFetch handles silent token refreshing automatically if the initial request fails.
             const resp = await apiFetch(`${getApiUrl()}/auth/me`);
             if (resp.ok) {
-                setUser(await resp.json());
+                const userData = await resp.json();
+                setUser(userData);
+                // Identify the authenticated user in PostHog.
+                // This links all anonymous events (before login) to their real identity.
+                posthog.identify(String(userData.id), {
+                    email: userData.email,
+                    username: userData.username,
+                    is_admin: userData.is_admin,
+                });
             } else {
                 // If the response is still not OK after refresh attempts, the user is unauthenticated.
                 setUser(null);
@@ -69,6 +78,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             // Clear local state even if the network request fails to ensure UI consistency.
         }
         setUser(null);
+        // Reset PostHog identity on logout — next session will be fully anonymous.
+        posthog.reset();
     }, []);
 
     const { pendingLikes, clearPendingLikes } = usePreferences();
