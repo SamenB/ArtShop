@@ -40,9 +40,9 @@ export default function Footer() {
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
-            .then(data => setSettings(data))
-            .catch(err => console.error("Error fetching footer settings:", err));
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data) setSettings(data); })
+            .catch(err => console.warn("Footer settings unavailable:", err));
     }, []);
 
     const submit = (e: FormEvent) => {

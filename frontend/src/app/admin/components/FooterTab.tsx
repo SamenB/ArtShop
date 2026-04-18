@@ -47,7 +47,7 @@ export default function FooterTab() {
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
+            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
             .then(data => { setSettings(data); setLoading(false); })
             .catch(err => { console.error(err); setLoading(false); });
     }, []);

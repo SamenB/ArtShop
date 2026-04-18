@@ -27,6 +27,15 @@ interface Artwork {
     original_price: number;
     original_status: OriginalStatus;
     has_prints: boolean;
+    has_canvas_print: boolean;
+    has_canvas_print_limited: boolean;
+    has_paper_print: boolean;
+    has_paper_print_limited: boolean;
+    canvas_print_limited_quantity?: number | null;
+    paper_print_limited_quantity?: number | null;
+    print_aspect_ratio_id?: number | null;
+    print_min_size_label?: string | null;
+    print_max_size_label?: string | null;
     orientation?: string;
     base_print_price?: number;
     images?: (string | ArtworkImage)[];
@@ -55,18 +64,6 @@ const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string; border: 
     digital: { label: "DIGITAL ONLY", bg: "#FAF5FF", border: "#6B21A8", desc: "Available as high-res digital file" },
 };
 
-const CANVAS_SIZES = [
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.0 },
-    { labelCm: "60 × 90 cm", labelIn: "24 × 36 in", multiplier: 1.8 },
-    { labelCm: "80 × 120 cm", labelIn: "32 × 48 in", multiplier: 2.8 },
-];
-
-const PAPER_SIZES = [
-    { labelCm: "30 × 45 cm", labelIn: "12 × 18 in", multiplier: 1.0 },
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.5 },
-    { labelCm: "50 × 75 cm", labelIn: "20 × 30 in", multiplier: 2.2 },
-];
-
 export default function ArtworkDetailPage() {
     const params = useParams();
     const slug = params?.slug as string;
@@ -75,13 +72,17 @@ export default function ArtworkDetailPage() {
 
     const [work, setWork] = useState<Artwork | null>(null);
     const [loading, setLoading] = useState(true);
-    const [selectedCanvas, setSelectedCanvas] = useState(CANVAS_SIZES[0]);
-    const [selectedPaper, setSelectedPaper] = useState(PAPER_SIZES[0]);
+    // Edition selection: "standard" = open edition, "limited" = limited/signed
+    const [canvasEdition, setCanvasEdition] = useState<"standard" | "limited">("standard");
+    const [paperEdition, setPaperEdition] = useState<"standard" | "limited">("standard");
+    // Size selection from DB pricing rows
+    const [canvasSizes, setCanvasSizes] = useState<{ size_label: string; price: number }[]>([]);
+    const [paperSizes, setPaperSizes] = useState<{ size_label: string; price: number }[]>([]);
+    const [selectedCanvasSize, setSelectedCanvasSize] = useState<{ size_label: string; price: number } | null>(null);
+    const [selectedPaperSize, setSelectedPaperSize] = useState<{ size_label: string; price: number } | null>(null);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [fullSizeOpen, setFullSizeOpen] = useState(false);
     const [purchaseType, setPurchaseType] = useState<"original" | "canvas" | "paper">("original");
-    const [canvasStyle, setCanvasStyle] = useState<"rolled" | "framed">("rolled");
-    const [canvasFrame, setCanvasFrame] = useState<"black" | "oak" | "white">("black");
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
 
@@ -149,8 +150,11 @@ export default function ArtworkDetailPage() {
     useEffect(() => {
         if (!slug) return;
         apiFetch(`${getApiUrl()}/artworks/${slug}`)
-            .then(res => res.json())
-            .then(data => {
+            .then(res => {
+                if (!res.ok) throw new Error(`Artwork API ${res.status}`);
+                return res.json();
+            })
+            .then(async data => {
                 const item = data.data || data;
                 setWork({
                     ...item,
@@ -161,10 +165,38 @@ export default function ArtworkDetailPage() {
                 // Auto-select the most relevant tab
                 if (item.original_status === "available") {
                     setPurchaseType("original");
-                } else if (item.has_prints) {
+                } else if (item.has_canvas_print || item.has_canvas_print_limited) {
                     setPurchaseType("canvas");
-                } else {
-                    setPurchaseType("original");
+                } else if (item.has_paper_print || item.has_paper_print_limited) {
+                    setPurchaseType("paper");
+                }
+
+                // Fetch pricing from DB if aspect ratio is set
+                if (item.print_aspect_ratio_id) {
+                    try {
+                        const pricingRes = await apiFetch(`${getApiUrl()}/print-pricing/aspect-ratios/with-pricing`);
+                        if (!pricingRes.ok) throw new Error(`Pricing API ${pricingRes.status}`);
+                        const allRatios = await pricingRes.json();
+                            const ratio = allRatios.find((r: any) => r.id === item.print_aspect_ratio_id);
+                            if (ratio?.pricing_rows) {
+                                const rows: { size_label: string; price: number; print_type: string }[] = ratio.pricing_rows;
+                                // Filter by min/max if set
+                                const allLabels = [...new Set(rows.map((r: any) => r.size_label))] as string[];
+                                const minIdx = item.print_min_size_label ? allLabels.indexOf(item.print_min_size_label) : 0;
+                                const maxIdx = item.print_max_size_label ? allLabels.indexOf(item.print_max_size_label) : allLabels.length - 1;
+                                const allowedLabels = allLabels.slice(Math.max(0, minIdx), maxIdx + 1);
+
+                                const canvasRows = rows.filter((r: any) => r.print_type === "canvas" && allowedLabels.includes(r.size_label));
+                                const canvasLtdRows = rows.filter((r: any) => r.print_type === "canvas_limited" && allowedLabels.includes(r.size_label));
+                                const paperRows = rows.filter((r: any) => r.print_type === "paper" && allowedLabels.includes(r.size_label));
+                                const paperLtdRows = rows.filter((r: any) => r.print_type === "paper_limited" && allowedLabels.includes(r.size_label));
+
+                                setCanvasSizes(canvasRows.length ? canvasRows : canvasLtdRows);
+                                setPaperSizes(paperRows.length ? paperRows : paperLtdRows);
+                                if (canvasRows.length) setSelectedCanvasSize(canvasRows[0]);
+                                if (paperRows.length) setSelectedPaperSize(paperRows[0]);
+                            }
+                    } catch (e) { console.warn("Pricing fetch failed", e); }
                 }
             })
             .catch(() => console.warn("Backend unavailable"))
@@ -176,7 +208,7 @@ export default function ArtworkDetailPage() {
     // Fetch all artwork slugs for prev/next navigation
     useEffect(() => {
         apiFetch(`${getApiUrl()}/artworks?limit=500&fields=slug`)
-            .then(res => res.json())
+            .then(res => res.ok ? res.json() : [])
             .then(data => {
                 const items = data.data || data.items || data || [];
                 const slugs = items.map((a: { slug: string }) => a.slug).filter(Boolean);
@@ -210,8 +242,8 @@ export default function ArtworkDetailPage() {
     if (!work) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Artwork not found.</div>;
 
     const images = work.images || [];
-    const currentCanvasPrice = Math.round(globalPrintPrice * selectedCanvas.multiplier);
-    const currentPaperPrice = Math.round((globalPrintPrice * 0.8) * selectedPaper.multiplier);
+    const currentCanvasPrice = selectedCanvasSize?.price ?? globalPrintPrice;
+    const currentPaperPrice = selectedPaperSize?.price ?? Math.round(globalPrintPrice * 0.8);
     const effectiveLiked = user ? liked : pendingLikes.includes(work.id);
 
     // Compute prev/next slugs
@@ -1240,6 +1272,270 @@ export default function ArtworkDetailPage() {
                                                 to   { opacity: 1; transform: translateY(0); }
                                             }
 
+                                            /* ══════════════════════════════════════
+                                               Premium Edition Selector Cards
+                                               ══════════════════════════════════════ */
+                                            .edition-cards-grid {
+                                                display: grid;
+                                                gap: 0.75rem;
+                                                padding-left: 10px;
+                                            }
+                                            .edition-cards-grid.two-col {
+                                                grid-template-columns: 1fr 1fr;
+                                            }
+                                            .edition-cards-grid.one-col {
+                                                grid-template-columns: 1fr;
+                                            }
+
+                                            /* Shared card base */
+                                            .edition-card {
+                                                position: relative;
+                                                display: flex;
+                                                flex-direction: column;
+                                                padding: 1.15rem 1rem 1rem;
+                                                border-radius: 14px;
+                                                cursor: pointer;
+                                                text-align: left;
+                                                transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+                                                overflow: hidden;
+                                                background: #fff;
+                                                border: 1.5px solid rgba(49,50,62,0.12);
+                                                outline: none;
+                                                -webkit-tap-highlight-color: transparent;
+                                            }
+
+                                            /* Subtle top shimmer line on hover */
+                                            .edition-card::before {
+                                                content: "";
+                                                position: absolute;
+                                                top: 0;
+                                                left: 15%;
+                                                right: 15%;
+                                                height: 2.5px;
+                                                border-radius: 0 0 4px 4px;
+                                                opacity: 0;
+                                                transition: opacity 0.3s ease, left 0.3s ease, right 0.3s ease;
+                                            }
+
+                                            /* ── Open Edition — dark elegant ── */
+                                            .edition-card.open-edition {
+                                                border-color: rgba(49,50,62,0.12);
+                                            }
+                                            .edition-card.open-edition::before {
+                                                background: #31323E;
+                                            }
+                                            .edition-card.open-edition.active {
+                                                border-color: #31323E;
+                                                background: linear-gradient(135deg, rgba(49,50,62,0.04) 0%, rgba(49,50,62,0.01) 100%);
+                                                box-shadow: 0 0 0 3px rgba(49,50,62,0.08), 0 4px 16px rgba(49,50,62,0.06);
+                                            }
+                                            .edition-card.open-edition.active::before {
+                                                opacity: 0.7;
+                                                left: 10%;
+                                                right: 10%;
+                                            }
+                                            @media (hover: hover) and (pointer: fine) {
+                                                .edition-card.open-edition:hover:not(.active) {
+                                                    border-color: rgba(49,50,62,0.3);
+                                                    box-shadow: 0 2px 8px rgba(49,50,62,0.06);
+                                                    transform: translateY(-1px);
+                                                }
+                                                .edition-card.open-edition:hover:not(.active)::before {
+                                                    opacity: 0.3;
+                                                }
+                                            }
+
+                                            /* ── Limited Edition — warm luxury gradient ── */
+                                            .edition-card.limited-edition {
+                                                border-color: rgba(236,72,153,0.12);
+                                            }
+                                            .edition-card.limited-edition::before {
+                                                background: linear-gradient(90deg, #ec4899, #fb923c);
+                                            }
+                                            .edition-card.limited-edition.active {
+                                                border-color: rgba(236,72,153,0.4);
+                                                background: linear-gradient(135deg, rgba(236,72,153,0.04) 0%, rgba(251,146,60,0.02) 100%);
+                                                box-shadow: 0 0 0 3px rgba(236,72,153,0.08), 0 4px 16px rgba(236,72,153,0.06);
+                                            }
+                                            .edition-card.limited-edition.active::before {
+                                                opacity: 0.8;
+                                                left: 10%;
+                                                right: 10%;
+                                            }
+                                            @media (hover: hover) and (pointer: fine) {
+                                                .edition-card.limited-edition:hover:not(.active) {
+                                                    border-color: rgba(236,72,153,0.25);
+                                                    box-shadow: 0 2px 8px rgba(236,72,153,0.06);
+                                                    transform: translateY(-1px);
+                                                }
+                                                .edition-card.limited-edition:hover:not(.active)::before {
+                                                    opacity: 0.35;
+                                                }
+                                            }
+
+                                            /* Card inner layout */
+                                            .edition-card-header {
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 0.5rem;
+                                                margin-bottom: 0.45rem;
+                                            }
+                                            .edition-card-icon {
+                                                width: 22px;
+                                                height: 22px;
+                                                flex-shrink: 0;
+                                                display: flex;
+                                                align-items: center;
+                                                justify-content: center;
+                                                border-radius: 6px;
+                                            }
+                                            .edition-card.open-edition .edition-card-icon {
+                                                background: rgba(49,50,62,0.08);
+                                                color: #31323E;
+                                            }
+                                            .edition-card.limited-edition .edition-card-icon {
+                                                background: rgba(236,72,153,0.1);
+                                                color: #be185d;
+                                            }
+                                            .edition-card-title {
+                                                font-family: var(--font-sans);
+                                                font-size: 0.78rem;
+                                                font-weight: 700;
+                                                line-height: 1.2;
+                                            }
+                                            .edition-card.open-edition .edition-card-title {
+                                                color: #31323E;
+                                            }
+                                            .edition-card.limited-edition .edition-card-title {
+                                                color: #be185d;
+                                            }
+                                            .edition-card-desc {
+                                                font-family: var(--font-sans);
+                                                font-size: 0.64rem;
+                                                line-height: 1.5;
+                                                margin: 0;
+                                            }
+                                            .edition-card.open-edition .edition-card-desc {
+                                                color: rgba(49,50,62,0.5);
+                                            }
+                                            .edition-card.limited-edition .edition-card-desc {
+                                                color: rgba(190,24,93,0.55);
+                                            }
+
+                                            /* Scarcity badge */
+                                            .edition-scarcity-badge {
+                                                display: inline-flex;
+                                                align-items: center;
+                                                gap: 0.3rem;
+                                                margin-top: 0.5rem;
+                                                padding: 0.2rem 0.55rem;
+                                                border-radius: 20px;
+                                                font-family: var(--font-sans);
+                                                font-size: 0.58rem;
+                                                font-weight: 600;
+                                                letter-spacing: 0.04em;
+                                                background: linear-gradient(135deg, rgba(236,72,153,0.08), rgba(251,146,60,0.06));
+                                                color: #be185d;
+                                                border: 1px solid rgba(236,72,153,0.15);
+                                            }
+                                            .edition-scarcity-dot {
+                                                width: 5px;
+                                                height: 5px;
+                                                border-radius: 50%;
+                                                background: #ec4899;
+                                                animation: scarcityPulse 2s ease-in-out infinite;
+                                            }
+                                            @keyframes scarcityPulse {
+                                                0%, 100% { opacity: 1; transform: scale(1); }
+                                                50% { opacity: 0.5; transform: scale(0.8); }
+                                            }
+
+                                            /* Radio indicator */
+                                            .edition-radio {
+                                                position: absolute;
+                                                top: 0.85rem;
+                                                right: 0.85rem;
+                                                width: 16px;
+                                                height: 16px;
+                                                border-radius: 50%;
+                                                border: 1.5px solid rgba(49,50,62,0.2);
+                                                display: flex;
+                                                align-items: center;
+                                                justify-content: center;
+                                                transition: all 0.25s ease;
+                                            }
+                                            .edition-card.open-edition.active .edition-radio {
+                                                border-color: #31323E;
+                                                background: #31323E;
+                                            }
+                                            .edition-card.limited-edition.active .edition-radio {
+                                                border-color: #ec4899;
+                                                background: linear-gradient(135deg, #ec4899, #fb923c);
+                                            }
+                                            .edition-radio-dot {
+                                                width: 5px;
+                                                height: 5px;
+                                                border-radius: 50%;
+                                                background: #fff;
+                                                opacity: 0;
+                                                transition: opacity 0.2s ease;
+                                            }
+                                            .edition-card.active .edition-radio-dot {
+                                                opacity: 1;
+                                            }
+
+                                            /* ── Edition Features Table ── */
+                                            .edition-features {
+                                                margin-top: 0.75rem;
+                                                padding-left: 10px;
+                                                animation: editionFeaturesIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+                                            }
+                                            @keyframes editionFeaturesIn {
+                                                from { opacity: 0; transform: translateY(6px); }
+                                                to   { opacity: 1; transform: translateY(0); }
+                                            }
+                                            .edition-features-list {
+                                                display: flex;
+                                                flex-direction: column;
+                                                gap: 0;
+                                                border-radius: 10px;
+                                                overflow: hidden;
+                                                border: 1px solid var(--color-border);
+                                                background: #fff;
+                                            }
+                                            .edition-feature-row {
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 0.6rem;
+                                                padding: 0.6rem 0.85rem;
+                                                border-bottom: 1px solid var(--color-border);
+                                                font-family: var(--font-sans);
+                                                font-size: 0.72rem;
+                                                color: var(--color-charcoal-mid);
+                                                line-height: 1.35;
+                                            }
+                                            .edition-feature-row:last-child {
+                                                border-bottom: none;
+                                            }
+                                            .edition-feature-icon {
+                                                width: 16px;
+                                                height: 16px;
+                                                flex-shrink: 0;
+                                                display: flex;
+                                                align-items: center;
+                                                justify-content: center;
+                                                font-size: 0.7rem;
+                                            }
+                                            .edition-feature-icon.positive {
+                                                color: #16a34a;
+                                            }
+                                            .edition-feature-icon.neutral {
+                                                color: var(--color-muted);
+                                            }
+                                            .edition-feature-icon.caution {
+                                                color: #d97706;
+                                            }
+
                                             /* Mobile refinements */
                                             @media (max-width: 767px) {
                                                 .step-number { font-size: 1.45rem; width: 1.4rem; }
@@ -1250,15 +1546,24 @@ export default function ArtworkDetailPage() {
                                                 .step-option { font-size: 0.78rem; padding: 0.7rem 0.9rem; }
                                                 .pc-title { font-size: 1.05rem; }
                                                 .info-badge { padding: 0.75rem 0.85rem; }
+                                                .edition-cards-grid { padding-left: 6px; }
+                                                .edition-card { padding: 0.9rem 0.8rem 0.85rem; border-radius: 12px; }
+                                                .edition-card-title { font-size: 0.72rem; }
+                                                .edition-card-desc { font-size: 0.6rem; }
+                                                .edition-card-icon { width: 18px; height: 18px; }
+                                                .edition-scarcity-badge { font-size: 0.54rem; padding: 0.15rem 0.4rem; }
+                                                .edition-features { padding-left: 6px; }
+                                                .edition-feature-row { font-size: 0.66rem; padding: 0.5rem 0.7rem; gap: 0.45rem; }
                                             }
                                         `}</style>
 
+                                        {/* ── Tabs ── */}
                                         <div className="fluid-tabs-container">
                                             {([
                                                 { key: "original", label: "Original" },
-                                                { key: "canvas", label: "Canvas Prints" },
-                                                { key: "paper", label: "Paper Prints" },
-                                            ] as const).map(({ key, label }) => {
+                                                ...(work.has_canvas_print || work.has_canvas_print_limited ? [{ key: "canvas", label: "Canvas Print" }] : []),
+                                                ...((work.has_paper_print || work.has_paper_print_limited || work.has_canvas_print || work.has_canvas_print_limited) ? [{ key: "paper", label: "Paper Print" }] : []),
+                                            ] as { key: "original" | "canvas" | "paper"; label: string }[]).map(({ key, label }) => {
                                                 const isActive = purchaseType === key;
                                                 return (
                                                     <button
@@ -1292,7 +1597,7 @@ export default function ArtworkDetailPage() {
                                             <div className="purchase-card-content" key={purchaseType} style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
                                                 {purchaseType === "original" ? (
                                                     <>
-                                                        {/* Purchase Details */}
+                                                        {/* ── Original Artwork ── */}
                                                         {work.original_status === "available" && (
                                                             <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
                                                                 <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.5rem" }}>Purchase Details</h3>
@@ -1305,46 +1610,26 @@ export default function ArtworkDetailPage() {
                                                             <p style={{ fontSize: "0.9rem", lineHeight: 1.7, color: "var(--color-charcoal-mid)" }}>{work.description}</p>
                                                         </div>
 
-                                                        {/* Shipping details — only when purchasable */}
                                                         {work.original_status === "available" && (
                                                             <>
                                                                 <div className="info-badge">
                                                                     <div className="info-badge-content">
                                                                         <p className="info-badge-title">Shipped Rolled in Protective Tube</p>
-                                                                        <p className="info-badge-desc">
-                                                                            Gallery-standard shipping method · Reinforced tube with acid-free tissue · Worldwide delivery
-                                                                        </p>
+                                                                        <p className="info-badge-desc">Gallery-standard shipping method · Reinforced tube with acid-free tissue · Worldwide delivery</p>
                                                                     </div>
                                                                 </div>
-
-                                                                <div style={{
-                                                                    backgroundColor: "#FFF8F0",
-                                                                    borderLeft: "3px solid #D4A574",
-                                                                    borderRadius: "6px",
-                                                                    padding: "0.85rem 1rem",
-                                                                }}>
+                                                                <div style={{ backgroundColor: "#FFF8F0", borderLeft: "3px solid #D4A574", borderRadius: "6px", padding: "0.85rem 1rem" }}>
                                                                     <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.68rem", fontWeight: 600, color: "var(--color-charcoal)", marginBottom: "0.2rem" }}>Flat crate available on request</p>
-                                                                    <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>
-                                                                        Custom crates from <span className="font-price font-medium">{convertPrice(1000)}</span>+. Contact us for details.
-                                                                    </p>
+                                                                    <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>Custom crates from <span className="font-price font-medium">{convertPrice(1000)}</span>+. Contact us for details.</p>
                                                                 </div>
                                                             </>
                                                         )}
 
-                                                        {/* Availability notice */}
                                                         {work.original_status !== "available" && STATUS_BADGE[work.original_status] && (() => {
                                                             const s = STATUS_BADGE[work.original_status]!;
                                                             return (
-                                                                <div style={{
-                                                                    backgroundColor: s.bg,
-                                                                    borderLeft: `3px solid ${s.border}`,
-                                                                    borderRadius: "6px",
-                                                                    padding: "0.85rem 1rem",
-                                                                    display: "flex",
-                                                                    alignItems: "flex-start",
-                                                                    gap: "0.65rem",
-                                                                }}>
-                                                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: s.border, marginTop: "0.35rem", flexShrink: 0 }}></div>
+                                                                <div style={{ backgroundColor: s.bg, borderLeft: `3px solid ${s.border}`, borderRadius: "6px", padding: "0.85rem 1rem", display: "flex", alignItems: "flex-start", gap: "0.65rem" }}>
+                                                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: s.border, marginTop: "0.35rem", flexShrink: 0 }} />
                                                                     <div style={{ flex: 1 }}>
                                                                         <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700, color: "var(--color-charcoal)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</p>
                                                                         {s.desc && <p style={{ margin: "0.2rem 0 0", fontSize: "0.7rem", color: "var(--color-muted)", lineHeight: 1.4 }}>{s.desc}</p>}
@@ -1362,235 +1647,364 @@ export default function ArtworkDetailPage() {
                                                             {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
                                                         </button>
                                                     </>
-                                                ) : purchaseType === "canvas" ? (
-                                                    <>
-                                                        {/* ── Canvas Prints — Step-by-Step Configurator ── */}
-                                                        <div className="pc-header">
-                                                            <p className="pc-title">Fine Art Canvas Prints</p>
-                                                            <p className="pc-subtitle">Printed &amp; fulfilled by Prodigi · Shipped worldwide</p>
-                                                        </div>
+                                                ) : purchaseType === "canvas" ? (() => {
+                                                    // Compute active sizes for current edition
+                                                    const isLimited = canvasEdition === "limited";
+                                                    const hasStd = work.has_canvas_print;
+                                                    const hasLtd = work.has_canvas_print_limited;
+                                                    // Re-derive from DB sizes: std = canvas, ltd = canvas_limited
+                                                    const activeSize = selectedCanvasSize;
+                                                    const basePrice = activeSize?.price ?? globalPrintPrice;
+                                                    const limitedSurcharge = 100;
+                                                    const finalPrice = isLimited ? basePrice + limitedSurcharge : basePrice;
 
-                                                        {/* Step 1: Select Format */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">1</span>
-                                                                <span className="step-text">Select Format</span>
+                                                    return (
+                                                        <>
+                                                            {/* ── Header ── */}
+                                                            <div className="pc-header">
+                                                                <p className="pc-title">Fine Art Canvas Print</p>
+                                                                <p className="pc-subtitle">Museum-grade 400gsm canvas · UV archival inks · Worldwide shipping</p>
                                                             </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "canvas-format" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "canvas-format" ? null : "canvas-format")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{canvasStyle === "rolled" ? `Rolled Canvas — up to ${units === "cm" ? "80 × 120 cm" : "32 × 48 in"}` : `Framed Canvas — up to ${units === "cm" ? "60 × 90 cm" : "24 × 36 in"}`}</span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "canvas-format" ? "open" : ""}`}>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`step-option ${canvasStyle === "rolled" ? "active" : ""}`}
-                                                                        onClick={() => { setCanvasStyle("rolled"); setOpenDropdown(null); }}
-                                                                    >
-                                                                        <span>Rolled Canvas — up to {units === "cm" ? "80 × 120 cm" : "32 × 48 in"}</span>
-                                                                        <span className="opt-check" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`step-option ${canvasStyle === "framed" ? "active" : ""}`}
-                                                                        onClick={() => { setCanvasStyle("framed"); setOpenDropdown(null); }}
-                                                                    >
-                                                                        <span>Framed Canvas — up to {units === "cm" ? "60 × 90 cm" : "24 × 36 in"}</span>
-                                                                        <span className="opt-check" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
 
-                                                        {/* Step 2: Select Size */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">2</span>
-                                                                <span className="step-text">Select Size</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "canvas-size" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "canvas-size" ? null : "canvas-size")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "canvas-size" ? "open" : ""}`}>
-                                                                    {(canvasStyle === "framed" ? CANVAS_SIZES.slice(0, 2) : CANVAS_SIZES).map(ps => (
-                                                                        <button
-                                                                            key={ps.labelCm}
-                                                                            type="button"
-                                                                            className={`step-option ${selectedCanvas === ps ? "active" : ""}`}
-                                                                            onClick={() => { setSelectedCanvas(ps); setOpenDropdown(null); }}
-                                                                        >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
-                                                                            <span className="opt-check" />
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Step 3: Select Frame (conditional — only when framed) */}
-                                                        {canvasStyle === "framed" && (
-                                                            <div className="step-row step-reveal" key="frame-step">
+                                                            {/* Step 1: Edition */}
+                                                            <div className="step-row">
                                                                 <div className="step-label">
-                                                                    <span className="step-number">3</span>
-                                                                    <span className="step-text">Select Frame</span>
+                                                                    <span className="step-number">1</span>
+                                                                    <span className="step-text">Select Edition</span>
                                                                 </div>
-                                                                <div className="step-select-wrap">
-                                                                    <button
-                                                                        className={`step-trigger ${openDropdown === "canvas-frame" ? "open" : ""}`}
-                                                                        onClick={() => setOpenDropdown(openDropdown === "canvas-frame" ? null : "canvas-frame")}
-                                                                        type="button"
-                                                                    >
-                                                                        <span>{canvasFrame === "black" ? "Black Floater Frame" : canvasFrame === "oak" ? "Natural Oak Frame" : "White Slim Frame"}</span>
-                                                                        <span className="step-chevron" />
-                                                                    </button>
-                                                                    <div className={`step-options ${openDropdown === "canvas-frame" ? "open" : ""}`}>
-                                                                        {([
-                                                                            { value: "black" as const, label: "Black Floater Frame" },
-                                                                            { value: "oak" as const, label: "Natural Oak Frame" },
-                                                                            { value: "white" as const, label: "White Slim Frame" },
-                                                                        ]).map(opt => (
-                                                                            <button
-                                                                                key={opt.value}
-                                                                                type="button"
-                                                                                className={`step-option ${canvasFrame === opt.value ? "active" : ""}`}
-                                                                                onClick={() => { setCanvasFrame(opt.value); setOpenDropdown(null); }}
-                                                                            >
-                                                                                <span>{opt.label}</span>
-                                                                                <span className="opt-check" />
-                                                                            </button>
-                                                                        ))}
+                                                                <div className={`edition-cards-grid ${hasStd && hasLtd ? "two-col" : "one-col"}`}>
+                                                                    {/* Open Edition */}
+                                                                    {(hasStd || !hasLtd) && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`edition-card open-edition ${canvasEdition === "standard" ? "active" : ""}`}
+                                                                            onClick={() => setCanvasEdition("standard")}
+                                                                        >
+                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
+                                                                            <div className="edition-card-header">
+                                                                                <span className="edition-card-icon">
+                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                                                                </span>
+                                                                                <span className="edition-card-title">Open Edition</span>
+                                                                            </div>
+                                                                            <p className="edition-card-desc">Museum-quality · Fast worldwide shipping</p>
+                                                                        </button>
+                                                                    )}
+                                                                    {/* Limited Edition */}
+                                                                    {hasLtd && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`edition-card limited-edition ${canvasEdition === "limited" ? "active" : ""}`}
+                                                                            onClick={() => setCanvasEdition("limited")}
+                                                                        >
+                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
+                                                                            <div className="edition-card-header">
+                                                                                <span className="edition-card-icon">
+                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                                                                                </span>
+                                                                                <span className="edition-card-title">Limited Edition</span>
+                                                                            </div>
+                                                                            <p className="edition-card-desc">Hand-signed · Certificate of authenticity</p>
+                                                                            {work.canvas_print_limited_quantity && (
+                                                                                <span className="edition-scarcity-badge">
+                                                                                    <span className="edition-scarcity-dot" />
+                                                                                    Only {work.canvas_print_limited_quantity} copies worldwide
+                                                                                </span>
+                                                                            )}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Edition features table */}
+                                                                <div className="edition-features" key={`canvas-features-${canvasEdition}`}>
+                                                                    <div className="edition-features-list">
+                                                                        <div className="edition-feature-row">
+                                                                            <span className="edition-feature-icon positive">✓</span>
+                                                                            <span>Museum-grade archival printing · UV-resistant inks</span>
+                                                                        </div>
+                                                                        {canvasEdition === "standard" ? (
+                                                                            <>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Fast delivery — 2–5 business days worldwide</span>
+                                                                                </div>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>400gsm gallery canvas · Ready to frame or stretch</span>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Personally signed & numbered by the artist</span>
+                                                                                </div>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Certificate of Authenticity included</span>
+                                                                                </div>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon caution">◷</span>
+                                                                                    <span>Delivery in 2–3 weeks (hand-finished to order)</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        )}
 
-                                                        {/* Info Badge — material details */}
-                                                        <div className="info-badge">
-                                                            <div className="info-badge-content">
-                                                                <p className="info-badge-title">Museum-Grade 400gsm Canvas</p>
-                                                                <p className="info-badge-desc">
-                                                                    {canvasStyle === "framed"
-                                                                        ? `Premium floating frame · ${canvasFrame === "black" ? "Matte black" : canvasFrame === "oak" ? "Natural oak" : "White slim"} finish · Ready to hang`
-                                                                        : "Shipped rolled in protective tube · Ideal for custom stretching or framing"
-                                                                    }
-                                                                    {" · UV-resistant archival inks"}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Footer — price + CTA */}
-                                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                            <div>
-                                                                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>
-                                                                    {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}
-                                                                </span>
-                                                            </div>
-                                                            <button
-                                                                className="premium-cta-btn"
-                                                                onClick={() => addItem({
-                                                                    id: `${work.id}-canvas-${canvasStyle}${canvasStyle === "framed" ? `-${canvasFrame}` : ""}-${selectedCanvas.labelCm}`,
-                                                                    slug: String(work.id),
-                                                                    title: work.title,
-                                                                    type: "print",
-                                                                    imageGradientFrom: work.gradientFrom!,
-                                                                    imageGradientTo: work.gradientTo!,
-                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
-                                                                    price: Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)),
-                                                                    finish: canvasStyle === "framed" ? `Framed (${canvasFrame})` : "Rolled Canvas",
-                                                                    size: units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn,
-                                                                })}
-                                                            >Add to Cart</button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {/* ── Paper Prints — Rolled Only ── */}
-                                                        <div className="pc-header">
-                                                            <p className="pc-title">Fine Art Paper Prints</p>
-                                                            <p className="pc-subtitle">Printed &amp; fulfilled by Prodigi · Shipped rolled worldwide</p>
-                                                        </div>
-
-                                                        {/* Step 1: Select Size */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">1</span>
-                                                                <span className="step-text">Select Size</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "paper-size" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "paper-size" ? null : "paper-size")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span></span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "paper-size" ? "open" : ""}`}>
-                                                                    {PAPER_SIZES.map(ps => (
-                                                                        <button
-                                                                            key={ps.labelCm}
-                                                                            type="button"
-                                                                            className={`step-option ${selectedPaper === ps ? "active" : ""}`}
-                                                                            onClick={() => { setSelectedPaper(ps); setOpenDropdown(null); }}
-                                                                        >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span></span>
-                                                                            <span className="opt-check" />
-                                                                        </button>
-                                                                    ))}
+                                                            {/* Step 2: Size */}
+                                                            <div className="step-row">
+                                                                <div className="step-label">
+                                                                    <span className="step-number">2</span>
+                                                                    <span className="step-text">Select Size</span>
+                                                                </div>
+                                                                <div className="step-select-wrap">
+                                                                    <button
+                                                                        className={`step-trigger ${openDropdown === "canvas-size" ? "open" : ""}`}
+                                                                        onClick={() => setOpenDropdown(openDropdown === "canvas-size" ? null : "canvas-size")}
+                                                                        type="button"
+                                                                    >
+                                                                        <span>{activeSize?.size_label ?? "Select a size"} &nbsp;—&nbsp; <span className="font-price font-medium">{convertPrice(finalPrice)}</span></span>
+                                                                        <span className="step-chevron" />
+                                                                    </button>
+                                                                    <div className={`step-options ${openDropdown === "canvas-size" ? "open" : ""}`}>
+                                                                        {canvasSizes.length > 0 ? canvasSizes.map(s => (
+                                                                            <button
+                                                                                key={s.size_label}
+                                                                                type="button"
+                                                                                className={`step-option ${selectedCanvasSize?.size_label === s.size_label ? "active" : ""}`}
+                                                                                onClick={() => { setSelectedCanvasSize(s); setOpenDropdown(null); }}
+                                                                            >
+                                                                                <span>{s.size_label} &nbsp;—&nbsp; <span className="font-price font-medium">{convertPrice(isLimited ? s.price + limitedSurcharge : s.price)}</span></span>
+                                                                                <span className="opt-check" />
+                                                                            </button>
+                                                                        )) : (
+                                                                            <p style={{ padding: "0.75rem 1rem", fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "rgba(49,50,62,0.4)", fontStyle: "italic" }}>Sizes coming soon</p>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
 
-                                                        {/* Info Badge — material details */}
-                                                        <div className="info-badge">
-                                                            <div className="info-badge-content">
-                                                                <p className="info-badge-title">Hahnemühle 310gsm Museum Paper</p>
-                                                                <p className="info-badge-desc">
-                                                                    Archival giclée printing · Matte finish · Shipped rolled in protective tube · Colour-accurate · Fade-resistant for 100+ years
-                                                                </p>
+                                                            {/* Info badge */}
+                                                            <div className="info-badge">
+                                                                <div className="info-badge-content">
+                                                                    <p className="info-badge-title">{isLimited ? "Hand-signed Limited Print" : "Museum-Grade 400gsm Canvas"}</p>
+                                                                    <p className="info-badge-desc">
+                                                                        {isLimited
+                                                                            ? "Individually signed and numbered by the artist · Includes certificate of authenticity · Archival UV inks"
+                                                                            : "Giclée-quality printing · Shipped rolled in protective tube · UV-resistant archival inks · Ready to frame or stretch"
+                                                                        }
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                        </div>
 
-                                                        {/* Footer — price + CTA */}
-                                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                            <div>
-                                                                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(currentPaperPrice)}</span>
+                                                            {/* Footer CTA */}
+                                                            <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                                <div>
+                                                                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
+                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(finalPrice)}</span>
+                                                                </div>
+                                                                <button
+                                                                    className="premium-cta-btn"
+                                                                    onClick={() => addItem({
+                                                                        id: `${work.id}-canvas-${canvasEdition}-${activeSize?.size_label ?? "default"}`,
+                                                                        slug: String(work.id),
+                                                                        title: work.title,
+                                                                        type: isLimited ? "canvas_print_limited" : "canvas_print",
+                                                                        imageGradientFrom: work.gradientFrom!,
+                                                                        imageGradientTo: work.gradientTo!,
+                                                                        imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
+                                                                        price: finalPrice,
+                                                                        finish: isLimited ? "Limited Edition Canvas" : "Canvas Print",
+                                                                        size: activeSize?.size_label ?? "",
+                                                                    })}
+                                                                >Add to Cart</button>
                                                             </div>
-                                                            <button
-                                                                className="premium-cta-btn"
-                                                                onClick={() => addItem({
-                                                                    id: `${work.id}-paper-rolled-${selectedPaper.labelCm}`,
-                                                                    slug: String(work.id),
-                                                                    title: work.title,
-                                                                    type: "print",
-                                                                    imageGradientFrom: work.gradientFrom!,
-                                                                    imageGradientTo: work.gradientTo!,
-                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
-                                                                    price: currentPaperPrice,
-                                                                    finish: "Rolled — Matte",
-                                                                    size: units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn,
-                                                                })}
-                                                            >Add to Cart</button>
-                                                        </div>
-                                                    </>
-                                                )}
+                                                        </>
+                                                    );
+                                                })() : (() => {
+                                                    // Paper prints
+                                                    const isLimited = paperEdition === "limited";
+                                                    const hasStd = work.has_paper_print;
+                                                    const hasLtd = work.has_paper_print_limited;
+                                                    const activeSize = selectedPaperSize;
+                                                    const basePrice = activeSize?.price ?? Math.round(globalPrintPrice * 0.8);
+                                                    const limitedSurcharge = 100;
+                                                    const finalPrice = isLimited ? basePrice + limitedSurcharge : basePrice;
+
+                                                    return (
+                                                        <>
+                                                            {/* ── Header ── */}
+                                                            <div className="pc-header">
+                                                                <p className="pc-title">Fine Art Paper Print</p>
+                                                                <p className="pc-subtitle">Hahnemühle 310gsm museum paper · Giclée printing · Worldwide shipping</p>
+                                                            </div>
+
+                                                            {/* Step 1: Edition */}
+                                                            <div className="step-row">
+                                                                <div className="step-label">
+                                                                    <span className="step-number">1</span>
+                                                                    <span className="step-text">Select Edition</span>
+                                                                </div>
+                                                                <div className={`edition-cards-grid ${hasStd && hasLtd ? "two-col" : "one-col"}`}>
+                                                                    {/* Open Edition */}
+                                                                    {(hasStd || !hasLtd) && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`edition-card open-edition ${paperEdition === "standard" ? "active" : ""}`}
+                                                                            onClick={() => setPaperEdition("standard")}
+                                                                        >
+                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
+                                                                            <div className="edition-card-header">
+                                                                                <span className="edition-card-icon">
+                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                                                                </span>
+                                                                                <span className="edition-card-title">Open Edition</span>
+                                                                            </div>
+                                                                            <p className="edition-card-desc">Museum-quality · Fast worldwide shipping</p>
+                                                                        </button>
+                                                                    )}
+                                                                    {/* Limited Edition */}
+                                                                    {hasLtd && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`edition-card limited-edition ${paperEdition === "limited" ? "active" : ""}`}
+                                                                            onClick={() => setPaperEdition("limited")}
+                                                                        >
+                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
+                                                                            <div className="edition-card-header">
+                                                                                <span className="edition-card-icon">
+                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                                                                                </span>
+                                                                                <span className="edition-card-title">Limited Edition</span>
+                                                                            </div>
+                                                                            <p className="edition-card-desc">Hand-signed · Certificate of authenticity</p>
+                                                                            {work.paper_print_limited_quantity && (
+                                                                                <span className="edition-scarcity-badge">
+                                                                                    <span className="edition-scarcity-dot" />
+                                                                                    Only {work.paper_print_limited_quantity} copies worldwide
+                                                                                </span>
+                                                                            )}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Edition features table */}
+                                                                <div className="edition-features" key={`paper-features-${paperEdition}`}>
+                                                                    <div className="edition-features-list">
+                                                                        <div className="edition-feature-row">
+                                                                            <span className="edition-feature-icon positive">✓</span>
+                                                                            <span>Museum-grade archival printing · UV-resistant inks</span>
+                                                                        </div>
+                                                                        {paperEdition === "standard" ? (
+                                                                            <>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Fast delivery — 2–5 business days worldwide</span>
+                                                                                </div>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Hahnemühle 310gsm museum paper · Matte finish</span>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Personally signed & numbered by the artist</span>
+                                                                                </div>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon positive">✓</span>
+                                                                                    <span>Certificate of Authenticity included</span>
+                                                                                </div>
+                                                                                <div className="edition-feature-row">
+                                                                                    <span className="edition-feature-icon caution">◷</span>
+                                                                                    <span>Delivery in 2–3 weeks (hand-finished to order)</span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Step 2: Size */}
+                                                            <div className="step-row">
+                                                                <div className="step-label">
+                                                                    <span className="step-number">2</span>
+                                                                    <span className="step-text">Select Size</span>
+                                                                </div>
+                                                                <div className="step-select-wrap">
+                                                                    <button
+                                                                        className={`step-trigger ${openDropdown === "paper-size" ? "open" : ""}`}
+                                                                        onClick={() => setOpenDropdown(openDropdown === "paper-size" ? null : "paper-size")}
+                                                                        type="button"
+                                                                    >
+                                                                        <span>{activeSize?.size_label ?? "Select a size"} &nbsp;—&nbsp; <span className="font-price font-medium">{convertPrice(finalPrice)}</span></span>
+                                                                        <span className="step-chevron" />
+                                                                    </button>
+                                                                    <div className={`step-options ${openDropdown === "paper-size" ? "open" : ""}`}>
+                                                                        {paperSizes.length > 0 ? paperSizes.map(s => (
+                                                                            <button
+                                                                                key={s.size_label}
+                                                                                type="button"
+                                                                                className={`step-option ${selectedPaperSize?.size_label === s.size_label ? "active" : ""}`}
+                                                                                onClick={() => { setSelectedPaperSize(s); setOpenDropdown(null); }}
+                                                                            >
+                                                                                <span>{s.size_label} &nbsp;—&nbsp; <span className="font-price font-medium">{convertPrice(isLimited ? s.price + limitedSurcharge : s.price)}</span></span>
+                                                                                <span className="opt-check" />
+                                                                            </button>
+                                                                        )) : (
+                                                                            <p style={{ padding: "0.75rem 1rem", fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "rgba(49,50,62,0.4)", fontStyle: "italic" }}>Sizes coming soon</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Info badge */}
+                                                            <div className="info-badge">
+                                                                <div className="info-badge-content">
+                                                                    <p className="info-badge-title">{isLimited ? "Hand-signed Limited Print" : "Hahnemühle 310gsm Museum Paper"}</p>
+                                                                    <p className="info-badge-desc">
+                                                                        {isLimited
+                                                                            ? "Individually signed and numbered by the artist · Certificate of authenticity · Archival matte finish · Fade-resistant 100+ years"
+                                                                            : "Archival giclée printing · Matte finish · Shipped rolled in protective tube · Colour-accurate · Fade-resistant for 100+ years"
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Footer CTA */}
+                                                            <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                                <div>
+                                                                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
+                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(finalPrice)}</span>
+                                                                </div>
+                                                                <button
+                                                                    className="premium-cta-btn"
+                                                                    onClick={() => addItem({
+                                                                        id: `${work.id}-paper-${paperEdition}-${activeSize?.size_label ?? "default"}`,
+                                                                        slug: String(work.id),
+                                                                        title: work.title,
+                                                                        type: isLimited ? "paper_print_limited" : "paper_print",
+                                                                        imageGradientFrom: work.gradientFrom!,
+                                                                        imageGradientTo: work.gradientTo!,
+                                                                        imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
+                                                                        price: finalPrice,
+                                                                        finish: isLimited ? "Limited Edition Paper" : "Archival Paper — Matte",
+                                                                        size: activeSize?.size_label ?? "",
+                                                                    })}
+                                                                >Add to Cart</button>
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     </>
                                 );
                             })()}
+
                         </div>
                     </div>
                 </div>

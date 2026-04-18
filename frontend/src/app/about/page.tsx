@@ -20,8 +20,8 @@ export default function AboutPage() {
     useEffect(() => {
         setIsVisible(true);
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
-            .then(data => setSettings(data))
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data) setSettings(data); })
             .catch(() => console.warn("Backend unavailable"));
     }, []);
 

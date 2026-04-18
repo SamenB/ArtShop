@@ -143,7 +143,7 @@ export default function LabelsTab() {
         });
         setCreatingCat(false);
         if (res.ok) { setNewCatName(""); reload(); }
-        else { const e = await res.json(); alert(e.detail || "Failed to create category"); }
+        else { const e = await res.json().catch(() => ({})); alert(e.detail || "Failed to create category"); }
     };
 
     const deleteCategory = async (id: number) => {
@@ -159,7 +159,7 @@ export default function LabelsTab() {
             body: JSON.stringify({ title, category_id }),
         });
         if (res.ok) reload();
-        else { const e = await res.json(); alert(e.detail || "Failed to add tag"); }
+        else { const e = await res.json().catch(() => ({})); alert(e.detail || "Failed to add tag"); }
     };
 
     const deleteTag = async (id: number, title: string) => {

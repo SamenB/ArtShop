@@ -953,6 +953,21 @@ export default function CheckoutPage() {
         }
     };
 
+    /* ---- Safely extract a string from FastAPI/Pydantic error detail ---- */
+    const parseApiError = (detail: unknown, fallback: string): string => {
+        if (!detail) return fallback;
+        if (typeof detail === "string") return detail;
+        // Pydantic validation errors come as an array of { loc, msg, ... } objects
+        if (Array.isArray(detail)) {
+            return detail
+                .map((e: { loc?: string[]; msg?: string }) =>
+                    [e.loc?.slice(-1)[0], e.msg].filter(Boolean).join(": ")
+                )
+                .join("\n") || fallback;
+        }
+        return fallback;
+    };
+
     /* ---- Submit: Create order → Monobank payment ---- */
     const handleSubmit = async () => {
         setIsSubmitting(true);
@@ -995,7 +1010,7 @@ export default function CheckoutPage() {
 
             if (!orderRes.ok) {
                 const errData = await orderRes.json();
-                setSubmitError(errData.detail || "Failed to create order. Please try again.");
+                setSubmitError(parseApiError(errData.detail, "Failed to create order. Please try again."));
                 return;
             }
 
@@ -1019,7 +1034,7 @@ export default function CheckoutPage() {
 
             if (!paymentRes.ok) {
                 const errData = await paymentRes.json();
-                setSubmitError(errData.detail || "Payment initiation failed. Please try again.");
+                setSubmitError(parseApiError(errData.detail, "Payment initiation failed. Please try again."));
                 return;
             }
 

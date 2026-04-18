@@ -244,7 +244,7 @@ export default function ArtworksTab() {
                 apiFetch(`${getApiUrl()}/artworks?limit=100`),
                 apiFetch(`${getApiUrl()}/labels/categories`),
                 apiFetch(`${getApiUrl()}/labels`),
-                apiFetch(`${getApiUrl()}/print-pricing/aspect-ratios`),
+                apiFetch(`${getApiUrl()}/print-pricing/aspect-ratios/with-pricing`),
             ]);
             if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
             if (catRes.ok) { const d = await catRes.json(); setCategories(d); }
@@ -293,6 +293,9 @@ export default function ArtworksTab() {
             if (!payload.width_cm || payload.width_cm === "") { payload.width_cm = null; payload.width_in = null; }
             if (!payload.height_cm || payload.height_cm === "") { payload.height_cm = null; payload.height_in = null; }
         }
+
+        if (payload.canvas_print_limited_quantity === "") payload.canvas_print_limited_quantity = null;
+        if (payload.paper_print_limited_quantity === "") payload.paper_print_limited_quantity = null;
 
         const method = editingId ? "PUT" : "POST";
         const url = editingId ? `${apiUrl}/artworks/${editingId}` : `${apiUrl}/artworks`;
@@ -518,28 +521,43 @@ export default function ArtworksTab() {
                                         ))}
                                     </select>
                                 </div>
-                                {formData.print_aspect_ratio_id && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Min Size Label</label>
-                                            <input
-                                                value={formData.print_min_size_label || ""}
-                                                onChange={e => setFormData({ ...formData, print_min_size_label: e.target.value })}
-                                                placeholder='e.g. "30×40 cm"'
-                                                className={inp}
-                                            />
+                                {formData.print_aspect_ratio_id && (() => {
+                                    const selectedRatio = aspectRatios.find((r: any) => r.id === formData.print_aspect_ratio_id) as any;
+                                    const sizesForRatio: string[] = selectedRatio?.pricing_rows
+                                        ? [...new Set<string>((selectedRatio.pricing_rows as any[]).map((r: any) => r.size_label as string))].sort()
+                                        : [];
+                                    return (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Min Size (smallest available)</label>
+                                                <select
+                                                    value={formData.print_min_size_label || ""}
+                                                    onChange={e => setFormData({ ...formData, print_min_size_label: e.target.value || null })}
+                                                    className={inp}
+                                                >
+                                                    <option value="">— No minimum restriction —</option>
+                                                    {sizesForRatio.map(s => <option key={s} value={s}>{s}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Max Size (largest available)</label>
+                                                <select
+                                                    value={formData.print_max_size_label || ""}
+                                                    onChange={e => setFormData({ ...formData, print_max_size_label: e.target.value || null })}
+                                                    className={inp}
+                                                >
+                                                    <option value="">— No maximum restriction —</option>
+                                                    {sizesForRatio.map(s => <option key={s} value={s}>{s}</option>)}
+                                                </select>
+                                            </div>
+                                            {sizesForRatio.length === 0 && (
+                                                <p className="col-span-2 text-[10px] text-amber-600 font-semibold bg-amber-50 rounded-lg px-3 py-2">
+                                                    ⚠ No sizes found for this ratio. Add them in the Print Pricing tab first.
+                                                </p>
+                                            )}
                                         </div>
-                                        <div>
-                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Max Size Label</label>
-                                            <input
-                                                value={formData.print_max_size_label || ""}
-                                                onChange={e => setFormData({ ...formData, print_max_size_label: e.target.value })}
-                                                placeholder='e.g. "80×100 cm"'
-                                                className={inp}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
                             </div>
                         </div>
                         )}
@@ -611,9 +629,21 @@ export default function ArtworksTab() {
                                 <button onClick={() => handleDelete(art.id)} className="flex-1 bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg hover:bg-red-600 transition-all">Delete</button>
                             </div>
                         </div>
-                        <div className="px-4 py-3.5">
+                    <div className="px-4 py-3.5">
                             <h3 className="font-bold text-sm text-[#31323E] truncate leading-tight mb-0.5">{art.title}</h3>
                             <p className="text-xs font-semibold text-[#31323E]/40">${art.original_price}</p>
+                            {/* Print badges */}
+                            {(art.has_canvas_print || art.has_canvas_print_limited || art.has_paper_print || art.has_paper_print_limited) && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                    {art.has_canvas_print && <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 rounded">Canvas</span>}
+                                    {art.has_canvas_print_limited && <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-violet-50 text-violet-600 rounded">Canvas Ltd</span>}
+                                    {art.has_paper_print && <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 rounded">Paper</span>}
+                                    {art.has_paper_print_limited && <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 rounded">Paper Ltd</span>}
+                                </div>
+                            )}
+                            {art.print_min_size_label && art.print_max_size_label && (
+                                <p className="text-[9px] text-[#31323E]/30 font-medium mt-1">{art.print_min_size_label} – {art.print_max_size_label}</p>
+                            )}
                         </div>
                     </div>
                 ))}

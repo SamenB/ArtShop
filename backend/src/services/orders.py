@@ -156,23 +156,6 @@ class OrderService(BaseService):
 
             logger.info("Order created successfully: {}", order)
 
-            # Fire admin Telegram notification in background (non-blocking)
-            import asyncio
-            from src.connectors.telegram import notify_admin_new_order
-
-            items_summary = "\n".join(
-                f"  • {it.edition_type} — ${it.price}"
-                for it in order.items
-            )
-            asyncio.create_task(
-                notify_admin_new_order(
-                    order_id=order.id,
-                    customer_name=f"{order.first_name} {order.last_name}",
-                    total=order.total_price,
-                    items_summary=items_summary,
-                )
-            )
-
             return order
 
         except (
@@ -280,6 +263,11 @@ class OrderService(BaseService):
             logger.info(
                 "Admin updated payment status of {} to {} (forced)", order_id, payment_status
             )
+            
+            # If manually paid, optionally alert admin (though they did it themselves, it's good for records)
+            if payment_status == "paid" and order.fulfillment_status in ["cancelled", "pending"]:
+                self._fire_admin_telegram_alert(await self.db.orders.get_one(id=order_id))
+
         except SQLAlchemyError:
             await self.db.rollback()
             raise DatabaseException
@@ -439,6 +427,34 @@ class OrderService(BaseService):
         )
         thread.start()
 
+    def _fire_admin_telegram_alert(self, order) -> None:
+        """
+        Fires an async task to notify the admin via Telegram of a successfully paid new order.
+        Passes all available order fields for a rich, actionable notification message.
+        Non-blocking — wraps the coroutine in asyncio.create_task().
+        """
+        import asyncio
+        from src.connectors.telegram import notify_admin_new_order
+
+        items = getattr(order, "items", [])
+        items_summary = "\n".join(
+            f"  • {it.edition_type} — ${it.price}" for it in items
+        ) if items else "  • (No data)"
+
+        asyncio.create_task(
+            notify_admin_new_order(
+                order_id=order.id,
+                customer_name=f"{order.first_name} {order.last_name}",
+                total=order.total_price,
+                items_summary=items_summary,
+                customer_email=order.email or "",
+                customer_phone=order.phone or "",
+                shipping_city=order.shipping_city or "",
+                shipping_country=order.shipping_country or "",
+                payment_status=order.payment_status or "paid",
+            )
+        )
+
     async def link_payment_session(self, order_id: int, invoice_id: str, payment_url: str) -> None:
         """
         Associates a Monobank payment session with an existing order.
@@ -563,6 +579,9 @@ class OrderService(BaseService):
                     subject_template=subject_tpl,
                     body_template=body_tpl,
                 )
+                
+                # Notify admin via Telegram that a new paid order has arrived
+                self._fire_admin_telegram_alert(order)
 
         except SQLAlchemyError as e:
             logger.error("Failed to update payment status for invoice {}: {}", invoice_id, e)

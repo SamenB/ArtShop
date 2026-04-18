@@ -30,9 +30,9 @@ export default function ContactPage() {
         setIsVisible(true);
         // Fetch public settings for dynamic contact details
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
-            .then(data => setSettings(data))
-            .catch(err => console.error("Failed to fetch settings", err));
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data) setSettings(data); })
+            .catch(err => console.warn("Failed to fetch settings", err));
     }, []);
 
     /** Validates inputs and delegates the form payload to the backend messaging service. */

@@ -8,7 +8,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 
 /** Supported types of items that can be added to the cart. */
-export type CartItemType = "original" | "print";
+export type CartItemType = "original" | "print" | "canvas_print" | "canvas_print_limited" | "paper_print" | "paper_print_limited";
 
 /** Represents a single item entry in the shopping cart. */
 export interface CartItem {

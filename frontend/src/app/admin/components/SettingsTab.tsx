@@ -151,11 +151,13 @@ export default function SettingsTab() {
             const desktopForm = new FormData();
             desktopForm.append("file", desktopBlob, `cover_${activeCoverSlot + 1}_desktop.webp`);
             const resDesktop = await apiFetch(`${getApiUrl()}/upload/image`, { method: "POST", body: desktopForm });
+            if (!resDesktop.ok) throw new Error("Upload failed");
             const dData = await resDesktop.json();
 
             const mobileForm = new FormData();
             mobileForm.append("file", mobileBlob, `cover_${activeCoverSlot + 1}_mobile.webp`);
             const resMobile = await apiFetch(`${getApiUrl()}/upload/image`, { method: "POST", body: mobileForm });
+            if (!resMobile.ok) throw new Error("Upload failed");
             const mData = await resMobile.json();
 
             setSettings(prev => prev ? { ...prev, [fields.desktop]: dData.url, [fields.mobile]: mData.url } : null);

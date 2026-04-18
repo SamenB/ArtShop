@@ -33,7 +33,10 @@ export default function GallerySlugRedirect() {
 
         // Fetch the specific artwork to build the most up-to-date pretty URL.
         apiFetch(`${getApiUrl()}/artworks/${id}`)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`API error ${res.status}`);
+                return res.json();
+            })
             .then(data => {
                 const item = data.data || data;
                 // Use the canonical URL generator to ensure formatting consistency.

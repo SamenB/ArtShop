@@ -94,6 +94,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         async function fetchRates() {
             try {
                 const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+                if (!res.ok) throw new Error(`Rate API ${res.status}`);
                 const data = await res.json();
                 if (data && data.rates) {
                     setRates({
@@ -102,7 +103,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
                     });
                 }
             } catch (err) {
-                console.error("Exchange rate API inaccessible, using cached fallbacks.");
+                console.warn("Exchange rate API inaccessible, using cached fallbacks.");
             }
         }
         fetchRates();

@@ -19,8 +19,9 @@ export default function ImagePreloader() {
         // main thread interactive paint
         const runPreload = () => {
              apiFetch(`${getApiUrl()}/artworks?limit=1000`)
-                .then(res => res.json())
+                .then(res => res.ok ? res.json() : null)
                 .then(data => {
+                    if (!data) return;
                     const rawData = data.items || data.data || data;
                     if (!Array.isArray(rawData)) return;
                     

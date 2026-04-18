@@ -837,11 +837,11 @@ function ShopPageContent() {
     useEffect(() => {
         const apiUrl = getApiUrl();
         Promise.all([
-            apiFetch(`${apiUrl}/artworks?limit=1000`).then(r => r.json()),
-            apiFetch(`${apiUrl}/labels/categories`).then(r => r.json()),
-            apiFetch(`${apiUrl}/labels`).then(r => r.json()),
+            apiFetch(`${apiUrl}/artworks?limit=1000`).then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
+            apiFetch(`${apiUrl}/labels/categories`).then(r => r.ok ? r.json() : []).catch(() => []),
+            apiFetch(`${apiUrl}/labels`).then(r => r.ok ? r.json() : []).catch(() => []),
         ]).then(([artData, catData, lblData]) => {
-            const rawData = artData.items || artData.data || artData;
+            const rawData = artData.items || artData.data || artData || [];
             if (Array.isArray(rawData)) {
                 const items = rawData.map((item: any, idx: number) => ({
                     ...item,
@@ -856,8 +856,10 @@ function ShopPageContent() {
             if (Array.isArray(lblData)) setLabels(lblData);
         }).catch(err => {
             console.error("Shop initialization failed:", err);
-            setError("Network error.");
-        }).finally(() => setLoading(false));
+            setError("Failed to load catalog data from server.");
+        }).finally(() => {
+            setLoading(false);
+        });
     }, []);
 
     /** Fetch the authenticated user's liked artwork IDs for UI state init. */

@@ -309,7 +309,7 @@ export default function PrintPartnersTab() {
 
         // Check bot configuration
         apiFetch(`${getApiUrl()}/telegram/status`)
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : null)
             .then(setBotStatus)
             .catch(() => {});
     }, []);
@@ -337,6 +337,7 @@ export default function PrintPartnersTab() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ chat_id: partner.chatId, message: testMsg }),
             });
+            if (!res.ok) throw new Error("Server error");
             const data = await res.json();
             setTestResult(data.success ? `✅ Test sent to "${partner.name}"!` : `❌ ${data.detail}`);
         } catch {

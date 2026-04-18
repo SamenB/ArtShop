@@ -482,6 +482,7 @@ function TelegramSendPanel({ order, onPrintOrdered }: { order: any; onPrintOrder
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ chat_id: partner.chatId, message }),
             });
+            if (!res.ok) throw new Error("Server error");
             const data = await res.json();
             if (data.success) {
                 setSent(true);
