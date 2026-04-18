@@ -46,6 +46,7 @@ class PrintAspectRatioOrm(Base):
         back_populates="aspect_ratio",
         cascade="all, delete-orphan",
         order_by="PrintPricingOrm.print_type, PrintPricingOrm.price",
+        lazy="selectin",
     )
 
     def __str__(self) -> str:

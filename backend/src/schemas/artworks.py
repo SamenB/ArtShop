@@ -8,6 +8,7 @@ import re
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.schemas.labels import Label
+from src.schemas.print_pricing import AspectRatioWithPricing
 
 
 class OriginalStatus(str, enum.Enum):
@@ -152,7 +153,9 @@ class ArtworkWithLabels(Artwork):
         None, description="Array of image URLs or image objects."
     )
     # Nested aspect ratio object (serialized from the SQLAlchemy relationship)
-    print_aspect_ratio: dict | None = None
+    print_aspect_ratio: AspectRatioWithPricing | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ArtworkPatchRequest(BaseModel):
