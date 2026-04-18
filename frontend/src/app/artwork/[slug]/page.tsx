@@ -1273,271 +1273,213 @@ export default function ArtworkDetailPage() {
                                             }
 
                                             /* ══════════════════════════════════════
-                                               Premium Edition Selector Cards
+                                               Pastel Minimalist Edition Selection
                                                ══════════════════════════════════════ */
-                                            .edition-cards-grid {
-                                                display: grid;
-                                                gap: 0.75rem;
+                                            .pastel-grid {
+                                                display: flex;
+                                                flex-direction: column;
+                                                gap: 0.6rem;
                                                 padding-left: 10px;
                                             }
-                                            .edition-cards-grid.two-col {
-                                                grid-template-columns: 1fr 1fr;
-                                            }
-                                            .edition-cards-grid.one-col {
-                                                grid-template-columns: 1fr;
-                                            }
 
-                                            /* Shared card base */
-                                            .edition-card {
+                                            .pastel-card {
                                                 position: relative;
                                                 display: flex;
-                                                flex-direction: column;
-                                                padding: 1.15rem 1rem 1rem;
-                                                border-radius: 14px;
+                                                align-items: flex-start;
+                                                padding: 1.1rem;
+                                                background: #FFFFFF;
+                                                border: 1px solid #EAEAEA;
+                                                border-radius: 8px;
                                                 cursor: pointer;
                                                 text-align: left;
-                                                transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-                                                overflow: hidden;
-                                                background: #fff;
-                                                border: 1.5px solid rgba(49,50,62,0.12);
-                                                outline: none;
+                                                transition: all 0.3s ease;
                                                 -webkit-tap-highlight-color: transparent;
+                                                outline: none;
+                                                overflow: hidden;
                                             }
 
-                                            /* Subtle top shimmer line on hover */
-                                            .edition-card::before {
-                                                content: "";
+                                            .pastel-card:hover {
+                                                border-color: #D6D6D6;
+                                            }
+
+                                            /* Open Edition Accent */
+                                            .pastel-card.open-edition::before {
+                                                content: '';
                                                 position: absolute;
                                                 top: 0;
-                                                left: 15%;
-                                                right: 15%;
-                                                height: 2.5px;
-                                                border-radius: 0 0 4px 4px;
-                                                opacity: 0;
-                                                transition: opacity 0.3s ease, left 0.3s ease, right 0.3s ease;
+                                                left: 0;
+                                                right: 0;
+                                                height: 0px;
+                                                background: #2A2C3A;
+                                                transition: height 0.3s ease;
+                                            }
+                                            .pastel-card.open-edition.active {
+                                                background: #FFFFFF;
+                                                border-color: #E2DDD0;
+                                                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04);
+                                            }
+                                            .pastel-card.open-edition.active::before {
+                                                height: 3px;
                                             }
 
-                                            /* ── Open Edition — dark elegant ── */
-                                            .edition-card.open-edition {
-                                                border-color: rgba(49,50,62,0.12);
-                                            }
-                                            .edition-card.open-edition::before {
-                                                background: #31323E;
-                                            }
-                                            .edition-card.open-edition.active {
-                                                border-color: #31323E;
-                                                background: linear-gradient(135deg, rgba(49,50,62,0.04) 0%, rgba(49,50,62,0.01) 100%);
-                                                box-shadow: 0 0 0 3px rgba(49,50,62,0.08), 0 4px 16px rgba(49,50,62,0.06);
-                                            }
-                                            .edition-card.open-edition.active::before {
-                                                opacity: 0.7;
-                                                left: 10%;
-                                                right: 10%;
-                                            }
-                                            @media (hover: hover) and (pointer: fine) {
-                                                .edition-card.open-edition:hover:not(.active) {
-                                                    border-color: rgba(49,50,62,0.3);
-                                                    box-shadow: 0 2px 8px rgba(49,50,62,0.06);
-                                                    transform: translateY(-1px);
-                                                }
-                                                .edition-card.open-edition:hover:not(.active)::before {
-                                                    opacity: 0.3;
-                                                }
-                                            }
-
-                                            /* ── Limited Edition — warm luxury gradient ── */
-                                            .edition-card.limited-edition {
-                                                border-color: rgba(236,72,153,0.12);
-                                            }
-                                            .edition-card.limited-edition::before {
-                                                background: linear-gradient(90deg, #ec4899, #fb923c);
-                                            }
-                                            .edition-card.limited-edition.active {
-                                                border-color: rgba(236,72,153,0.4);
-                                                background: linear-gradient(135deg, rgba(236,72,153,0.04) 0%, rgba(251,146,60,0.02) 100%);
-                                                box-shadow: 0 0 0 3px rgba(236,72,153,0.08), 0 4px 16px rgba(236,72,153,0.06);
-                                            }
-                                            .edition-card.limited-edition.active::before {
-                                                opacity: 0.8;
-                                                left: 10%;
-                                                right: 10%;
-                                            }
-                                            @media (hover: hover) and (pointer: fine) {
-                                                .edition-card.limited-edition:hover:not(.active) {
-                                                    border-color: rgba(236,72,153,0.25);
-                                                    box-shadow: 0 2px 8px rgba(236,72,153,0.06);
-                                                    transform: translateY(-1px);
-                                                }
-                                                .edition-card.limited-edition:hover:not(.active)::before {
-                                                    opacity: 0.35;
-                                                }
-                                            }
-
-                                            /* Card inner layout */
-                                            .edition-card-header {
-                                                display: flex;
-                                                align-items: center;
-                                                gap: 0.5rem;
-                                                margin-bottom: 0.45rem;
-                                            }
-                                            .edition-card-icon {
-                                                width: 22px;
-                                                height: 22px;
-                                                flex-shrink: 0;
-                                                display: flex;
-                                                align-items: center;
-                                                justify-content: center;
-                                                border-radius: 6px;
-                                            }
-                                            .edition-card.open-edition .edition-card-icon {
-                                                background: rgba(49,50,62,0.08);
-                                                color: #31323E;
-                                            }
-                                            .edition-card.limited-edition .edition-card-icon {
-                                                background: rgba(236,72,153,0.1);
-                                                color: #be185d;
-                                            }
-                                            .edition-card-title {
-                                                font-family: var(--font-sans);
-                                                font-size: 0.78rem;
-                                                font-weight: 700;
-                                                line-height: 1.2;
-                                            }
-                                            .edition-card.open-edition .edition-card-title {
-                                                color: #31323E;
-                                            }
-                                            .edition-card.limited-edition .edition-card-title {
-                                                color: #be185d;
-                                            }
-                                            .edition-card-desc {
-                                                font-family: var(--font-sans);
-                                                font-size: 0.64rem;
-                                                line-height: 1.5;
-                                                margin: 0;
-                                            }
-                                            .edition-card.open-edition .edition-card-desc {
-                                                color: rgba(49,50,62,0.5);
-                                            }
-                                            .edition-card.limited-edition .edition-card-desc {
-                                                color: rgba(190,24,93,0.55);
-                                            }
-
-                                            /* Scarcity badge */
-                                            .edition-scarcity-badge {
-                                                display: inline-flex;
-                                                align-items: center;
-                                                gap: 0.3rem;
-                                                margin-top: 0.5rem;
-                                                padding: 0.2rem 0.55rem;
-                                                border-radius: 20px;
-                                                font-family: var(--font-sans);
-                                                font-size: 0.58rem;
-                                                font-weight: 600;
-                                                letter-spacing: 0.04em;
-                                                background: linear-gradient(135deg, rgba(236,72,153,0.08), rgba(251,146,60,0.06));
-                                                color: #be185d;
-                                                border: 1px solid rgba(236,72,153,0.15);
-                                            }
-                                            .edition-scarcity-dot {
-                                                width: 5px;
-                                                height: 5px;
-                                                border-radius: 50%;
-                                                background: #ec4899;
-                                                animation: scarcityPulse 2s ease-in-out infinite;
-                                            }
-                                            @keyframes scarcityPulse {
-                                                0%, 100% { opacity: 1; transform: scale(1); }
-                                                50% { opacity: 0.5; transform: scale(0.8); }
-                                            }
-
-                                            /* Radio indicator */
-                                            .edition-radio {
+                                            /* Limited Edition Accent */
+                                            .pastel-card.limited-edition::before {
+                                                content: '';
                                                 position: absolute;
-                                                top: 0.85rem;
-                                                right: 0.85rem;
+                                                top: 0;
+                                                left: 0;
+                                                right: 0;
+                                                height: 0px;
+                                                background: linear-gradient(90deg, #ec4899, #fb923c);
+                                                transition: height 0.3s ease;
+                                            }
+                                            .pastel-card.limited-edition.active {
+                                                background: #FFFFFF;
+                                                border-color: #E2DDD0;
+                                                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04);
+                                            }
+                                            .pastel-card.limited-edition.active::before {
+                                                height: 3px;
+                                            }
+
+                                            .pastel-radio-wrap {
+                                                flex-shrink: 0;
+                                                margin-right: 1rem;
+                                                margin-top: 0.15rem;
+                                            }
+
+                                            .pastel-radio {
                                                 width: 16px;
                                                 height: 16px;
                                                 border-radius: 50%;
-                                                border: 1.5px solid rgba(49,50,62,0.2);
+                                                border: 1px solid #CCCCCC;
                                                 display: flex;
                                                 align-items: center;
                                                 justify-content: center;
-                                                transition: all 0.25s ease;
-                                            }
-                                            .edition-card.open-edition.active .edition-radio {
-                                                border-color: #31323E;
-                                                background: #31323E;
-                                            }
-                                            .edition-card.limited-edition.active .edition-radio {
-                                                border-color: #ec4899;
-                                                background: linear-gradient(135deg, #ec4899, #fb923c);
-                                            }
-                                            .edition-radio-dot {
-                                                width: 5px;
-                                                height: 5px;
-                                                border-radius: 50%;
-                                                background: #fff;
-                                                opacity: 0;
-                                                transition: opacity 0.2s ease;
-                                            }
-                                            .edition-card.active .edition-radio-dot {
-                                                opacity: 1;
+                                                transition: all 0.3s ease;
                                             }
 
-                                            /* ── Edition Features Table ── */
-                                            .edition-features {
-                                                margin-top: 0.75rem;
-                                                padding-left: 10px;
-                                                animation: editionFeaturesIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+                                            .pastel-card.open-edition.active .pastel-radio {
+                                                border-color: #2A2C3A;
                                             }
-                                            @keyframes editionFeaturesIn {
-                                                from { opacity: 0; transform: translateY(6px); }
-                                                to   { opacity: 1; transform: translateY(0); }
+
+                                            .pastel-card.limited-edition.active .pastel-radio {
+                                                border-color: #fb923c;
                                             }
-                                            .edition-features-list {
+
+                                            .pastel-radio-fill {
+                                                width: 8px;
+                                                height: 8px;
+                                                border-radius: 50%;
+                                                background: transparent;
+                                                transition: all 0.3s ease;
+                                                transform: scale(0);
+                                            }
+
+                                            .pastel-card.open-edition.active .pastel-radio-fill {
+                                                background: #2A2C3A;
+                                                transform: scale(1);
+                                            }
+
+                                            .pastel-card.limited-edition.active .pastel-radio-fill {
+                                                background: linear-gradient(90deg, #ec4899, #fb923c);
+                                                transform: scale(1);
+                                            }
+
+                                            .pastel-content {
                                                 display: flex;
                                                 flex-direction: column;
-                                                gap: 0;
-                                                border-radius: 10px;
-                                                overflow: hidden;
-                                                border: 1px solid var(--color-border);
-                                                background: #fff;
-                                            }
-                                            .edition-feature-row {
-                                                display: flex;
-                                                align-items: center;
-                                                gap: 0.6rem;
-                                                padding: 0.6rem 0.85rem;
-                                                border-bottom: 1px solid var(--color-border);
-                                                font-family: var(--font-sans);
-                                                font-size: 0.72rem;
-                                                color: var(--color-charcoal-mid);
-                                                line-height: 1.35;
-                                            }
-                                            .edition-feature-row:last-child {
-                                                border-bottom: none;
-                                            }
-                                            .edition-feature-icon {
-                                                width: 16px;
-                                                height: 16px;
-                                                flex-shrink: 0;
-                                                display: flex;
-                                                align-items: center;
-                                                justify-content: center;
-                                                font-size: 0.7rem;
-                                            }
-                                            .edition-feature-icon.positive {
-                                                color: #16a34a;
-                                            }
-                                            .edition-feature-icon.neutral {
-                                                color: var(--color-muted);
-                                            }
-                                            .edition-feature-icon.caution {
-                                                color: #d97706;
+                                                gap: 0.2rem;
                                             }
 
-                                            /* Mobile refinements */
+                                            .pastel-title {
+                                                font-family: var(--font-sans);
+                                                font-size: 0.95rem;
+                                                font-weight: 500;
+                                                color: #4A4A4A;
+                                                letter-spacing: -0.01em;
+                                            }
+
+                                            .pastel-desc {
+                                                font-family: var(--font-sans);
+                                                font-size: 0.7rem;
+                                                color: #888888;
+                                                line-height: 1.4;
+                                                font-weight: 400;
+                                            }
+
+                                            .pastel-scarcity {
+                                                display: inline-block;
+                                                margin-top: 0.4rem;
+                                                padding: 0.2rem 0.6rem;
+                                                background: rgba(251, 146, 60, 0.08);
+                                                color: #d97706;
+                                                border-radius: 4px;
+                                                font-family: var(--font-sans);
+                                                font-size: 0.65rem;
+                                                font-weight: 600;
+                                                letter-spacing: 0.02em;
+                                                align-self: flex-start;
+                                            }
+
+                                            /* Expansion Table Features */
+                                            .edition-table-wrap {
+                                                margin-top: 1rem;
+                                                padding-left: 10px;
+                                                animation: editionFeaturesIn 0.3s ease-out forwards;
+                                            }
+
+                                            @keyframes editionFeaturesIn {
+                                                from { opacity: 0; transform: translateY(-5px); }
+                                                to { opacity: 1; transform: translateY(0); }
+                                            }
+
+                                            .edition-table {
+                                                border: 1px solid rgba(0,0,0,0.06);
+                                                border-radius: 8px;
+                                                background: #FAFAFA;
+                                                overflow: hidden;
+                                            }
+
+                                            .edition-table-row {
+                                                display: flex;
+                                                align-items: center;
+                                                justify-content: space-between;
+                                                padding: 0.8rem 1.1rem;
+                                                border-bottom: 1px solid rgba(0,0,0,0.04);
+                                                font-family: var(--font-sans);
+                                                font-size: 0.75rem;
+                                            }
+
+                                            .edition-table-row:last-child {
+                                                border-bottom: none;
+                                            }
+
+                                            .edition-table-label {
+                                                color: #888;
+                                                letter-spacing: 0.02em;
+                                            }
+
+                                            .edition-table-value {
+                                                color: #333;
+                                                font-weight: 500;
+                                                text-align: right;
+                                            }
+
+                                            .edition-table-value.highlight {
+                                                color: #4A4A4A;
+                                                font-weight: 600;
+                                            }
+
+                                            /* Mobile */
                                             @media (max-width: 767px) {
+                                                .pastel-grid { padding-left: 6px; }
+                                                .pastel-card { padding: 1rem; }
+                                                .pastel-title { font-size: 0.9rem; }
+                                                .pastel-desc { font-size: 0.65rem; }
+                                                .edition-table-wrap { padding-left: 6px; padding-right: 6px; }
+                                                .edition-table-row { padding: 0.7rem 0.9rem; font-size: 0.7rem; flex-direction: column; align-items: flex-start; gap: 0.35rem;}
+                                                .edition-table-value { text-align: left; }
                                                 .step-number { font-size: 1.45rem; width: 1.4rem; }
                                                 .step-text { font-size: 0.72rem; }
                                                 .step-label { margin-left: -3px; }
@@ -1546,14 +1488,6 @@ export default function ArtworkDetailPage() {
                                                 .step-option { font-size: 0.78rem; padding: 0.7rem 0.9rem; }
                                                 .pc-title { font-size: 1.05rem; }
                                                 .info-badge { padding: 0.75rem 0.85rem; }
-                                                .edition-cards-grid { padding-left: 6px; }
-                                                .edition-card { padding: 0.9rem 0.8rem 0.85rem; border-radius: 12px; }
-                                                .edition-card-title { font-size: 0.72rem; }
-                                                .edition-card-desc { font-size: 0.6rem; }
-                                                .edition-card-icon { width: 18px; height: 18px; }
-                                                .edition-scarcity-badge { font-size: 0.54rem; padding: 0.15rem 0.4rem; }
-                                                .edition-features { padding-left: 6px; }
-                                                .edition-feature-row { font-size: 0.66rem; padding: 0.5rem 0.7rem; gap: 0.45rem; }
                                             }
                                         `}</style>
 
@@ -1672,80 +1606,77 @@ export default function ArtworkDetailPage() {
                                                                     <span className="step-number">1</span>
                                                                     <span className="step-text">Select Edition</span>
                                                                 </div>
-                                                                <div className={`edition-cards-grid ${hasStd && hasLtd ? "two-col" : "one-col"}`}>
+                                                                <div className={`pastel-grid ${hasStd && hasLtd ? "two-col" : "one-col"}`}>
                                                                     {/* Open Edition */}
                                                                     {(hasStd || !hasLtd) && (
                                                                         <button
                                                                             type="button"
-                                                                            className={`edition-card open-edition ${canvasEdition === "standard" ? "active" : ""}`}
+                                                                            className={`pastel-card open-edition ${canvasEdition === "standard" ? "active" : ""}`}
                                                                             onClick={() => setCanvasEdition("standard")}
                                                                         >
-                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
-                                                                            <div className="edition-card-header">
-                                                                                <span className="edition-card-icon">
-                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                                                                </span>
-                                                                                <span className="edition-card-title">Open Edition</span>
+                                                                            <div className="pastel-radio-wrap">
+                                                                                <div className="pastel-radio"><div className="pastel-radio-fill" /></div>
                                                                             </div>
-                                                                            <p className="edition-card-desc">Museum-quality · Fast worldwide shipping</p>
+                                                                            <div className="pastel-content">
+                                                                                <span className="pastel-title">Open Edition</span>
+                                                                                <span className="pastel-desc">Museum-quality prints.<br/>Fast worldwide delivery.</span>
+                                                                            </div>
                                                                         </button>
                                                                     )}
                                                                     {/* Limited Edition */}
                                                                     {hasLtd && (
                                                                         <button
                                                                             type="button"
-                                                                            className={`edition-card limited-edition ${canvasEdition === "limited" ? "active" : ""}`}
+                                                                            className={`pastel-card limited-edition ${canvasEdition === "limited" ? "active" : ""}`}
                                                                             onClick={() => setCanvasEdition("limited")}
                                                                         >
-                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
-                                                                            <div className="edition-card-header">
-                                                                                <span className="edition-card-icon">
-                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                                                                                </span>
-                                                                                <span className="edition-card-title">Limited Edition</span>
+                                                                            <div className="pastel-radio-wrap">
+                                                                                <div className="pastel-radio"><div className="pastel-radio-fill" /></div>
                                                                             </div>
-                                                                            <p className="edition-card-desc">Hand-signed · Certificate of authenticity</p>
-                                                                            {work.canvas_print_limited_quantity && (
-                                                                                <span className="edition-scarcity-badge">
-                                                                                    <span className="edition-scarcity-dot" />
-                                                                                    Only {work.canvas_print_limited_quantity} copies worldwide
-                                                                                </span>
-                                                                            )}
+                                                                            <div className="pastel-content">
+                                                                                <span className="pastel-title">Limited Edition</span>
+                                                                                <span className="pastel-desc">Hand-signed & numbered.<br/>Includes certificate.</span>
+                                                                                {work.canvas_print_limited_quantity && (
+                                                                                    <span className="pastel-scarcity">
+                                                                                        Rare: {work.canvas_print_limited_quantity} Copies Worldwide
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
                                                                         </button>
                                                                     )}
                                                                 </div>
 
-                                                                {/* Edition features table */}
-                                                                <div className="edition-features" key={`canvas-features-${canvasEdition}`}>
-                                                                    <div className="edition-features-list">
-                                                                        <div className="edition-feature-row">
-                                                                            <span className="edition-feature-icon positive">✓</span>
-                                                                            <span>Museum-grade archival printing · UV-resistant inks</span>
+                                                                {/* Edition features minimalistic */}
+                                                                <div className="edition-table-wrap" key={`canvas-features-${canvasEdition}`}>
+                                                                    <div className="edition-table">
+                                                                        <div className="edition-table-row">
+                                                                            <span className="edition-table-label">Print Quality</span>
+                                                                            <span className="edition-table-value">Uncompromising Museum Quality</span>
                                                                         </div>
                                                                         {canvasEdition === "standard" ? (
                                                                             <>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Fast delivery — 2–5 business days worldwide</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Material</span>
+                                                                                    <span className="edition-table-value">400gsm Gallery Canvas</span>
                                                                                 </div>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>400gsm gallery canvas · Ready to frame or stretch</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Shipping</span>
+                                                                                    <span className="edition-table-value">2–5 Days Worldwide</span>
                                                                                 </div>
                                                                             </>
                                                                         ) : (
                                                                             <>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Personally signed & numbered by the artist</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Authenticity</span>
+                                                                                    <span className="edition-table-value highlight">Personally Signed + Certificate</span>
                                                                                 </div>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Certificate of Authenticity included</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Exclusivity</span>
+                                                                                    <span className="edition-table-value highlight">{work.canvas_print_limited_quantity ? `Strictly limited to ${work.canvas_print_limited_quantity} copies` : "Strictly Limited Edition"}</span>
                                                                                 </div>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon caution">◷</span>
-                                                                                    <span>Delivery in 2–3 weeks (hand-finished to order)</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Delivery</span>
+                                                                                    <span className="edition-table-value">2–3 Weeks (Hand-Finished)</span>
                                                                                 </div>
                                                                             </>
                                                                         )}
@@ -1847,80 +1778,77 @@ export default function ArtworkDetailPage() {
                                                                     <span className="step-number">1</span>
                                                                     <span className="step-text">Select Edition</span>
                                                                 </div>
-                                                                <div className={`edition-cards-grid ${hasStd && hasLtd ? "two-col" : "one-col"}`}>
+                                                                <div className={`pastel-grid ${hasStd && hasLtd ? "two-col" : "one-col"}`}>
                                                                     {/* Open Edition */}
                                                                     {(hasStd || !hasLtd) && (
                                                                         <button
                                                                             type="button"
-                                                                            className={`edition-card open-edition ${paperEdition === "standard" ? "active" : ""}`}
+                                                                            className={`pastel-card open-edition ${paperEdition === "standard" ? "active" : ""}`}
                                                                             onClick={() => setPaperEdition("standard")}
                                                                         >
-                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
-                                                                            <div className="edition-card-header">
-                                                                                <span className="edition-card-icon">
-                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                                                                </span>
-                                                                                <span className="edition-card-title">Open Edition</span>
+                                                                            <div className="pastel-radio-wrap">
+                                                                                <div className="pastel-radio"><div className="pastel-radio-fill" /></div>
                                                                             </div>
-                                                                            <p className="edition-card-desc">Museum-quality · Fast worldwide shipping</p>
+                                                                            <div className="pastel-content">
+                                                                                <span className="pastel-title">Open Edition</span>
+                                                                                <span className="pastel-desc">Museum-quality prints.<br/>Fast worldwide delivery.</span>
+                                                                            </div>
                                                                         </button>
                                                                     )}
                                                                     {/* Limited Edition */}
                                                                     {hasLtd && (
                                                                         <button
                                                                             type="button"
-                                                                            className={`edition-card limited-edition ${paperEdition === "limited" ? "active" : ""}`}
+                                                                            className={`pastel-card limited-edition ${paperEdition === "limited" ? "active" : ""}`}
                                                                             onClick={() => setPaperEdition("limited")}
                                                                         >
-                                                                            <span className="edition-radio"><span className="edition-radio-dot" /></span>
-                                                                            <div className="edition-card-header">
-                                                                                <span className="edition-card-icon">
-                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                                                                                </span>
-                                                                                <span className="edition-card-title">Limited Edition</span>
+                                                                            <div className="pastel-radio-wrap">
+                                                                                <div className="pastel-radio"><div className="pastel-radio-fill" /></div>
                                                                             </div>
-                                                                            <p className="edition-card-desc">Hand-signed · Certificate of authenticity</p>
-                                                                            {work.paper_print_limited_quantity && (
-                                                                                <span className="edition-scarcity-badge">
-                                                                                    <span className="edition-scarcity-dot" />
-                                                                                    Only {work.paper_print_limited_quantity} copies worldwide
-                                                                                </span>
-                                                                            )}
+                                                                            <div className="pastel-content">
+                                                                                <span className="pastel-title">Limited Edition</span>
+                                                                                <span className="pastel-desc">Hand-signed & numbered.<br/>Includes certificate.</span>
+                                                                                {work.paper_print_limited_quantity && (
+                                                                                    <span className="pastel-scarcity">
+                                                                                        Rare: {work.paper_print_limited_quantity} Copies Worldwide
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
                                                                         </button>
                                                                     )}
                                                                 </div>
 
-                                                                {/* Edition features table */}
-                                                                <div className="edition-features" key={`paper-features-${paperEdition}`}>
-                                                                    <div className="edition-features-list">
-                                                                        <div className="edition-feature-row">
-                                                                            <span className="edition-feature-icon positive">✓</span>
-                                                                            <span>Museum-grade archival printing · UV-resistant inks</span>
+                                                                {/* Edition features minimalistic */}
+                                                                <div className="edition-table-wrap" key={`paper-features-${paperEdition}`}>
+                                                                    <div className="edition-table">
+                                                                        <div className="edition-table-row">
+                                                                            <span className="edition-table-label">Print Quality</span>
+                                                                            <span className="edition-table-value">Uncompromising Museum Quality</span>
                                                                         </div>
                                                                         {paperEdition === "standard" ? (
                                                                             <>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Fast delivery — 2–5 business days worldwide</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Material</span>
+                                                                                    <span className="edition-table-value">Hahnemühle 310gsm Paper</span>
                                                                                 </div>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Hahnemühle 310gsm museum paper · Matte finish</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Shipping</span>
+                                                                                    <span className="edition-table-value">2–5 Days Worldwide</span>
                                                                                 </div>
                                                                             </>
                                                                         ) : (
                                                                             <>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Personally signed & numbered by the artist</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Authenticity</span>
+                                                                                    <span className="edition-table-value highlight">Personally Signed + Certificate</span>
                                                                                 </div>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon positive">✓</span>
-                                                                                    <span>Certificate of Authenticity included</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Exclusivity</span>
+                                                                                    <span className="edition-table-value highlight">{work.paper_print_limited_quantity ? `Strictly limited to ${work.paper_print_limited_quantity} copies` : "Strictly Limited Edition"}</span>
                                                                                 </div>
-                                                                                <div className="edition-feature-row">
-                                                                                    <span className="edition-feature-icon caution">◷</span>
-                                                                                    <span>Delivery in 2–3 weeks (hand-finished to order)</span>
+                                                                                <div className="edition-table-row">
+                                                                                    <span className="edition-table-label">Delivery</span>
+                                                                                    <span className="edition-table-value">2–3 Weeks (Hand-Finished)</span>
                                                                                 </div>
                                                                             </>
                                                                         )}
