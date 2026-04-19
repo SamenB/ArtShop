@@ -145,6 +145,12 @@ class OrderService(BaseService):
                     finish=item_data.finish,
                     size=item_data.size,
                     price=item_data.price,
+                    prodigi_sku=item_data.prodigi_sku,
+                    prodigi_attributes=item_data.prodigi_attributes,
+                    prodigi_shipping_method=item_data.prodigi_shipping_method,
+                    prodigi_wholesale_eur=item_data.prodigi_wholesale_eur,
+                    prodigi_shipping_eur=item_data.prodigi_shipping_eur,
+                    prodigi_retail_eur=item_data.prodigi_retail_eur,
                 )
                 await self.db.order_items.add(item_add)
 
@@ -540,6 +546,12 @@ class OrderService(BaseService):
                 )
 
             await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
+            
+            # Submit print on demand items to Prodigi
+            if payment_status == "paid":
+                 from src.services.prodigi_orders import ProdigiOrderService
+                 await ProdigiOrderService.submit_order_items(order, self.db.session)
+
             await self.db.commit()
 
             logger.info(

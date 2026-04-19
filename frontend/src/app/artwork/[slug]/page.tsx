@@ -7,6 +7,7 @@ import { usePreferences } from "@/context/PreferencesContext";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import Lightbox from "@/components/Lightbox";
+import PrintConfigurator from "@/components/PrintConfigurator";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
@@ -55,17 +56,7 @@ const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string; border: 
     digital: { label: "DIGITAL ONLY", bg: "#FAF5FF", border: "#6B21A8", desc: "Available as high-res digital file" },
 };
 
-const CANVAS_SIZES = [
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.0 },
-    { labelCm: "60 × 90 cm", labelIn: "24 × 36 in", multiplier: 1.8 },
-    { labelCm: "80 × 120 cm", labelIn: "32 × 48 in", multiplier: 2.8 },
-];
 
-const PAPER_SIZES = [
-    { labelCm: "30 × 45 cm", labelIn: "12 × 18 in", multiplier: 1.0 },
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.5 },
-    { labelCm: "50 × 75 cm", labelIn: "20 × 30 in", multiplier: 2.2 },
-];
 
 export default function ArtworkDetailPage() {
     const params = useParams();
@@ -75,15 +66,20 @@ export default function ArtworkDetailPage() {
 
     const [work, setWork] = useState<Artwork | null>(null);
     const [loading, setLoading] = useState(true);
-    const [selectedCanvas, setSelectedCanvas] = useState(CANVAS_SIZES[0]);
-    const [selectedPaper, setSelectedPaper] = useState(PAPER_SIZES[0]);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [fullSizeOpen, setFullSizeOpen] = useState(false);
     const [purchaseType, setPurchaseType] = useState<"original" | "canvas" | "paper">("original");
-    const [canvasStyle, setCanvasStyle] = useState<"rolled" | "framed">("rolled");
-    const [canvasFrame, setCanvasFrame] = useState<"black" | "oak" | "white">("black");
-    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
+    const [userCountryCode, setUserCountryCode] = useState<string>("US");
+
+    useEffect(() => {
+        apiFetch(`${getApiUrl()}/geo/country`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.country_code) setUserCountryCode(data.country_code);
+            })
+            .catch(() => {});
+    }, []);
 
     const { user } = useUser();
     const [liked, setLiked] = useState(false);
@@ -210,8 +206,6 @@ export default function ArtworkDetailPage() {
     if (!work) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Artwork not found.</div>;
 
     const images = work.images || [];
-    const currentCanvasPrice = Math.round(globalPrintPrice * selectedCanvas.multiplier);
-    const currentPaperPrice = Math.round((globalPrintPrice * 0.8) * selectedPaper.multiplier);
     const effectiveLiked = user ? liked : pendingLikes.includes(work.id);
 
     // Compute prev/next slugs
@@ -1362,230 +1356,19 @@ export default function ArtworkDetailPage() {
                                                             {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
                                                         </button>
                                                     </>
-                                                ) : purchaseType === "canvas" ? (
-                                                    <>
-                                                        {/* ── Canvas Prints — Step-by-Step Configurator ── */}
-                                                        <div className="pc-header">
-                                                            <p className="pc-title">Fine Art Canvas Prints</p>
-                                                            <p className="pc-subtitle">Printed &amp; fulfilled by Prodigi · Shipped worldwide</p>
-                                                        </div>
-
-                                                        {/* Step 1: Select Format */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">1</span>
-                                                                <span className="step-text">Select Format</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "canvas-format" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "canvas-format" ? null : "canvas-format")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{canvasStyle === "rolled" ? `Rolled Canvas — up to ${units === "cm" ? "80 × 120 cm" : "32 × 48 in"}` : `Framed Canvas — up to ${units === "cm" ? "60 × 90 cm" : "24 × 36 in"}`}</span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "canvas-format" ? "open" : ""}`}>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`step-option ${canvasStyle === "rolled" ? "active" : ""}`}
-                                                                        onClick={() => { setCanvasStyle("rolled"); setOpenDropdown(null); }}
-                                                                    >
-                                                                        <span>Rolled Canvas — up to {units === "cm" ? "80 × 120 cm" : "32 × 48 in"}</span>
-                                                                        <span className="opt-check" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`step-option ${canvasStyle === "framed" ? "active" : ""}`}
-                                                                        onClick={() => { setCanvasStyle("framed"); setOpenDropdown(null); }}
-                                                                    >
-                                                                        <span>Framed Canvas — up to {units === "cm" ? "60 × 90 cm" : "24 × 36 in"}</span>
-                                                                        <span className="opt-check" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Step 2: Select Size */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">2</span>
-                                                                <span className="step-text">Select Size</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "canvas-size" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "canvas-size" ? null : "canvas-size")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "canvas-size" ? "open" : ""}`}>
-                                                                    {(canvasStyle === "framed" ? CANVAS_SIZES.slice(0, 2) : CANVAS_SIZES).map(ps => (
-                                                                        <button
-                                                                            key={ps.labelCm}
-                                                                            type="button"
-                                                                            className={`step-option ${selectedCanvas === ps ? "active" : ""}`}
-                                                                            onClick={() => { setSelectedCanvas(ps); setOpenDropdown(null); }}
-                                                                        >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
-                                                                            <span className="opt-check" />
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Step 3: Select Frame (conditional — only when framed) */}
-                                                        {canvasStyle === "framed" && (
-                                                            <div className="step-row step-reveal" key="frame-step">
-                                                                <div className="step-label">
-                                                                    <span className="step-number">3</span>
-                                                                    <span className="step-text">Select Frame</span>
-                                                                </div>
-                                                                <div className="step-select-wrap">
-                                                                    <button
-                                                                        className={`step-trigger ${openDropdown === "canvas-frame" ? "open" : ""}`}
-                                                                        onClick={() => setOpenDropdown(openDropdown === "canvas-frame" ? null : "canvas-frame")}
-                                                                        type="button"
-                                                                    >
-                                                                        <span>{canvasFrame === "black" ? "Black Floater Frame" : canvasFrame === "oak" ? "Natural Oak Frame" : "White Slim Frame"}</span>
-                                                                        <span className="step-chevron" />
-                                                                    </button>
-                                                                    <div className={`step-options ${openDropdown === "canvas-frame" ? "open" : ""}`}>
-                                                                        {([
-                                                                            { value: "black" as const, label: "Black Floater Frame" },
-                                                                            { value: "oak" as const, label: "Natural Oak Frame" },
-                                                                            { value: "white" as const, label: "White Slim Frame" },
-                                                                        ]).map(opt => (
-                                                                            <button
-                                                                                key={opt.value}
-                                                                                type="button"
-                                                                                className={`step-option ${canvasFrame === opt.value ? "active" : ""}`}
-                                                                                onClick={() => { setCanvasFrame(opt.value); setOpenDropdown(null); }}
-                                                                            >
-                                                                                <span>{opt.label}</span>
-                                                                                <span className="opt-check" />
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Info Badge — material details */}
-                                                        <div className="info-badge">
-                                                            <div className="info-badge-content">
-                                                                <p className="info-badge-title">Museum-Grade 400gsm Canvas</p>
-                                                                <p className="info-badge-desc">
-                                                                    {canvasStyle === "framed"
-                                                                        ? `Premium floating frame · ${canvasFrame === "black" ? "Matte black" : canvasFrame === "oak" ? "Natural oak" : "White slim"} finish · Ready to hang`
-                                                                        : "Shipped rolled in protective tube · Ideal for custom stretching or framing"
-                                                                    }
-                                                                    {" · UV-resistant archival inks"}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Footer — price + CTA */}
-                                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                            <div>
-                                                                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>
-                                                                    {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}
-                                                                </span>
-                                                            </div>
-                                                            <button
-                                                                className="premium-cta-btn"
-                                                                onClick={() => addItem({
-                                                                    id: `${work.id}-canvas-${canvasStyle}${canvasStyle === "framed" ? `-${canvasFrame}` : ""}-${selectedCanvas.labelCm}`,
-                                                                    slug: String(work.id),
-                                                                    title: work.title,
-                                                                    type: "print",
-                                                                    imageGradientFrom: work.gradientFrom!,
-                                                                    imageGradientTo: work.gradientTo!,
-                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
-                                                                    price: Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)),
-                                                                    finish: canvasStyle === "framed" ? `Framed (${canvasFrame})` : "Rolled Canvas",
-                                                                    size: units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn,
-                                                                })}
-                                                            >Add to Cart</button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {/* ── Paper Prints — Rolled Only ── */}
-                                                        <div className="pc-header">
-                                                            <p className="pc-title">Fine Art Paper Prints</p>
-                                                            <p className="pc-subtitle">Printed &amp; fulfilled by Prodigi · Shipped rolled worldwide</p>
-                                                        </div>
-
-                                                        {/* Step 1: Select Size */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">1</span>
-                                                                <span className="step-text">Select Size</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "paper-size" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "paper-size" ? null : "paper-size")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span></span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "paper-size" ? "open" : ""}`}>
-                                                                    {PAPER_SIZES.map(ps => (
-                                                                        <button
-                                                                            key={ps.labelCm}
-                                                                            type="button"
-                                                                            className={`step-option ${selectedPaper === ps ? "active" : ""}`}
-                                                                            onClick={() => { setSelectedPaper(ps); setOpenDropdown(null); }}
-                                                                        >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span></span>
-                                                                            <span className="opt-check" />
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Info Badge — material details */}
-                                                        <div className="info-badge">
-                                                            <div className="info-badge-content">
-                                                                <p className="info-badge-title">Hahnemühle 310gsm Museum Paper</p>
-                                                                <p className="info-badge-desc">
-                                                                    Archival giclée printing · Matte finish · Shipped rolled in protective tube · Colour-accurate · Fade-resistant for 100+ years
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Footer — price + CTA */}
-                                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                            <div>
-                                                                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(currentPaperPrice)}</span>
-                                                            </div>
-                                                            <button
-                                                                className="premium-cta-btn"
-                                                                onClick={() => addItem({
-                                                                    id: `${work.id}-paper-rolled-${selectedPaper.labelCm}`,
-                                                                    slug: String(work.id),
-                                                                    title: work.title,
-                                                                    type: "print",
-                                                                    imageGradientFrom: work.gradientFrom!,
-                                                                    imageGradientTo: work.gradientTo!,
-                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
-                                                                    price: currentPaperPrice,
-                                                                    finish: "Rolled — Matte",
-                                                                    size: units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn,
-                                                                })}
-                                                            >Add to Cart</button>
-                                                        </div>
-                                                    </>
-                                                )}
+                                                ) : <PrintConfigurator 
+                                                    artworkId={work.id}
+                                                    artworkTitle={work.title}
+                                                    aspectRatio={work.aspect_ratio || "1:1"}
+                                                    userCountryCode={userCountryCode}
+                                                    purchaseType={purchaseType as "canvas" | "paper"}
+                                                    units={units}
+                                                    isSmall={isSmall}
+                                                    onAddToCart={addItem}
+                                                    imageGradientFrom={work.gradientFrom || "#ccc"}
+                                                    imageGradientTo={work.gradientTo || "#fff"}
+                                                    imageUrl={getImageUrl(work.images?.[0], 'thumb') || undefined}
+                                                /> }
                                             </div>
                                         </div>
                                     </>

@@ -804,9 +804,8 @@ export default function GalleryPage() {
                 </div>
             </div>
 
-            {/* Rendered Exhibition Sections grouped by Collection. */}
             <div style={{ display: "flex", flexDirection: "column" }}>
-                {sorted.map(({ name, id, bg, works, totalInGroup }, idx) => {
+                {sorted.map(({ name, id, works, totalInGroup }, idx) => {
                     return (
                         <section key={name} style={{ paddingBottom: "1.25rem", marginBottom: 0 }}>
                             {/* Visual hierarchy header: Full-width ribbon styled collection title. */}

@@ -37,6 +37,7 @@ interface PreferencesContextType {
     clearPendingLikes: () => void;
     unauthLikeCount: number;
     incrementUnauthLikeCount: () => void;
+    globalPrintPrice: number;
 }
 
 /** UI labels for the language selector. */

@@ -13,7 +13,6 @@ import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useUser } from "@/context/UserContext";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
-import GoogleOAuthProviderWrapper from "@/components/GoogleOAuthProviderWrapper";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 /** Availability states for artworks and prints. */

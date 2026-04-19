@@ -83,6 +83,7 @@ class ArtworkAddRequest(BaseModel):
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
+    print_quality_url: str | None = Field(None, description="High-res image URL for Prodigi")
 
 
 class ArtworkAdd(BaseModel):
@@ -111,6 +112,7 @@ class ArtworkAdd(BaseModel):
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
+    print_quality_url: str | None = Field(None)
 
     # Print availability flags
     has_original: bool = Field(False)
@@ -197,6 +199,7 @@ class ArtworkPatchRequest(BaseModel):
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
+    print_quality_url: str | None = Field(None, description="High-res image URL for Prodigi")
 
 
 class ArtworkPatch(BaseModel):
@@ -221,6 +224,7 @@ class ArtworkPatch(BaseModel):
     depth_in: float | None = Field(None)
     orientation: str | None = Field(None)
     images: list[str | dict] | None = Field(None)
+    print_quality_url: str | None = Field(None)
 
     # Print availability flags
     has_original: bool | None = Field(None)
@@ -250,6 +254,7 @@ class ArtworkAddBulk(BaseModel):
     original_status: OriginalStatus = Field(OriginalStatus.AVAILABLE)
     orientation: str = Field(..., description="Orientation of the artwork")
     images: list[str | dict] | None = Field(None)
+    print_quality_url: str | None = Field(None)
 
     # Print availability flags
     has_original: bool = Field(False)

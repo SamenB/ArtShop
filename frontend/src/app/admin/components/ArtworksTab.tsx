@@ -24,6 +24,7 @@ interface Artwork {
     print_min_size_label?: string | null;
     print_max_size_label?: string | null;
     orientation?: string;
+    print_quality_url?: string | null;
     labels?: { id: number; title: string; category_id?: number }[];
 }
 
@@ -207,6 +208,9 @@ export default function ArtworksTab() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [imageItems, setImageItems] = useState<DragItem[]>([]);
     const [cropImageIndex, setCropImageIndex] = useState<number | null>(null);
+    const [printUploading, setPrintUploading] = useState(false);
+    const [printUploadError, setPrintUploadError] = useState<string | null>(null);
+    const printFileRef = useRef<HTMLInputElement>(null);
 
     const defaultForm = {
         title: "",
@@ -228,6 +232,7 @@ export default function ArtworksTab() {
         orientation: "Horizontal",
         labels: [] as number[],
         original_status: "available",
+        print_quality_url: "",
     };
     const [formData, setFormData] = useState<any>(defaultForm);
     const [aspectRatios, setAspectRatios] = useState<AspectRatio[]>([]);
@@ -283,15 +288,32 @@ export default function ArtworksTab() {
         setUploading(true);
         const apiUrl = getApiUrl();
         const payload = { ...formData };
-        if (payload.width_cm) payload.width_in = Number((parseFloat(payload.width_cm) * 0.393701).toFixed(2));
-        if (payload.height_cm) payload.height_in = Number((parseFloat(payload.height_cm) * 0.393701).toFixed(2));
+        
+        // Helper to convert empty strings to null or parse as number
+        const toNum = (val: any, isFloat = false) => {
+            if (val === "" || val === null || val === undefined) return null;
+            const parsed = isFloat ? parseFloat(val.toString()) : parseInt(val.toString());
+            return isNaN(parsed) ? null : parsed;
+        };
+
+        payload.original_price = toNum(payload.original_price);
+        payload.year = toNum(payload.year);
+        payload.width_cm = toNum(payload.width_cm, true);
+        payload.height_cm = toNum(payload.height_cm, true);
+        payload.canvas_print_limited_quantity = toNum(payload.canvas_print_limited_quantity);
+        payload.paper_print_limited_quantity = toNum(payload.paper_print_limited_quantity);
+        payload.print_aspect_ratio_id = toNum(payload.print_aspect_ratio_id);
+
+        // Recalculate inches if cm is valid
+        if (payload.width_cm !== null) payload.width_in = Number((payload.width_cm * 0.393701).toFixed(2));
+        else payload.width_in = null;
+
+        if (payload.height_cm !== null) payload.height_in = Number((payload.height_cm * 0.393701).toFixed(2));
+        else payload.height_in = null;
 
         if (payload.original_status !== "available") payload.original_price = null;
         if (payload.original_status === "digital") {
             payload.width_cm = null; payload.height_cm = null; payload.width_in = null; payload.height_in = null;
-        } else {
-            if (!payload.width_cm || payload.width_cm === "") { payload.width_cm = null; payload.width_in = null; }
-            if (!payload.height_cm || payload.height_cm === "") { payload.height_cm = null; payload.height_in = null; }
         }
 
         const method = editingId ? "PUT" : "POST";
@@ -343,6 +365,7 @@ export default function ArtworksTab() {
                 orientation: full.orientation || "Horizontal",
                 labels: (full.labels || []).map((t: any) => typeof t === "number" ? t : t.id),
                 original_status: full.original_status || "available",
+                print_quality_url: full.print_quality_url || "",
             });
             const existing: DragItem[] = (full.images || []).map((img: ImageEntry) => ({ type: "existing" as const, url: resolveImageUrl(img), existingData: img }));
             setImageItems(existing);
@@ -540,6 +563,107 @@ export default function ArtworksTab() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                        )}
+
+                        {/* High-Res print source */}
+                        {(formData.has_canvas_print || formData.has_canvas_print_limited || formData.has_paper_print || formData.has_paper_print_limited) && (
+                        <div>
+                            <FormSection title="Source Image (Prodigi Fulfillment)" desc="High-resolution file sent to Prodigi for printing. No size reduction — upload TIFF, PNG, or JPEG at 300 DPI or higher. Max 500 MB." />
+                            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                {/* Preview strip when URL is set */}
+                                {formData.print_quality_url && (
+                                    <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "10px" }}>
+                                        <img
+                                            src={`${getApiUrl().replace("/api","")}${formData.print_quality_url}`}
+                                            alt="Print source"
+                                            style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid rgba(0,0,0,0.08)", flexShrink: 0 }}
+                                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                        />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#15803d", margin: "0 0 2px" }}>✓ High-Res Image Linked</p>
+                                            <p style={{ fontFamily: "monospace", fontSize: "0.68rem", color: "#555", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {formData.print_quality_url}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => printFileRef.current?.click()}
+                                            style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, color: "#555", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.1)", borderRadius: 6, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}
+                                        >
+                                            Replace
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Manual Path entry for power-users */}
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <input
+                                        type="text"
+                                        value={formData.print_quality_url || ""}
+                                        onChange={e => setFormData({ ...formData, print_quality_url: e.target.value })}
+                                        placeholder="e.g. /static/print/my-file.tif"
+                                        style={{ 
+                                            flex: 1, 
+                                            padding: "10px 14px", 
+                                            borderRadius: "8px", 
+                                            border: "1px solid rgba(0,0,0,0.1)", 
+                                            fontSize: "0.8rem", 
+                                            fontFamily: "monospace",
+                                            background: "rgba(0,0,0,0.02)"
+                                        }}
+                                    />
+                                    {!formData.print_quality_url && (
+                                        <button
+                                            type="button"
+                                            disabled={!editingId || printUploading}
+                                            onClick={() => printFileRef.current?.click()}
+                                            style={{
+                                                padding: "10px 20px", borderRadius: 8,
+                                                background: editingId ? "var(--color-charcoal)" : "rgba(0,0,0,0.1)",
+                                                color: "white",
+                                                fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 600,
+                                                cursor: editingId ? "pointer" : "not-allowed",
+                                                display: "flex", alignItems: "center", gap: 6,
+                                                border: "none"
+                                            }}
+                                        >
+                                            {printUploading ? "..." : "📎 Upload"}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {printUploadError && (
+                                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#b91c1c", margin: 0 }}>⚠ {printUploadError}</p>
+                                )}
+
+                                {/* Hidden file input */}
+                                <input
+                                    ref={printFileRef}
+                                    type="file"
+                                    accept="image/tiff,image/png,image/jpeg,image/webp,.tif,.tiff"
+                                    style={{ display: "none" }}
+                                    onChange={async e => {
+                                        const file = e.target.files?.[0];
+                                        if (!file || !editingId) return;
+                                        setPrintUploading(true);
+                                        setPrintUploadError(null);
+                                        try {
+                                            const fd = new FormData();
+                                            fd.append("file", file);
+                                            const res = await apiFetch(`${getApiUrl()}/artworks/${editingId}/print-image`, { method: "POST", body: fd });
+                                            if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(JSON.stringify(err)); }
+                                            const data = await res.json();
+                                            setFormData((prev: any) => ({ ...prev, print_quality_url: data.url }));
+                                        } catch (err: any) {
+                                            setPrintUploadError(`Upload failed: ${err.message}`);
+                                        } finally {
+                                            setPrintUploading(false);
+                                            (e.target as HTMLInputElement).value = "";
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
                         )}

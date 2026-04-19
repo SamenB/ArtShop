@@ -34,6 +34,18 @@ export interface CartItem {
     finish?: string;
     /** Optional size selection for prints (e.g., '30 × 40 cm'). */
     size?: string;
+    /** Prodigi SKU for the selected variant. */
+    prodigi_sku?: string;
+    /** Prodigi print attributes (like frame color or wrap border). */
+    prodigi_attributes?: Record<string, string>;
+    /** Selected shipping method for the item (e.g., Standard, Express). */
+    prodigi_shipping_method?: string;
+    /** Prodigi wholesale item cost. */
+    prodigi_wholesale_eur?: number;
+    /** Prodigi shipping cost. */
+    prodigi_shipping_eur?: number;
+    /** Prodigi total retail price (wholesale * markup + shipping pass-through). */
+    prodigi_retail_eur?: number;
 }
 
 /** Definition of the cart context state and available mutators. */

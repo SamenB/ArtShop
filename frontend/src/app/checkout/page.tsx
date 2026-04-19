@@ -980,10 +980,16 @@ export default function CheckoutPage() {
                 promo_code: promoApplied ? formData.promoCode : null,
                 items: items.map((item) => ({
                     artwork_id: parseInt(item.slug) || 1,
-                    edition_type: item.type,
+                    edition_type: item.type === "original" ? "original" : (item.finish?.toLowerCase().includes("canvas") ? "canvas_print" : "paper_print"),
                     finish: item.finish || "Original",
                     size: item.size,
                     price: item.price,
+                    prodigi_sku: item.prodigi_sku,
+                    prodigi_attributes: item.prodigi_attributes,
+                    prodigi_shipping_method: item.prodigi_shipping_method,
+                    prodigi_wholesale_eur: item.prodigi_wholesale_eur,
+                    prodigi_shipping_eur: item.prodigi_shipping_eur,
+                    prodigi_retail_eur: item.prodigi_retail_eur,
                 })),
             };
 

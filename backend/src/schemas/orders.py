@@ -120,6 +120,16 @@ class OrderItemBase(BaseModel):
     size: Optional[str] = None
     price: int
 
+    # Prodigi Print-on-Demand Fields
+    prodigi_sku: Optional[str] = None
+    prodigi_attributes: Optional[dict] = None
+    prodigi_shipping_method: Optional[str] = None
+    prodigi_order_id: Optional[str] = None
+    prodigi_status: Optional[str] = None
+    prodigi_wholesale_eur: Optional[float] = None
+    prodigi_shipping_eur: Optional[float] = None
+    prodigi_retail_eur: Optional[float] = None
+
 
 class OrderItem(OrderItemBase):
     """

@@ -4,7 +4,7 @@ SQLAlchemy database models for orders and their constituent items.
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -111,3 +111,13 @@ class OrderItemOrm(Base):
     # Relationships
     order: Mapped["OrdersOrm"] = relationship("OrdersOrm", back_populates="items")
     artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm", lazy="selectin")
+
+    # Prodigi Print-on-Demand Fields
+    prodigi_sku: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prodigi_attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    prodigi_shipping_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prodigi_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prodigi_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prodigi_wholesale_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_shipping_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_retail_eur: Mapped[float | None] = mapped_column(Float, nullable=True)

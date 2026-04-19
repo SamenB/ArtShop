@@ -151,6 +151,44 @@ async def upload_artwork_images(
     return {"status": "processing"}
 
 
+@router.post("/{artwork_id}/print-image")
+async def upload_print_quality_image(
+    artwork_id: int, admin_id: AdminDep, db: DBDep, file: UploadFile = File(...)
+):
+    """
+    Uploads a high-resolution source image for Prodigi print fulfillment.
+    The file is stored as-is (no conversion, no resize) to preserve maximum quality.
+    Supported formats: TIFF, PNG, JPEG, WebP.
+    Prodigi requires: ≥ 150 DPI at print size, recommended 300 DPI.
+    """
+    ALLOWED_TYPES = {"image/tiff", "image/png", "image/jpeg", "image/webp", "image/x-tiff"}
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(400, "Unsupported format. Use TIFF, PNG, JPEG or WebP.")
+
+    out_dir = "static/print"
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Sanitise filename and keep original extension for Prodigi compatibility
+    original_ext = os.path.splitext(file.filename or "upload")[1] or ".jpg"
+    safe_ext = original_ext.lower().replace(".tiff", ".tif")
+    from uuid import uuid4
+    filename = f"print_{artwork_id}_{uuid4().hex[:8]}{safe_ext}"
+    dest_path = f"{out_dir}/{filename}"
+
+    with open(dest_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    public_url = f"/static/print/{filename}"
+
+    # Persist the URL directly on the artwork record
+    await ArtworkService(db).update_artwork_partially(
+        artwork_id,
+        ArtworkPatchRequest(print_quality_url=public_url),
+    )
+
+    return {"url": public_url}
+
+
 @router.delete("/{artwork_id}")
 async def delete_artwork(artwork_id: int, admin_id: AdminDep, db: DBDep):
     """
