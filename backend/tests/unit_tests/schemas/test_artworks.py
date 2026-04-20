@@ -8,13 +8,13 @@ def test_artwork_add_request_valid():
     data = {
         "title": "Mona Lisa",
         "description": "Famous painting",
-        "has_prints": False,
+        "has_paper_print": True,
         "orientation": "Horizontal",
-        "base_print_price": 100,
         "labels": [1, 2],
     }
     artwork = ArtworkAddRequest(**data)
-    assert artwork.has_prints is False
+    assert artwork.has_paper_print is True
+    assert artwork.has_canvas_print is False
     assert artwork.labels == [1, 2]
     assert artwork.original_status == "available"
 
@@ -23,8 +23,8 @@ def test_artwork_add_request_defaults():
     data = {"title": "Minimalist", "orientation": "Vertical"}
     artwork = ArtworkAddRequest(**data)
     assert artwork.title == "Minimalist"
-    assert artwork.has_prints is False
-    assert artwork.base_print_price is None
+    assert artwork.has_paper_print is False
+    assert artwork.has_canvas_print is False
     assert artwork.orientation == "Vertical"
     assert artwork.labels == []
 

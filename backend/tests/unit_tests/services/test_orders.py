@@ -16,6 +16,8 @@ class MockDBManager:
     def __init__(self):
         self.artworks = AsyncMock()
         self.orders = AsyncMock()
+        self.email_templates = AsyncMock()
+        self.email_templates.get_by_key = AsyncMock(return_value=None)
         from src.models.orders import OrdersOrm
 
         self.orders.model = OrdersOrm
@@ -65,7 +67,7 @@ async def test_create_order_print_sold_out_fails(order_service):
     # Setup mock artwork that has 0 prints available
     mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
-    mock_artwork.has_prints = False
+    mock_artwork.has_paper_print = False
 
     order_service.db.artworks.get_one.return_value = mock_artwork
 
@@ -80,7 +82,12 @@ async def test_create_order_print_sold_out_fails(order_service):
         shipping_address_line1="St 1",
         shipping_postal_code="01001",
         items=[
-            {"artwork_id": 1, "edition_type": EditionType.PRINT, "finish": "none", "price": 1000}
+            {
+                "artwork_id": 1,
+                "edition_type": EditionType.PAPER_PRINT,
+                "finish": "none",
+                "price": 1000,
+            }
         ],
     )
 
@@ -135,8 +142,7 @@ async def test_create_order_original_success(order_service):
 async def test_create_order_print_success(order_service):
     mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
-    mock_artwork.has_prints = True
-    mock_artwork.base_print_price = 50
+    mock_artwork.has_paper_print = True
 
     order_service.db.artworks.get_one.return_value = mock_artwork
 
@@ -156,7 +162,12 @@ async def test_create_order_print_success(order_service):
         shipping_address_line1="St 1",
         shipping_postal_code="01001",
         items=[
-            {"artwork_id": 1, "edition_type": EditionType.PRINT, "finish": "none", "price": 1000}
+            {
+                "artwork_id": 1,
+                "edition_type": EditionType.PAPER_PRINT,
+                "finish": "none",
+                "price": 1000,
+            }
         ],
     )
 

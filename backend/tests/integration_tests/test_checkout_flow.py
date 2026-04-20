@@ -34,7 +34,7 @@ def _order_payload(**overrides) -> dict:
         "items": [
             {
                 "artwork_id": 6,
-                "edition_type": "print",
+                "edition_type": "paper_print",
                 "finish": "Rolled",
                 "size": "50x70",
                 "price": 1500,
@@ -63,7 +63,7 @@ class TestOrderCreation:
         assert order["email"] == "anna@example.com"
         assert order["total_price"] == 1500
         assert len(order["items"]) == 1
-        assert order["items"][0]["edition_type"] == "print"
+        assert order["items"][0]["edition_type"] == "paper_print"
 
     async def test_create_order_with_full_shipping(self, ac):
         """All shipping fields are persisted correctly."""
@@ -135,7 +135,7 @@ class TestInventoryEnforcement:
             items=[
                 {
                     "artwork_id": 5,
-                    "edition_type": "print",
+                    "edition_type": "paper_print",
                     "finish": "glossy",
                     "price": 500,
                 }
@@ -173,14 +173,14 @@ class TestDBPersistence:
             items=[
                 {
                     "artwork_id": 6,
-                    "edition_type": "print",
+                    "edition_type": "paper_print",
                     "finish": "Rolled",
                     "size": "50x70",
                     "price": 1500,
                 },
                 {
                     "artwork_id": 1,
-                    "edition_type": "print",
+                    "edition_type": "paper_print",
                     "finish": "Framed",
                     "size": "30x40",
                     "price": 800,
@@ -221,7 +221,7 @@ class TestOrderTrackingByEmail:
             assert "id" in order
             assert "payment_status" in order
             assert "items" in order
-            assert order["items"][0]["edition_type"] == "print"
+            assert order["items"][0]["edition_type"] == "paper_print"
 
     async def test_track_orders_no_results(self, ac):
         """Email with no orders returns empty list."""

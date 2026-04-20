@@ -15,7 +15,9 @@ def test_order_item_invalid_edition_type():
     data = {"artwork_id": 1, "edition_type": "fake_edition", "finish": "none", "price": 1000}
     with pytest.raises(ValidationError) as exc:
         OrderItemBase(**data)
-    assert "Input should be 'original' or 'print'" in str(exc.value)
+    message = str(exc.value)
+    assert "canvas_print" in message
+    assert "paper_print" in message
 
 
 def test_order_add_request_valid():

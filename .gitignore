@@ -9,6 +9,7 @@ backend/venv/
 # Tests cache
 .pytest_cache/
 backend/.pytest_cache/
+.ruff_cache/
 
 # Secrets
 .env
@@ -41,6 +42,11 @@ test_script.py
 
 # OS
 .DS_Store
+
+# Local editor and agent files
+.vscode/
+AGENTS.md
+backend/src/scratch/
 
 # Local supplier dumps
 prodigy/

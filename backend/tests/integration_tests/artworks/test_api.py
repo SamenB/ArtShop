@@ -68,7 +68,7 @@ async def test_create_and_get_my_orders(
     for artwork_id in artwork_ids:
         response = await authenticated_ac.post(
             "/orders",
-            json=get_base_payload(artwork_id, "print"),
+            json=get_base_payload(artwork_id, "paper_print"),
         )
         assert response.status_code == 200
 

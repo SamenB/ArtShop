@@ -21,7 +21,12 @@ class TestAdminOrders:
             "shipping_address_line1": "TestSt 1",
             "shipping_postal_code": "00000",
             "items": [
-                {"artwork_id": 6, "edition_type": "print", "finish": "Rolled", "price": 1000}
+                {
+                    "artwork_id": 6,
+                    "edition_type": "paper_print",
+                    "finish": "Rolled",
+                    "price": 1000,
+                }
             ],
         }
         create_resp = await authenticated_ac.post("/orders", json=order_payload)

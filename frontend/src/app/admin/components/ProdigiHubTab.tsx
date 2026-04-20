@@ -726,7 +726,7 @@ export default function ProdigiHubTab() {
                                         <td className="px-3 py-2 align-top">
                                             <div>{item.description}</div>
                                             <div className="text-xs text-[#31323E]/45 mt-1">
-                                                {item.width_in}x{item.height_in}" / {item.aspect_ratio}
+                                                {item.width_in}x{item.height_in}&quot; / {item.aspect_ratio}
                                             </div>
                                         </td>
                                         <td className="px-3 py-2 align-top text-xs text-[#31323E]/75">
