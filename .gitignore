@@ -39,6 +39,14 @@ nginx/htpasswd
 # Temp files
 error.txt
 test_script.py
+test_shadow.html
+update_colors.py
+site_content_ideas.md
+frontend/lint_output.txt
+frontend/test.ts
+backend/test_*.log
+backend/test_*.txt
+backend/tests.log
 
 # OS
 .DS_Store
