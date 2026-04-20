@@ -66,8 +66,8 @@ async def get_options(
              prefix = "GLOBAL-FRA-CAN"
         elif p.sku.startswith("GLOBAL-CFP"):
              prefix = "GLOBAL-CFP"
-        elif p.sku.startswith("GLOBAL-BFPM"):
-             prefix = "GLOBAL-BFPM"
+        elif p.sku.startswith("GLOBAL-BFP"):
+             prefix = "GLOBAL-BFP"
         
         if prefix in ["GLOBAL-HPR", "GLOBAL-HGE", "GLOBAL-FAP", "GLOBAL-EMA", "GLOBAL-BAP", "GLOBAL-SAP"]:
             if prefix not in paper_types:
@@ -113,7 +113,7 @@ async def get_options(
                 }
             add_variant(canvas_types[prefix]["variants"], p)
             
-        elif prefix in ["GLOBAL-CFP", "GLOBAL-BFPM"]:
+        elif prefix in ["GLOBAL-CFP", "GLOBAL-BFP"]:
             if prefix not in frame_types:
                 frame_types[prefix] = {
                     "id": "classic_frame" if prefix == "GLOBAL-CFP" else "box_frame",

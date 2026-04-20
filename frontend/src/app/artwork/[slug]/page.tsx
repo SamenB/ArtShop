@@ -36,6 +36,13 @@ interface Artwork {
     gradientTo?: string;
     width_cm?: number;
     height_cm?: number;
+    // Added for Prodigi expansion
+    print_aspect_ratio?: { id: number; label: string };
+    has_canvas_print_limited?: boolean;
+    has_paper_print_limited?: boolean;
+    canvas_print_limited_quantity?: number;
+    paper_print_limited_quantity?: number;
+    print_quality_url?: string;
 }
 
 const DEFAULT_GRADIENTS = [
@@ -1359,7 +1366,7 @@ export default function ArtworkDetailPage() {
                                                 ) : <PrintConfigurator 
                                                     artworkId={work.id}
                                                     artworkTitle={work.title}
-                                                    aspectRatio={work.aspect_ratio || "1:1"}
+                                                    aspectRatio={work.print_aspect_ratio?.label || work.aspect_ratio || "1:1"}
                                                     userCountryCode={userCountryCode}
                                                     purchaseType={purchaseType as "canvas" | "paper"}
                                                     units={units}
@@ -1368,6 +1375,9 @@ export default function ArtworkDetailPage() {
                                                     imageGradientFrom={work.gradientFrom || "#ccc"}
                                                     imageGradientTo={work.gradientTo || "#fff"}
                                                     imageUrl={getImageUrl(work.images?.[0], 'thumb') || undefined}
+                                                    isLimited={purchaseType === "canvas" ? work.has_canvas_print_limited : work.has_paper_print_limited}
+                                                    limitedQuantity={purchaseType === "canvas" ? work.canvas_print_limited_quantity : work.paper_print_limited_quantity}
+                                                    hasHighResAsset={!!work.print_quality_url}
                                                 /> }
                                             </div>
                                         </div>

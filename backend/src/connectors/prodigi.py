@@ -39,7 +39,18 @@ PAPER_SKU_PREFIXES = [
 ]
 
 # All standard sizes Prodigi offers (width x height in inches).
-# We try every combination — invalid ones return 404 and are skipped.
+# We try every combination — invalid ones return 404 and are skipped.# Standard metric sizes (cm) often used for high-end European fulfillment.
+# Used in composite SKUs like FRA-BOX-HPR-MOUNT1-ACRY-40x50.
+METRIC_CANDIDATE_SIZES_CM = [
+    (20, 25),
+    (20, 30),
+    (30, 40),
+    (40, 50),
+    (50, 50),
+    (50, 70),
+    (60, 80),
+    (70, 100),
+]
 CANDIDATE_SIZES_IN = [
     (5, 7),
     (6, 8),
@@ -193,7 +204,7 @@ class ProdigiClient:
             return None
 
         p = data.get("product") or data  # Some responses wrap in "product"
-        dims = p.get("productDimensions", {})
+        dims = p.get("productDimensions") or {}
 
         variants = []
         for v in p.get("variants", []):
@@ -203,11 +214,22 @@ class ProdigiClient:
                 print_area_sizes=v.get("printAreaSizes", {}),
             ))
 
+        raw_w = float(dims.get("width", 0))
+        raw_h = float(dims.get("height", 0))
+        units = dims.get("units", "in").lower()
+        
+        if units == "cm":
+            w_in = raw_w / 2.54
+            h_in = raw_h / 2.54
+        else:
+            w_in = raw_w
+            h_in = raw_h
+
         return ProductDetails(
             sku=p.get("sku", sku).upper(),
             description=p.get("description", ""),
-            width_in=float(dims.get("width", 0)),
-            height_in=float(dims.get("height", 0)),
+            width_in=w_in,
+            height_in=h_in,
             attributes=p.get("attributes", {}),
             variants=variants,
         )
@@ -219,7 +241,7 @@ class ProdigiClient:
         country_code: str,
         target_aspect_ratios: list[str] | None = None,
         sku_prefixes: list[str] | None = None,
-        max_concurrent: int = 10,
+        max_concurrent: int = 15,
     ) -> list[ProductDetails]:
         """
         Discover all available paper print products for a country by probing
@@ -242,10 +264,16 @@ class ProdigiClient:
         # Build candidate SKUs: prefix + WxH for each size combination
         candidates: list[str] = []
         for prefix in prefixes:
-            for w, h in CANDIDATE_SIZES_IN:
-                candidates.append(f"{prefix}-{w}X{h}")
-
-        log.info("Probing %d candidate SKUs for country=%s...", len(candidates), cc)
+            # Composite SKUs (like FRA-BOX) use metric sizes and 'x' separator
+            if prefix.startswith("FRA-"):
+                for w, h in METRIC_CANDIDATE_SIZES_CM:
+                    candidates.append(f"{prefix}-{w}x{h}")
+            else:
+                # Standard SKUs use imperial sizes and 'X' separator
+                for w, h in CANDIDATE_SIZES_IN:
+                    candidates.append(f"{prefix}-{w}X{h}")
+        
+        log.info("Probing %d candidate SKUs (imperial/metric) for country=%s...", len(candidates), cc)
 
         semaphore = asyncio.Semaphore(max_concurrent)
         results: list[ProductDetails] = []

@@ -113,6 +113,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 from src.api.print_options import router as print_options_router
 from src.api.geo import router as geo_router
 from src.api.prodigi_callbacks import router as prodigi_callbacks_router
+from src.api.admin_prodigi import router as admin_prodigi_router
 
 # Register all domain-specific API routers.
 app.include_router(auth_router)
@@ -131,6 +132,7 @@ app.include_router(telegram_router)
 app.include_router(print_options_router)
 app.include_router(geo_router)
 app.include_router(prodigi_callbacks_router)
+app.include_router(admin_prodigi_router)
 
 if __name__ == "__main__":
     # Local development server execution.

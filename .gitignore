@@ -41,3 +41,7 @@ test_script.py
 
 # OS
 .DS_Store
+
+# Local supplier dumps
+prodigy/
+Prodigy/

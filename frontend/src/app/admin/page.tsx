@@ -11,13 +11,15 @@ import FooterTab from "@/app/admin/components/FooterTab";
 import EmailTemplatesTab from "@/app/admin/components/EmailTemplatesTab";
 import PrintPricingTab from "@/app/admin/components/PrintPricingTab";
 import PrintPartnersTab from "@/app/admin/components/PrintPartnersTab";
+import ProdigiHubTab from "@/app/admin/components/ProdigiHubTab";
 
-type Tab = "artwork" | "orders" | "print-pricing" | "print-partners" | "email-templates" | "label" | "setting" | "footer";
+type Tab = "artwork" | "orders" | "print-pricing" | "prodigi-hub" | "print-partners" | "email-templates" | "label" | "setting" | "footer";
 
 const TAB_LABELS: Record<Tab, string> = {
     "artwork": "Artworks",
     "orders": "Orders",
     "print-pricing": "Print Pricing",
+    "prodigi-hub": "Prodigi Hub",
     "print-partners": "Print Partners",
     "email-templates": "Email Templates",
     "label": "Labels",
@@ -87,6 +89,7 @@ export default function AdminDashboardPage() {
                         {activeTab === "artwork" && <ArtworksTab />}
                         {activeTab === "orders" && <OrdersTab />}
                         {activeTab === "print-pricing" && <PrintPricingTab />}
+                        {activeTab === "prodigi-hub" && <ProdigiHubTab />}
                         {activeTab === "print-partners" && <PrintPartnersTab />}
                         {activeTab === "email-templates" && <EmailTemplatesTab />}
                         {activeTab === "label" && <LabelsTab />}
