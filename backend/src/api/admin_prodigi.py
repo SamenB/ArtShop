@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Query, HTTPException, Depends
-from typing import Any
-from src.services.prodigi_catalog import ProdigiCatalogService
-from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
-from src.connectors.prodigi import ProdigiClient
+from fastapi import APIRouter, HTTPException, Query
+
 from src.api.dependencies import AdminDep, DBDep
 from src.api.print_options import MARKUP
+from src.connectors.prodigi import ProdigiClient
+from src.services.prodigi_catalog import ProdigiCatalogService
+from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
+from src.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
 
 router = APIRouter(prefix="/v1/admin/prodigi", tags=["Admin Prodigi Diagnostics"])
 catalog_service = ProdigiCatalogService()
@@ -22,23 +23,23 @@ async def probe_prodigi(
     """
     try:
         results = await catalog_service.get_detailed_options(
-            country.upper(), 
-            aspect_ratio, 
-            family.upper()
+            country.upper(),
+            aspect_ratio,
+            family.upper(),
         )
-        
+
         # Inject retail prices for convenience
         for item in results:
             for tier in item.get("shipping_tiers", []):
                 tier["retail_product_eur"] = round(tier["wholesale_cost_eur"] * MARKUP, 2)
                 tier["total_retail_eur"] = round(tier["retail_product_eur"] + tier["shipping_cost_eur"], 2)
-                
+
         return {
             "country": country.upper(),
             "aspect_ratio": aspect_ratio,
             "family": family.upper(),
             "count": len(results),
-            "results": results
+            "results": results,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -74,9 +75,9 @@ async def get_raw_quote(
     import json
     try:
         attr_dict = json.loads(attributes)
-    except:
+    except json.JSONDecodeError:
         attr_dict = {}
-        
+
     async with ProdigiClient() as client:
         try:
             raw_data = await client.get_quote(sku, country, "EUR", attr_dict)
@@ -92,6 +93,10 @@ async def get_catalog_preview(
     aspect_ratio: str | None = Query(None, description="Preview ratio, e.g. 4:5"),
     country: str | None = Query(None, description="Destination country ISO, e.g. DE"),
     paper_material: str | None = Query(None, description="Normalized paper material, e.g. hahnemuhle_german_etching"),
+    include_notice_level: bool = Query(
+        True,
+        description="Whether notice-level cross-border categories remain visible in storefront preview.",
+    ),
 ):
     """
     Curated preview of the future ArtShop print catalog.
@@ -99,11 +104,21 @@ async def get_catalog_preview(
     database would expose after our business filters are applied.
     """
     try:
-        return await ProdigiCatalogPreviewService(db).get_preview(
+        preview_service = ProdigiCatalogPreviewService(db)
+        preview = await preview_service.get_preview(
             selected_ratio=aspect_ratio,
             selected_country=country,
             selected_paper_material=paper_material,
         )
+        storefront_preview = ProdigiStorefrontBakeService(db).build_storefront_country_preview(
+            preview_payload=preview,
+            include_notice_level=include_notice_level,
+        )
+        preview["storefront_mode"] = (
+            "include_notice_level" if include_notice_level else "primary_only"
+        )
+        preview["selected_country_storefront_preview"] = storefront_preview
+        return preview
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -115,17 +130,20 @@ async def create_catalog_database_preview(
     aspect_ratio: str | None = Query(None, description="Preview ratio checkpoint"),
     country: str | None = Query(None, description="Destination country checkpoint"),
     paper_material: str | None = Query(None, description="Normalized paper material checkpoint"),
+    include_notice_level: bool = Query(
+        True,
+        description="Whether notice-level cross-border categories should be baked into storefront tables.",
+    ),
 ):
     """
-    Intentional checkpoint endpoint.
-    The actual storefront bake remains a separate explicit step after the preview
-    configuration is approved in the admin UI.
+    Materialize the curated preview into dedicated storefront bake tables.
     """
     try:
-        return await ProdigiCatalogPreviewService(db).request_bake(
+        return await ProdigiStorefrontBakeService(db).bake_storefront(
             selected_ratio=aspect_ratio,
             selected_country=country,
             selected_paper_material=paper_material,
+            include_notice_level=include_notice_level,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

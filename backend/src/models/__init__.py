@@ -12,6 +12,13 @@ from src.models.print_pricing import PrintPricingOrm as PrintPricingOrm
 from src.models.prodigi_catalog import ProdigiCatalogProductOrm as ProdigiCatalogProductOrm
 from src.models.prodigi_catalog import ProdigiCatalogRouteOrm as ProdigiCatalogRouteOrm
 from src.models.prodigi_catalog import ProdigiCatalogVariantOrm as ProdigiCatalogVariantOrm
+from src.models.prodigi_storefront import ProdigiStorefrontBakeOrm as ProdigiStorefrontBakeOrm
+from src.models.prodigi_storefront import (
+    ProdigiStorefrontOfferGroupOrm as ProdigiStorefrontOfferGroupOrm,
+)
+from src.models.prodigi_storefront import (
+    ProdigiStorefrontOfferSizeOrm as ProdigiStorefrontOfferSizeOrm,
+)
 from src.models.site_settings import SiteSettingsOrm as SiteSettingsOrm
 from src.models.user_likes import UserLikesOrm as UserLikesOrm
 from src.models.users import UsersOrm as UsersOrm
