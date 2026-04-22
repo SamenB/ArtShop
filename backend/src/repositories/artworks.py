@@ -6,6 +6,7 @@ Extends BaseRepository to provide specialized filtering and eager loading of tag
 from sqlalchemy import and_, select
 from sqlalchemy.orm import joinedload
 
+from src.exeptions import ObjectNotFoundException
 from src.models.artworks import ArtworksOrm
 from src.models.labels import LabelsOrm
 from src.repositories.base import BaseRepository
@@ -23,10 +24,16 @@ class ArtworksRepository(BaseRepository):
     model = ArtworksOrm
     mapper = ArtworkMapper
 
-    async def get_available_artworks(
+    def _base_query(self):
+        return select(self.model).options(
+            joinedload(self.model.labels),
+            joinedload(self.model.print_aspect_ratio),
+        )
+
+    def _apply_common_filters(
         self,
-        limit: int = 10,
-        offset: int = 0,
+        query,
+        *,
         title: str | None = None,
         labels: list[int] | None = None,
         year_from: int | None = None,
@@ -36,22 +43,6 @@ class ArtworksRepository(BaseRepository):
         orientation: str | None = None,
         size_category: str | None = None,
     ):
-        """
-        Retrieves a list of available artworks based on various filters.
-        Filters include title (fuzzy), labels, collection, production year, price range,
-        aspect ratio (orientation), and surface area (size category).
-        """
-        artworks_ids_to_get = available_artwork_ids()
-
-        query = (
-            select(self.model)
-            .options(
-                joinedload(self.model.labels),
-                joinedload(self.model.print_aspect_ratio),
-            )
-            .filter(self.model.id.in_(artworks_ids_to_get))
-        )
-
         if title:
             query = query.filter(self.model.title.ilike(f"%{title}%"))
 
@@ -123,6 +114,38 @@ class ArtworksRepository(BaseRepository):
                 )
             )
 
+        return query
+
+    async def get_available_artworks(
+        self,
+        limit: int = 10,
+        offset: int = 0,
+        title: str | None = None,
+        labels: list[int] | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+        price_min: int | None = None,
+        price_max: int | None = None,
+        orientation: str | None = None,
+        size_category: str | None = None,
+    ):
+        """
+        Retrieves a list of available artworks based on various filters.
+        Filters include title (fuzzy), labels, collection, production year, price range,
+        aspect ratio (orientation), and surface area (size category).
+        """
+        query = self._base_query().filter(self.model.id.in_(available_artwork_ids()))
+        query = self._apply_common_filters(
+            query,
+            title=title,
+            labels=labels,
+            year_from=year_from,
+            year_to=year_to,
+            price_min=price_min,
+            price_max=price_max,
+            orientation=orientation,
+            size_category=size_category,
+        )
         query = query.limit(limit).offset(offset)
 
         result = await self.session.execute(query)
@@ -131,12 +154,52 @@ class ArtworksRepository(BaseRepository):
             for model in result.unique().scalars().all()
         ]
 
+    async def get_admin_artworks(
+        self,
+        limit: int = 10,
+        offset: int = 0,
+        title: str | None = None,
+        labels: list[int] | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+        price_min: int | None = None,
+        price_max: int | None = None,
+        orientation: str | None = None,
+        size_category: str | None = None,
+    ):
+        query = self._base_query()
+        query = self._apply_common_filters(
+            query,
+            title=title,
+            labels=labels,
+            year_from=year_from,
+            year_to=year_to,
+            price_min=price_min,
+            price_max=price_max,
+            orientation=orientation,
+            size_category=size_category,
+        )
+        query = query.order_by(self.model.id.desc()).limit(limit).offset(offset)
+        result = await self.session.execute(query)
+        return [
+            ArtworkWithLabels.model_validate(model, from_attributes=True)
+            for model in result.unique().scalars().all()
+        ]
+
+    async def get_one(self, **filter_by):
+        query = self._base_query().filter_by(**filter_by)
+        result = await self.session.execute(query)
+        model = result.unique().scalars().one_or_none()
+        if model is None:
+            raise ObjectNotFoundException(detail=f"Object not found in {self.model.__tablename__}")
+        return ArtworkWithLabels.model_validate(model, from_attributes=True)
+
     async def get_one_or_none(self, **filter_by):
         """
         Retrieves a single artwork by its fields or returns None if not found.
         Eagerly loads associated labels.
         """
-        query = select(self.model).options(joinedload(self.model.labels)).filter_by(**filter_by)
+        query = self._base_query().filter_by(**filter_by)
         result = await self.session.execute(query)
         model = result.unique().scalars().one_or_none()
         if model is None:

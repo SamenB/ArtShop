@@ -57,6 +57,7 @@ class ArtworksOrm(Base):
     print_quality_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     print_source_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     print_profile_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    print_workflow_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # ── Print availability flags ──────────────────────────────────────────────
     # Each flag independently controls whether a given print type is purchasable.

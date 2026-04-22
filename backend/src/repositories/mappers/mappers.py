@@ -3,20 +3,22 @@ Specific data mapper implementations for each domain entity.
 These mappers link SQLAlchemy ORM models to their corresponding Pydantic schemas.
 """
 
+from src.models.artwork_print_assets import ArtworkPrintAssetOrm
 from src.models.artworks import ArtworksOrm
+from src.models.email_templates import EmailTemplateOrm
 from src.models.label_categories import LabelCategoriesOrm
 from src.models.labels import ArtworkLabelsOrm, LabelsOrm
 from src.models.orders import OrderItemOrm, OrdersOrm
 from src.models.print_pricing import PrintAspectRatioOrm, PrintPricingOrm
 from src.models.users import UsersOrm
 from src.repositories.mappers.base import DataMapper
+from src.schemas.artwork_print_assets import ArtworkPrintAsset
 from src.schemas.artworks import Artwork
+from src.schemas.email_templates import EmailTemplate
 from src.schemas.labels import ArtworkLabel, Label, LabelCategory
 from src.schemas.orders import Order, OrderItem
 from src.schemas.print_pricing import AspectRatioItem, PrintPricingItem
 from src.schemas.users import User
-from src.models.email_templates import EmailTemplateOrm
-from src.schemas.email_templates import EmailTemplate
 
 
 class UserMapper(DataMapper):
@@ -31,6 +33,11 @@ class ArtworkMapper(DataMapper):
 
     db_model = ArtworksOrm
     schema = Artwork
+
+
+class ArtworkPrintAssetMapper(DataMapper):
+    db_model = ArtworkPrintAssetOrm
+    schema = ArtworkPrintAsset
 
 
 class LabelCategoryMapper(DataMapper):

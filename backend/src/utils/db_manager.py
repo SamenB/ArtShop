@@ -8,6 +8,7 @@ import asyncio
 
 from sqlalchemy.exc import OperationalError
 
+from src.repositories.artwork_print_assets import ArtworkPrintAssetsRepository
 from src.repositories.artworks import ArtworksRepository
 from src.repositories.email_templates import EmailTemplatesRepository
 from src.repositories.labels import (
@@ -39,6 +40,7 @@ class DBManager:
         self.session = self.session_factory()
 
         self.artworks = ArtworksRepository(self.session)
+        self.artwork_print_assets = ArtworkPrintAssetsRepository(self.session)
         self.users = UsersRepository(self.session)
         self.orders = OrdersRepository(self.session)
         self.order_items = OrderItemsRepository(self.session)

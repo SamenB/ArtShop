@@ -1,18 +1,72 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
+import { useEffect, useRef, useState } from "react";
+
+import { apiFetch, getApiUrl, getImageUrl } from "@/utils";
+
 import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
 
-interface ArtworkImage { thumb: string; medium: string; original: string; }
+interface ArtworkImage {
+    thumb: string;
+    medium: string;
+    original: string;
+}
+
 type ImageEntry = string | ArtworkImage;
+
+interface Label {
+    id: number;
+    title: string;
+    category_id?: number;
+}
+
+interface LabelCategory {
+    id: number;
+    title: string;
+    accent_color?: string;
+}
+
+interface AspectRatio {
+    id: number;
+    label: string;
+    description: string | null;
+}
+
+interface WorkflowCategoryConfig {
+    enabled?: boolean | null;
+    reviewed?: boolean;
+    asset_strategy?: string;
+    provider_attributes?: Record<string, string>;
+    notes?: string;
+}
+
+interface PrintWorkflowConfig {
+    source_master_reviewed?: boolean;
+    categories?: Record<string, WorkflowCategoryConfig>;
+}
+
+interface PrintReadinessSummary {
+    status: "ready" | "attention" | "blocked";
+    message: string;
+    blocking_step_count: number;
+    attention_step_count: number;
+    blocking_category_count: number;
+    ready_category_count: number;
+    enabled_category_count: number;
+    highlight_variant?: string;
+}
 
 interface Artwork {
     id: number;
     title: string;
-    original_price: number;
+    slug?: string | null;
+    description?: string | null;
+    year?: number | null;
+    width_cm?: number | null;
+    height_cm?: number | null;
+    original_price?: number | null;
+    original_status?: string | null;
     images?: ImageEntry[];
-    description?: string;
     has_original?: boolean;
     has_canvas_print?: boolean;
     has_canvas_print_limited?: boolean;
@@ -23,25 +77,166 @@ interface Artwork {
     print_aspect_ratio_id?: number | null;
     print_min_size_label?: string | null;
     print_max_size_label?: string | null;
-    orientation?: string;
+    orientation?: string | null;
     print_quality_url?: string | null;
+    print_workflow_config?: PrintWorkflowConfig | null;
+    print_readiness_summary?: PrintReadinessSummary | null;
     labels?: { id: number; title: string; category_id?: number }[];
 }
 
-interface AspectRatio { id: number; label: string; description: string | null; }
+interface ArtworkPrintAsset {
+    id: number;
+    artwork_id: number;
+    provider_key: string;
+    category_id: string | null;
+    asset_role: string;
+    slot_size_label: string | null;
+    file_url: string;
+    file_name: string | null;
+    file_ext: string | null;
+    mime_type: string | null;
+    file_size_bytes: number | null;
+    checksum_sha256: string | null;
+    file_metadata?: Record<string, unknown> | null;
+    note?: string | null;
+}
 
-interface Label { id: number; title: string; category_id?: number; }
-interface LabelCategory { id: number; title: string; accent_color?: string; }
+interface WorkflowAttributeChoice {
+    key: string;
+    mode: "fixed" | "select" | "default";
+    value?: string | null;
+    options: string[];
+    default_value?: string | null;
+}
 
-const STATUS_OPTIONS = [
-    { value: "available",     label: "Available" },
-    { value: "sold",          label: "Sold" },
-    { value: "reserved",      label: "Reserved" },
-    { value: "not_for_sale",  label: "Not for Sale" },
-    { value: "on_exhibition", label: "On Exhibition" },
-    { value: "archived",      label: "Archived" },
-    { value: "digital",       label: "Digital" },
-];
+interface WorkflowValidation {
+    status: "ready" | "blocked" | "attention" | "not_required";
+    issues: string[];
+    warnings: string[];
+}
+
+interface SizeRequirement {
+    slot_size_label: string;
+    required: boolean;
+    asset_role: string | null;
+    asset_role_label: string | null;
+    strategy: string;
+    target_dpi: number;
+    base_target_dpi?: number;
+    dpi_policy_note?: string;
+    wrap_margin_pct: number;
+    required_dimensions_px: {
+        width: number;
+        height: number;
+    };
+    asset_source?: "missing" | "exact" | "category_master";
+    asset: ArtworkPrintAsset | null;
+    validation: WorkflowValidation;
+}
+
+interface PreparationMatrixEntry {
+    category_id: string;
+    label: string;
+    enabled: boolean;
+    status: "ready" | "attention" | "blocked";
+    asset_strategy: string;
+    uses_source_master_only: boolean;
+    category_master_supported: boolean;
+    required_asset_role: string | null;
+    required_asset_label: string | null;
+    suggested_master_size_label: string | null;
+    suggested_master_target_dpi?: number | null;
+    suggested_master_dpi_policy_note?: string | null;
+    minimum_master_dimensions_px: {
+        width: number;
+        height: number;
+    } | null;
+    covered_size_count: number;
+    source_master_present: boolean;
+    source_master_reviewed: boolean;
+    client_selectable_attributes: WorkflowAttributeChoice[];
+    provider_submission_defaults: Record<string, string>;
+}
+
+interface CategoryWorkflow {
+    category_id: string;
+    label: string;
+    medium: string;
+    material_label: string;
+    frame_label: string;
+    enabled: boolean;
+    offered_in_active_bake: boolean;
+    asset_strategy: string;
+    reviewed: boolean;
+    provider_attributes: Record<string, string>;
+    attribute_choices: WorkflowAttributeChoice[];
+    admin_managed_attributes: WorkflowAttributeChoice[];
+    client_selectable_attributes: WorkflowAttributeChoice[];
+    provider_submission_defaults: Record<string, string>;
+    effective_profile: Record<string, unknown>;
+    issues: string[];
+    size_requirements: SizeRequirement[];
+    summary: {
+        required_count: number;
+        ready_count: number;
+        blocking_count: number;
+        status: "ready" | "attention" | "blocked";
+    };
+}
+
+interface WorkflowStep {
+    id: string;
+    label: string;
+    status: "ready" | "attention" | "blocked";
+    issues?: string[];
+    warnings?: string[];
+}
+
+interface ArtworkPrintWorkflowPayload {
+    artwork_id: number;
+    provider_key: string;
+    print_enabled: boolean;
+    source_master: {
+        required: boolean;
+        present: boolean;
+        reviewed: boolean;
+        status: "ready" | "attention" | "blocked";
+        issues: string[];
+        warnings: string[];
+        url: string | null;
+        metadata?: Record<string, unknown> | null;
+    };
+    workflow_config: PrintWorkflowConfig;
+    preparation_matrix: PreparationMatrixEntry[];
+    category_workflows: CategoryWorkflow[];
+    steps: WorkflowStep[];
+    assets: ArtworkPrintAsset[];
+    readiness_summary: PrintReadinessSummary;
+}
+
+interface ArtworkFormState {
+    title: string;
+    description: string;
+    year: number;
+    width_cm: number | string;
+    height_cm: number | string;
+    original_price: number | string;
+    has_original: boolean;
+    has_canvas_print: boolean;
+    has_canvas_print_limited: boolean;
+    has_paper_print: boolean;
+    has_paper_print_limited: boolean;
+    canvas_print_limited_quantity: number | string;
+    paper_print_limited_quantity: number | string;
+    print_aspect_ratio_id: number | null;
+    print_min_size_label: string;
+    print_max_size_label: string;
+    orientation: string;
+    labels: number[];
+    original_status: string;
+    print_quality_url: string;
+    print_workflow_config: PrintWorkflowConfig;
+}
 
 interface DragItem {
     type: "existing" | "new";
@@ -50,697 +245,2551 @@ interface DragItem {
     file?: File;
 }
 
-// ── Shared Input Style ────────────────────────────────────────────────────────
+const STATUS_OPTIONS = [
+    { value: "available", label: "Available" },
+    { value: "sold", label: "Sold" },
+    { value: "reserved", label: "Reserved" },
+    { value: "not_for_sale", label: "Not for Sale" },
+    { value: "on_exhibition", label: "On Exhibition" },
+    { value: "archived", label: "Archived" },
+    { value: "digital", label: "Digital" },
+];
 
-const inp = "w-full bg-white border border-[#31323E]/15 rounded-lg px-3.5 py-2.5 text-sm font-medium text-[#31323E] focus:outline-none focus:border-[#31323E]/50 focus:ring-2 focus:ring-[#31323E]/10 placeholder-[#31323E]/30 transition-all shadow-sm";
+const WORKFLOW_STEP_ORDER = [
+    { id: "basics", label: "Basics" },
+    { id: "offerings", label: "Offerings" },
+    { id: "pipeline", label: "Print Pipeline" },
+    { id: "media", label: "Media" },
+] as const;
 
-// ── Image Reorder Grid ────────────────────────────────────────────────────────
+const INPUT_CLASS =
+    "w-full bg-white border border-[#31323E]/15 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#31323E] focus:outline-none focus:border-[#31323E]/45 focus:ring-2 focus:ring-[#31323E]/10 transition-all";
 
-function ImageReorderGrid({ items, onReorder, onRemove, onAddFiles, onCropClick, maxItems = 10 }: {
-    items: DragItem[];
-    onReorder: (next: DragItem[]) => void;
-    onRemove: (idx: number) => void;
-    onAddFiles: (files: File[]) => void;
-    onCropClick?: (idx: number) => void;
-    maxItems?: number;
-}) {
-    const dragIdx = useRef<number | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+const currentYear = new Date().getFullYear();
 
-    const handleDragStart = (idx: number) => { dragIdx.current = idx; };
-    const handleDrop = (idx: number) => {
-        if (dragIdx.current === null || dragIdx.current === idx) return;
-        const next = [...items];
-        const [moved] = next.splice(dragIdx.current, 1);
-        next.splice(idx, 0, moved);
-        onReorder(next);
-        dragIdx.current = null;
+function createEmptyWorkflowConfig(): PrintWorkflowConfig {
+    return {
+        source_master_reviewed: false,
+        categories: {},
     };
-
-    return (
-        <div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "12px" }}>
-                {items.map((item, i) => (
-                    <div key={i} draggable onDragStart={() => handleDragStart(i)} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(i)}
-                        style={{
-                            position: "relative", width: "100px", height: "100px",
-                            border: i === 0 ? "2px solid #31323E" : "1px solid rgba(0,0,0,0.1)",
-                            borderRadius: "10px", overflow: "hidden", cursor: "grab", flexShrink: 0,
-                            transition: "box-shadow 0.2s",
-                        }}>
-                        <img src={item.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }} />
-                        {i === 0 && (
-                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "#31323E", color: "#fff", fontSize: "8px", padding: "3px 7px", fontFamily: "var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
-                                Cover
-                            </div>
-                        )}
-                        {i > 0 && (
-                            <div style={{ position: "absolute", top: 0, left: 0, backgroundColor: "rgba(255,255,255,0.85)", color: "#31323E", fontSize: "8px", padding: "3px 7px", fontFamily: "var(--font-sans)", fontWeight: 700 }}>
-                                #{i + 1}
-                            </div>
-                        )}
-                        <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); onRemove(i); }}
-                            style={{ position: "absolute", top: "4px", right: "4px", width: "20px", height: "20px", borderRadius: "50%", backgroundColor: "rgba(239,68,68,1)", border: "none", color: "#fff", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
-                            title="Remove">×</button>
-                        {item.type === "new" && onCropClick && (
-                            <button type="button" onClick={e => { e.stopPropagation(); e.preventDefault(); onCropClick(i); }}
-                                style={{ position: "absolute", bottom: "4px", right: "4px", width: "22px", height: "22px", borderRadius: "50%", backgroundColor: "rgba(0,0,0,0.85)", border: "none", color: "#fff", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
-                                title="Crop Image">◩</button>
-                        )}
-                    </div>
-                ))}
-                {items.length < maxItems && (
-                    <button type="button" onClick={e => { e.preventDefault(); inputRef.current?.click(); }}
-                        style={{ width: "100px", height: "100px", border: "1.5px dashed rgba(49,50,62,0.2)", borderRadius: "10px", backgroundColor: "rgba(49,50,62,0.02)", color: "rgba(49,50,62,0.3)", fontSize: "2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(49,50,62,0.5)"; e.currentTarget.style.color = "rgba(49,50,62,0.7)"; e.currentTarget.style.backgroundColor = "rgba(49,50,62,0.04)" }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(49,50,62,0.2)"; e.currentTarget.style.color = "rgba(49,50,62,0.3)"; e.currentTarget.style.backgroundColor = "rgba(49,50,62,0.02)" }}
-                    >+</button>
-                )}
-                <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: "none" }}
-                    onClick={e => { (e.target as HTMLInputElement).value = ""; }}
-                    onChange={e => {
-                        const files = Array.from(e.target.files || []).slice(0, maxItems - items.length);
-                        if (files.length > 0) onAddFiles(files);
-                        (e.target as HTMLInputElement).value = "";
-                    }}
-                />
-            </div>
-            <p className="text-[10px] font-semibold text-[#31323E]/40 mt-2.5 tracking-wider">
-                Drag to reorder · First image is cover · Up to {maxItems} photos
-            </p>
-        </div>
-    );
 }
 
-// ── Label Multi Select ────────────────────────────────────────────────────────
-
-function LabelMultiSelect({ labels, selected, onChange, placeholder }: {
-    labels: Label[];
-    selected: number[];
-    onChange: (ids: number[]) => void;
-    placeholder: string;
-}) {
-    const toggle = (id: number) =>
-        onChange(selected.includes(id) ? selected.filter(s => s !== id) : [...selected, id]);
-
-    return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {labels.map(t => {
-                const active = selected.includes(t.id);
-                return (
-                    <button key={t.id} type="button" onClick={() => toggle(t.id)}
-                        style={{
-                            padding: "5px 12px", borderRadius: "20px",
-                            border: `1px solid ${active ? "#31323E" : "rgba(49,50,62,0.12)"}`,
-                            backgroundColor: active ? "#31323E" : "#fff",
-                            color: active ? "#fff" : "#52525b",
-                            fontFamily: "var(--font-sans)", fontSize: "0.72rem",
-                            cursor: "pointer", transition: "all 0.15s",
-                            fontWeight: active ? 700 : 500,
-                        }}>
-                        {t.title}
-                    </button>
-                );
-            })}
-            {labels.length === 0 && (
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", color: "rgba(49,50,62,0.35)", fontStyle: "italic" }}>
-                    {placeholder}
-                </span>
-            )}
-        </div>
-    );
-}
-
-// ── Form Section Components ───────────────────────────────────────────────────
-
-function FormSection({ title, desc }: { title: string; desc?: string }) {
-    return (
-        <div className="mb-5">
-            <div className="flex items-center gap-3 mb-1">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#31323E] flex-shrink-0">{title}</h3>
-                <div className="flex-1 h-px bg-[#31323E]/8" />
-            </div>
-            {desc && <p className="text-xs text-[#31323E]/40 font-medium">{desc}</p>}
-        </div>
-    );
-}
-
-function FieldLabel({ text, required = false, valid = true }: { text: string; required?: boolean; valid?: boolean }) {
-    return (
-        <div className="flex items-center gap-1.5 mb-1.5">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${valid ? "bg-emerald-400" : "bg-amber-400"}`} />
-            <label className="block text-[11px] uppercase font-bold text-[#31323E]/60 tracking-[0.12em]">
-                {text} {required && "*"}
-            </label>
-        </div>
-    );
-}
-
-// ── Main Component ────────────────────────────────────────────────────────────
-
-export default function ArtworksTab() {
-    const [artworks, setArtworks] = useState<Artwork[]>([]);
-    const [categories, setCategories] = useState<LabelCategory[]>([]);
-    const [labels, setLabels] = useState<Label[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [uploading, setUploading] = useState(false);
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [imageItems, setImageItems] = useState<DragItem[]>([]);
-    const [cropImageIndex, setCropImageIndex] = useState<number | null>(null);
-    const [printUploading, setPrintUploading] = useState(false);
-    const [printUploadError, setPrintUploadError] = useState<string | null>(null);
-    const printFileRef = useRef<HTMLInputElement>(null);
-
-    const defaultForm = {
+function createDefaultFormState(): ArtworkFormState {
+    return {
         title: "",
         description: "",
-        year: new Date().getFullYear(),
-        width_cm: "" as string | number,
-        height_cm: "" as string | number,
+        year: currentYear,
+        width_cm: "",
+        height_cm: "",
         original_price: 1000,
         has_original: false,
         has_canvas_print: false,
         has_canvas_print_limited: false,
         has_paper_print: false,
         has_paper_print_limited: false,
-        canvas_print_limited_quantity: "" as string | number,
-        paper_print_limited_quantity: "" as string | number,
-        print_aspect_ratio_id: null as number | null,
+        canvas_print_limited_quantity: "",
+        paper_print_limited_quantity: "",
+        print_aspect_ratio_id: null,
         print_min_size_label: "",
         print_max_size_label: "",
         orientation: "Horizontal",
-        labels: [] as number[],
+        labels: [],
         original_status: "available",
         print_quality_url: "",
+        print_workflow_config: createEmptyWorkflowConfig(),
     };
-    const [formData, setFormData] = useState<any>(defaultForm);
-    const [aspectRatios, setAspectRatios] = useState<AspectRatio[]>([]);
+}
 
-    const resolveImageUrl = useCallback((img: ImageEntry): string => {
-        if (typeof img === "string") return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
-        return getImageUrl(img, "thumb") || "";
-    }, []);
+function resolveImageUrl(img: ImageEntry): string {
+    if (typeof img === "string") {
+        return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
+    }
+    return getImageUrl(img, "thumb") || "";
+}
+
+function hasPrintOfferings(formData: ArtworkFormState): boolean {
+    return Boolean(
+        formData.has_canvas_print ||
+            formData.has_canvas_print_limited ||
+            formData.has_paper_print ||
+            formData.has_paper_print_limited
+    );
+}
+
+function toNumber(value: number | string | null | undefined, isFloat = false): number | null {
+    if (value === "" || value === null || value === undefined) {
+        return null;
+    }
+    const parsed = isFloat ? Number.parseFloat(String(value)) : Number.parseInt(String(value), 10);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function buildFormPayload(formData: ArtworkFormState) {
+    const payload: Record<string, unknown> = {
+        ...formData,
+        original_price: toNumber(formData.original_price),
+        year: toNumber(formData.year),
+        width_cm: toNumber(formData.width_cm, true),
+        height_cm: toNumber(formData.height_cm, true),
+        canvas_print_limited_quantity: toNumber(formData.canvas_print_limited_quantity),
+        paper_print_limited_quantity: toNumber(formData.paper_print_limited_quantity),
+        print_aspect_ratio_id: formData.print_aspect_ratio_id,
+        print_workflow_config: formData.print_workflow_config,
+    };
+
+    if (payload.width_cm !== null) {
+        payload.width_in = Number(((payload.width_cm as number) * 0.393701).toFixed(2));
+    } else {
+        payload.width_in = null;
+    }
+
+    if (payload.height_cm !== null) {
+        payload.height_in = Number(((payload.height_cm as number) * 0.393701).toFixed(2));
+    } else {
+        payload.height_in = null;
+    }
+
+    if (!formData.has_original || formData.original_status !== "available") {
+        payload.original_price = null;
+    }
+
+    if (formData.original_status === "digital") {
+        payload.width_cm = null;
+        payload.height_cm = null;
+        payload.width_in = null;
+        payload.height_in = null;
+    }
+
+    return payload;
+}
+
+function getStatusClasses(status: string): string {
+    if (status === "ready") {
+        return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+    }
+    if (status === "blocked") {
+        return "bg-rose-50 text-rose-700 border border-rose-200";
+    }
+    return "bg-amber-50 text-amber-700 border border-amber-200";
+}
+
+function titleCase(value: string): string {
+    return value
+        .replace(/[_-]/g, " ")
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+}
+
+function FormSection({ title, description }: { title: string; description?: string }) {
+    return (
+        <div className="mb-5">
+            <div className="flex items-center gap-3 mb-1.5">
+                <h3 className="text-sm font-bold uppercase tracking-[0.16em] text-[#31323E]">
+                    {title}
+                </h3>
+                <div className="flex-1 h-px bg-[#31323E]/10" />
+            </div>
+            {description ? (
+                <p className="text-xs text-[#31323E]/45 font-medium">{description}</p>
+            ) : null}
+        </div>
+    );
+}
+
+function FieldLabel({
+    text,
+    required = false,
+    valid = true,
+}: {
+    text: string;
+    required?: boolean;
+    valid?: boolean;
+}) {
+    return (
+        <div className="flex items-center gap-2 mb-1.5">
+            <div
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    valid ? "bg-emerald-400" : "bg-amber-400"
+                }`}
+            />
+            <label className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#31323E]/60">
+                {text}
+                {required ? " *" : ""}
+            </label>
+        </div>
+    );
+}
+
+function StatusBadge({ status, label }: { status: string; label?: string }) {
+    return (
+        <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${getStatusClasses(status)}`}
+        >
+            {label || titleCase(status)}
+        </span>
+    );
+}
+
+function IssueList({
+    title,
+    items,
+    tone,
+}: {
+    title: string;
+    items?: string[];
+    tone: "danger" | "warning";
+}) {
+    if (!items || items.length === 0) {
+        return null;
+    }
+
+    const classes =
+        tone === "danger"
+            ? "bg-rose-50 border border-rose-200 text-rose-700"
+            : "bg-amber-50 border border-amber-200 text-amber-700";
+
+    return (
+        <div className={`rounded-xl px-3.5 py-3 ${classes}`}>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] mb-2">{title}</p>
+            <ul className="space-y-1.5 text-xs font-medium">
+                {items.map((item) => (
+                    <li key={item}>- {item}</li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+function LabelMultiSelect({
+    labels,
+    selected,
+    onChange,
+    placeholder,
+}: {
+    labels: Label[];
+    selected: number[];
+    onChange: (ids: number[]) => void;
+    placeholder: string;
+}) {
+    const toggle = (id: number) => {
+        if (selected.includes(id)) {
+            onChange(selected.filter((item) => item !== id));
+            return;
+        }
+        onChange([...selected, id]);
+    };
+
+    return (
+        <div className="flex flex-wrap gap-2">
+            {labels.map((label) => {
+                const active = selected.includes(label.id);
+                return (
+                    <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => toggle(label.id)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                            active
+                                ? "bg-[#31323E] text-white border border-[#31323E]"
+                                : "bg-white text-[#31323E]/70 border border-[#31323E]/15 hover:bg-[#31323E]/5"
+                        }`}
+                    >
+                        {label.title}
+                    </button>
+                );
+            })}
+            {labels.length === 0 ? (
+                <span className="text-xs font-medium text-[#31323E]/40 italic">{placeholder}</span>
+            ) : null}
+        </div>
+    );
+}
+
+function ImageReorderGrid({
+    items,
+    onReorder,
+    onRemove,
+    onAddFiles,
+    onCropClick,
+    maxItems = 10,
+}: {
+    items: DragItem[];
+    onReorder: (next: DragItem[]) => void;
+    onRemove: (index: number) => void;
+    onAddFiles: (files: File[]) => void;
+    onCropClick?: (index: number) => void;
+    maxItems?: number;
+}) {
+    const dragIndexRef = useRef<number | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleDrop = (index: number) => {
+        if (dragIndexRef.current === null || dragIndexRef.current === index) {
+            return;
+        }
+        const next = [...items];
+        const [moved] = next.splice(dragIndexRef.current, 1);
+        next.splice(index, 0, moved);
+        dragIndexRef.current = null;
+        onReorder(next);
+    };
+
+    return (
+        <div>
+            <div className="flex flex-wrap gap-3 mt-3">
+                {items.map((item, index) => (
+                    <div
+                        key={`${item.url}-${index}`}
+                        draggable
+                        onDragStart={() => {
+                            dragIndexRef.current = index;
+                        }}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handleDrop(index)}
+                        className={`relative w-[104px] h-[104px] rounded-xl overflow-hidden bg-[#31323E]/5 ${
+                            index === 0 ? "ring-2 ring-[#31323E]" : "border border-[#31323E]/10"
+                        }`}
+                    >
+                        <img
+                            src={item.url}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                        />
+                        <div className="absolute top-2 left-2 text-[9px] font-bold uppercase tracking-[0.14em] rounded-full px-2 py-1 bg-white/90 text-[#31323E]">
+                            {index === 0 ? "Cover" : `#${index + 1}`}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onRemove(index)}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-rose-500 text-white text-xs font-bold"
+                        >
+                            x
+                        </button>
+                        {item.type === "new" && onCropClick ? (
+                            <button
+                                type="button"
+                                onClick={() => onCropClick(index)}
+                                className="absolute bottom-2 right-2 rounded-full bg-[#31323E] text-white text-[10px] font-bold px-2 py-1"
+                            >
+                                Crop
+                            </button>
+                        ) : null}
+                    </div>
+                ))}
+
+                {items.length < maxItems ? (
+                    <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className="w-[104px] h-[104px] rounded-xl border border-dashed border-[#31323E]/20 text-[#31323E]/35 text-3xl font-light hover:bg-[#31323E]/5 transition-colors"
+                    >
+                        +
+                    </button>
+                ) : null}
+            </div>
+
+            <p className="text-[10px] font-semibold text-[#31323E]/40 mt-2 tracking-[0.14em] uppercase">
+                Drag to reorder. First image becomes the cover. Up to {maxItems} photos.
+            </p>
+
+            <input
+                ref={inputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onClick={(event) => {
+                    (event.target as HTMLInputElement).value = "";
+                }}
+                onChange={(event) => {
+                    const files = Array.from(event.target.files || []).slice(0, maxItems - items.length);
+                    if (files.length > 0) {
+                        onAddFiles(files);
+                    }
+                    (event.target as HTMLInputElement).value = "";
+                }}
+            />
+        </div>
+    );
+}
+
+export default function ArtworksTab() {
+    const [artworks, setArtworks] = useState<Artwork[]>([]);
+    const [categories, setCategories] = useState<LabelCategory[]>([]);
+    const [labels, setLabels] = useState<Label[]>([]);
+    const [aspectRatios, setAspectRatios] = useState<AspectRatio[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [savingArtwork, setSavingArtwork] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [imageItems, setImageItems] = useState<DragItem[]>([]);
+    const [cropImageIndex, setCropImageIndex] = useState<number | null>(null);
+    const [printUploading, setPrintUploading] = useState(false);
+    const [printUploadError, setPrintUploadError] = useState<string | null>(null);
+    const [workflowData, setWorkflowData] = useState<ArtworkPrintWorkflowPayload | null>(null);
+    const [workflowLoading, setWorkflowLoading] = useState(false);
+    const [workflowError, setWorkflowError] = useState<string | null>(null);
+    const [workflowSaving, setWorkflowSaving] = useState(false);
+    const [assetUploadingKey, setAssetUploadingKey] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
+    const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+    const [activeStep, setActiveStep] =
+        useState<(typeof WORKFLOW_STEP_ORDER)[number]["id"]>("basics");
+    const printFileRef = useRef<HTMLInputElement>(null);
+    const [formData, setFormData] = useState<ArtworkFormState>(createDefaultFormState());
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [artRes, catRes, lblRes, ratioRes] = await Promise.all([
-                apiFetch(`${getApiUrl()}/artworks?limit=100`),
+            const [artworksRes, categoriesRes, labelsRes, ratiosRes] = await Promise.all([
+                apiFetch(`${getApiUrl()}/artworks/admin/list?limit=200&include_print_readiness=true`),
                 apiFetch(`${getApiUrl()}/labels/categories`),
                 apiFetch(`${getApiUrl()}/labels`),
                 apiFetch(`${getApiUrl()}/print-pricing/aspect-ratios`),
             ]);
-            if (artRes.ok) { const d = await artRes.json(); setArtworks(d.items || d); }
-            if (catRes.ok) { const d = await catRes.json(); setCategories(d); }
-            if (lblRes.ok) { const d = await lblRes.json(); setLabels(d); }
-            if (ratioRes.ok) { const d = await ratioRes.json(); setAspectRatios(d); }
-        } catch (e) { console.error("Fetch error:", e); }
-        finally { setLoading(false); }
+
+            if (artworksRes.ok) {
+                setArtworks(await artworksRes.json());
+            }
+            if (categoriesRes.ok) {
+                setCategories(await categoriesRes.json());
+            }
+            if (labelsRes.ok) {
+                setLabels(await labelsRes.json());
+            }
+            if (ratiosRes.ok) {
+                setAspectRatios(await ratiosRes.json());
+            }
+        } catch (error) {
+            console.error("Failed to fetch artwork admin data", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    useEffect(() => { fetchData(); }, []);
-
-    const addFiles = (files: File[]) => {
-        const newItems: DragItem[] = files.map(f => ({ type: "new", url: URL.createObjectURL(f), file: f }));
-        setImageItems(prev => [...prev, ...newItems].slice(0, 10));
+    const fetchWorkflow = async (artworkId: number) => {
+        setWorkflowLoading(true);
+        setWorkflowError(null);
+        try {
+            const response = await apiFetch(`${getApiUrl()}/artworks/${artworkId}/print-workflow`);
+            if (!response.ok) {
+                throw new Error(`Workflow request failed with ${response.status}`);
+            }
+            const payload = (await response.json()) as ArtworkPrintWorkflowPayload;
+            setWorkflowData(payload);
+            setFormData((previous) => ({
+                ...previous,
+                print_workflow_config: payload.workflow_config || createEmptyWorkflowConfig(),
+            }));
+        } catch (error) {
+            console.error(error);
+            setWorkflowData(null);
+            setWorkflowError("Could not load print workflow yet.");
+        } finally {
+            setWorkflowLoading(false);
+        }
     };
 
-    const removeImage = (idx: number) => setImageItems(prev => prev.filter((_, i) => i !== idx));
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    useEffect(() => {
+        if (!workflowData) {
+            setCollapsedCategories({});
+            return;
+        }
+        setCollapsedCategories((previous) => {
+            const next: Record<string, boolean> = {};
+            workflowData.category_workflows.forEach((category) => {
+                next[category.category_id] =
+                    previous[category.category_id] ?? category.summary.status === "ready";
+            });
+            return next;
+        });
+    }, [workflowData]);
+
+    const resetEditor = () => {
+        setFormData(createDefaultFormState());
+        setImageItems([]);
+        setEditingId(null);
+        setWorkflowData(null);
+        setWorkflowError(null);
+        setPrintUploadError(null);
+        setNotice(null);
+        setActiveStep("basics");
+        setIsFormOpen(false);
+    };
+
+    const openNewEditor = () => {
+        setFormData(createDefaultFormState());
+        setImageItems([]);
+        setEditingId(null);
+        setWorkflowData(null);
+        setWorkflowError(null);
+        setPrintUploadError(null);
+        setNotice(null);
+        setActiveStep("basics");
+        setIsFormOpen(true);
+    };
 
     const handleSaveCrop = async (croppedBlob: Blob) => {
-        if (cropImageIndex === null) return;
-        const newFile = new File([croppedBlob], `cropped-${Date.now()}.webp`, { type: "image/webp" });
-        setImageItems(prev => {
-            const next = [...prev];
-            next[cropImageIndex] = { type: "new", url: URL.createObjectURL(newFile), file: newFile };
+        if (cropImageIndex === null) {
+            return;
+        }
+        const file = new File([croppedBlob], `cropped-${Date.now()}.webp`, {
+            type: "image/webp",
+        });
+        setImageItems((previous) => {
+            const next = [...previous];
+            next[cropImageIndex] = {
+                type: "new",
+                url: URL.createObjectURL(file),
+                file,
+            };
             return next;
         });
         setCropImageIndex(null);
     };
 
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!formData.title?.trim()) return alert("Title is required.");
-        if (formData.original_status === "available" && Number(formData.original_price) <= 0) return alert("Original Price is required and must be > 0.");
-        if (imageItems.length === 0) return alert("At least one photo is required.");
-
-        setUploading(true);
-        const apiUrl = getApiUrl();
-        const payload = { ...formData };
-        
-        // Helper to convert empty strings to null or parse as number
-        const toNum = (val: any, isFloat = false) => {
-            if (val === "" || val === null || val === undefined) return null;
-            const parsed = isFloat ? parseFloat(val.toString()) : parseInt(val.toString());
-            return isNaN(parsed) ? null : parsed;
-        };
-
-        payload.original_price = toNum(payload.original_price);
-        payload.year = toNum(payload.year);
-        payload.width_cm = toNum(payload.width_cm, true);
-        payload.height_cm = toNum(payload.height_cm, true);
-        payload.canvas_print_limited_quantity = toNum(payload.canvas_print_limited_quantity);
-        payload.paper_print_limited_quantity = toNum(payload.paper_print_limited_quantity);
-        payload.print_aspect_ratio_id = toNum(payload.print_aspect_ratio_id);
-
-        // Recalculate inches if cm is valid
-        if (payload.width_cm !== null) payload.width_in = Number((payload.width_cm * 0.393701).toFixed(2));
-        else payload.width_in = null;
-
-        if (payload.height_cm !== null) payload.height_in = Number((payload.height_cm * 0.393701).toFixed(2));
-        else payload.height_in = null;
-
-        if (payload.original_status !== "available") payload.original_price = null;
-        if (payload.original_status === "digital") {
-            payload.width_cm = null; payload.height_cm = null; payload.width_in = null; payload.height_in = null;
+    const saveArtwork = async () => {
+        if (!formData.title.trim()) {
+            window.alert("Title is required.");
+            return null;
         }
 
-        const method = editingId ? "PUT" : "POST";
-        const url = editingId ? `${apiUrl}/artworks/${editingId}` : `${apiUrl}/artworks`;
+        if (formData.has_original && formData.original_status === "available") {
+            const originalPrice = Number(formData.original_price || 0);
+            if (originalPrice <= 0) {
+                window.alert("Original price must be greater than zero when the original is sellable.");
+                return null;
+            }
+        }
+
+        setSavingArtwork(true);
+        setNotice(null);
 
         try {
-            const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-            if (!res.ok) { const err = await res.json().catch(() => ({})); alert(`Save failed: ${res.status} ${JSON.stringify(err)}`); return; }
-            const data = await res.json();
+            const payload = buildFormPayload(formData);
+            const method = editingId ? "PUT" : "POST";
+            const url = editingId
+                ? `${getApiUrl()}/artworks/${editingId}`
+                : `${getApiUrl()}/artworks`;
+
+            const response = await apiFetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                window.alert(`Save failed: ${response.status} ${JSON.stringify(errorPayload)}`);
+                return null;
+            }
+
+            const data = await response.json();
             const targetId = editingId || data.data?.id;
+            if (!targetId) {
+                throw new Error("Artwork ID was not returned after save.");
+            }
 
             if (editingId) {
-                const existingOrdered = imageItems.filter(it => it.type === "existing").map(it => it.existingData!);
-                await apiFetch(`${apiUrl}/artworks/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ images: existingOrdered }) });
+                const existingOrdered = imageItems
+                    .filter((item) => item.type === "existing")
+                    .map((item) => item.existingData);
+                await apiFetch(`${getApiUrl()}/artworks/${editingId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ images: existingOrdered }),
+                });
             }
 
-            const newFiles = imageItems.filter(it => it.type === "new" && it.file).map(it => it.file!);
-            if (newFiles.length > 0 && targetId) {
-                const fd = new FormData();
-                newFiles.forEach(f => fd.append("files", f));
-                await apiFetch(`${apiUrl}/artworks/${targetId}/images`, { method: "POST", body: fd });
+            const newFiles = imageItems
+                .filter((item) => item.type === "new" && item.file)
+                .map((item) => item.file as File);
+            if (newFiles.length > 0) {
+                const body = new FormData();
+                newFiles.forEach((file) => body.append("files", file));
+                await apiFetch(`${getApiUrl()}/artworks/${targetId}/images`, {
+                    method: "POST",
+                    body,
+                });
             }
 
-            alert(`Artwork ${editingId ? "updated" : "created"}! Images processing in background.`);
-            setIsFormOpen(false); setEditingId(null); setImageItems([]); setFormData({ ...defaultForm }); fetchData();
-        } catch (err: any) {
-            alert(`Network error: ${err.message}`);
-        } finally { setUploading(false); }
+            setEditingId(targetId);
+            setIsFormOpen(true);
+            setNotice(
+                editingId
+                    ? "Artwork updated. Draft state and print workflow were refreshed."
+                    : "Artwork draft created. You can continue through the print workflow now."
+            );
+
+            await fetchData();
+
+            if (hasPrintOfferings(formData)) {
+                await fetchWorkflow(targetId);
+                if (!editingId) {
+                    setActiveStep("pipeline");
+                }
+            }
+
+            return targetId;
+        } catch (error) {
+            console.error(error);
+            window.alert("Network error while saving the artwork.");
+            return null;
+        } finally {
+            setSavingArtwork(false);
+        }
     };
 
-    const handleEditClick = async (art: Artwork) => {
+    const handleEditClick = async (artwork: Artwork) => {
+        setNotice(null);
+        setWorkflowError(null);
+
         try {
-            const res = await apiFetch(`${getApiUrl()}/artworks/${art.id}`);
-            if (!res.ok) return;
-            const full = await res.json();
+            const response = await apiFetch(`${getApiUrl()}/artworks/${artwork.id}`);
+            if (!response.ok) {
+                throw new Error(`Artwork request failed with ${response.status}`);
+            }
+            const full = (await response.json()) as Artwork;
             setFormData({
-                title: full.title || "", description: full.description || "",
-                year: full.year || new Date().getFullYear(),
-                width_cm: full.width_cm || "", height_cm: full.height_cm || "",
-                original_price: full.original_price || 0,
-                has_original: full.has_original || false,
-                has_canvas_print: full.has_canvas_print || false, has_canvas_print_limited: full.has_canvas_print_limited || false,
-                has_paper_print: full.has_paper_print || false, has_paper_print_limited: full.has_paper_print_limited || false,
+                title: full.title || "",
+                description: full.description || "",
+                year: full.year || currentYear,
+                width_cm: full.width_cm || "",
+                height_cm: full.height_cm || "",
+                original_price: full.original_price || "",
+                has_original: Boolean(full.has_original),
+                has_canvas_print: Boolean(full.has_canvas_print),
+                has_canvas_print_limited: Boolean(full.has_canvas_print_limited),
+                has_paper_print: Boolean(full.has_paper_print),
+                has_paper_print_limited: Boolean(full.has_paper_print_limited),
                 canvas_print_limited_quantity: full.canvas_print_limited_quantity || "",
                 paper_print_limited_quantity: full.paper_print_limited_quantity || "",
                 print_aspect_ratio_id: full.print_aspect_ratio_id || null,
                 print_min_size_label: full.print_min_size_label || "",
                 print_max_size_label: full.print_max_size_label || "",
                 orientation: full.orientation || "Horizontal",
-                labels: (full.labels || []).map((t: any) => typeof t === "number" ? t : t.id),
+                labels: (full.labels || []).map((label) => label.id),
                 original_status: full.original_status || "available",
                 print_quality_url: full.print_quality_url || "",
+                print_workflow_config: full.print_workflow_config || createEmptyWorkflowConfig(),
             });
-            const existing: DragItem[] = (full.images || []).map((img: ImageEntry) => ({ type: "existing" as const, url: resolveImageUrl(img), existingData: img }));
-            setImageItems(existing);
+            setImageItems(
+                (full.images || []).map((image) => ({
+                    type: "existing" as const,
+                    url: resolveImageUrl(image),
+                    existingData: image,
+                }))
+            );
             setEditingId(full.id);
             setIsFormOpen(true);
-        } catch (e) { console.error(e); alert("Error loading artwork details."); }
+            setActiveStep("basics");
+
+            if (
+                full.has_canvas_print ||
+                full.has_canvas_print_limited ||
+                full.has_paper_print ||
+                full.has_paper_print_limited
+            ) {
+                await fetchWorkflow(full.id);
+            } else {
+                setWorkflowData(null);
+            }
+        } catch (error) {
+            console.error(error);
+            window.alert("Error loading artwork details.");
+        }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Delete this artwork?")) return;
-        const res = await apiFetch(`${getApiUrl()}/artworks/${id}`, { method: "DELETE" });
-        if (res.ok) setArtworks(artworks.filter(a => a.id !== id));
-        else alert("Delete failed");
+    const handleDelete = async (artworkId: number) => {
+        if (!window.confirm("Delete this artwork?")) {
+            return;
+        }
+
+        const response = await apiFetch(`${getApiUrl()}/artworks/${artworkId}`, {
+            method: "DELETE",
+        });
+        if (!response.ok) {
+            window.alert("Delete failed.");
+            return;
+        }
+
+        setArtworks((previous) => previous.filter((artwork) => artwork.id !== artworkId));
+        if (editingId === artworkId) {
+            resetEditor();
+        }
     };
 
-    if (loading) return (
-        <div className="flex items-center gap-3 py-10">
-            <div className="w-5 h-5 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
-            <span className="text-sm font-semibold text-[#31323E]/50 uppercase tracking-wider">Synchronizing catalog…</span>
-        </div>
-    );
+    const patchArtwork = async (payload: Record<string, unknown>) => {
+        if (!editingId) {
+            return false;
+        }
+        const response = await apiFetch(`${getApiUrl()}/artworks/${editingId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorPayload = await response.json().catch(() => ({}));
+            console.error("Patch failed", errorPayload);
+            return false;
+        }
+        return true;
+    };
+
+    const persistWorkflowConfig = async (nextConfig: PrintWorkflowConfig) => {
+        setFormData((previous) => ({
+            ...previous,
+            print_workflow_config: nextConfig,
+        }));
+
+        if (!editingId) {
+            setNotice("Save the artwork draft first to persist workflow decisions.");
+            return;
+        }
+
+        setWorkflowSaving(true);
+        const ok = await patchArtwork({ print_workflow_config: nextConfig });
+        if (!ok) {
+            window.alert("Could not save print workflow changes.");
+            setWorkflowSaving(false);
+            return;
+        }
+
+        await fetchWorkflow(editingId);
+        await fetchData();
+        setWorkflowSaving(false);
+    };
+
+    const updateSourceReviewed = async (reviewed: boolean) => {
+        const nextConfig: PrintWorkflowConfig = {
+            ...(formData.print_workflow_config || createEmptyWorkflowConfig()),
+            source_master_reviewed: reviewed,
+            categories: {
+                ...((formData.print_workflow_config || createEmptyWorkflowConfig()).categories || {}),
+            },
+        };
+        await persistWorkflowConfig(nextConfig);
+    };
+
+    const updateCategoryConfig = async (
+        categoryId: string,
+        patch: Partial<WorkflowCategoryConfig>
+    ) => {
+        const existingConfig = formData.print_workflow_config || createEmptyWorkflowConfig();
+        const nextConfig: PrintWorkflowConfig = {
+            source_master_reviewed: existingConfig.source_master_reviewed || false,
+            categories: {
+                ...(existingConfig.categories || {}),
+                [categoryId]: {
+                    enabled: existingConfig.categories?.[categoryId]?.enabled,
+                    reviewed: existingConfig.categories?.[categoryId]?.reviewed || false,
+                    asset_strategy:
+                        existingConfig.categories?.[categoryId]?.asset_strategy || undefined,
+                    provider_attributes: {
+                        ...(existingConfig.categories?.[categoryId]?.provider_attributes || {}),
+                    },
+                    ...patch,
+                },
+            },
+        };
+        await persistWorkflowConfig(nextConfig);
+    };
+
+    const uploadPreparedAsset = async (
+        categoryId: string,
+        assetRole: string | null,
+        slotSizeLabel: string | null,
+        file: File
+    ) => {
+        if (!editingId || !assetRole) {
+            return;
+        }
+
+        const uploadKey = `${categoryId}:${slotSizeLabel || "category-master"}:${assetRole}`;
+        setAssetUploadingKey(uploadKey);
+        setWorkflowError(null);
+
+        try {
+            const body = new FormData();
+            body.append("file", file);
+            body.append("asset_role", assetRole);
+            body.append("category_id", categoryId);
+            if (slotSizeLabel) {
+                body.append("slot_size_label", slotSizeLabel);
+            }
+
+            const response = await apiFetch(`${getApiUrl()}/artworks/${editingId}/print-assets`, {
+                method: "POST",
+                body,
+            });
+
+            if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                throw new Error(errorPayload.detail || "Prepared asset upload failed.");
+            }
+
+            const payload = await response.json();
+            await fetchWorkflow(editingId);
+            await fetchData();
+            const generatedCount = Array.isArray(payload.generated_assets)
+                ? payload.generated_assets.length
+                : 0;
+            if (slotSizeLabel) {
+                setNotice(`Prepared asset uploaded for ${slotSizeLabel}.`);
+            } else if (generatedCount > 0) {
+                setNotice(
+                    `Category preparation master uploaded. ${generatedCount} smaller print assets were generated automatically.`
+                );
+            } else {
+                setNotice("Category preparation master uploaded.");
+            }
+        } catch (error) {
+            console.error(error);
+            setWorkflowError(error instanceof Error ? error.message : "Prepared asset upload failed.");
+        } finally {
+            setAssetUploadingKey(null);
+        }
+    };
+
+    const deletePreparedAsset = async (assetId: number) => {
+        if (!editingId) {
+            return;
+        }
+        const response = await apiFetch(`${getApiUrl()}/artworks/${editingId}/print-assets/${assetId}`, {
+            method: "DELETE",
+        });
+        if (!response.ok) {
+            window.alert("Could not delete prepared asset.");
+            return;
+        }
+        await fetchWorkflow(editingId);
+        await fetchData();
+    };
+
+    const stepStatusMap: Record<(typeof WORKFLOW_STEP_ORDER)[number]["id"], string> = {
+        basics: formData.title.trim() ? "ready" : "blocked",
+        offerings:
+            hasPrintOfferings(formData) && !formData.print_aspect_ratio_id ? "attention" : "ready",
+        pipeline: hasPrintOfferings(formData)
+            ? editingId
+                ? workflowData
+                    ? workflowData.readiness_summary.status === "ready" &&
+                      workflowData.source_master.status === "ready"
+                        ? "ready"
+                        : workflowData.readiness_summary.status === "blocked" ||
+                            workflowData.source_master.status === "blocked"
+                        ? "blocked"
+                        : "attention"
+                    : "attention"
+                : "attention"
+            : "ready",
+        media: imageItems.length > 0 ? "ready" : "attention",
+    };
+    const sourceMaxPrint300 = (workflowData?.source_master.metadata?.max_print_size_at_300dpi_in ||
+        {}) as {
+        width?: number | string;
+        height?: number | string;
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center gap-3 py-10">
+                <div className="w-5 h-5 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
+                <span className="text-sm font-semibold text-[#31323E]/50 uppercase tracking-[0.14em]">
+                    Synchronizing admin catalog
+                </span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8 text-[#31323E]">
-            {/* ── Header ─────────────────────────────────── */}
-            <div className="flex justify-between items-start pb-6 border-b border-[#31323E]/8">
+            <div className="flex flex-wrap justify-between items-start gap-4 pb-6 border-b border-[#31323E]/8">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-[#31323E] mb-1">Artworks</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-[#31323E] mb-1">
+                        Artwork Workbench
+                    </h2>
                     <p className="text-sm text-[#31323E]/50 font-medium">
-                        {artworks.length} work{artworks.length !== 1 ? "s" : ""} in the catalog
+                        {artworks.length} artworks, drafts and sellable works together
                     </p>
                 </div>
+
                 <button
+                    type="button"
                     onClick={() => {
-                        if (isFormOpen) { setIsFormOpen(false); setEditingId(null); setFormData({ ...defaultForm }); setImageItems([]); }
-                        else setIsFormOpen(true);
+                        if (isFormOpen) {
+                            resetEditor();
+                        } else {
+                            openNewEditor();
+                        }
                     }}
-                    className={`px-5 py-2.5 rounded-lg font-bold text-sm uppercase tracking-wider transition-all shadow-sm ${
+                    className={`px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-[0.14em] transition-colors ${
                         isFormOpen
-                            ? "bg-[#31323E]/10 text-[#31323E] hover:bg-[#31323E]/15 border border-[#31323E]/20"
+                            ? "bg-[#31323E]/10 text-[#31323E] border border-[#31323E]/15"
                             : "bg-[#31323E] text-white hover:bg-[#434455]"
                     }`}
                 >
-                    {isFormOpen ? "✕ Cancel" : "+ Add New Artwork"}
+                    {isFormOpen ? "Close Editor" : "New Artwork"}
                 </button>
             </div>
 
-            {/* ── Create / Edit Form ──────────────────────────────── */}
-            {isFormOpen && (
-                <form onSubmit={handleCreate} className="bg-[#FAFAF9] border border-[#31323E]/10 rounded-2xl shadow-sm overflow-hidden mb-2">
-                    {/* Form Header */}
-                    <div className="px-8 py-5 border-b border-[#31323E]/8 bg-white">
-                        <h3 className="font-bold text-lg text-[#31323E]">{editingId ? "Edit Artwork" : "New Artwork"}</h3>
-                        <p className="text-sm text-[#31323E]/40 font-medium mt-0.5">Fill in all required fields marked with *</p>
+            {isFormOpen ? (
+                <div className="bg-[#FCFBF8] border border-[#31323E]/10 rounded-[28px] shadow-sm overflow-hidden">
+                    <div className="px-8 py-6 border-b border-[#31323E]/8 bg-white">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-[#31323E]">
+                                    {editingId ? "Edit Artwork" : "Create Artwork Draft"}
+                                </h3>
+                                <p className="text-sm font-medium text-[#31323E]/45 mt-1">
+                                    Build the artwork step by step, then complete strict print-prep
+                                    validation directly in admin.
+                                </p>
+                            </div>
+
+                            {workflowData?.readiness_summary ? (
+                                <div className="text-right">
+                                    <StatusBadge
+                                        status={workflowData.readiness_summary.status}
+                                        label={workflowData.readiness_summary.message}
+                                    />
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mt-6">
+                            {WORKFLOW_STEP_ORDER.map((step) => (
+                                <button
+                                    key={step.id}
+                                    type="button"
+                                    onClick={() => setActiveStep(step.id)}
+                                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                                        activeStep === step.id
+                                            ? "border-[#31323E] bg-[#31323E] text-white"
+                                            : "border-[#31323E]/12 bg-white hover:bg-[#31323E]/3"
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-[11px] font-bold uppercase tracking-[0.14em]">
+                                            {step.label}
+                                        </span>
+                                        <StatusBadge status={stepStatusMap[step.id]} />
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="p-8 space-y-8">
-                        {/* Identity */}
-                        <div>
-                            <FormSection title="Identity" />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                <div>
-                                    <FieldLabel text="Title" required valid={formData.title?.trim().length > 0} />
-                                    <input required value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className={inp} placeholder="Artwork title" />
-                                </div>
-                                <div>
-                                    <FieldLabel text="Year" valid={!!formData.year} />
-                                    <input type="number" value={formData.year} onChange={e => setFormData({ ...formData, year: Number(e.target.value) })} className={inp} />
-                                </div>
-                                <div>
-                                    <FieldLabel text="Orientation" valid={!!formData.orientation} />
-                                    <select value={formData.orientation} onChange={e => setFormData({ ...formData, orientation: e.target.value })} className={inp}>
-                                        <option value="Horizontal">Horizontal</option>
-                                        <option value="Vertical">Vertical</option>
-                                        <option value="Square">Square</option>
-                                    </select>
-                                </div>
+                    <form
+                        onSubmit={async (event) => {
+                            event.preventDefault();
+                            await saveArtwork();
+                        }}
+                        className="p-8 space-y-8"
+                    >
+                        {notice ? (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                                {notice}
                             </div>
-                        </div>
+                        ) : null}
 
-                        {/* Original */}
-                        <div>
-                            <FormSection title="Original Artwork" desc="Status and price of the physical original" />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        {activeStep === "basics" ? (
+                            <div className="space-y-6">
                                 <div>
-                                    <FieldLabel text="Status" required valid={!!formData.original_status} />
-                                    <select value={formData.original_status} onChange={e => setFormData({ ...formData, original_status: e.target.value })} className={inp}>
-                                        {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-                                {formData.original_status === "available" && (
-                                    <div>
-                                        <FieldLabel text="Original Price ($)" required valid={Number(formData.original_price) > 0} />
-                                        <input type="number" value={formData.original_price || ""} onChange={e => setFormData({ ...formData, original_price: Number(e.target.value) })} className={inp} />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Dimensions */}
-                        {formData.original_status !== "digital" && (
-                            <div>
-                                <FormSection title="Dimensions (cm)" />
-                                <div className="grid grid-cols-2 gap-5">
-                                    <div>
-                                        <FieldLabel text="Width" valid={!!formData.width_cm} />
-                                        <input type="number" step="0.1" value={formData.width_cm} onChange={e => setFormData({ ...formData, width_cm: e.target.value })} className={inp} placeholder="e.g. 60" />
-                                    </div>
-                                    <div>
-                                        <FieldLabel text="Height" valid={!!formData.height_cm} />
-                                        <input type="number" step="0.1" value={formData.height_cm} onChange={e => setFormData({ ...formData, height_cm: e.target.value })} className={inp} placeholder="e.g. 80" />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Print Availability */}
-                        <div>
-                            <FormSection title="Print Availability" desc="Select which print formats are available. Pricing is configured in the Print Pricing tab." />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {([
-                                    { key: "has_canvas_print",         label: "Canvas Print" },
-                                    { key: "has_canvas_print_limited", label: "Canvas Print — Limited Edition" },
-                                    { key: "has_paper_print",          label: "Paper Print" },
-                                    { key: "has_paper_print_limited",  label: "Paper Print — Limited Edition" },
-                                ] as const).map(({ key, label }) => (
-                                    <div key={key}>
-                                        <label className={`flex items-center gap-3 cursor-pointer p-3.5 rounded-xl border transition-colors ${formData[key] ? "bg-[#31323E]/5 border-[#31323E]/25" : "bg-white border-[#31323E]/10 hover:bg-[#31323E]/2"}`}>
+                                    <FormSection
+                                        title="Artwork Basics"
+                                        description="Core identity, physical dimensions and original-sales information."
+                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div>
+                                            <FieldLabel text="Title" required valid={Boolean(formData.title.trim())} />
                                             <input
-                                                type="checkbox"
-                                                checked={!!formData[key]}
-                                                onChange={e => setFormData({ ...formData, [key]: e.target.checked })}
-                                                className="w-4 h-4 accent-[#31323E] cursor-pointer rounded"
+                                                value={formData.title}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        title: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                                placeholder="Artwork title"
                                             />
-                                            <span className="text-sm font-semibold text-[#31323E]">{label}</span>
-                                        </label>
-                                        {key === "has_canvas_print_limited" && !!formData[key] && (
-                                            <div className="mt-2 px-1">
-                                                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Edition Size (total prints in series)</label>
-                                                <input type="number" min={1} value={formData.canvas_print_limited_quantity}
-                                                    onChange={e => setFormData({ ...formData, canvas_print_limited_quantity: e.target.value ? Number(e.target.value) : "" })}
-                                                    placeholder="e.g. 30" className={inp} />
-                                            </div>
-                                        )}
-                                        {key === "has_paper_print_limited" && !!formData[key] && (
-                                            <div className="mt-2 px-1">
-                                                <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Edition Size (total prints in series)</label>
-                                                <input type="number" min={1} value={formData.paper_print_limited_quantity}
-                                                    onChange={e => setFormData({ ...formData, paper_print_limited_quantity: e.target.value ? Number(e.target.value) : "" })}
-                                                    placeholder="e.g. 30" className={inp} />
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                                        </div>
 
-                        {/* Print Config */}
-                        {(formData.has_canvas_print || formData.has_canvas_print_limited || formData.has_paper_print || formData.has_paper_print_limited) && (
-                        <div>
-                            <FormSection title="Print Configuration" desc="Link this artwork to a pricing grid and optionally restrict the available size range." />
-                            <div className="space-y-3">
+                                        <div>
+                                            <FieldLabel text="Year" valid={Boolean(formData.year)} />
+                                            <input
+                                                type="number"
+                                                value={formData.year}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        year: Number(event.target.value || currentYear),
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel
+                                                text="Orientation"
+                                                valid={Boolean(formData.orientation)}
+                                            />
+                                            <select
+                                                value={formData.orientation}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        orientation: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                            >
+                                                <option value="Horizontal">Horizontal</option>
+                                                <option value="Vertical">Vertical</option>
+                                                <option value="Square">Square</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel text="Original Status" valid={Boolean(formData.original_status)} />
+                                            <select
+                                                value={formData.original_status}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        original_status: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                            >
+                                                {STATUS_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel text="Width cm" valid={Boolean(formData.width_cm)} />
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={formData.width_cm}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        width_cm: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                                placeholder="e.g. 60"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel text="Height cm" valid={Boolean(formData.height_cm)} />
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={formData.height_cm}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        height_cm: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                                placeholder="e.g. 80"
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="flex items-center gap-3 rounded-2xl border border-[#31323E]/12 bg-white px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.has_original}
+                                                    onChange={(event) =>
+                                                        setFormData((previous) => ({
+                                                            ...previous,
+                                                            has_original: event.target.checked,
+                                                        }))
+                                                    }
+                                                    className="w-4 h-4 accent-[#31323E]"
+                                                />
+                                                <span className="text-sm font-semibold text-[#31323E]">
+                                                    Original artwork is offered for sale
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel
+                                                text="Original price USD"
+                                                valid={
+                                                    !formData.has_original ||
+                                                    Number(formData.original_price || 0) > 0
+                                                }
+                                            />
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={formData.original_price}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        original_price: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                                placeholder="e.g. 2400"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel text="Description" valid={Boolean(formData.description.trim())} />
+                                            <textarea
+                                                value={formData.description}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        description: event.target.value,
+                                                    }))
+                                                }
+                                                rows={4}
+                                                className={INPUT_CLASS}
+                                                placeholder="Artwork story, mood, technique, collector notes"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {activeStep === "offerings" ? (
+                            <div className="space-y-6">
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Aspect Ratio</label>
-                                    <select
-                                        value={formData.print_aspect_ratio_id || ""}
-                                        onChange={e => setFormData({ ...formData, print_aspect_ratio_id: e.target.value ? Number(e.target.value) : null })}
-                                        className={inp}
-                                    >
-                                        <option value="">— No ratio selected (all sizes available) —</option>
-                                        {aspectRatios.map(r => (
-                                            <option key={r.id} value={r.id}>{r.label}{r.description ? ` — ${r.description}` : ""}</option>
+                                    <FormSection
+                                        title="Offerings"
+                                        description="Turn print families on or off, define edition logic and bind the artwork to the storefront ratio grid."
+                                    />
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {[
+                                            {
+                                                key: "has_canvas_print",
+                                                label: "Canvas print",
+                                            },
+                                            {
+                                                key: "has_canvas_print_limited",
+                                                label: "Canvas print limited",
+                                            },
+                                            {
+                                                key: "has_paper_print",
+                                                label: "Paper print",
+                                            },
+                                            {
+                                                key: "has_paper_print_limited",
+                                                label: "Paper print limited",
+                                            },
+                                        ].map((item) => (
+                                            <label
+                                                key={item.key}
+                                                className={`rounded-2xl border px-4 py-3 cursor-pointer transition-colors ${
+                                                    formData[item.key as keyof ArtworkFormState]
+                                                        ? "bg-[#31323E]/5 border-[#31323E]/25"
+                                                        : "bg-white border-[#31323E]/12 hover:bg-[#31323E]/3"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(
+                                                            formData[item.key as keyof ArtworkFormState]
+                                                        )}
+                                                        onChange={(event) =>
+                                                            setFormData((previous) => ({
+                                                                ...previous,
+                                                                [item.key]: event.target.checked,
+                                                            }))
+                                                        }
+                                                        className="w-4 h-4 accent-[#31323E]"
+                                                    />
+                                                    <span className="text-sm font-semibold text-[#31323E]">
+                                                        {item.label}
+                                                    </span>
+                                                </div>
+
+                                                {item.key === "has_canvas_print_limited" &&
+                                                formData.has_canvas_print_limited ? (
+                                                    <div className="mt-3">
+                                                        <FieldLabel text="Canvas edition size" valid={Boolean(formData.canvas_print_limited_quantity)} />
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            value={formData.canvas_print_limited_quantity}
+                                                            onChange={(event) =>
+                                                                setFormData((previous) => ({
+                                                                    ...previous,
+                                                                    canvas_print_limited_quantity:
+                                                                        event.target.value,
+                                                                }))
+                                                            }
+                                                            className={INPUT_CLASS}
+                                                        />
+                                                    </div>
+                                                ) : null}
+
+                                                {item.key === "has_paper_print_limited" &&
+                                                formData.has_paper_print_limited ? (
+                                                    <div className="mt-3">
+                                                        <FieldLabel text="Paper edition size" valid={Boolean(formData.paper_print_limited_quantity)} />
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            value={formData.paper_print_limited_quantity}
+                                                            onChange={(event) =>
+                                                                setFormData((previous) => ({
+                                                                    ...previous,
+                                                                    paper_print_limited_quantity:
+                                                                        event.target.value,
+                                                                }))
+                                                            }
+                                                            className={INPUT_CLASS}
+                                                        />
+                                                    </div>
+                                                ) : null}
+                                            </label>
                                         ))}
-                                    </select>
+                                    </div>
                                 </div>
-                                {formData.print_aspect_ratio_id && (
-                                    <div className="grid grid-cols-2 gap-3">
+
+                                {hasPrintOfferings(formData) ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                                         <div>
-                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Min Size Label</label>
+                                            <FieldLabel
+                                                text="Print aspect ratio"
+                                                valid={Boolean(formData.print_aspect_ratio_id)}
+                                            />
+                                            <select
+                                                value={formData.print_aspect_ratio_id || ""}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        print_aspect_ratio_id: event.target.value
+                                                            ? Number(event.target.value)
+                                                            : null,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                            >
+                                                <option value="">Select ratio</option>
+                                                {aspectRatios.map((ratio) => (
+                                                    <option key={ratio.id} value={ratio.id}>
+                                                        {ratio.label}
+                                                        {ratio.description ? ` - ${ratio.description}` : ""}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <FieldLabel text="Min size label" valid={true} />
                                             <input
-                                                value={formData.print_min_size_label || ""}
-                                                onChange={e => setFormData({ ...formData, print_min_size_label: e.target.value })}
-                                                placeholder='e.g. "30×40 cm"'
-                                                className={inp}
+                                                value={formData.print_min_size_label}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        print_min_size_label: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                                placeholder="e.g. 30x40 cm"
                                             />
                                         </div>
+
                                         <div>
-                                            <label className="block text-[10px] font-bold uppercase tracking-widest text-[#31323E]/50 mb-1.5">Max Size Label</label>
+                                            <FieldLabel text="Max size label" valid={true} />
                                             <input
-                                                value={formData.print_max_size_label || ""}
-                                                onChange={e => setFormData({ ...formData, print_max_size_label: e.target.value })}
-                                                placeholder='e.g. "80×100 cm"'
-                                                className={inp}
+                                                value={formData.print_max_size_label}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        print_max_size_label: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                                placeholder="e.g. 80x100 cm"
                                             />
                                         </div>
                                     </div>
+                                ) : (
+                                    <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
+                                        No print families are enabled yet. The print source and print workflow
+                                        steps will unlock automatically once you enable at least one paper or
+                                        canvas offering.
+                                    </div>
                                 )}
                             </div>
-                        </div>
-                        )}
+                        ) : null}
 
-                        {/* High-Res print source */}
-                        {(formData.has_canvas_print || formData.has_canvas_print_limited || formData.has_paper_print || formData.has_paper_print_limited) && (
-                        <div>
-                            <FormSection title="Source Image (Prodigi Fulfillment)" desc="High-resolution file sent to Prodigi for printing. No size reduction — upload TIFF, PNG, or JPEG at 300 DPI or higher. Max 500 MB." />
-                            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                {/* Preview strip when URL is set */}
-                                {formData.print_quality_url && (
-                                    <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "10px" }}>
-                                        <img
-                                            src={`${getApiUrl().replace("/api","")}${formData.print_quality_url}`}
-                                            alt="Print source"
-                                            style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid rgba(0,0,0,0.08)", flexShrink: 0 }}
-                                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                        />
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#15803d", margin: "0 0 2px" }}>✓ High-Res Image Linked</p>
-                                            <p style={{ fontFamily: "monospace", fontSize: "0.68rem", color: "#555", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                {formData.print_quality_url}
+                        {false ? (
+                            <div className="space-y-6">
+                                <FormSection
+                                    title="Source Master"
+                                    description="Upload the hi-res print source that every prepared print asset derives from."
+                                />
+
+                                {workflowData?.source_master ? (
+                                    <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-bold text-[#31323E]">
+                                                    Source master readiness
+                                                </p>
+                                                <p className="text-xs font-medium text-[#31323E]/45 mt-1">
+                                                    Current upload, metadata presence and manual approval state.
+                                                </p>
+                                            </div>
+                                            <StatusBadge status={workflowData?.source_master.status || "attention"} />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                                            <div className="rounded-xl bg-[#31323E]/4 px-3 py-3">
+                                                <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                    Source Present
+                                                </p>
+                                                <p className="text-sm font-semibold text-[#31323E] mt-1">
+                                                    {workflowData?.source_master.present ? "Yes" : "No"}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl bg-[#31323E]/4 px-3 py-3">
+                                                <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                    Reviewed
+                                                </p>
+                                                <p className="text-sm font-semibold text-[#31323E] mt-1">
+                                                    {workflowData?.source_master.reviewed ? "Yes" : "No"}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl bg-[#31323E]/4 px-3 py-3">
+                                                <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                    Pixel Size
+                                                </p>
+                                                <p className="text-sm font-semibold text-[#31323E] mt-1">
+                                                    {String(
+                                                        workflowData?.source_master.metadata?.width_px || "-"
+                                                    )}{" "}
+                                                    x{" "}
+                                                    {String(
+                                                        workflowData?.source_master.metadata?.height_px || "-"
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4">
+                                            <label className="flex items-center gap-3 rounded-xl border border-[#31323E]/10 px-3.5 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={Boolean(
+                                                        formData.print_workflow_config.source_master_reviewed
+                                                    )}
+                                                    onChange={(event) =>
+                                                        void updateSourceReviewed(event.target.checked)
+                                                    }
+                                                    className="w-4 h-4 accent-[#31323E]"
+                                                />
+                                                <span className="text-sm font-semibold text-[#31323E]">
+                                                    Source master has been visually approved for production
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        <div className="mt-4 space-y-3">
+                                            <IssueList
+                                                title="Blocking issues"
+                                                items={workflowData?.source_master.issues}
+                                                tone="danger"
+                                            />
+                                            <IssueList
+                                                title="Warnings"
+                                                items={workflowData?.source_master.warnings}
+                                                tone="warning"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div>
+                                            <p className="text-sm font-bold text-[#31323E]">
+                                                High-res source file
+                                            </p>
+                                            <p className="text-xs font-medium text-[#31323E]/45 mt-1">
+                                                TIFF, PNG, JPEG or WebP. Use the untouched master if possible.
                                             </p>
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => printFileRef.current?.click()}
-                                            style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, color: "#555", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.1)", borderRadius: 6, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}
-                                        >
-                                            Replace
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Manual Path entry for power-users */}
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    <input
-                                        type="text"
-                                        value={formData.print_quality_url || ""}
-                                        onChange={e => setFormData({ ...formData, print_quality_url: e.target.value })}
-                                        placeholder="e.g. /static/print/my-file.tif"
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: "10px 14px", 
-                                            borderRadius: "8px", 
-                                            border: "1px solid rgba(0,0,0,0.1)", 
-                                            fontSize: "0.8rem", 
-                                            fontFamily: "monospace",
-                                            background: "rgba(0,0,0,0.02)"
-                                        }}
-                                    />
-                                    {!formData.print_quality_url && (
-                                        <button
-                                            type="button"
                                             disabled={!editingId || printUploading}
                                             onClick={() => printFileRef.current?.click()}
-                                            style={{
-                                                padding: "10px 20px", borderRadius: 8,
-                                                background: editingId ? "var(--color-charcoal)" : "rgba(0,0,0,0.1)",
-                                                color: "white",
-                                                fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 600,
-                                                cursor: editingId ? "pointer" : "not-allowed",
-                                                display: "flex", alignItems: "center", gap: 6,
-                                                border: "none"
-                                            }}
+                                            className={`px-4 py-2 rounded-xl text-sm font-bold ${
+                                                editingId
+                                                    ? "bg-[#31323E] text-white"
+                                                    : "bg-[#31323E]/10 text-[#31323E]/40"
+                                            }`}
                                         >
-                                            {printUploading ? "..." : "📎 Upload"}
+                                            {printUploading ? "Uploading..." : "Upload Source"}
                                         </button>
-                                    )}
+                                    </div>
+
+                                    <div className="mt-4 flex flex-col gap-3">
+                                        <input
+                                            type="text"
+                                            value={formData.print_quality_url}
+                                            onChange={(event) =>
+                                                setFormData((previous) => ({
+                                                    ...previous,
+                                                    print_quality_url: event.target.value,
+                                                }))
+                                            }
+                                            placeholder="/static/print/my-master.tif"
+                                            className={`${INPUT_CLASS} font-mono text-xs`}
+                                        />
+
+                                        {formData.print_quality_url ? (
+                                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-xs font-semibold text-emerald-700">
+                                                Current source: {formData.print_quality_url}
+                                            </div>
+                                        ) : null}
+
+                                        {printUploadError ? (
+                                            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-xs font-semibold text-rose-700">
+                                                {printUploadError}
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 </div>
 
-                                {printUploadError && (
-                                    <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.72rem", color: "#b91c1c", margin: 0 }}>⚠ {printUploadError}</p>
-                                )}
-
-                                {/* Hidden file input */}
                                 <input
                                     ref={printFileRef}
                                     type="file"
                                     accept="image/tiff,image/png,image/jpeg,image/webp,.tif,.tiff"
-                                    style={{ display: "none" }}
-                                    onChange={async e => {
-                                        const file = e.target.files?.[0];
-                                        if (!file || !editingId) return;
+                                    className="hidden"
+                                    onChange={async (event) => {
+                                        const file = event.target.files?.[0];
+                                        if (!file || !editingId) {
+                                            return;
+                                        }
+
                                         setPrintUploading(true);
                                         setPrintUploadError(null);
                                         try {
-                                            const fd = new FormData();
-                                            fd.append("file", file);
-                                            const res = await apiFetch(`${getApiUrl()}/artworks/${editingId}/print-image`, { method: "POST", body: fd });
-                                            if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(JSON.stringify(err)); }
-                                            const data = await res.json();
-                                            setFormData((prev: any) => ({ ...prev, print_quality_url: data.url }));
-                                        } catch (err: any) {
-                                            setPrintUploadError(`Upload failed: ${err.message}`);
+                                            const body = new FormData();
+                                            body.append("file", file);
+                                            const response = await apiFetch(
+                                                `${getApiUrl()}/artworks/${editingId}/print-image`,
+                                                {
+                                                    method: "POST",
+                                                    body,
+                                                }
+                                            );
+                                            if (!response.ok) {
+                                                const errorPayload = await response.json().catch(() => ({}));
+                                                throw new Error(JSON.stringify(errorPayload));
+                                            }
+
+                                            const payload = await response.json();
+                                            setFormData((previous) => ({
+                                                ...previous,
+                                                print_quality_url: payload.url,
+                                            }));
+                                            await fetchWorkflow(editingId);
+                                            await fetchData();
+                                        } catch (error) {
+                                            console.error(error);
+                                            setPrintUploadError("Upload failed.");
                                         } finally {
                                             setPrintUploading(false);
-                                            (e.target as HTMLInputElement).value = "";
+                                            (event.target as HTMLInputElement).value = "";
                                         }
                                     }}
                                 />
                             </div>
-                        </div>
-                        )}
+                        ) : null}
 
-                        {/* Labels */}
-                        <div>
-                            <FormSection title="Labels & Categorization" desc="Tag this artwork to make it discoverable in filters" />
-                            {categories.map(cat => {
-                                const catLabels = labels.filter(l => l.category_id === cat.id);
-                                return (
-                                    <div key={cat.id} className="mt-4">
-                                        <FieldLabel text={cat.title} valid={formData.labels?.some((l: number) => catLabels.find(cl => cl.id === l))} />
-                                        <LabelMultiSelect
-                                            labels={catLabels}
-                                            selected={formData.labels}
-                                            onChange={ids => setFormData({ ...formData, labels: ids })}
-                                            placeholder={`No ${cat.title} labels yet — create them in the Labels tab.`}
+                        {activeStep === "pipeline" ? (
+                            <div className="space-y-6">
+                                <FormSection
+                                    title="Print Pipeline"
+                                    description="Upload the source once, validate the preparation matrix, and let smaller prepared sizes derive automatically from the largest approved category master."
+                                />
+
+                                <div className="rounded-[24px] border border-[#31323E]/10 bg-white px-5 py-5">
+                                    <div className="flex flex-wrap items-start justify-between gap-4">
+                                        <div>
+                                            <h4 className="text-base font-bold text-[#31323E]">
+                                                Source And Quality
+                                            </h4>
+                                            <p className="text-sm font-medium text-[#31323E]/50 mt-1">
+                                                One hi-res source file powers the whole print pipeline.
+                                            </p>
+                                        </div>
+                                        {workflowData?.source_master ? (
+                                            <StatusBadge status={workflowData.source_master.status} />
+                                        ) : null}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4 mt-5">
+                                        <div className="rounded-2xl border border-[#31323E]/10 px-4 py-4">
+                                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                            <div>
+                                                <p className="text-sm font-bold text-[#31323E]">
+                                                    High-res source file
+                                                </p>
+                                                <p className="text-xs font-medium text-[#31323E]/45 mt-1">
+                                                    TIFF, PNG, JPEG or WebP. PNG is preferred for the print pipeline.
+                                                </p>
+                                            </div>
+                                                <button
+                                                    type="button"
+                                                    disabled={!editingId || printUploading}
+                                                    onClick={() => printFileRef.current?.click()}
+                                                    className={`px-4 py-2 rounded-xl text-sm font-bold ${
+                                                        editingId
+                                                            ? "bg-[#31323E] text-white"
+                                                            : "bg-[#31323E]/10 text-[#31323E]/40"
+                                                    }`}
+                                                >
+                                                    {printUploading ? "Uploading..." : "Upload Source"}
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-4 flex flex-col gap-3">
+                                                <input
+                                                    type="text"
+                                                    value={formData.print_quality_url}
+                                                    onChange={(event) =>
+                                                        setFormData((previous) => ({
+                                                            ...previous,
+                                                            print_quality_url: event.target.value,
+                                                        }))
+                                                    }
+                                                    placeholder="/static/print/my-master.tif"
+                                                    className={`${INPUT_CLASS} font-mono text-xs`}
+                                                />
+
+                                                {formData.print_quality_url ? (
+                                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-xs font-semibold text-emerald-700">
+                                                        Current source: {formData.print_quality_url}
+                                                    </div>
+                                                ) : null}
+
+                                                {printUploadError ? (
+                                                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-xs font-semibold text-rose-700">
+                                                        {printUploadError}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-[#31323E]/10 px-4 py-4">
+                                            <div className="grid grid-cols-1 gap-3">
+                                                <div className="rounded-xl bg-[#31323E]/4 px-3 py-3">
+                                                    <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                        Pixel Size
+                                                    </p>
+                                                    <p className="text-sm font-semibold text-[#31323E] mt-1">
+                                                        {String(workflowData?.source_master.metadata?.width_px || "-")} x{" "}
+                                                        {String(workflowData?.source_master.metadata?.height_px || "-")}
+                                                    </p>
+                                                </div>
+                                                <div className="rounded-xl bg-[#31323E]/4 px-3 py-3">
+                                                    <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                        300 DPI Limit
+                                                    </p>
+                                                    <p className="text-sm font-semibold text-[#31323E] mt-1">
+                                                        {String(sourceMaxPrint300.width || "-")}{" "}
+                                                        x{" "}
+                                                        {String(sourceMaxPrint300.height || "-")} in
+                                                    </p>
+                                                </div>
+                                                <label className="flex items-center gap-3 rounded-xl border border-[#31323E]/10 px-3.5 py-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(
+                                                            formData.print_workflow_config.source_master_reviewed
+                                                        )}
+                                                        onChange={(event) =>
+                                                            void updateSourceReviewed(event.target.checked)
+                                                        }
+                                                        className="w-4 h-4 accent-[#31323E]"
+                                                    />
+                                                    <span className="text-sm font-semibold text-[#31323E]">
+                                                        Source approved for production
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 space-y-3">
+                                        <IssueList
+                                            title="Source blockers"
+                                            items={workflowData?.source_master.issues}
+                                            tone="danger"
+                                        />
+                                        <IssueList
+                                            title="Source warnings"
+                                            items={workflowData?.source_master.warnings}
+                                            tone="warning"
                                         />
                                     </div>
-                                );
-                            })}
-                            <div className="mt-5">
-                                <FieldLabel text="Description" valid={formData.description?.trim().length > 0} />
-                                <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} rows={4} className={inp} placeholder="Artwork description…" />
+
+                                    <input
+                                        ref={printFileRef}
+                                        type="file"
+                                        accept="image/tiff,image/png,image/jpeg,image/webp,.tif,.tiff"
+                                        className="hidden"
+                                        onChange={async (event) => {
+                                            const file = event.target.files?.[0];
+                                            if (!file || !editingId) {
+                                                return;
+                                            }
+
+                                            setPrintUploading(true);
+                                            setPrintUploadError(null);
+                                            try {
+                                                const body = new FormData();
+                                                body.append("file", file);
+                                                const response = await apiFetch(
+                                                    `${getApiUrl()}/artworks/${editingId}/print-image`,
+                                                    {
+                                                        method: "POST",
+                                                        body,
+                                                    }
+                                                );
+                                                if (!response.ok) {
+                                                    const errorPayload = await response.json().catch(() => ({}));
+                                                    throw new Error(JSON.stringify(errorPayload));
+                                                }
+
+                                                const payload = await response.json();
+                                                setFormData((previous) => ({
+                                                    ...previous,
+                                                    print_quality_url: payload.url,
+                                                }));
+                                                await fetchWorkflow(editingId);
+                                                await fetchData();
+                                            } catch (error) {
+                                                console.error(error);
+                                                setPrintUploadError("Upload failed.");
+                                            } finally {
+                                                setPrintUploading(false);
+                                                (event.target as HTMLInputElement).value = "";
+                                            }
+                                        }}
+                                    />
+                                </div>
+
+                                {!hasPrintOfferings(formData) ? (
+                                    <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
+                                        Enable at least one print family in the Offerings step to unlock the
+                                        print workflow.
+                                    </div>
+                                ) : !editingId ? (
+                                    <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm font-medium text-amber-700">
+                                        Save the artwork draft first. After that the admin workflow can calculate
+                                        baked categories, size requirements and missing prepared assets.
+                                    </div>
+                                ) : workflowLoading ? (
+                                    <div className="flex items-center gap-3 py-6">
+                                        <div className="w-5 h-5 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
+                                        <span className="text-sm font-semibold text-[#31323E]/55">
+                                            Loading print workflow
+                                        </span>
+                                    </div>
+                                ) : workflowError ? (
+                                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-700">
+                                        {workflowError}
+                                    </div>
+                                ) : workflowData ? (
+                                    <>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {workflowData.steps.map((step) => (
+                                                <div
+                                                    key={step.id}
+                                                    className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4"
+                                                >
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <p className="text-sm font-bold text-[#31323E]">
+                                                            {step.label}
+                                                        </p>
+                                                        <StatusBadge status={step.status} />
+                                                    </div>
+                                                    <IssueList
+                                                        title="Issues"
+                                                        items={step.issues}
+                                                        tone="danger"
+                                                    />
+                                                    <IssueList
+                                                        title="Warnings"
+                                                        items={step.warnings}
+                                                        tone="warning"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <StatusBadge status={workflowData.readiness_summary.status} />
+                                            <span className="text-sm font-semibold text-[#31323E]/70">
+                                                {workflowData.readiness_summary.message}
+                                            </span>
+                                            {workflowSaving ? (
+                                                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E]/35">
+                                                    Saving workflow...
+                                                </span>
+                                            ) : null}
+                                        </div>
+
+                                        <div className="rounded-[24px] border border-[#31323E]/10 bg-white px-5 py-5">
+                                            <div className="flex flex-wrap items-start justify-between gap-4">
+                                                <div>
+                                                    <h4 className="text-base font-bold text-[#31323E]">
+                                                        Preparation Matrix
+                                                    </h4>
+                                                    <p className="text-sm font-medium text-[#31323E]/50 mt-1">
+                                                        Start here: prepare one production-safe master per enabled
+                                                        category whenever possible, then let smaller slots validate
+                                                        against it.
+                                                    </p>
+                                                </div>
+                                                <StatusBadge status={workflowData.readiness_summary.status} />
+                                            </div>
+
+                                            <div className="space-y-3 mt-5">
+                                                {workflowData.preparation_matrix.map((entry) => {
+                                                    const uploadKey = `${entry.category_id}:category-master:${entry.required_asset_role || "none"}`;
+                                                    const category = workflowData.category_workflows.find(
+                                                        (item) => item.category_id === entry.category_id
+                                                    );
+                                                    const categoryMasterAsset =
+                                                        category?.size_requirements.find(
+                                                            (requirement) =>
+                                                                requirement.asset_source === "category_master"
+                                                        )?.asset || null;
+                                                    const assetUrl = categoryMasterAsset?.file_url
+                                                        ? `${getApiUrl().replace("/api", "")}${categoryMasterAsset.file_url}`
+                                                        : null;
+
+                                                    return (
+                                                        <div
+                                                            key={entry.category_id}
+                                                            className={`rounded-2xl border px-4 py-4 ${
+                                                                entry.status === "ready"
+                                                                    ? "border-emerald-200 bg-emerald-50/40"
+                                                                    : entry.status === "blocked"
+                                                                    ? "border-rose-200 bg-rose-50/40"
+                                                                    : "border-amber-200 bg-amber-50/40"
+                                                            }`}
+                                                        >
+                                                            <div className="flex flex-wrap items-start justify-between gap-4">
+                                                                <div>
+                                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                                        <p className="text-sm font-bold text-[#31323E]">
+                                                                            {entry.label}
+                                                                        </p>
+                                                                        <StatusBadge status={entry.status} />
+                                                                        {!entry.enabled ? (
+                                                                            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
+                                                                                Disabled
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    <p className="text-xs font-medium text-[#31323E]/50 mt-1">
+                                                                        {entry.uses_source_master_only
+                                                                            ? "This category can use the reviewed source master directly."
+                                                                            : `Prepare one ${
+                                                                                  entry.required_asset_label || "production"
+                                                                              } at least as large as ${entry.suggested_master_size_label || "the largest baked slot"}.`}
+                                                                    </p>
+                                                                    {entry.suggested_master_dpi_policy_note ? (
+                                                                        <p className="text-xs font-medium text-[#31323E]/45 mt-2">
+                                                                            {entry.suggested_master_dpi_policy_note}
+                                                                        </p>
+                                                                    ) : null}
+                                                                </div>
+
+                                                                {entry.minimum_master_dimensions_px ? (
+                                                                    <div className="rounded-xl bg-white/80 px-3 py-2 border border-[#31323E]/10">
+                                                                        <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
+                                                                            Minimum master px
+                                                                        </p>
+                                                                        <p className="text-sm font-bold text-[#31323E] mt-1">
+                                                                            {entry.minimum_master_dimensions_px.width} x{" "}
+                                                                            {entry.minimum_master_dimensions_px.height}
+                                                                        </p>
+                                                                        {entry.suggested_master_target_dpi ? (
+                                                                            <p className="text-[11px] font-medium text-[#31323E]/45 mt-1">
+                                                                                {entry.suggested_master_target_dpi} DPI
+                                                                            </p>
+                                                                        ) : null}
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+
+                                                            {entry.client_selectable_attributes.length > 0 ? (
+                                                                <div className="mt-4 rounded-xl bg-white/80 border border-[#31323E]/10 px-3.5 py-3">
+                                                                    <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                                        Customer options
+                                                                    </p>
+                                                                    <p className="text-xs font-medium text-[#31323E]/55 mt-2">
+                                                                        These are chosen by the client, not by admin:
+                                                                    </p>
+                                                                    <div className="flex flex-wrap gap-2 mt-3">
+                                                                        {entry.client_selectable_attributes.map((choice) => (
+                                                                            <span
+                                                                                key={choice.key}
+                                                                                className="rounded-full border border-[#31323E]/12 bg-white px-3 py-1.5 text-xs font-semibold text-[#31323E]"
+                                                                            >
+                                                                                {titleCase(choice.key)}:{" "}
+                                                                                {choice.options.map(titleCase).join(", ")}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ) : null}
+
+                                                            {entry.provider_submission_defaults &&
+                                                            Object.keys(entry.provider_submission_defaults).length > 0 ? (
+                                                                <div className="mt-4 rounded-xl bg-white/80 border border-[#31323E]/10 px-3.5 py-3">
+                                                                    <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                                        Provider defaults
+                                                                    </p>
+                                                                    <div className="flex flex-wrap gap-2 mt-3">
+                                                                        {Object.entries(entry.provider_submission_defaults).map(
+                                                                            ([key, value]) => (
+                                                                                <span
+                                                                                    key={key}
+                                                                                    className="rounded-full border border-[#31323E]/12 bg-white px-3 py-1.5 text-xs font-semibold text-[#31323E]"
+                                                                                >
+                                                                                    {titleCase(key)}: {titleCase(String(value))}
+                                                                                </span>
+                                                                            )
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ) : null}
+
+                                                            {!entry.uses_source_master_only &&
+                                                            entry.category_master_supported &&
+                                                            entry.enabled ? (
+                                                                <div className="mt-4 flex flex-wrap items-center gap-3">
+                                                                    <input
+                                                                        type="file"
+                                                                        accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                                                                        onChange={(event) => {
+                                                                            const file = event.target.files?.[0];
+                                                                            if (file) {
+                                                                                void uploadPreparedAsset(
+                                                                                    entry.category_id,
+                                                                                    entry.required_asset_role,
+                                                                                    null,
+                                                                                    file
+                                                                                );
+                                                                            }
+                                                                            (event.target as HTMLInputElement).value = "";
+                                                                        }}
+                                                                        className="block text-sm font-medium text-[#31323E]"
+                                                                    />
+
+                                                                    {assetUploadingKey === uploadKey ? (
+                                                                        <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                                                            Uploading...
+                                                                        </span>
+                                                                    ) : null}
+
+                                                                    {assetUrl ? (
+                                                                        <a
+                                                                            href={assetUrl}
+                                                                            target="_blank"
+                                                                            rel="noreferrer"
+                                                                            className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E] underline"
+                                                                        >
+                                                                            Open current master
+                                                                        </a>
+                                                                    ) : null}
+
+                                                                    {categoryMasterAsset ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                void deletePreparedAsset(categoryMasterAsset.id)
+                                                                            }
+                                                                            className="text-xs font-bold uppercase tracking-[0.14em] text-rose-600"
+                                                                        >
+                                                                            Remove
+                                                                        </button>
+                                                                    ) : null}
+
+                                                                    <span className="text-xs font-medium text-[#31323E]/45">
+                                                                        Covers up to {entry.covered_size_count} baked size
+                                                                        {entry.covered_size_count === 1 ? "" : "s"} in this
+                                                                        category. Auto-generated smaller variants are stored as PNG.
+                                                                    </span>
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {workflowData.category_workflows.map((category) => {
+                                                const currentConfig =
+                                                    formData.print_workflow_config.categories?.[category.category_id] ||
+                                                    {};
+                                                const collapsed = Boolean(
+                                                    collapsedCategories[category.category_id]
+                                                );
+
+                                                return (
+                                                    <div
+                                                        key={category.category_id}
+                                                        className={`rounded-[24px] border px-5 py-5 ${
+                                                            category.summary.status === "ready"
+                                                                ? "border-emerald-200 bg-emerald-50/40"
+                                                                : category.summary.status === "blocked"
+                                                                ? "border-rose-200 bg-rose-50/40"
+                                                                : "border-amber-200 bg-amber-50/40"
+                                                        }`}
+                                                    >
+                                                        <div className="flex flex-wrap items-start justify-between gap-4">
+                                                            <div>
+                                                                <div className="flex items-center gap-3 flex-wrap">
+                                                                    <h4 className="text-base font-bold text-[#31323E]">
+                                                                        {category.label}
+                                                                    </h4>
+                                                                    <StatusBadge
+                                                                        status={category.summary.status}
+                                                                    />
+                                                                </div>
+                                                                <p className="text-sm font-medium text-[#31323E]/50 mt-1">
+                                                                    {category.material_label} | {category.frame_label}
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="grid grid-cols-3 gap-2">
+                                                                    <div className="rounded-xl bg-white/80 px-3 py-2 border border-[#31323E]/10">
+                                                                        <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
+                                                                            Required
+                                                                        </p>
+                                                                        <p className="text-sm font-bold text-[#31323E] mt-1">
+                                                                            {category.summary.required_count}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="rounded-xl bg-white/80 px-3 py-2 border border-[#31323E]/10">
+                                                                        <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
+                                                                            Ready
+                                                                        </p>
+                                                                        <p className="text-sm font-bold text-[#31323E] mt-1">
+                                                                            {category.summary.ready_count}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="rounded-xl bg-white/80 px-3 py-2 border border-[#31323E]/10">
+                                                                        <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
+                                                                            Blockers
+                                                                        </p>
+                                                                        <p className="text-sm font-bold text-[#31323E] mt-1">
+                                                                            {category.summary.blocking_count}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setCollapsedCategories((previous) => ({
+                                                                            ...previous,
+                                                                            [category.category_id]:
+                                                                                !previous[category.category_id],
+                                                                        }))
+                                                                    }
+                                                                    className="rounded-xl border border-[#31323E]/12 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#31323E]"
+                                                                >
+                                                                    {collapsed ? "Expand" : "Collapse"}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {collapsed ? null : (
+                                                            <>
+                                                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-5">
+                                                                    <label className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-3">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={
+                                                                                    currentConfig.enabled === undefined
+                                                                                        ? category.enabled
+                                                                                        : Boolean(currentConfig.enabled)
+                                                                                }
+                                                                                onChange={(event) =>
+                                                                                    void updateCategoryConfig(category.category_id, {
+                                                                                        enabled: event.target.checked,
+                                                                                    })
+                                                                                }
+                                                                                className="w-4 h-4 accent-[#31323E]"
+                                                                            />
+                                                                            <span className="text-sm font-semibold text-[#31323E]">
+                                                                                Enable this category for the artwork
+                                                                            </span>
+                                                                        </div>
+                                                                    </label>
+
+                                                                    <label className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-3">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={Boolean(currentConfig.reviewed)}
+                                                                                onChange={(event) =>
+                                                                                    void updateCategoryConfig(category.category_id, {
+                                                                                        reviewed: event.target.checked,
+                                                                                    })
+                                                                                }
+                                                                                className="w-4 h-4 accent-[#31323E]"
+                                                                            />
+                                                                            <span className="text-sm font-semibold text-[#31323E]">
+                                                                                Manual production review completed
+                                                                            </span>
+                                                                        </div>
+                                                                    </label>
+
+                                                                    <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-3">
+                                                                        <FieldLabel text="Asset strategy" valid={true} />
+                                                                        <select
+                                                                            value={
+                                                                                currentConfig.asset_strategy ||
+                                                                                category.asset_strategy
+                                                                            }
+                                                                            onChange={(event) =>
+                                                                                void updateCategoryConfig(category.category_id, {
+                                                                                    asset_strategy: event.target.value,
+                                                                                })
+                                                                            }
+                                                                            className={INPUT_CLASS}
+                                                                        >
+                                                                            {category.medium === "paper" ? (
+                                                                                <>
+                                                                                    <option value="manual_white_border">
+                                                                                        Manual white border file
+                                                                                    </option>
+                                                                                    <option value="source_master_only">
+                                                                                        Source master only
+                                                                                    </option>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <option value="manual_wrap_asset">
+                                                                                        Manual wrap-ready file
+                                                                                    </option>
+                                                                                    <option value="source_master_only">
+                                                                                        Source master only
+                                                                                    </option>
+                                                                                </>
+                                                                            )}
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+
+                                                                {category.client_selectable_attributes.length > 0 ? (
+                                                                    <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4 mt-5">
+                                                                        <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                                            Customer-selectable options
+                                                                        </p>
+                                                                        <p className="text-xs font-medium text-[#31323E]/55 mt-2">
+                                                                            Admin does not choose these. The customer can
+                                                                            select them later in storefront and checkout.
+                                                                        </p>
+                                                                        <div className="flex flex-wrap gap-2 mt-3">
+                                                                            {category.client_selectable_attributes.map((choice) => (
+                                                                                <span
+                                                                                    key={choice.key}
+                                                                                    className="rounded-full border border-[#31323E]/12 bg-[#FCFBF8] px-3 py-1.5 text-xs font-semibold text-[#31323E]"
+                                                                                >
+                                                                                    {titleCase(choice.key)}:{" "}
+                                                                                    {choice.options.map(titleCase).join(", ")}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : null}
+
+                                                                {Object.keys(category.provider_submission_defaults || {})
+                                                                    .length > 0 ? (
+                                                                    <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4 mt-5">
+                                                                        <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-[#31323E]/45">
+                                                                            Provider body filled automatically
+                                                                        </p>
+                                                                        <div className="flex flex-wrap gap-2 mt-3">
+                                                                            {Object.entries(
+                                                                                category.provider_submission_defaults
+                                                                            ).map(([key, value]) => (
+                                                                                <span
+                                                                                    key={key}
+                                                                                    className="rounded-full border border-[#31323E]/12 bg-[#FCFBF8] px-3 py-1.5 text-xs font-semibold text-[#31323E]"
+                                                                                >
+                                                                                    {titleCase(key)}:{" "}
+                                                                                    {titleCase(String(value))}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : null}
+
+                                                                <div className="space-y-3 mt-5">
+                                                                    <IssueList
+                                                                        title="Category blockers"
+                                                                        items={category.issues}
+                                                                        tone="danger"
+                                                                    />
+
+                                                                    {category.size_requirements.map((requirement) => {
+                                                                        const uploadKey = `${category.category_id}:${requirement.slot_size_label}:${requirement.asset_role}`;
+                                                                        const assetUrl = requirement.asset?.file_url
+                                                                            ? `${getApiUrl().replace("/api", "")}${requirement.asset.file_url}`
+                                                                            : null;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={`${category.category_id}-${requirement.slot_size_label}`}
+                                                                                className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4"
+                                                                            >
+                                                                                <div className="flex flex-wrap items-start justify-between gap-4">
+                                                                                    <div>
+                                                                                        <div className="flex items-center gap-3 flex-wrap">
+                                                                                            <p className="text-sm font-bold text-[#31323E]">
+                                                                                                {requirement.slot_size_label}
+                                                                                            </p>
+                                                                                            <StatusBadge
+                                                                                                status={
+                                                                                                    requirement.validation
+                                                                                                        .status
+                                                                                                }
+                                                                                            />
+                                                                                        </div>
+                                                                                        <p className="text-xs font-medium text-[#31323E]/45 mt-1">
+                                                                                            Required file:{" "}
+                                                                                            {requirement.asset_role_label ||
+                                                                                                "Not required"}
+                                                                                        </p>
+                                                                                        {requirement.asset_source ===
+                                                                                        "category_master" ? (
+                                                                                            <p className="text-xs font-medium text-emerald-700 mt-2">
+                                                                                                Validated via the shared category
+                                                                                                master asset.
+                                                                                            </p>
+                                                                                        ) : null}
+                                                                                    </div>
+
+                                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                                        <div className="rounded-xl bg-[#31323E]/4 px-3 py-2">
+                                                                                            <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
+                                                                                                Required px
+                                                                                            </p>
+                                                                                            <p className="text-sm font-bold text-[#31323E] mt-1">
+                                                                                                {
+                                                                                                    requirement
+                                                                                                        .required_dimensions_px
+                                                                                                        .width
+                                                                                                }{" "}
+                                                                                                x{" "}
+                                                                                                {
+                                                                                                    requirement
+                                                                                                        .required_dimensions_px
+                                                                                                        .height
+                                                                                                }
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        <div className="rounded-xl bg-[#31323E]/4 px-3 py-2">
+                                                                                            <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
+                                                                                                Target DPI
+                                                                                            </p>
+                                                                                            <p className="text-sm font-bold text-[#31323E] mt-1">
+                                                                                                {requirement.target_dpi}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {requirement.strategy === "manual_wrap_asset" ? (
+                                                                                    <p className="text-xs font-medium text-[#31323E]/45 mt-3">
+                                                                                        Wrap margin is currently{" "}
+                                                                                        {requirement.wrap_margin_pct}%. Required
+                                                                                        dimensions above already include the wrap
+                                                                                        zone.
+                                                                                    </p>
+                                                                                ) : null}
+                                                                                {requirement.dpi_policy_note ? (
+                                                                                    <p className="text-xs font-medium text-[#31323E]/45 mt-2">
+                                                                                        {requirement.dpi_policy_note}
+                                                                                    </p>
+                                                                                ) : null}
+
+                                                                                <div className="mt-4 space-y-3">
+                                                                                    <IssueList
+                                                                                        title="Validation issues"
+                                                                                        items={requirement.validation.issues}
+                                                                                        tone="danger"
+                                                                                    />
+                                                                                    <IssueList
+                                                                                        title="Validation warnings"
+                                                                                        items={requirement.validation.warnings}
+                                                                                        tone="warning"
+                                                                                    />
+                                                                                </div>
+
+                                                                                {requirement.required ? (
+                                                                                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                                                                                        <input
+                                                                                            type="file"
+                                                                                            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                                                                                            onChange={(event) => {
+                                                                                                const file =
+                                                                                                    event.target.files?.[0];
+                                                                                                if (file) {
+                                                                                                    void uploadPreparedAsset(
+                                                                                                        category.category_id,
+                                                                                                        requirement.asset_role,
+                                                                                                        requirement.slot_size_label,
+                                                                                                        file
+                                                                                                    );
+                                                                                                }
+                                                                                                (
+                                                                                                    event.target as HTMLInputElement
+                                                                                                ).value = "";
+                                                                                            }}
+                                                                                            className="block text-sm font-medium text-[#31323E]"
+                                                                                        />
+
+                                                                                        {assetUploadingKey === uploadKey ? (
+                                                                                            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                                                                                Uploading...
+                                                                                            </span>
+                                                                                        ) : null}
+
+                                                                                        {requirement.asset ? (
+                                                                                            <>
+                                                                                                {assetUrl ? (
+                                                                                                    <a
+                                                                                                        href={assetUrl}
+                                                                                                        target="_blank"
+                                                                                                        rel="noreferrer"
+                                                                                                        className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E] underline"
+                                                                                                    >
+                                                                                                        Open asset
+                                                                                                    </a>
+                                                                                                ) : null}
+
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() =>
+                                                                                                        void deletePreparedAsset(
+                                                                                                            requirement.asset!.id
+                                                                                                        )
+                                                                                                    }
+                                                                                                    className="text-xs font-bold uppercase tracking-[0.14em] text-rose-600"
+                                                                                                >
+                                                                                                    Remove
+                                                                                                </button>
+
+                                                                                                <span className="text-xs font-medium text-[#31323E]/45">
+                                                                                                    Uploaded:{" "}
+                                                                                                    {String(
+                                                                                                        requirement.asset
+                                                                                                            .file_metadata?.width_px ||
+                                                                                                            "-"
+                                                                                                    )}{" "}
+                                                                                                    x{" "}
+                                                                                                    {String(
+                                                                                                        requirement.asset
+                                                                                                            .file_metadata?.height_px ||
+                                                                                                            "-"
+                                                                                                    )}
+                                                                                                </span>
+                                                                                            </>
+                                                                                        ) : null}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="mt-4 rounded-xl bg-[#31323E]/4 px-3.5 py-3 text-xs font-medium text-[#31323E]/55">
+                                                                                        This size slot does not currently require a
+                                                                                        dedicated prepared asset because the chosen
+                                                                                        strategy is{" "}
+                                                                                        {titleCase(requirement.strategy)}.
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                ) : null}
+                            </div>
+                        ) : null}
+
+                        {activeStep === "media" ? (
+                            <div className="space-y-6">
+                                <div>
+                                    <FormSection
+                                        title="Labels and Photos"
+                                        description="Tag the artwork for discovery and manage the gallery imagery shown on the site."
+                                    />
+
+                                    <div className="space-y-5">
+                                        {categories.map((category) => {
+                                            const categoryLabels = labels.filter(
+                                                (label) => label.category_id === category.id
+                                            );
+                                            return (
+                                                <div key={category.id}>
+                                                    <FieldLabel
+                                                        text={category.title}
+                                                        valid={Boolean(
+                                                            formData.labels.some((labelId) =>
+                                                                categoryLabels.find(
+                                                                    (label) => label.id === labelId
+                                                                )
+                                                            )
+                                                        )}
+                                                    />
+                                                    <LabelMultiSelect
+                                                        labels={categoryLabels}
+                                                        selected={formData.labels}
+                                                        onChange={(selectedIds) =>
+                                                            setFormData((previous) => ({
+                                                                ...previous,
+                                                                labels: selectedIds,
+                                                            }))
+                                                        }
+                                                        placeholder={`No ${category.title} labels yet.`}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <FormSection title="Artwork Photos" description="Cover image first, supporting shots after that." />
+                                    <ImageReorderGrid
+                                        items={imageItems}
+                                        onReorder={setImageItems}
+                                        onRemove={(index) =>
+                                            setImageItems((previous) =>
+                                                previous.filter((_, itemIndex) => itemIndex !== index)
+                                            )
+                                        }
+                                        onAddFiles={(files) => {
+                                            const nextItems = files.map((file) => ({
+                                                type: "new" as const,
+                                                url: URL.createObjectURL(file),
+                                                file,
+                                            }));
+                                            setImageItems((previous) => [...previous, ...nextItems].slice(0, 10));
+                                        }}
+                                        onCropClick={(index) => setCropImageIndex(index)}
+                                    />
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[#31323E]/8">
+                            <div className="flex items-center gap-2">
+                                {WORKFLOW_STEP_ORDER.map((step, index) =>
+                                    step.id === activeStep ? (
+                                        <span
+                                            key={step.id}
+                                            className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E]/45"
+                                        >
+                                            Step {index + 1} of {WORKFLOW_STEP_ORDER.length}
+                                        </span>
+                                    ) : null
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const currentIndex = WORKFLOW_STEP_ORDER.findIndex(
+                                            (step) => step.id === activeStep
+                                        );
+                                        if (currentIndex > 0) {
+                                            setActiveStep(WORKFLOW_STEP_ORDER[currentIndex - 1].id);
+                                        }
+                                    }}
+                                    className="px-4 py-2 rounded-xl border border-[#31323E]/12 text-sm font-semibold text-[#31323E]"
+                                >
+                                    Previous
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const currentIndex = WORKFLOW_STEP_ORDER.findIndex(
+                                            (step) => step.id === activeStep
+                                        );
+                                        if (currentIndex < WORKFLOW_STEP_ORDER.length - 1) {
+                                            setActiveStep(WORKFLOW_STEP_ORDER[currentIndex + 1].id);
+                                        }
+                                    }}
+                                    className="px-4 py-2 rounded-xl border border-[#31323E]/12 text-sm font-semibold text-[#31323E]"
+                                >
+                                    Next
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={savingArtwork}
+                                    className="px-5 py-2.5 rounded-xl bg-[#31323E] text-white text-sm font-bold uppercase tracking-[0.14em] disabled:opacity-50"
+                                >
+                                    {savingArtwork
+                                        ? "Saving..."
+                                        : editingId
+                                        ? "Save Artwork Draft"
+                                        : "Create Draft"}
+                                </button>
                             </div>
                         </div>
-
-                        {/* Photos */}
-                        <div>
-                            <FormSection title="Photos (up to 10)" />
-                            <ImageReorderGrid
-                                items={imageItems}
-                                onReorder={setImageItems}
-                                onRemove={removeImage}
-                                onAddFiles={addFiles}
-                                onCropClick={idx => setCropImageIndex(idx)}
-                                maxItems={10}
-                            />
-                        </div>
-
-                        <button type="submit" disabled={uploading}
-                            className="w-full bg-[#31323E] text-white py-4 rounded-xl uppercase tracking-[0.12em] text-sm font-bold disabled:opacity-50 hover:bg-[#434455] transition-colors shadow-lg shadow-[#31323E]/15">
-                            {uploading ? "Saving Asset…" : editingId ? "Update Artwork" : "Create Artwork"}
-                        </button>
-                    </div>
-                </form>
-            )}
+                    </form>
+                </div>
+            ) : null}
 
             <SimpleArtworkCropperModal
                 isOpen={cropImageIndex !== null}
-                imageSrc={cropImageIndex !== null && imageItems[cropImageIndex]?.url ? imageItems[cropImageIndex].url : ""}
+                imageSrc={
+                    cropImageIndex !== null && imageItems[cropImageIndex]?.url
+                        ? imageItems[cropImageIndex].url
+                        : ""
+                }
                 onClose={() => setCropImageIndex(null)}
                 onSaveCrop={handleSaveCrop}
             />
 
-            {/* ── Artworks Grid ──────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
-                {artworks.map(art => (
-                    <div key={art.id} className="border border-[#31323E]/10 rounded-2xl relative group bg-white shadow-sm hover:shadow-md transition-all overflow-hidden">
-                        <div className="aspect-[4/5] bg-[#31323E]/5 overflow-hidden relative">
-                            {art.images && art.images.length > 0 ? (
-                                <img src={getImageUrl(art.images[0], "thumb")} alt={art.title} className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity group-hover:scale-102" style={{ transition: "opacity 0.3s, transform 0.5s" }} />
-                            ) : (
-                                <div className="absolute inset-0 flex items-center justify-center text-xs text-[#31323E]/30 font-semibold uppercase tracking-wider">No Image</div>
-                            )}
-                            {/* Hover Actions */}
-                            <div className="absolute inset-0 bg-[#31323E]/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 gap-2">
-                                <button onClick={() => handleEditClick(art)} className="flex-1 bg-white text-[#31323E] text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg hover:bg-[#31323E] hover:text-white transition-all">Edit</button>
-                                <button onClick={() => handleDelete(art.id)} className="flex-1 bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg hover:bg-red-600 transition-all">Delete</button>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {artworks.map((artwork) => {
+                    const readiness = artwork.print_readiness_summary;
+                    return (
+                        <div
+                            key={artwork.id}
+                            className={`rounded-[24px] overflow-hidden border bg-white shadow-sm ${
+                                readiness?.status === "blocked"
+                                    ? "border-rose-200"
+                                    : readiness?.status === "attention"
+                                    ? "border-amber-200"
+                                    : "border-[#31323E]/10"
+                            }`}
+                        >
+                            <div className="aspect-[4/5] bg-[#31323E]/5 relative overflow-hidden">
+                                {artwork.images && artwork.images.length > 0 ? (
+                                    <img
+                                        src={resolveImageUrl(artwork.images[0])}
+                                        alt={artwork.title}
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold uppercase tracking-[0.14em] text-[#31323E]/35">
+                                        No image
+                                    </div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/50 to-transparent flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleEditClick(artwork)}
+                                        className="flex-1 rounded-xl bg-white text-[#31323E] text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-2"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleDelete(artwork.id)}
+                                        className="flex-1 rounded-xl bg-rose-500 text-white text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-2"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="px-4 py-4 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 className="text-base font-bold text-[#31323E] leading-tight">
+                                            {artwork.title}
+                                        </h3>
+                                        <p className="text-sm font-semibold text-[#31323E]/45 mt-1">
+                                            Original:{" "}
+                                            {artwork.original_price ? `$${artwork.original_price}` : "not priced"}
+                                        </p>
+                                    </div>
+                                    {readiness ? <StatusBadge status={readiness.status} /> : null}
+                                </div>
+
+                                {readiness ? (
+                                    <div className="rounded-2xl bg-[#31323E]/4 px-3.5 py-3">
+                                        <p className="text-sm font-semibold text-[#31323E]">
+                                            {readiness.message}
+                                        </p>
+                                        <div className="flex flex-wrap gap-3 mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                            <span>Ready categories: {readiness.ready_category_count}</span>
+                                            <span>Blockers: {readiness.blocking_category_count}</span>
+                                            <span>Attention steps: {readiness.attention_step_count}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-2xl bg-[#31323E]/4 px-3.5 py-3 text-sm font-medium text-[#31323E]/55">
+                                        No print-prep summary yet.
+                                    </div>
+                                )}
+
+                                <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                    {artwork.has_paper_print || artwork.has_paper_print_limited ? (
+                                        <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
+                                            Paper
+                                        </span>
+                                    ) : null}
+                                    {artwork.has_canvas_print || artwork.has_canvas_print_limited ? (
+                                        <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
+                                            Canvas
+                                        </span>
+                                    ) : null}
+                                    {artwork.print_quality_url ? (
+                                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                                            Source linked
+                                        </span>
+                                    ) : null}
+                                </div>
                             </div>
                         </div>
-                        <div className="px-4 py-3.5">
-                            <h3 className="font-bold text-sm text-[#31323E] truncate leading-tight mb-0.5">{art.title}</h3>
-                            <p className="text-xs font-semibold text-[#31323E]/40">${art.original_price}</p>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

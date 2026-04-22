@@ -93,6 +93,10 @@ class ArtworkAddRequest(BaseModel):
         None,
         description="Per-artwork overrides for Prodigi print-profile recommendations.",
     )
+    print_workflow_config: dict[str, Any] | None = Field(
+        None,
+        description="Provider-neutral admin workflow settings and approval flags.",
+    )
 
 
 class ArtworkAdd(BaseModel):
@@ -124,6 +128,7 @@ class ArtworkAdd(BaseModel):
     print_quality_url: str | None = Field(None)
     print_source_metadata: dict[str, Any] | None = Field(None)
     print_profile_overrides: dict[str, Any] | None = Field(None)
+    print_workflow_config: dict[str, Any] | None = Field(None)
 
     # Print availability flags
     has_original: bool = Field(False)
@@ -169,6 +174,8 @@ class ArtworkWithLabels(Artwork):
     print_aspect_ratio: AspectRatioWithPricing | None = None
     print_source_metadata: dict[str, Any] | None = None
     print_profile_overrides: dict[str, Any] | None = None
+    print_workflow_config: dict[str, Any] | None = None
+    print_readiness_summary: dict[str, Any] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -221,6 +228,10 @@ class ArtworkPatchRequest(BaseModel):
         None,
         description="Per-artwork overrides for Prodigi print-profile recommendations.",
     )
+    print_workflow_config: dict[str, Any] | None = Field(
+        None,
+        description="Provider-neutral admin workflow settings and approval flags.",
+    )
 
 
 class ArtworkPatch(BaseModel):
@@ -248,6 +259,7 @@ class ArtworkPatch(BaseModel):
     print_quality_url: str | None = Field(None)
     print_source_metadata: dict[str, Any] | None = Field(None)
     print_profile_overrides: dict[str, Any] | None = Field(None)
+    print_workflow_config: dict[str, Any] | None = Field(None)
 
     # Print availability flags
     has_original: bool | None = Field(None)

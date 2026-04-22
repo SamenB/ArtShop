@@ -5,20 +5,63 @@ Includes CRUD operations, bulk creation, and image uploading.
 
 import json
 import os
+import re
 import shutil
+from uuid import uuid4
 
-from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile
 
 from src.api.dependencies import AdminDep, DBDep
 from src.exeptions import ObjectNotFoundException
 from src.init import redis_manager
 from src.print_on_demand import get_print_provider
 from src.schemas.artworks import ArtworkAddBulk, ArtworkAddRequest, ArtworkPatchRequest
+from src.services.artwork_print_workflow import ArtworkPrintWorkflowService
 from src.services.artworks import ArtworkService
 from src.tasks.tasks import process_and_attach_image
 
 router = APIRouter(prefix="/artworks", tags=["Artworks"])
 bulk_router = APIRouter(prefix="/artworks/bulk", tags=["Artworks"])
+
+
+def _sanitize_path_fragment(value: str | None, fallback: str) -> str:
+    candidate = (value or "").strip()
+    normalized = re.sub(r"[^a-zA-Z0-9_-]+", "-", candidate).strip("-").lower()
+    return normalized or fallback
+
+
+@router.get("/admin/list")
+async def get_admin_artworks(
+    admin_id: AdminDep,
+    db: DBDep,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    title: str | None = Query(None),
+    labels: list[int] | None = Query(None),
+    year_from: int | None = Query(None),
+    year_to: int | None = Query(None),
+    price_min: int | None = Query(None),
+    price_max: int | None = Query(None),
+    orientation: str | None = Query(None),
+    size_category: str | None = Query(None),
+    include_print_readiness: bool = Query(
+        False,
+        description="When true, include admin-facing print workflow readiness summary per artwork.",
+    ),
+):
+    return await ArtworkService(db).get_admin_artworks(
+        limit=limit,
+        offset=offset,
+        title=title,
+        labels=labels,
+        year_from=year_from,
+        year_to=year_to,
+        price_min=price_min,
+        price_max=price_max,
+        orientation=orientation,
+        size_category=size_category,
+        include_print_readiness=include_print_readiness,
+    )
 
 
 @router.get("")
@@ -247,6 +290,132 @@ async def get_artwork_print_profile(artwork_id: int, db: DBDep):
         )
     except ObjectNotFoundException:
         raise HTTPException(status_code=404, detail="Artwork not found")
+
+
+@router.get("/{artwork_id}/print-workflow")
+async def get_artwork_print_workflow(
+    artwork_id: int,
+    admin_id: AdminDep,
+    db: DBDep,
+):
+    try:
+        return await ArtworkPrintWorkflowService(db).get_workflow(artwork_id)
+    except ObjectNotFoundException:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+
+@router.post("/{artwork_id}/print-assets")
+async def upload_artwork_print_asset(
+    artwork_id: int,
+    admin_id: AdminDep,
+    db: DBDep,
+    file: UploadFile = File(...),
+    asset_role: str = Form(...),
+    category_id: str | None = Form(None),
+    slot_size_label: str | None = Form(None),
+    note: str | None = Form(None),
+):
+    try:
+        await ArtworkService(db).get_artwork_by_id(artwork_id)
+    except ObjectNotFoundException:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    service = ArtworkPrintWorkflowService(db)
+    file_ext = (os.path.splitext(file.filename or "")[1] or "").lower()
+    try:
+        service.validate_asset_upload_scope(
+            asset_role=asset_role,
+            file_ext=file_ext,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    out_dir = os.path.join(
+        "static",
+        "print-prep",
+        str(artwork_id),
+        _sanitize_path_fragment(category_id, "shared"),
+        _sanitize_path_fragment(asset_role, "asset"),
+    )
+    os.makedirs(out_dir, exist_ok=True)
+
+    filename = (
+        f"{_sanitize_path_fragment(slot_size_label, 'variant')}_{uuid4().hex[:8]}{file_ext or '.png'}"
+    )
+    dest_path = os.path.join(out_dir, filename)
+
+    try:
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        public_url = "/" + dest_path.replace("\\", "/")
+        metadata = service.extract_prepared_asset_metadata(dest_path, public_url=public_url)
+        asset = await service.upsert_prepared_asset(
+            artwork_id=artwork_id,
+            provider_key=get_print_provider().provider_key,
+            category_id=category_id,
+            asset_role=asset_role,
+            slot_size_label=slot_size_label,
+            file_url=public_url,
+            file_name=file.filename or filename,
+            file_ext=file_ext or None,
+            mime_type=file.content_type,
+            file_size_bytes=metadata.get("file_size_bytes"),
+            checksum_sha256=service.compute_sha256(dest_path),
+            file_metadata=metadata,
+            note=note,
+        )
+        generated_assets = []
+        if category_id and asset_role and slot_size_label is None:
+            generated_assets = await service.generate_category_derivatives_from_master(
+                artwork_id=artwork_id,
+                category_id=category_id,
+                asset_role=asset_role,
+            )
+        await db.commit()
+        return {
+            "status": "OK",
+            "asset": asset.model_dump(mode="json"),
+            "generated_assets": [item.model_dump(mode="json") for item in generated_assets],
+        }
+    except ValueError as exc:
+        await db.rollback()
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        await db.rollback()
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        raise
+
+
+@router.delete("/{artwork_id}/print-assets/{asset_id}")
+async def delete_artwork_print_asset(
+    artwork_id: int,
+    asset_id: int,
+    admin_id: AdminDep,
+    db: DBDep,
+):
+    try:
+        asset = await db.artwork_print_assets.get_one(id=asset_id)
+    except ObjectNotFoundException:
+        raise HTTPException(status_code=404, detail="Prepared print asset not found")
+
+    if int(asset.artwork_id) != artwork_id:
+        raise HTTPException(status_code=404, detail="Prepared print asset not found")
+
+    service = ArtworkPrintWorkflowService(db)
+    if asset.slot_size_label is None:
+        await service.delete_generated_assets_for_master(asset)
+    await service.delete_prepared_asset(asset_id)
+    await db.commit()
+
+    file_path = str(asset.file_url or "").lstrip("/")
+    if file_path and os.path.exists(file_path):
+        os.remove(file_path)
+
+    return {"status": "OK"}
 
 
 async def _get_artwork_print_storefront(
