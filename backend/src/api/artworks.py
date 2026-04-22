@@ -12,13 +12,9 @@ from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
 from src.api.dependencies import AdminDep, DBDep
 from src.exeptions import ObjectNotFoundException
 from src.init import redis_manager
+from src.print_on_demand import get_print_provider
 from src.schemas.artworks import ArtworkAddBulk, ArtworkAddRequest, ArtworkPatchRequest
-from src.services.artwork_print_profiles import ArtworkPrintProfileService
 from src.services.artworks import ArtworkService
-from src.services.prodigi_artwork_collection_storefront import (
-    ProdigiArtworkCollectionStorefrontService,
-)
-from src.services.prodigi_artwork_storefront import ProdigiArtworkStorefrontService
 from src.tasks.tasks import process_and_attach_image
 
 router = APIRouter(prefix="/artworks", tags=["Artworks"])
@@ -88,15 +84,14 @@ async def get_artwork(
 
         serialized = artwork.model_dump(mode="json")
         country_code = country.upper()
-        storefront_service = ProdigiArtworkStorefrontService(db)
-        serialized["print_storefront"] = await storefront_service.get_artwork_storefront(
+        provider = get_print_provider()
+        serialized["print_storefront"] = await provider.get_artwork_storefront(
+            db=db,
             artwork_id_or_slug=artwork_id_or_slug,
             country_code=country_code,
         )
-        serialized["storefront_summary"] = (
-            ProdigiArtworkCollectionStorefrontService.build_summary_from_storefront_payload(
-                serialized["print_storefront"]
-            )
+        serialized["storefront_summary"] = provider.build_summary_from_storefront_payload(
+            serialized["print_storefront"]
         )
         return serialized
     except ObjectNotFoundException:
@@ -197,7 +192,7 @@ async def upload_print_quality_image(
     artwork_id: int, admin_id: AdminDep, db: DBDep, file: UploadFile = File(...)
 ):
     """
-    Uploads a high-resolution source image for Prodigi print fulfillment.
+    Uploads a high-resolution source image for print-on-demand fulfillment.
     The file is stored as-is (no conversion, no resize) to preserve maximum quality.
     Supported formats: TIFF, PNG, JPEG, WebP.
     Prodigi requires: ≥ 150 DPI at print size, recommended 300 DPI.
@@ -209,7 +204,7 @@ async def upload_print_quality_image(
     out_dir = "static/print"
     os.makedirs(out_dir, exist_ok=True)
 
-    # Sanitise filename and keep original extension for Prodigi compatibility
+    # Keep the original extension so the active provider receives the raw asset format.
     original_ext = os.path.splitext(file.filename or "upload")[1] or ".jpg"
     safe_ext = original_ext.lower().replace(".tiff", ".tif")
     from uuid import uuid4
@@ -220,8 +215,8 @@ async def upload_print_quality_image(
         shutil.copyfileobj(file.file, buffer)
 
     public_url = f"/static/print/{filename}"
-    source_metadata = ArtworkPrintProfileService.extract_source_metadata(
-        dest_path,
+    source_metadata = get_print_provider().extract_source_metadata(
+        file_path=dest_path,
         public_url=public_url,
     )
 
@@ -240,13 +235,16 @@ async def upload_print_quality_image(
 @router.get("/{artwork_id}/print-profile")
 async def get_artwork_print_profile(artwork_id: int, db: DBDep):
     """
-    Returns the recommended and effective Prodigi print-profile bundle for one artwork.
+    Returns the recommended and effective active-provider print-profile bundle for one artwork.
 
     This endpoint is intended to power the future admin editor and the storefront's
     production-aware print rendering layer.
     """
     try:
-        return await ArtworkPrintProfileService(db).get_profile_bundle(artwork_id)
+        return await get_print_provider().get_print_profile_bundle(
+            db=db,
+            artwork_id=artwork_id,
+        )
     except ObjectNotFoundException:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -259,8 +257,8 @@ async def _get_artwork_print_storefront(
     """
     Resolves public storefront print offers for one artwork in one destination country.
 
-    The response is built from the active baked Prodigi snapshot plus artwork-specific
-    print profile metadata, so the storefront can stop depending on raw catalog probing.
+    The response is built from the active provider's baked snapshot plus artwork-specific
+    print profile metadata, so the storefront can stop depending on raw supplier probing.
     """
     cache_key = f"api:artwork-prints:v1:{artwork_id_or_slug}:{(country or '').upper()}"
     if redis_manager.redis is not None:
@@ -272,7 +270,8 @@ async def _get_artwork_print_storefront(
                 pass
 
     try:
-        payload = await ProdigiArtworkStorefrontService(db).get_artwork_storefront(
+        payload = await get_print_provider().get_artwork_storefront(
+            db=db,
             artwork_id_or_slug=artwork_id_or_slug,
             country_code=country,
         )

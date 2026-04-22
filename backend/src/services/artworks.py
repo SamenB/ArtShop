@@ -13,6 +13,7 @@ from src.exeptions import (
     DatabaseException,
     ObjectAlreadyExistsException,
 )
+from src.print_on_demand import get_print_provider
 from src.schemas.artworks import (
     ArtworkAdd,
     ArtworkAddBulk,
@@ -22,9 +23,6 @@ from src.schemas.artworks import (
 )
 from src.schemas.labels import ArtworkLabelAdd
 from src.services.base import BaseService
-from src.services.prodigi_artwork_collection_storefront import (
-    ProdigiArtworkCollectionStorefrontService,
-)
 
 
 class ArtworkService(BaseService):
@@ -102,10 +100,9 @@ class ArtworkService(BaseService):
             raise DatabaseException
 
         if country_code:
-            summaries = await ProdigiArtworkCollectionStorefrontService(
-                self.db
-            ).build_shop_summaries(
-                artworks,
+            summaries = await get_print_provider().build_shop_summaries(
+                db=self.db,
+                artworks=artworks,
                 country_code=country_code,
             )
             enriched_artworks = []
@@ -139,12 +136,9 @@ class ArtworkService(BaseService):
         if not artwork_ids:
             return
         try:
-            from src.services.prodigi_artwork_storefront_materializer import (
-                ProdigiArtworkStorefrontMaterializerService,
-            )
-
-            await ProdigiArtworkStorefrontMaterializerService(self.db).materialize_active_bake(
-                artwork_ids=artwork_ids
+            await get_print_provider().rematerialize_artworks(
+                db=self.db,
+                artwork_ids=artwork_ids,
             )
         except Exception as exc:
             logger.warning(

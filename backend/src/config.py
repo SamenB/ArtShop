@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     # In production, this should be https://your-domain.com
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
+    # Active print-on-demand provider adapter used by the domain-facing backend.
+    # Provider-specific code should stay behind the print_on_demand abstraction.
+    PRINT_PROVIDER: Literal["prodigi"] = "prodigi"
+
     # --- Telegram Bot Integration ---
     # Bot token from @BotFather — used for both admin notifications and print partner orders.
     TELEGRAM_BOT_TOKEN: str | None = None

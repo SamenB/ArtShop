@@ -16,6 +16,7 @@ from src.exeptions import (
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
+from src.print_on_demand import get_print_provider
 from src.schemas.artworks import ArtworkPatch
 from src.schemas.orders import (
     EditionType,
@@ -164,6 +165,7 @@ class OrderService(BaseService):
 
             # Fire admin Telegram notification in background (non-blocking)
             import asyncio
+
             from src.connectors.telegram import notify_admin_new_order
 
             items_summary = "\n".join(
@@ -546,11 +548,13 @@ class OrderService(BaseService):
                 )
 
             await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
-            
-            # Submit print on demand items to Prodigi
+
+            # Submit print-on-demand items through the active provider adapter.
             if payment_status == "paid":
-                 from src.services.prodigi_orders import ProdigiOrderService
-                 await ProdigiOrderService.submit_order_items(order, self.db.session)
+                await get_print_provider().submit_paid_order_items(
+                    order=order,
+                    db_session=self.db.session,
+                )
 
             await self.db.commit()
 
