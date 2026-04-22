@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import Lightbox from "@/components/Lightbox";
 import PrintConfigurator from "@/components/PrintConfigurator";
+import type { ArtworkPrintStorefront } from "@/lib/artworkStorefront";
+import { buildArtworkStorefrontKey, loadArtworkStorefront } from "@/lib/artworkStorefront";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
@@ -21,6 +23,7 @@ interface ArtworkImage {
 
 interface Artwork {
     id: number;
+    slug?: string;
     title: string;
     description: string;
     medium: string;
@@ -28,6 +31,9 @@ interface Artwork {
     original_price: number;
     original_status: OriginalStatus;
     has_prints: boolean;
+    has_original?: boolean;
+    has_canvas_print?: boolean;
+    has_paper_print?: boolean;
     orientation?: string;
     base_print_price?: number;
     images?: (string | ArtworkImage)[];
@@ -43,6 +49,7 @@ interface Artwork {
     canvas_print_limited_quantity?: number;
     paper_print_limited_quantity?: number;
     print_quality_url?: string;
+    print_storefront?: ArtworkPrintStorefront | null;
 }
 
 const DEFAULT_GRADIENTS = [
@@ -67,26 +74,46 @@ const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string; border: 
 
 export default function ArtworkDetailPage() {
     const params = useParams();
+    const pathname = usePathname();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const slug = params?.slug as string;
-    const { units, convertPrice, globalPrintPrice } = usePreferences();
+    const { units, convertPrice } = usePreferences();
     const { addItem } = useCart();
 
     const [work, setWork] = useState<Artwork | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [fullSizeOpen, setFullSizeOpen] = useState(false);
-    const [purchaseType, setPurchaseType] = useState<"original" | "canvas" | "paper">("original");
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
-    const [userCountryCode, setUserCountryCode] = useState<string>("US");
+    const [userCountryCode, setUserCountryCode] = useState<string>("");
+    const [storefrontState, setStorefrontState] = useState<{
+        requestKey: string;
+        storefront: ArtworkPrintStorefront | null;
+        error: string | null;
+    } | null>(null);
+    const urlCountry = (searchParams.get("country") || "").toUpperCase();
+    const urlView = searchParams.get("view");
+    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : (userCountryCode || "DE");
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/geo/country`)
             .then(res => res.json())
             .then(data => {
-                if (data.country_code) setUserCountryCode(data.country_code);
+                if (data.country_code) setUserCountryCode(String(data.country_code).toUpperCase());
+                else setUserCountryCode("DE");
             })
-            .catch(() => {});
+            .catch(() => setUserCountryCode("DE"));
     }, []);
+
+    useEffect(() => {
+        if (/^[A-Z]{2}$/.test(urlCountry) || !/^[A-Z]{2}$/.test(userCountryCode)) {
+            return;
+        }
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set("country", userCountryCode);
+        router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+    }, [pathname, router, searchParams, urlCountry, userCountryCode]);
 
     const { user } = useUser();
     const [liked, setLiked] = useState(false);
@@ -151,7 +178,12 @@ export default function ArtworkDetailPage() {
 
     useEffect(() => {
         if (!slug) return;
-        apiFetch(`${getApiUrl()}/artworks/${slug}`)
+        const params = new URLSearchParams();
+        if (activeCountryCode) {
+            params.set("country", activeCountryCode);
+        }
+
+        apiFetch(`${getApiUrl()}/artworks/${slug}${params.size ? `?${params.toString()}` : ""}`)
             .then(res => res.json())
             .then(data => {
                 const item = data.data || data;
@@ -160,19 +192,59 @@ export default function ArtworkDetailPage() {
                     gradientFrom: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][0],
                     gradientTo: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][1],
                 });
-
-                // Auto-select the most relevant tab
-                if (item.original_status === "available") {
-                    setPurchaseType("original");
-                } else if (item.has_prints) {
-                    setPurchaseType("canvas");
-                } else {
-                    setPurchaseType("original");
+                if (item.print_storefront && activeCountryCode) {
+                    setStorefrontState({
+                        requestKey: buildArtworkStorefrontKey(slug, activeCountryCode),
+                        storefront: item.print_storefront,
+                        error: null,
+                    });
                 }
             })
             .catch(() => console.warn("Backend unavailable"))
             .finally(() => setLoading(false));
-    }, [slug]);
+    }, [activeCountryCode, slug]);
+
+    useEffect(() => {
+        if (!slug || !activeCountryCode || loading) {
+            return;
+        }
+
+        let cancelled = false;
+        const requestKey = buildArtworkStorefrontKey(slug, activeCountryCode);
+
+        if (work?.print_storefront?.country_code === activeCountryCode) {
+            return;
+        }
+
+        if (storefrontState?.requestKey === requestKey && storefrontState.storefront) {
+            return;
+        }
+
+        loadArtworkStorefront(slug, activeCountryCode)
+            .then((data) => {
+                if (!cancelled) {
+                    setStorefrontState({
+                        requestKey,
+                        storefront: data,
+                        error: null,
+                    });
+                }
+            })
+            .catch((err: unknown) => {
+                if (!cancelled) {
+                    setStorefrontState({
+                        requestKey,
+                        storefront: null,
+                        error:
+                            err instanceof Error ? err.message : "Unable to load print offers.",
+                    });
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeCountryCode, loading, slug, storefrontState, work]);
 
     const { pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
 
@@ -191,7 +263,6 @@ export default function ArtworkDetailPage() {
     // Fetch initial like state if authenticated
     useEffect(() => {
         if (!user || !work) {
-            setLiked(false);
             return;
         }
         apiFetch(`${getApiUrl()}/users/me/likes`)
@@ -212,8 +283,49 @@ export default function ArtworkDetailPage() {
     if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Loading artwork...</div>;
     if (!work) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Artwork not found.</div>;
 
+    const storefrontRequestKey = buildArtworkStorefrontKey(slug, activeCountryCode);
+    const embeddedStorefront =
+        work.print_storefront?.country_code === activeCountryCode ? work.print_storefront : null;
+    const storefront = embeddedStorefront
+        || (storefrontState?.requestKey === storefrontRequestKey ? storefrontState.storefront : null);
+    const storefrontError = embeddedStorefront
+        ? null
+        : storefrontState?.requestKey === storefrontRequestKey ? storefrontState.error : null;
+    const storefrontLoading = !embeddedStorefront && storefrontState?.requestKey !== storefrontRequestKey;
     const images = work.images || [];
+    const storefrontCanvasAvailable = Boolean(storefront?.mediums?.canvas?.cards?.length);
+    const storefrontPaperAvailable = Boolean(storefront?.mediums?.paper?.cards?.length);
+    const hasCanvasOffers = storefront
+        ? storefrontCanvasAvailable
+        : Boolean(work.has_canvas_print || work.has_canvas_print_limited);
+    const hasPaperOffers = storefront
+        ? storefrontPaperAvailable
+        : Boolean(work.has_paper_print || work.has_paper_print_limited);
+    const defaultPurchaseType: "original" | "canvas" | "paper" =
+        work.original_status === "available"
+            ? "original"
+            : work.has_canvas_print || work.has_canvas_print_limited
+              ? "canvas"
+              : work.has_paper_print || work.has_paper_print_limited
+                ? "paper"
+                : "original";
+    const resolvedPurchaseType: "original" | "canvas" | "paper" =
+        urlView === "canvas" || urlView === "paper" || urlView === "original"
+            ? urlView
+            : defaultPurchaseType;
     const effectiveLiked = user ? liked : pendingLikes.includes(work.id);
+
+    const updateRouteState = (next: { country?: string; view?: "original" | "canvas" | "paper" }) => {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        const nextCountry = (next.country || activeCountryCode || userCountryCode || "US").toUpperCase();
+        nextParams.set("country", nextCountry);
+        if (next.view) {
+            nextParams.set("view", next.view);
+        } else {
+            nextParams.delete("view");
+        }
+        router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+    };
 
     // Compute prev/next slugs
     const currentSlugIdx = allSlugs.indexOf(slug);
@@ -635,7 +747,6 @@ export default function ArtworkDetailPage() {
                                                                     ...explicitDimensions
                                                                 }}
                                                             >
-                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                                 <img
                                                                     src={getImageUrl(img, 'original')}
                                                                     alt={work.title}
@@ -778,7 +889,6 @@ export default function ArtworkDetailPage() {
                                                             }
                                                         }}
                                                     >
-                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img
                                                             src={getImageUrl(img, 'thumb')}
                                                             alt=""
@@ -851,8 +961,8 @@ export default function ArtworkDetailPage() {
                             {(() => {
                                 const isSmall = layoutMetrics.winW < 768;
                                 // Determine radii to make the active tab merge seamlessly into the card
-                                const cardBorderRadiusTopLeft = isSmall ? "0" : (purchaseType === "original" ? "0" : "24px");
-                                const cardBorderRadiusTopRight = isSmall ? "0" : (purchaseType === "paper" ? "0" : "24px");
+                                const cardBorderRadiusTopLeft = isSmall ? "0" : (resolvedPurchaseType === "original" ? "0" : "24px");
+                                const cardBorderRadiusTopRight = isSmall ? "0" : (resolvedPurchaseType === "paper" ? "0" : "24px");
 
                                 return (
                                     <>
@@ -1260,12 +1370,24 @@ export default function ArtworkDetailPage() {
                                                 { key: "canvas", label: "Canvas Prints" },
                                                 { key: "paper", label: "Paper Prints" },
                                             ] as const).map(({ key, label }) => {
-                                                const isActive = purchaseType === key;
+                                                const isActive = resolvedPurchaseType === key;
+                                                const unavailableForCountry =
+                                                    key === "canvas"
+                                                        ? !hasCanvasOffers
+                                                        : key === "paper"
+                                                          ? !hasPaperOffers
+                                                          : false;
                                                 return (
                                                     <button
                                                         key={key}
                                                         className={`fluid-tab ${isActive ? "active" : ""}`}
-                                                        onClick={() => setPurchaseType(key)}
+                                                        onClick={() => updateRouteState({ view: key })}
+                                                        style={unavailableForCountry ? { opacity: 0.72 } : undefined}
+                                                        title={
+                                                            unavailableForCountry && key !== "original"
+                                                                ? `This print medium is not currently baked for ${activeCountryCode}.`
+                                                                : undefined
+                                                        }
                                                     >
                                                         {isActive && <span className="tab-highlight" />}
                                                         {label}
@@ -1290,8 +1412,8 @@ export default function ArtworkDetailPage() {
                                             width: "100%",
                                             boxSizing: "border-box"
                                         }}>
-                                            <div className="purchase-card-content" key={purchaseType} style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-                                                {purchaseType === "original" ? (
+                                            <div className="purchase-card-content" style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+                                                {resolvedPurchaseType === "original" ? (
                                                     <>
                                                         {/* Purchase Details */}
                                                         {work.original_status === "available" && (
@@ -1366,18 +1488,17 @@ export default function ArtworkDetailPage() {
                                                 ) : <PrintConfigurator 
                                                     artworkId={work.id}
                                                     artworkTitle={work.title}
-                                                    aspectRatio={work.print_aspect_ratio?.label || work.aspect_ratio || "1:1"}
-                                                    userCountryCode={userCountryCode}
-                                                    purchaseType={purchaseType as "canvas" | "paper"}
+                                                    purchaseType={resolvedPurchaseType as "canvas" | "paper"}
                                                     units={units}
                                                     isSmall={isSmall}
                                                     onAddToCart={addItem}
                                                     imageGradientFrom={work.gradientFrom || "#ccc"}
                                                     imageGradientTo={work.gradientTo || "#fff"}
                                                     imageUrl={getImageUrl(work.images?.[0], 'thumb') || undefined}
-                                                    isLimited={purchaseType === "canvas" ? work.has_canvas_print_limited : work.has_paper_print_limited}
-                                                    limitedQuantity={purchaseType === "canvas" ? work.canvas_print_limited_quantity : work.paper_print_limited_quantity}
                                                     hasHighResAsset={!!work.print_quality_url}
+                                                    storefront={storefront}
+                                                    storefrontLoading={storefrontLoading}
+                                                    storefrontError={storefrontError}
                                                 /> }
                                             </div>
                                         </div>

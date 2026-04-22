@@ -22,6 +22,9 @@ from src.schemas.artworks import (
 )
 from src.schemas.labels import ArtworkLabelAdd
 from src.services.base import BaseService
+from src.services.prodigi_artwork_collection_storefront import (
+    ProdigiArtworkCollectionStorefrontService,
+)
 
 
 class ArtworkService(BaseService):
@@ -76,6 +79,7 @@ class ArtworkService(BaseService):
         price_max: int | None = None,
         orientation: str | None = None,
         size_category: str | None = None,
+        country_code: str | None = None,
     ):
         """
         Retrieves a list of artworks based on filtered availability and metadata.
@@ -96,8 +100,58 @@ class ArtworkService(BaseService):
             )
         except SQLAlchemyError:
             raise DatabaseException
+
+        if country_code:
+            summaries = await ProdigiArtworkCollectionStorefrontService(
+                self.db
+            ).build_shop_summaries(
+                artworks,
+                country_code=country_code,
+            )
+            enriched_artworks = []
+            for artwork in artworks:
+                item = artwork.model_dump(
+                    mode="json",
+                    exclude={
+                        "print_aspect_ratio": True,
+                        "print_source_metadata": True,
+                        "print_profile_overrides": True,
+                        "print_quality_url": True,
+                    },
+                )
+                storefront_summary = summaries.get(artwork.id)
+                item["storefront_summary"] = storefront_summary
+                item["has_prints"] = bool(
+                    storefront_summary and storefront_summary.get("print_country_supported")
+                )
+                item["base_print_price"] = (
+                    storefront_summary.get("min_print_price")
+                    if storefront_summary
+                    else None
+                )
+                enriched_artworks.append(item)
+            artworks = enriched_artworks
+
         logger.info(f"Artworks retrieved: count={len(artworks)}, title={title}, labels={labels}")
         return artworks
+
+    async def _refresh_materialized_storefront(self, artwork_ids: list[int]) -> None:
+        if not artwork_ids:
+            return
+        try:
+            from src.services.prodigi_artwork_storefront_materializer import (
+                ProdigiArtworkStorefrontMaterializerService,
+            )
+
+            await ProdigiArtworkStorefrontMaterializerService(self.db).materialize_active_bake(
+                artwork_ids=artwork_ids
+            )
+        except Exception as exc:
+            logger.warning(
+                "Skipping storefront rematerialization for artworks {}: {}",
+                artwork_ids,
+                exc,
+            )
 
     async def create_artwork(self, artwork_data: ArtworkAddRequest):
         """
@@ -124,6 +178,7 @@ class ArtworkService(BaseService):
         except SQLAlchemyError:
             await self.db.rollback()
             raise DatabaseException
+        await self._refresh_materialized_storefront([artwork.id])
         logger.info("Artwork created: id={}", artwork.id)
         return artwork
 
@@ -153,6 +208,7 @@ class ArtworkService(BaseService):
         except SQLAlchemyError:
             await self.db.rollback()
             raise DatabaseException
+        await self._refresh_materialized_storefront([artwork_id])
         logger.info("Artwork updated: id={}", artwork_id)
 
     async def update_artwork_partially(self, artwork_id: int, artwork_data: ArtworkPatchRequest):
@@ -173,6 +229,7 @@ class ArtworkService(BaseService):
         except SQLAlchemyError:
             await self.db.rollback()
             raise DatabaseException
+        await self._refresh_materialized_storefront([artwork_id])
         logger.info("Artwork partially updated: id={}", artwork_id)
 
     async def delete_artwork(self, artwork_id: int):

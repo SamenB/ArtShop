@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -63,7 +64,7 @@ class ProdigiStorefrontBakeOrm(Base):
         "ProdigiStorefrontOfferGroupOrm",
         back_populates="bake",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="select",
     )
 
 
@@ -106,6 +107,8 @@ class ProdigiStorefrontOfferGroupOrm(Base):
     fixed_attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     recommended_defaults: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     allowed_attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    available_shipping_tiers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    default_shipping_tier: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     available_size_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     min_total_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
@@ -156,6 +159,11 @@ class ProdigiStorefrontOfferSizeOrm(Base):
     shipping_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     total_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     delivery_days: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    default_shipping_tier: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    shipping_method: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    service_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    service_level: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    shipping_profiles: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     offer_group: Mapped["ProdigiStorefrontOfferGroupOrm"] = relationship(
@@ -163,3 +171,40 @@ class ProdigiStorefrontOfferSizeOrm(Base):
         back_populates="sizes",
         lazy="selectin",
     )
+
+
+class ProdigiArtworkStorefrontPayloadOrm(Base):
+    __tablename__ = "prodigi_artwork_storefront_payloads"
+    __table_args__ = (
+        UniqueConstraint(
+            "bake_id",
+            "artwork_id",
+            "country_code",
+            name="uq_prodigi_artwork_storefront_payload_bake_artwork_country",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bake_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("prodigi_storefront_bakes.id", ondelete="CASCADE"),
+        index=True,
+    )
+    artwork_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("artworks.id", ondelete="CASCADE"),
+        index=True,
+    )
+    country_code: Mapped[str] = mapped_column(String(8), index=True)
+    country_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    print_country_supported: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
+    default_medium: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    min_print_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    summary: Mapped[dict] = mapped_column(JSON, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

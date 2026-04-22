@@ -6,6 +6,7 @@ from src.connectors.prodigi import ProdigiClient
 from src.services.prodigi_catalog import ProdigiCatalogService
 from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
 from src.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
+from src.services.prodigi_storefront_snapshot import ProdigiStorefrontSnapshotService
 
 router = APIRouter(prefix="/v1/admin/prodigi", tags=["Admin Prodigi Diagnostics"])
 catalog_service = ProdigiCatalogService()
@@ -144,6 +145,24 @@ async def create_catalog_database_preview(
             selected_country=country,
             selected_paper_material=paper_material,
             include_notice_level=include_notice_level,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/storefront-snapshot")
+async def get_storefront_snapshot(
+    admin_id: AdminDep,
+    db: DBDep,
+    aspect_ratio: str | None = Query(None, description="Snapshot ratio, e.g. 4:5"),
+):
+    """
+    Dense visualization payload for the currently active baked storefront snapshot.
+    Returns all countries at once for the selected ratio.
+    """
+    try:
+        return await ProdigiStorefrontSnapshotService(db).get_snapshot_visualization(
+            selected_ratio=aspect_ratio
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

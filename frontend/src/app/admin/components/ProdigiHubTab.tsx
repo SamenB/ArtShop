@@ -161,6 +161,21 @@ interface PreviewOffer {
     total_cost: number;
     currency: string;
     delivery_days?: string | null;
+    shipping_method?: string | null;
+    service_name?: string | null;
+    service_level?: string | null;
+    default_shipping_tier?: string | null;
+    available_shipping_tiers?: string[];
+    shipping_profiles?: Array<{
+        tier: string;
+        shipping_method?: string | null;
+        service_name?: string | null;
+        service_level?: string | null;
+        source_country?: string | null;
+        currency?: string | null;
+        total_cost?: number | null;
+        delivery_days?: string | null;
+    }>;
 }
 
 interface PreviewSizeCell {
@@ -230,6 +245,27 @@ interface StorefrontCardSize {
     total_cost?: number | null;
     delivery_days?: string | null;
     sku?: string | null;
+    shipping_method?: string | null;
+    service_name?: string | null;
+    service_level?: string | null;
+    default_shipping_tier?: string | null;
+    shipping_profiles?: Array<{
+        tier: string;
+        shipping_method?: string | null;
+        service_name?: string | null;
+        service_level?: string | null;
+        source_country?: string | null;
+        currency?: string | null;
+        total_cost?: number | null;
+        delivery_days?: string | null;
+    }>;
+    shipping_support: {
+        status: "covered" | "blocked" | "unavailable";
+        chosen_tier?: string | null;
+        chosen_shipping_price?: number | null;
+        chosen_delivery_days?: string | null;
+        note: string;
+    };
 }
 
 interface StorefrontCardPreview {
@@ -249,6 +285,18 @@ interface StorefrontCardPreview {
         fixed_attributes: Record<string, string>;
         recommended_defaults: Record<string, string>;
         allowed_attributes: Record<string, string[]>;
+    };
+    available_shipping_tiers?: string[];
+    default_shipping_tier?: string | null;
+    shipping_support: {
+        status: "covered" | "blocked" | "unavailable";
+        covered_size_count: number;
+        review_size_count: number;
+        blocked_size_count: number;
+        unavailable_size_count: number;
+        dominant_tier?: string | null;
+        min_supported_shipping_price?: number | null;
+        max_supported_shipping_price?: number | null;
     };
     available_size_count: number;
     size_labels: string[];
@@ -395,6 +443,36 @@ function taxRiskClass(risk: PreviewFulfillmentPolicy["tax_risk"]) {
     }
     if (risk === "elevated") {
         return "bg-amber-50 text-amber-700";
+    }
+    return "bg-rose-50 text-rose-700";
+}
+
+function shippingTierLabel(tier: string | null | undefined) {
+    if (tier === "express") {
+        return "ex";
+    }
+    if (tier === "standard") {
+        return "std";
+    }
+    if (tier === "budget") {
+        return "bud";
+    }
+    if (tier === "overnight") {
+        return "ovn";
+    }
+    return tier || "-";
+}
+
+function formatShippingTierList(tiers: string[] | null | undefined) {
+    return (tiers ?? []).map((tier) => shippingTierLabel(tier)).join(" | ") || "-";
+}
+
+function shippingSupportClass(status: "covered" | "blocked" | "unavailable") {
+    if (status === "covered") {
+        return "bg-emerald-50 text-emerald-700";
+    }
+    if (status === "unavailable") {
+        return "bg-[#F3F3F1] text-[#31323E]/60";
     }
     return "bg-rose-50 text-rose-700";
 }
@@ -992,6 +1070,16 @@ export default function ProdigiHubTab() {
                                                                 src: {card.source_countries.join(", ") || "-"} / eta:{" "}
                                                                 {card.fastest_delivery_days || "-"}
                                                             </div>
+                                                            <div className="text-xs text-[#31323E]/55 mt-1">
+                                                                ship: {formatShippingTierList(card.available_shipping_tiers)}
+                                                                {card.default_shipping_tier ? ` / default ${shippingTierLabel(card.default_shipping_tier)}` : ""}
+                                                            </div>
+                                                            <div className="text-xs text-[#31323E]/55 mt-1">
+                                                                free ship: {card.shipping_support.dominant_tier ? shippingTierLabel(card.shipping_support.dominant_tier) : "-"}
+                                                                {card.shipping_support.min_supported_shipping_price !== null && card.shipping_support.min_supported_shipping_price !== undefined
+                                                                    ? ` / ${card.price_range.currency || ""} ${card.shipping_support.min_supported_shipping_price?.toFixed(2)}${card.shipping_support.max_supported_shipping_price !== null && card.shipping_support.max_supported_shipping_price !== undefined && card.shipping_support.max_supported_shipping_price !== card.shipping_support.min_supported_shipping_price ? `-${card.shipping_support.max_supported_shipping_price?.toFixed(2)}` : ""}`
+                                                                    : " / blocked"}
+                                                            </div>
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.12em]">
@@ -1006,6 +1094,9 @@ export default function ProdigiHubTab() {
                                                                 </span>
                                                                 <span className={`inline-block px-2 py-1 ${storefrontActionClass(card.storefront_action)}`}>
                                                                     {storefrontActionLabel(card.storefront_action)}
+                                                                </span>
+                                                                <span className={`inline-block px-2 py-1 ${shippingSupportClass(card.shipping_support.status)}`}>
+                                                                    free {card.shipping_support.status}
                                                                 </span>
                                                             </div>
                                                             <div className="text-xs text-[#31323E]/55 mt-2">{card.note}</div>
@@ -1028,6 +1119,29 @@ export default function ProdigiHubTab() {
                                                                         <span className="text-[#31323E]/55">
                                                                             ({size.source_country || "-"} / {size.delivery_days || "-"})
                                                                         </span>
+                                                                        <div className="text-[11px] text-[#31323E]/55">
+                                                                            free: {size.shipping_support.chosen_tier ? shippingTierLabel(size.shipping_support.chosen_tier) : "-"}
+                                                                            {size.shipping_support.chosen_shipping_price !== null && size.shipping_support.chosen_shipping_price !== undefined
+                                                                                ? ` / ${size.currency || "-"} ${size.shipping_support.chosen_shipping_price.toFixed(2)}`
+                                                                                : " / blocked"}
+                                                                        </div>
+                                                                        {size.shipping_profiles && size.shipping_profiles.length > 0 && (
+                                                                            <div className="text-[11px] text-[#31323E]/55">
+                                                                                {size.shipping_profiles.map((profile) => (
+                                                                                    <span
+                                                                                        key={`${size.slot_size_label}-${profile.tier}`}
+                                                                                        className="mr-2 inline-block"
+                                                                                    >
+                                                                                        {shippingTierLabel(profile.tier)}
+                                                                                        {size.default_shipping_tier === profile.tier ? "*" : ""}:{" "}
+                                                                                        {profile.currency && profile.total_cost !== null
+                                                                                            ? `${profile.currency} ${profile.total_cost?.toFixed(2)}`
+                                                                                            : "-"}{" "}
+                                                                                        / {profile.delivery_days || "-"}
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -1151,7 +1265,7 @@ export default function ProdigiHubTab() {
                                                             }`}
                                                             title={
                                                                 cell.offer
-                                                                    ? `${cell.slot_size_label} slot -> ${cell.size_label} exact | ${cell.offer.source_country || "-"} | ${cell.offer.currency} ${cell.offer.total_cost.toFixed(2)} | ${cell.offer.delivery_days || "delivery n/a"} | cluster: ${cell.member_size_labels.join(", ")}`
+                                                                    ? `${cell.slot_size_label} slot -> ${cell.size_label} exact | ${cell.offer.source_country || "-"} | ${cell.offer.currency} ${cell.offer.total_cost.toFixed(2)} | ${cell.offer.delivery_days || "delivery n/a"} | ship ${cell.offer.default_shipping_tier || "-"} | cluster: ${cell.member_size_labels.join(", ")}`
                                                                     : "Unavailable for this country"
                                                             }
                                                         >
@@ -1170,6 +1284,10 @@ export default function ProdigiHubTab() {
                                                                         {cell.offer.currency} {cell.offer.total_cost.toFixed(2)}
                                                                     </div>
                                                                     <div>{cell.offer.delivery_days || "-"}</div>
+                                                                    <div>
+                                                                        {cell.offer.available_shipping_tiers?.map((tier) => shippingTierLabel(tier)).join(" | ") || "-"}
+                                                                        {cell.offer.default_shipping_tier ? ` / ${shippingTierLabel(cell.offer.default_shipping_tier)}*` : ""}
+                                                                    </div>
                                                                 </div>
                                                             ) : (
                                                                 <div className="mt-1 text-[#31323E]/35">-</div>

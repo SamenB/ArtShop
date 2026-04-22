@@ -54,6 +54,40 @@ def make_preview_payload(storefront_action: str) -> dict:
                                 "shipping_price": 10.0,
                                 "total_cost": 50.0,
                                 "delivery_days": "2-4 days",
+                                "default_shipping_tier": "express",
+                                "shipping_method": "Express",
+                                "service_name": "Express",
+                                "service_level": "EXPRESS",
+                                "shipping_profiles": [
+                                    {
+                                        "tier": "express",
+                                        "shipping_method": "Express",
+                                        "service_name": "Express",
+                                        "service_level": "EXPRESS",
+                                        "source_country": "GB",
+                                        "currency": "GBP",
+                                        "product_price": 40.0,
+                                        "shipping_price": 10.0,
+                                        "total_cost": 50.0,
+                                        "delivery_days": "2-4 days",
+                                        "min_shipping_days": 2,
+                                        "max_shipping_days": 4,
+                                    },
+                                    {
+                                        "tier": "standard",
+                                        "shipping_method": "Standard",
+                                        "service_name": "Standard",
+                                        "service_level": None,
+                                        "source_country": "GB",
+                                        "currency": "GBP",
+                                        "product_price": 40.0,
+                                        "shipping_price": 8.0,
+                                        "total_cost": 48.0,
+                                        "delivery_days": "4-8 days",
+                                        "min_shipping_days": 4,
+                                        "max_shipping_days": 8,
+                                    },
+                                ],
                             },
                         }
                     ],
@@ -87,3 +121,7 @@ def test_storefront_preview_keeps_notice_level_when_enabled() -> None:
     assert preview["storefront_mode"] == "include_notice_level"
     assert len(preview["visible_cards"]) == 1
     assert preview["visible_cards"][0]["price_range"]["min_total"] == 50.0
+    assert preview["visible_cards"][0]["default_shipping_tier"] == "express"
+    assert preview["visible_cards"][0]["available_shipping_tiers"] == ["express", "standard"]
+    assert preview["visible_cards"][0]["shipping_support"]["status"] == "covered"
+    assert preview["visible_cards"][0]["size_options"][0]["shipping_support"]["chosen_tier"] == "express"

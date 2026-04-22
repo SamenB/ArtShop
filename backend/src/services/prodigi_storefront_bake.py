@@ -10,7 +10,14 @@ from src.models.prodigi_storefront import (
     ProdigiStorefrontOfferGroupOrm,
     ProdigiStorefrontOfferSizeOrm,
 )
+from src.services.prodigi_artwork_storefront_materializer import (
+    ProdigiArtworkStorefrontMaterializerService,
+)
 from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
+from src.services.prodigi_shipping_policy import ProdigiShippingPolicyService
+from src.services.prodigi_shipping_support_policy import (
+    ProdigiShippingSupportPolicyService,
+)
 from src.utils.db_manager import DBManager
 
 
@@ -27,6 +34,8 @@ class ProdigiStorefrontBakeService:
     def __init__(self, db: DBManager):
         self.db = db
         self.preview_service = ProdigiCatalogPreviewService(db)
+        self.shipping_policy = ProdigiShippingPolicyService()
+        self.shipping_support_policy = ProdigiShippingSupportPolicyService()
 
     async def bake_storefront(
         self,
@@ -135,6 +144,8 @@ class ProdigiStorefrontBakeService:
                             "recommended_defaults"
                         ],
                         allowed_attributes=card["storefront_policy"]["allowed_attributes"],
+                        available_shipping_tiers=card["available_shipping_tiers"],
+                        default_shipping_tier=card["default_shipping_tier"],
                         available_size_count=len(card["size_options"]),
                         min_total_cost=min(totals) if totals else None,
                         max_total_cost=max(totals) if totals else None,
@@ -155,6 +166,11 @@ class ProdigiStorefrontBakeService:
                             shipping_price=size["shipping_price"],
                             total_cost=size["total_cost"],
                             delivery_days=size["delivery_days"],
+                            default_shipping_tier=size["default_shipping_tier"],
+                            shipping_method=size["shipping_method"],
+                            service_name=size["service_name"],
+                            service_level=size["service_level"],
+                            shipping_profiles=size["shipping_profiles"],
                         )
                         for size in card["size_options"]
                     ]
@@ -168,6 +184,9 @@ class ProdigiStorefrontBakeService:
         bake.offer_size_count = size_count
 
         await self.db.commit()
+        materialization = await ProdigiArtworkStorefrontMaterializerService(
+            self.db
+        ).materialize_active_bake()
 
         return {
             "status": "baked",
@@ -186,6 +205,7 @@ class ProdigiStorefrontBakeService:
                 "offer_group_count": bake.offer_group_count,
                 "offer_size_count": bake.offer_size_count,
             },
+            "artwork_storefront_materialization": materialization,
             "selected_ratio": selection["selected_ratio"],
             "selected_country": selection["selected_country"],
             "selected_country_storefront_preview": selected_storefront_preview,
@@ -229,6 +249,11 @@ class ProdigiStorefrontBakeService:
                     "shipping_price": cell["offer"]["shipping_price"],
                     "total_cost": cell["offer"]["total_cost"],
                     "delivery_days": cell["offer"]["delivery_days"],
+                    "default_shipping_tier": cell["offer"]["default_shipping_tier"],
+                    "shipping_method": cell["offer"]["shipping_method"],
+                    "service_name": cell["offer"]["service_name"],
+                    "service_level": cell["offer"]["service_level"],
+                    "shipping_profiles": cell["offer"]["shipping_profiles"],
                 }
                 for cell in row["size_cells"]
                 if cell["available"] and cell["offer"] is not None
@@ -244,6 +269,21 @@ class ProdigiStorefrontBakeService:
                     (item["currency"] for item in size_options if item.get("currency")),
                     None,
                 )
+                delivery_summary = self._summarize_delivery_days(size_options)
+                shipping_summary = self.shipping_policy.summarize_group_shipping(size_options)
+                size_options_with_support = []
+                for item in size_options:
+                    size_options_with_support.append(
+                        {
+                            **item,
+                            "shipping_support": self.shipping_support_policy.evaluate_size(
+                                item.get("shipping_profiles")
+                            ),
+                        }
+                    )
+                shipping_support = self.shipping_support_policy.summarize_group(
+                    size_options_with_support
+                )
                 visible_cards.append(
                     {
                         "category_id": row["category_id"],
@@ -256,21 +296,25 @@ class ProdigiStorefrontBakeService:
                         "geography_scope": fulfillment_policy["geography_scope"],
                         "tax_risk": fulfillment_policy["tax_risk"],
                         "source_countries": fulfillment_policy["source_countries"],
-                        "fastest_delivery_days": fulfillment_policy["fastest_delivery_days"],
+                        "fastest_delivery_days": delivery_summary
+                        or fulfillment_policy["fastest_delivery_days"],
                         "note": fulfillment_policy["note"],
                         "storefront_policy": {
                             "fixed_attributes": storefront_policy["fixed_attributes"],
                             "recommended_defaults": storefront_policy["recommended_defaults"],
                             "allowed_attributes": storefront_policy["allowed_attributes"],
                         },
-                        "available_size_count": len(size_options),
-                        "size_labels": [item["size_label"] for item in size_options],
+                        "available_shipping_tiers": shipping_summary["available_shipping_tiers"],
+                        "default_shipping_tier": shipping_summary["default_shipping_tier"],
+                        "shipping_support": shipping_support,
+                        "available_size_count": len(size_options_with_support),
+                        "size_labels": [item["size_label"] for item in size_options_with_support],
                         "price_range": {
                             "currency": currency,
                             "min_total": min(totals) if totals else None,
                             "max_total": max(totals) if totals else None,
                         },
-                        "size_options": size_options,
+                        "size_options": size_options_with_support,
                     }
                 )
                 continue
@@ -335,3 +379,48 @@ class ProdigiStorefrontBakeService:
         timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         mode = "notice" if include_notice_level else "strict"
         return f"{paper_material}-{mode}-{timestamp}"
+
+    def _summarize_delivery_days(self, size_options: list[dict[str, Any]]) -> str | None:
+        minimums: list[int] = []
+        maximums: list[int] = []
+
+        for item in size_options:
+            parsed = self._parse_delivery_days(item.get("delivery_days"))
+            if parsed is None:
+                continue
+            min_days, max_days = parsed
+            minimums.append(min_days)
+            maximums.append(max_days)
+
+        if not minimums or not maximums:
+            return None
+
+        global_min = min(minimums)
+        global_max = max(maximums)
+        if global_min == global_max:
+            return f"{global_min} days"
+        return f"{global_min}-{global_max} days"
+
+    def _parse_delivery_days(self, value: Any) -> tuple[int, int] | None:
+        if value is None:
+            return None
+
+        text = str(value).strip().lower().replace("days", "").replace("day", "").strip()
+        if not text:
+            return None
+
+        if "-" in text:
+            left, right = text.split("-", 1)
+            try:
+                return int(left.strip()), int(right.strip())
+            except ValueError:
+                return None
+
+        if text.endswith("+"):
+            text = text[:-1].strip()
+
+        try:
+            day = int(text)
+        except ValueError:
+            return None
+        return day, day

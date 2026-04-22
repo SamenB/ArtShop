@@ -45,7 +45,10 @@ class ArtworksRepository(BaseRepository):
 
         query = (
             select(self.model)
-            .options(joinedload(self.model.labels))
+            .options(
+                joinedload(self.model.labels),
+                joinedload(self.model.print_aspect_ratio),
+            )
             .filter(self.model.id.in_(artworks_ids_to_get))
         )
 

@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from src.repositories.prodigi_catalog import ProdigiCatalogRepository
 from src.services.prodigi_fulfillment_policy import ProdigiFulfillmentPolicyService
+from src.services.prodigi_shipping_policy import ProdigiShippingPolicyService
 from src.services.prodigi_sizing.selector import ProdigiSizeSelectorService
 from src.services.prodigi_storefront_policy import ProdigiStorefrontPolicyService
 from src.utils.db_manager import DBManager
@@ -177,6 +178,7 @@ class ProdigiCatalogPreviewService:
         self.catalog_repository = ProdigiCatalogRepository(db.session)
         self.storefront_policy = ProdigiStorefrontPolicyService()
         self.fulfillment_policy = ProdigiFulfillmentPolicyService()
+        self.shipping_policy = ProdigiShippingPolicyService()
 
     async def get_catalog_dataset(
         self,
@@ -369,8 +371,8 @@ class ProdigiCatalogPreviewService:
             lambda: defaultdict(set)
         )
         ratio_country_category_offers: dict[
-            str, dict[str, dict[str, dict[str, dict[str, Any]]]]
-        ] = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+            str, dict[str, dict[str, dict[str, list[dict[str, Any]]]]]
+        ] = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
 
         for row in rows:
             category_id = row["category_id"]
@@ -421,17 +423,16 @@ class ProdigiCatalogPreviewService:
                     row.get("min_shipping_days"),
                     row.get("max_shipping_days"),
                 ),
+                "shipping_method": row.get("shipping_method"),
+                "service_name": row.get("service_name"),
+                "service_level": row.get("service_level"),
                 "min_shipping_days": row.get("min_shipping_days"),
                 "max_shipping_days": row.get("max_shipping_days"),
             }
 
-            current = ratio_country_category_offers[matched_ratio][country_code][category_id].get(
+            ratio_country_category_offers[matched_ratio][country_code][category_id][
                 size_label
-            )
-            if current is None or self._is_better_offer(current, offer, country_code):
-                ratio_country_category_offers[matched_ratio][country_code][category_id][
-                    size_label
-                ] = offer
+            ].append(offer)
 
         ratio_cards: list[dict[str, Any]] = []
         by_ratio: dict[str, dict[str, Any]] = {}
@@ -678,7 +679,7 @@ class ProdigiCatalogPreviewService:
         category_defs: list[dict[str, Any]],
         ratio_category_slots: dict[str, list[dict[str, Any]]],
         country_slots: dict[str, list[dict[str, Any]]],
-        country_offers: dict[str, dict[str, dict[str, Any]]],
+        country_offers: dict[str, dict[str, list[dict[str, Any]]]],
         country_fulfillment: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
         category_rows = []
@@ -712,7 +713,11 @@ class ProdigiCatalogPreviewService:
                 )
 
                 exact_size_label = country_slot["size_label"]
-                offer = country_offers.get(category_id, {}).get(exact_size_label)
+                shipping_selection = self.shipping_policy.select_storefront_offer(
+                    country_offers.get(category_id, {}).get(exact_size_label, []),
+                    country_code,
+                )
+                offer = shipping_selection["default_offer"]
                 available = country_slot["available"] and offer is not None
                 if available:
                     available_size_count += 1
@@ -726,7 +731,18 @@ class ProdigiCatalogPreviewService:
                         "is_exact_match": exact_size_label == slot_size_label,
                         "centroid_size_label": country_slot["centroid_size_label"],
                         "member_size_labels": country_slot["member_size_labels"],
-                        "offer": offer if available else None,
+                        "offer": (
+                            {
+                                **offer,
+                                "default_shipping_tier": shipping_selection["default_shipping_tier"],
+                                "shipping_profiles": shipping_selection["shipping_profiles"],
+                                "available_shipping_tiers": shipping_selection[
+                                    "available_shipping_tiers"
+                                ],
+                            }
+                            if available
+                            else None
+                        ),
                     }
                 )
 
@@ -794,28 +810,6 @@ class ProdigiCatalogPreviewService:
             return
         if len(candidate) > 3 and len(current) <= 3:
             country_names[country_code] = candidate
-
-    def _is_better_offer(
-        self,
-        current: dict[str, Any],
-        candidate: dict[str, Any],
-        destination_country: str,
-    ) -> bool:
-        return self._offer_rank(candidate, destination_country) < self._offer_rank(
-            current,
-            destination_country,
-        )
-
-    def _offer_rank(self, offer: dict[str, Any], destination_country: str) -> tuple[Any, ...]:
-        source_country = offer.get("source_country") or "ZZ"
-        return (
-            0 if source_country == destination_country else 1,
-            offer.get("max_shipping_days") if offer.get("max_shipping_days") is not None else 9999,
-            offer.get("min_shipping_days") if offer.get("min_shipping_days") is not None else 9999,
-            source_country,
-            offer.get("currency") or "ZZZ",
-            offer.get("total_cost") or 0,
-        )
 
     def _format_delivery_days(self, min_days: Any, max_days: Any) -> str | None:
         if min_days is None and max_days is None:

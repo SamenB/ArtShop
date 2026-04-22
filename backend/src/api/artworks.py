@@ -3,6 +3,7 @@ API endpoints for managing artworks.
 Includes CRUD operations, bulk creation, and image uploading.
 """
 
+import json
 import os
 import shutil
 
@@ -10,8 +11,14 @@ from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
 
 from src.api.dependencies import AdminDep, DBDep
 from src.exeptions import ObjectNotFoundException
+from src.init import redis_manager
 from src.schemas.artworks import ArtworkAddBulk, ArtworkAddRequest, ArtworkPatchRequest
+from src.services.artwork_print_profiles import ArtworkPrintProfileService
 from src.services.artworks import ArtworkService
+from src.services.prodigi_artwork_collection_storefront import (
+    ProdigiArtworkCollectionStorefrontService,
+)
+from src.services.prodigi_artwork_storefront import ProdigiArtworkStorefrontService
 from src.tasks.tasks import process_and_attach_image
 
 router = APIRouter(prefix="/artworks", tags=["Artworks"])
@@ -31,6 +38,12 @@ async def get_artworks(
     price_max: int | None = Query(None),
     orientation: str | None = Query(None),  # horizontal | vertical | square
     size_category: str | None = Query(None),  # small | medium | large
+    country: str | None = Query(
+        None,
+        min_length=2,
+        max_length=2,
+        description="ISO 3166-1 alpha-2. When provided, artworks are enriched with baked storefront summary for this region.",
+    ),
 ):
     """
     Retrieves a list of artworks with optional filtering and pagination.
@@ -46,18 +59,46 @@ async def get_artworks(
         price_max=price_max,
         orientation=orientation,
         size_category=size_category,
+        country_code=country.upper() if country else None,
     )
 
 
 @router.get("/{artwork_id_or_slug}")
-async def get_artwork(artwork_id_or_slug: str, db: DBDep):
+async def get_artwork(
+    artwork_id_or_slug: str,
+    db: DBDep,
+    country: str | None = Query(
+        None,
+        min_length=2,
+        max_length=2,
+        description="Optional ISO 3166-1 alpha-2 country code for baked storefront enrichment.",
+    ),
+):
     """
     Retrieves a single artwork by its numeric ID or unique slug.
     """
     try:
         if artwork_id_or_slug.isdigit():
-            return await ArtworkService(db).get_artwork_by_id(int(artwork_id_or_slug))
-        return await ArtworkService(db).get_artwork_by_slug(artwork_id_or_slug)
+            artwork = await ArtworkService(db).get_artwork_by_id(int(artwork_id_or_slug))
+        else:
+            artwork = await ArtworkService(db).get_artwork_by_slug(artwork_id_or_slug)
+
+        if not country:
+            return artwork
+
+        serialized = artwork.model_dump(mode="json")
+        country_code = country.upper()
+        storefront_service = ProdigiArtworkStorefrontService(db)
+        serialized["print_storefront"] = await storefront_service.get_artwork_storefront(
+            artwork_id_or_slug=artwork_id_or_slug,
+            country_code=country_code,
+        )
+        serialized["storefront_summary"] = (
+            ProdigiArtworkCollectionStorefrontService.build_summary_from_storefront_payload(
+                serialized["print_storefront"]
+            )
+        )
+        return serialized
     except ObjectNotFoundException:
         raise HTTPException(status_code=404, detail="Artwork not found")
 
@@ -179,14 +220,102 @@ async def upload_print_quality_image(
         shutil.copyfileobj(file.file, buffer)
 
     public_url = f"/static/print/{filename}"
+    source_metadata = ArtworkPrintProfileService.extract_source_metadata(
+        dest_path,
+        public_url=public_url,
+    )
 
     # Persist the URL directly on the artwork record
     await ArtworkService(db).update_artwork_partially(
         artwork_id,
-        ArtworkPatchRequest(print_quality_url=public_url),
+        ArtworkPatchRequest(
+            print_quality_url=public_url,
+            print_source_metadata=source_metadata,
+        ),
     )
 
-    return {"url": public_url}
+    return {"url": public_url, "metadata": source_metadata}
+
+
+@router.get("/{artwork_id}/print-profile")
+async def get_artwork_print_profile(artwork_id: int, db: DBDep):
+    """
+    Returns the recommended and effective Prodigi print-profile bundle for one artwork.
+
+    This endpoint is intended to power the future admin editor and the storefront's
+    production-aware print rendering layer.
+    """
+    try:
+        return await ArtworkPrintProfileService(db).get_profile_bundle(artwork_id)
+    except ObjectNotFoundException:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+
+async def _get_artwork_print_storefront(
+    artwork_id_or_slug: str,
+    db: DBDep,
+    country: str = Query(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2"),
+):
+    """
+    Resolves public storefront print offers for one artwork in one destination country.
+
+    The response is built from the active baked Prodigi snapshot plus artwork-specific
+    print profile metadata, so the storefront can stop depending on raw catalog probing.
+    """
+    cache_key = f"api:artwork-prints:v1:{artwork_id_or_slug}:{(country or '').upper()}"
+    if redis_manager.redis is not None:
+        cached = await redis_manager.get(cache_key)
+        if cached:
+            try:
+                return json.loads(cached)
+            except json.JSONDecodeError:
+                pass
+
+    try:
+        payload = await ProdigiArtworkStorefrontService(db).get_artwork_storefront(
+            artwork_id_or_slug=artwork_id_or_slug,
+            country_code=country,
+        )
+        if redis_manager.redis is not None:
+            await redis_manager.set(cache_key, json.dumps(payload), expire=900)
+        return payload
+    except ObjectNotFoundException:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+
+@router.get("/{artwork_id_or_slug}/prints")
+async def get_artwork_print_storefront(
+    artwork_id_or_slug: str,
+    db: DBDep,
+    country: str = Query(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2"),
+):
+    """
+    Public storefront print offers for one artwork and one destination country.
+
+    This is the clean, stable client-facing route for the website and any future
+    validation UI around print configuration.
+    """
+    return await _get_artwork_print_storefront(
+        artwork_id_or_slug=artwork_id_or_slug,
+        db=db,
+        country=country,
+    )
+
+
+@router.get("/{artwork_id_or_slug}/storefront-offers")
+async def get_artwork_storefront_offers(
+    artwork_id_or_slug: str,
+    db: DBDep,
+    country: str = Query(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2"),
+):
+    """
+    Backward-compatible alias for the older storefront naming.
+    """
+    return await _get_artwork_print_storefront(
+        artwork_id_or_slug=artwork_id_or_slug,
+        db=db,
+        country=country,
+    )
 
 
 @router.delete("/{artwork_id}")

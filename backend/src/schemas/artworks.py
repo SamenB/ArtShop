@@ -4,6 +4,7 @@ Pydantic schemas for artwork data validation and serialization.
 
 import enum
 import re
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -84,6 +85,14 @@ class ArtworkAddRequest(BaseModel):
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
     print_quality_url: str | None = Field(None, description="High-res image URL for Prodigi")
+    print_source_metadata: dict[str, Any] | None = Field(
+        None,
+        description="Derived metadata for the hi-res print source asset (pixels, DPI, ICC, etc.)",
+    )
+    print_profile_overrides: dict[str, Any] | None = Field(
+        None,
+        description="Per-artwork overrides for Prodigi print-profile recommendations.",
+    )
 
 
 class ArtworkAdd(BaseModel):
@@ -113,6 +122,8 @@ class ArtworkAdd(BaseModel):
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
     print_quality_url: str | None = Field(None)
+    print_source_metadata: dict[str, Any] | None = Field(None)
+    print_profile_overrides: dict[str, Any] | None = Field(None)
 
     # Print availability flags
     has_original: bool = Field(False)
@@ -156,6 +167,8 @@ class ArtworkWithLabels(Artwork):
     )
     # Nested aspect ratio object (serialized from the SQLAlchemy relationship)
     print_aspect_ratio: AspectRatioWithPricing | None = None
+    print_source_metadata: dict[str, Any] | None = None
+    print_profile_overrides: dict[str, Any] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -200,6 +213,14 @@ class ArtworkPatchRequest(BaseModel):
         None, description="Array of image URLs. The first image (index 0) is the main cover image."
     )
     print_quality_url: str | None = Field(None, description="High-res image URL for Prodigi")
+    print_source_metadata: dict[str, Any] | None = Field(
+        None,
+        description="Derived metadata for the hi-res print source asset (pixels, DPI, ICC, etc.)",
+    )
+    print_profile_overrides: dict[str, Any] | None = Field(
+        None,
+        description="Per-artwork overrides for Prodigi print-profile recommendations.",
+    )
 
 
 class ArtworkPatch(BaseModel):
@@ -225,6 +246,8 @@ class ArtworkPatch(BaseModel):
     orientation: str | None = Field(None)
     images: list[str | dict] | None = Field(None)
     print_quality_url: str | None = Field(None)
+    print_source_metadata: dict[str, Any] | None = Field(None)
+    print_profile_overrides: dict[str, Any] | None = Field(None)
 
     # Print availability flags
     has_original: bool | None = Field(None)

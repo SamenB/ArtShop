@@ -2,10 +2,10 @@
 
 /**
  * Context provider for managing the shopping cart state.
- * Handles item addition, removal, quantity updates, and persistent 
+ * Handles item addition, removal, quantity updates, and persistent
  * storage across browser sessions using localStorage.
  */
-import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
+import { createContext, useContext, useMemo, useState, useSyncExternalStore } from "react";
 
 /** Supported types of items that can be added to the cart. */
 export type CartItemType = "original" | "print";
@@ -32,8 +32,15 @@ export interface CartItem {
     quantity: number;
     /** Optional finish selection for prints (e.g., 'Framed'). */
     finish?: string;
-    /** Optional size selection for prints (e.g., '30 × 40 cm'). */
+    /** Optional size selection for prints (e.g., '30 x 40 cm'). */
     size?: string;
+    /** Explicit backend edition type for checkout/order creation. */
+    edition_type?:
+        | "original"
+        | "canvas_print"
+        | "canvas_print_limited"
+        | "paper_print"
+        | "paper_print_limited";
     /** Prodigi SKU for the selected variant. */
     prodigi_sku?: string;
     /** Prodigi print attributes (like frame color or wrap border). */
@@ -64,61 +71,122 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const STORAGE_KEY = "artshop_cart";
+const CART_UPDATED_EVENT = "artshop-cart-updated";
+const EMPTY_CART: CartItem[] = [];
+
+let cachedCartRaw: string | null = null;
+let cachedCartSnapshot: CartItem[] = EMPTY_CART;
+
+function readCartFromStorage(): CartItem[] {
+    if (typeof window === "undefined") {
+        return EMPTY_CART;
+    }
+
+    try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+            cachedCartRaw = null;
+            cachedCartSnapshot = EMPTY_CART;
+            return cachedCartSnapshot;
+        }
+
+        if (saved === cachedCartRaw) {
+            return cachedCartSnapshot;
+        }
+
+        const parsed = JSON.parse(saved);
+        cachedCartRaw = saved;
+        cachedCartSnapshot = Array.isArray(parsed) ? parsed : EMPTY_CART;
+        return cachedCartSnapshot;
+    } catch {
+        cachedCartRaw = null;
+        cachedCartSnapshot = EMPTY_CART;
+        return cachedCartSnapshot;
+    }
+}
+
+function writeCartToStorage(items: CartItem[]): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    try {
+        const serialized = JSON.stringify(items);
+        window.localStorage.setItem(STORAGE_KEY, serialized);
+        cachedCartRaw = serialized;
+        cachedCartSnapshot = items.length ? items : EMPTY_CART;
+    } catch {
+        // Silently ignore storage quota or permission errors.
+    }
+}
+
+function notifyCartUpdated(): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    window.dispatchEvent(new Event(CART_UPDATED_EVENT));
+}
+
+function subscribeCartStore(onStoreChange: () => void): () => void {
+    if (typeof window === "undefined") {
+        return () => {};
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+        if (!event.key || event.key === STORAGE_KEY) {
+            onStoreChange();
+        }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(CART_UPDATED_EVENT, onStoreChange);
+
+    return () => {
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener(CART_UPDATED_EVENT, onStoreChange);
+    };
+}
+
+function getCartServerSnapshot(): CartItem[] {
+    return EMPTY_CART;
+}
 
 /**
  * High-level provider component that manages cart persistence and state updates.
  */
-export function CartProvider({ children }: { children: ReactNode }) {
-    const [items, setItems] = useState<CartItem[]>([]);
+export function CartProvider({ children }: { children: React.ReactNode }) {
     const [isCartOpen, setIsCartOpen] = useState(false);
-    const [loaded, setLoaded] = useState(false);
-
-    // Synchronize state with local storage on initial mount.
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                setItems(JSON.parse(saved));
-            }
-        } catch {
-            // Silently ignore corrupted or inaccessible storage data.
-        }
-        setLoaded(true);
-    }, []);
-
-    // Persist state changes back to local storage.
-    useEffect(() => {
-        if (!loaded) return;
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-        } catch {
-            // Silently ignore storage quota or permission errors.
-        }
-    }, [items, loaded]);
+    const items = useSyncExternalStore(
+        subscribeCartStore,
+        readCartFromStorage,
+        getCartServerSnapshot
+    );
 
     /**
      * Adds a new item to the cart or increments its quantity if it already exists.
      * Automatically triggers the cart visibility overlay.
      */
     const addItem = (newItem: Omit<CartItem, "quantity">) => {
-        setItems(prev => {
-            const existingIndex = prev.findIndex(item => item.id === newItem.id);
-            if (existingIndex >= 0) {
-                const clone = [...prev];
-                // For prints, we allow incrementing. 
-                // Note: Logic for 'originals' uniqueness is handled in updateQuantity.
-                clone[existingIndex].quantity += 1;
-                return clone;
-            } else {
-                return [...prev, { ...newItem, quantity: 1 }];
-            }
-        });
+        const currentItems = readCartFromStorage();
+        const existingIndex = currentItems.findIndex((item) => item.id === newItem.id);
+        if (existingIndex >= 0) {
+            const clone = [...currentItems];
+            // For prints, we allow incrementing.
+            // Note: Logic for 'originals' uniqueness is handled in updateQuantity.
+            clone[existingIndex].quantity += 1;
+            writeCartToStorage(clone);
+        } else {
+            writeCartToStorage([...currentItems, { ...newItem, quantity: 1 }]);
+        }
+        notifyCartUpdated();
         setIsCartOpen(true);
     };
 
     /** Removes an item completely from the cart by its unique ID. */
     const removeItem = (id: string) => {
-        setItems(prev => prev.filter(item => item.id !== id));
+        writeCartToStorage(readCartFromStorage().filter((item) => item.id !== id));
+        notifyCartUpdated();
     };
 
     /**
@@ -126,20 +194,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
      * Prevents quantity < 1 and enforces single-unit limits for "original" artworks.
      */
     const updateQuantity = (id: string, delta: number) => {
-        setItems(prev => prev.map(item => {
-            if (item.id === id) {
-                const newQ = Math.max(1, item.quantity + delta);
-                // Original artworks can only ever have a quantity of 1.
-                const isOriginal = item.type === "original";
-                return { ...item, quantity: isOriginal ? 1 : newQ };
-            }
-            return item;
-        }));
+        writeCartToStorage(
+            readCartFromStorage().map((item) => {
+                if (item.id === id) {
+                    const newQuantity = Math.max(1, item.quantity + delta);
+                    const isOriginal = item.type === "original";
+                    return { ...item, quantity: isOriginal ? 1 : newQuantity };
+                }
+                return item;
+            })
+        );
+        notifyCartUpdated();
     };
 
     /** Clears all items from the cart. */
     const clearCart = () => {
-        setItems([]);
+        writeCartToStorage([]);
+        notifyCartUpdated();
     };
 
     /** Derived total number of units in the cart. */
@@ -149,21 +220,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     /** Derived total currency value of all items in the cart. */
     const cartTotal = useMemo(() => {
-        return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     }, [items]);
 
     return (
-        <CartContext.Provider value={{
-            items,
-            isCartOpen,
-            setIsCartOpen,
-            addItem,
-            removeItem,
-            updateQuantity,
-            clearCart,
-            cartCount,
-            cartTotal
-        }}>
+        <CartContext.Provider
+            value={{
+                items,
+                isCartOpen,
+                setIsCartOpen,
+                addItem,
+                removeItem,
+                updateQuantity,
+                clearCart,
+                cartCount,
+                cartTotal,
+            }}
+        >
             {children}
         </CartContext.Provider>
     );

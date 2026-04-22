@@ -980,7 +980,13 @@ export default function CheckoutPage() {
                 promo_code: promoApplied ? formData.promoCode : null,
                 items: items.map((item) => ({
                     artwork_id: parseInt(item.slug) || 1,
-                    edition_type: item.type === "original" ? "original" : (item.finish?.toLowerCase().includes("canvas") ? "canvas_print" : "paper_print"),
+                    edition_type:
+                        item.edition_type ||
+                        (item.type === "original"
+                            ? "original"
+                            : item.finish?.toLowerCase().includes("canvas")
+                              ? "canvas_print"
+                              : "paper_print"),
                     finish: item.finish || "Original",
                     size: item.size,
                     price: item.price,

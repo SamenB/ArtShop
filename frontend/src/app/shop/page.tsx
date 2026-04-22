@@ -7,7 +7,7 @@
  */
 
 import { useState, useMemo, useEffect, useCallback, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
@@ -37,11 +37,49 @@ interface Product {
     has_prints?: boolean;
     orientation?: string;
     base_print_price?: number;
+    storefront_summary?: {
+        country_code: string;
+        country_name?: string | null;
+        print_country_supported: boolean;
+        min_print_price?: number | null;
+        default_medium?: "paper" | "canvas" | null;
+        mediums: {
+            paper: {
+                available: boolean;
+                starting_price?: number | null;
+                starting_size_label?: string | null;
+                card_count: number;
+            };
+            canvas: {
+                available: boolean;
+                starting_price?: number | null;
+                starting_size_label?: string | null;
+                card_count: number;
+            };
+        };
+    };
     aspectRatio?: string;
     gradientFrom?: string;
     gradientTo?: string;
     labels?: { id: number; title: string; category_id?: number }[];
 }
+
+const getStorefrontSummary = (product: Product) => product.storefront_summary;
+
+const buildArtworkHref = (product: Product, countryCode?: string): string => {
+    const href = artworkUrl(product.slug || product.id);
+    const params = new URLSearchParams();
+    const storefrontSummary = getStorefrontSummary(product);
+
+    if (countryCode) {
+        params.set("country", countryCode);
+    }
+    if (storefrontSummary?.default_medium) {
+        params.set("view", storefrontSummary.default_medium);
+    }
+
+    return params.size > 0 ? `${href}?${params.toString()}` : href;
+};
 
 /** Collection metadata. */
 
@@ -99,8 +137,8 @@ function sortProducts(products: Product[], key: SortKey, globalPrintPrice: numbe
     const c = [...products];
     switch (key) {
         case "newest": c.sort((a, b) => b.id - a.id); break;
-        case "price-low": c.sort((a, b) => (a.original_price || globalPrintPrice) - (b.original_price || globalPrintPrice)); break;
-        case "price-high": c.sort((a, b) => (b.original_price || globalPrintPrice) - (a.original_price || globalPrintPrice)); break;
+        case "price-low": c.sort((a, b) => ((a.original_price || a.base_print_price || globalPrintPrice) - (b.original_price || b.base_print_price || globalPrintPrice))); break;
+        case "price-high": c.sort((a, b) => ((b.original_price || b.base_print_price || globalPrintPrice) - (a.original_price || a.base_print_price || globalPrintPrice))); break;
         case "size-small": c.sort((a, b) => getArea(a) - getArea(b)); break;
         case "size-large": c.sort((a, b) => getArea(b) - getArea(a)); break;
     }
@@ -131,8 +169,9 @@ const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string
  * Features dynamic aspect-ratio calculation to align metadata perfectly with
  * the image's left edge. Displays original status and print pricing.
  */
-function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedIds, onAuthRequired, listIndex, onLikeChange }: {
+function ProductCard({ product, zoneH, gridMode, isMobile, countryCode, initialLiked, likedIds, onAuthRequired, listIndex, onLikeChange }: {
     product: Product; zoneH: number; gridMode: string; isMobile: boolean;
+    countryCode?: string;
     initialLiked?: boolean;
     likedIds?: Set<number>;
     onAuthRequired?: (id: number, newState: boolean) => void;
@@ -140,6 +179,19 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
     onLikeChange?: (id: number, liked: boolean) => void;
 }) {
     const { convertPrice, units } = usePreferences();
+    const storefrontSummary = getStorefrontSummary(product);
+    const artworkHref = buildArtworkHref(product, countryCode);
+    const paperStartingPrice = storefrontSummary?.mediums.paper.starting_price ?? null;
+    const canvasStartingPrice = storefrontSummary?.mediums.canvas.starting_price ?? null;
+    const hasStructuredPrintSummary = Boolean(
+        storefrontSummary?.mediums.paper.available || storefrontSummary?.mediums.canvas.available,
+    );
+    const fallbackPrintStartingPrice = storefrontSummary?.min_print_price ?? product.base_print_price;
+    const fallbackPrintLabel = storefrontSummary?.default_medium === "paper"
+        ? "Paper prints"
+        : storefrontSummary?.default_medium === "canvas"
+            ? "Canvas prints"
+            : "Prints";
     const ori = (product.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
     const isSquare = ori === "square";
@@ -246,7 +298,7 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                 WebkitTapHighlightColor: "transparent",
             }}
         >
-            <Link href={artworkUrl(product.slug || product.id)} style={{ textDecoration: "none", display: "block", width: "100%", position: "relative", zIndex: 10, pointerEvents: "none" }}>
+            <Link href={artworkHref} style={{ textDecoration: "none", display: "block", width: "100%", position: "relative", zIndex: 10, pointerEvents: "none" }}>
                 <div
                     ref={containerRef}
                     className="art-card-container"
@@ -402,13 +454,31 @@ function ProductCard({ product, zoneH, gridMode, isMobile, initialLiked, likedId
                                 Original <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(product.original_price)}</span>
                             </p>
                         )}
-                        {product.has_prints && product.base_print_price && (
+                        {product.has_prints && hasStructuredPrintSummary && paperStartingPrice && (
                             <p style={{
                                 fontFamily: "var(--font-sans)",
                                 fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
                                 fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
                             }}>
-                                Prints starting at <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(product.base_print_price)}</span>
+                                Paper prints starting at <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(paperStartingPrice)}</span>
+                            </p>
+                        )}
+                        {product.has_prints && hasStructuredPrintSummary && canvasStartingPrice && (
+                            <p style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                                fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                            }}>
+                                Canvas prints starting at <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(canvasStartingPrice)}</span>
+                            </p>
+                        )}
+                        {product.has_prints && !hasStructuredPrintSummary && fallbackPrintStartingPrice && (
+                            <p style={{
+                                fontFamily: "var(--font-sans)",
+                                fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
+                                fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
+                            }}>
+                                {fallbackPrintLabel} starting at <span className="font-price" style={{ fontWeight: 600, color: "#444" }}>{convertPrice(fallbackPrintStartingPrice)}</span>
                             </p>
                         )}
                     </div>
@@ -562,11 +632,20 @@ function DualRangeSlider({
     const rGMin = useRef(globalMin);
     const rGMax = useRef(globalMax);
     const rOnChange = useRef(onChange);
-    rMin.current = valueMin;
-    rMax.current = valueMax;
-    rGMin.current = globalMin;
-    rGMax.current = globalMax;
-    rOnChange.current = onChange;
+
+    useEffect(() => {
+        rMin.current = valueMin;
+    }, [valueMin]);
+    useEffect(() => {
+        rMax.current = valueMax;
+    }, [valueMax]);
+    useEffect(() => {
+        rGMin.current = globalMin;
+        rGMax.current = globalMax;
+    }, [globalMin, globalMax]);
+    useEffect(() => {
+        rOnChange.current = onChange;
+    }, [onChange]);
 
     const valFromClientX = useCallback((clientX: number) => {
         const rect = trackRef.current!.getBoundingClientRect();
@@ -577,11 +656,8 @@ function DualRangeSlider({
 
     const [localMin, setLocalMin] = useState(valueMin);
     const [localMax, setLocalMax] = useState(valueMax);
-    const minFocused = useRef(false);
-    const maxFocused = useRef(false);
-
-    useEffect(() => { if (!minFocused.current) setLocalMin(valueMin); }, [valueMin]);
-    useEffect(() => { if (!maxFocused.current) setLocalMax(valueMax); }, [valueMax]);
+    const [isEditingMin, setIsEditingMin] = useState(false);
+    const [isEditingMax, setIsEditingMax] = useState(false);
 
     /** Standardizes and emits a minimum boundary update. */
     const applyMin = useCallback((raw: number) => {
@@ -661,10 +737,10 @@ function DualRangeSlider({
                     <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", color: "#bbb", marginBottom: "2px" }}>Min ({unit})</div>
                     <input
                         type="number"
-                        value={localMin}
+                        value={isEditingMin ? localMin : valueMin}
                         onChange={e => setLocalMin(Number(e.target.value))}
-                        onFocus={() => { minFocused.current = true; }}
-                        onBlur={() => { minFocused.current = false; applyMin(localMin); }}
+                        onFocus={() => { setIsEditingMin(true); }}
+                        onBlur={() => { setIsEditingMin(false); applyMin(localMin); }}
                         onKeyDown={e => { if (e.key === "Enter") { applyMin(localMin); (e.target as HTMLInputElement).blur(); } }}
                         style={{ width: "100%", border: "1px solid rgba(26,26,24,0.18)", borderRadius: "3px", padding: "4px 5px", fontFamily: "var(--font-sans)", fontSize: "0.75rem", outline: "none", color: "#1a1a18" }}
                     />
@@ -674,10 +750,10 @@ function DualRangeSlider({
                     <div style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", color: "#bbb", marginBottom: "2px" }}>Max ({unit})</div>
                     <input
                         type="number"
-                        value={localMax}
+                        value={isEditingMax ? localMax : valueMax}
                         onChange={e => setLocalMax(Number(e.target.value))}
-                        onFocus={() => { maxFocused.current = true; }}
-                        onBlur={() => { maxFocused.current = false; applyMax(localMax); }}
+                        onFocus={() => { setIsEditingMax(true); }}
+                        onBlur={() => { setIsEditingMax(false); applyMax(localMax); }}
                         onKeyDown={e => { if (e.key === "Enter") { applyMax(localMax); (e.target as HTMLInputElement).blur(); } }}
                         style={{ width: "100%", border: "1px solid rgba(26,26,24,0.18)", borderRadius: "3px", padding: "4px 5px", fontFamily: "var(--font-sans)", fontSize: "0.75rem", outline: "none", color: "#1a1a18" }}
                     />
@@ -692,10 +768,8 @@ function DualRangeSlider({
  */
 function PriceRangeSection({ min, max, onChange, isMobile }: { min: number; max: number; onChange: (min: number, max: number) => void; isMobile?: boolean }) {
     const [open, setOpen] = useState(false);
-    const [localMin, setLocalMin] = useState(min);
-    const [localMax, setLocalMax] = useState(max);
-
-    useEffect(() => { setLocalMin(min); setLocalMax(max); }, [min, max]);
+    const [localMin, setLocalMin] = useState(() => min);
+    const [localMax, setLocalMax] = useState(() => max);
 
     const presets = [
         { label: "Any Price", min: 0, max: 999999 },
@@ -776,7 +850,12 @@ export default function ShopPage() {
 
 function ShopPageContent() {
     const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const router = useRouter();
     const { user } = useUser();
+    const urlCountry = (searchParams.get("country") || "").toUpperCase();
+    const [userCountryCode, setUserCountryCode] = useState<string>("");
+    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : (userCountryCode || "DE");
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<LabelCategory[]>([]);
     const [labels, setLabels] = useState<Label[]>([]);
@@ -804,6 +883,28 @@ function ShopPageContent() {
     useEffect(() => {
         setFilterLiked(searchParams.get("liked") === "true");
     }, [searchParams]);
+
+    useEffect(() => {
+        apiFetch(`${getApiUrl()}/geo/country`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.country_code) {
+                    setUserCountryCode(String(data.country_code).toUpperCase());
+                } else {
+                    setUserCountryCode("DE");
+                }
+            })
+            .catch(() => setUserCountryCode("DE"));
+    }, []);
+
+    useEffect(() => {
+        if (/^[A-Z]{2}$/.test(urlCountry) || !/^[A-Z]{2}$/.test(userCountryCode)) {
+            return;
+        }
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set("country", userCountryCode);
+        router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+    }, [pathname, router, searchParams, urlCountry, userCountryCode]);
 
     const [sortIdx, setSortIdx] = useState(0);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -834,12 +935,22 @@ function ShopPageContent() {
 
     /** Bootstraps the catalog data from multiple endpoints. */
     useEffect(() => {
+        if (!activeCountryCode) {
+            return;
+        }
         const apiUrl = getApiUrl();
+        const abortController = new AbortController();
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
         Promise.all([
-            apiFetch(`${apiUrl}/artworks?limit=1000`).then(r => r.json()),
-            apiFetch(`${apiUrl}/labels/categories`).then(r => r.json()),
-            apiFetch(`${apiUrl}/labels`).then(r => r.json()),
+            apiFetch(`${apiUrl}/artworks?limit=1000&country=${activeCountryCode}`, { signal: abortController.signal }).then(r => r.json()),
+            apiFetch(`${apiUrl}/labels/categories`, { signal: abortController.signal }).then(r => r.json()),
+            apiFetch(`${apiUrl}/labels`, { signal: abortController.signal }).then(r => r.json()),
         ]).then(([artData, catData, lblData]) => {
+            if (cancelled) {
+                return;
+            }
             const rawData = artData.items || artData.data || artData;
             if (Array.isArray(rawData)) {
                 const items = rawData.map((item: any, idx: number) => ({
@@ -854,10 +965,22 @@ function ShopPageContent() {
             if (Array.isArray(catData)) setCategories(catData);
             if (Array.isArray(lblData)) setLabels(lblData);
         }).catch(err => {
+            if (cancelled || abortController.signal.aborted) {
+                return;
+            }
             console.error("Shop initialization failed:", err);
             setError("Network error.");
-        }).finally(() => setLoading(false));
-    }, []);
+        }).finally(() => {
+            if (!cancelled) {
+                setLoading(false);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            abortController.abort();
+        };
+    }, [activeCountryCode]);
 
     /** Fetch the authenticated user's liked artwork IDs for UI state init. */
     useEffect(() => {
@@ -871,7 +994,7 @@ function ShopPageContent() {
                 setLikedIds(new Set(items.map(a => a.id)));
             })
             .catch(() => setLikedIds(new Set()));
-    }, [user]);
+    }, [pendingLikes, user]);
 
     /** Monitors viewport width to toggle between desktop sidebar and mobile bottom drawer. */
     useEffect(() => {
@@ -970,7 +1093,10 @@ function ShopPageContent() {
      * Aggregates all active UI filters (type, price, size, tech info) into a 
      * single high-performance memoized list.
      */
-    const effectiveLikedIds = user ? likedIds : new Set(pendingLikes);
+    const effectiveLikedIds = useMemo(
+        () => (user ? likedIds : new Set(pendingLikes)),
+        [likedIds, pendingLikes, user],
+    );
 
     const filtered = useMemo(() => {
         let list = allProducts;
@@ -1035,7 +1161,7 @@ function ShopPageContent() {
         }
 
         return list;
-    }, [allProducts, categoryFilter, filterLiked, likedIds, priceMin, priceMax, widthMin, widthMax, wGlobalMax, wGlobalMin, heightMin, heightMax, hGlobalMax, hGlobalMin, activeYears, activeOrientations, activeLabels, globalPrintPrice, getUnitVal]);
+    }, [activeLabels, activeOrientations, activeYears, allProducts, categoryFilter, effectiveLikedIds, filterLiked, getUnitVal, hGlobalMax, hGlobalMin, heightMax, heightMin, priceMax, priceMin, wGlobalMax, wGlobalMin, widthMax, widthMin]);
 
     /** Updates pending likes locally, and occasionally prompts the user. */
     const handleAuthRequired = (id: number, isLiked: boolean) => {
@@ -1169,7 +1295,7 @@ function ShopPageContent() {
             </SidebarSection>
 
             {/* 2. Budgetary filtering. */}
-            <PriceRangeSection min={priceMin} max={priceMax} onChange={(mn, mx) => { setPriceMin(mn); setPriceMax(mx); }} isMobile={isMobile} />
+            <PriceRangeSection key={`${priceMin}-${priceMax}`} min={priceMin} max={priceMax} onChange={(mn, mx) => { setPriceMin(mn); setPriceMax(mx); }} isMobile={isMobile} />
 
             {/* 3. Physical dimension filtering. */}
             <SidebarSection title="Size" defaultOpen={false} isMobile={isMobile}>
@@ -1334,6 +1460,7 @@ function ShopPageContent() {
                                 zoneH={IMAGE_ZONE[gridMode] || 380}
                                 gridMode={gridMode}
                                 isMobile={isMobile}
+                                countryCode={activeCountryCode}
                                 likedIds={effectiveLikedIds}
                                 listIndex={i}
                                 onAuthRequired={!user ? handleAuthRequired : undefined}
