@@ -14,11 +14,23 @@ from src.services.prodigi_artwork_storefront_materializer import (
     ProdigiArtworkStorefrontMaterializerService,
 )
 from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
+from src.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
 from src.services.prodigi_shipping_policy import ProdigiShippingPolicyService
 from src.services.prodigi_shipping_support_policy import (
     ProdigiShippingSupportPolicyService,
 )
 from src.utils.db_manager import DBManager
+
+MIRROR_WRAP_FALLBACK_MARGIN_PCT = 0.0
+PROVIDER_PRINT_AREA_SOURCE = "prodigi_product_details"
+PROVIDER_PRINT_AREA_SOURCES = {
+    "prodigi_product_details",
+    "prodigi_product_dimensions",
+}
+
+
+class ProdigiPrintAreaBakeError(RuntimeError):
+    """Raised when a storefront bake would rely on non-provider pixel targets."""
 
 
 class ProdigiStorefrontBakeService:
@@ -61,122 +73,142 @@ class ProdigiStorefrontBakeService:
             preview_payload=selected_preview_payload,
             include_notice_level=include_notice_level,
         )
+        async with ProdigiPrintAreaResolver() as print_area_resolver:
+            await self._enrich_storefront_print_areas(
+                selected_storefront_preview,
+                print_area_resolver,
+            )
+            self._keep_only_provider_print_area_sizes(selected_storefront_preview)
+            self._assert_provider_print_area_sizes(selected_storefront_preview)
 
-        bake = ProdigiStorefrontBakeOrm(
-            bake_key=self._build_bake_key(dataset["selected_paper_material"], include_notice_level),
-            paper_material=dataset["selected_paper_material"],
-            include_notice_level=include_notice_level,
-            status="ready",
-            note=(
-                "Materialized from Prodigi catalog preview after storefront, sizing, and "
-                "fulfillment policies were applied."
-            ),
-        )
-        self.db.session.add(bake)
-        await self.db.session.flush()
+            bake = ProdigiStorefrontBakeOrm(
+                bake_key=self._build_bake_key(dataset["selected_paper_material"], include_notice_level),
+                paper_material=dataset["selected_paper_material"],
+                include_notice_level=include_notice_level,
+                status="ready",
+                note=(
+                    "Materialized from Prodigi catalog preview after storefront, sizing, and "
+                    "fulfillment policies were applied."
+                ),
+            )
+            self.db.session.add(bake)
+            await self.db.session.flush()
 
-        await self.db.session.execute(
-            update(ProdigiStorefrontBakeOrm)
-            .where(ProdigiStorefrontBakeOrm.id != bake.id)
-            .values(is_active=False)
-        )
+            await self.db.session.execute(
+                update(ProdigiStorefrontBakeOrm)
+                .where(ProdigiStorefrontBakeOrm.id != bake.id)
+                .values(is_active=False)
+            )
 
-        group_count = 0
-        size_count = 0
-        visible_country_codes: set[str] = set()
-        visible_ratio_labels: set[str] = set()
+            group_count = 0
+            size_count = 0
+            visible_country_codes: set[str] = set()
+            visible_ratio_labels: set[str] = set()
 
-        for ratio_meta in dataset["ratio_presets"]:
-            ratio_label = ratio_meta["label"]
-            ratio_preview = dataset["preview"]["by_ratio"].get(ratio_label)
-            if ratio_preview is None:
-                continue
-
-            for country_option in ratio_preview["countries"]:
-                country_code = country_option["country_code"]
-                country_selection = self.preview_service.resolve_selection(
-                    preview=dataset["preview"],
-                    ratio_presets=dataset["ratio_presets"],
-                    category_defs=dataset["category_defs"],
-                    selected_ratio=ratio_label,
-                    selected_country=country_code,
-                )
-                preview_payload = self._make_preview_payload(
-                    dataset=dataset,
-                    selection=country_selection,
-                )
-                storefront_preview = self.build_storefront_country_preview(
-                    preview_payload=preview_payload,
-                    include_notice_level=include_notice_level,
-                )
-
-                if not storefront_preview["visible_cards"]:
+            for ratio_meta in dataset["ratio_presets"]:
+                ratio_label = ratio_meta["label"]
+                ratio_preview = dataset["preview"]["by_ratio"].get(ratio_label)
+                if ratio_preview is None:
                     continue
 
-                visible_country_codes.add(country_code)
-                visible_ratio_labels.add(ratio_label)
-
-                for card in storefront_preview["visible_cards"]:
-                    totals = [
-                        size["total_cost"]
-                        for size in card["size_options"]
-                        if size.get("total_cost") is not None
-                    ]
-                    group = ProdigiStorefrontOfferGroupOrm(
-                        bake_id=bake.id,
-                        ratio_label=ratio_label,
-                        ratio_title=ratio_meta["title"],
-                        destination_country=storefront_preview["country_code"],
-                        destination_country_name=storefront_preview["country_name"],
-                        category_id=card["category_id"],
-                        category_label=card["label"],
-                        material_label=card["material_label"],
-                        frame_label=card["frame_label"],
-                        storefront_action=card["storefront_action"],
-                        fulfillment_level=card["fulfillment_level"],
-                        geography_scope=card["geography_scope"],
-                        tax_risk=card["tax_risk"],
-                        source_countries=card["source_countries"],
-                        fastest_delivery_days=card["fastest_delivery_days"],
-                        note=card["note"],
-                        fixed_attributes=card["storefront_policy"]["fixed_attributes"],
-                        recommended_defaults=card["storefront_policy"][
-                            "recommended_defaults"
-                        ],
-                        allowed_attributes=card["storefront_policy"]["allowed_attributes"],
-                        available_shipping_tiers=card["available_shipping_tiers"],
-                        default_shipping_tier=card["default_shipping_tier"],
-                        available_size_count=len(card["size_options"]),
-                        min_total_cost=min(totals) if totals else None,
-                        max_total_cost=max(totals) if totals else None,
-                        currency=card["price_range"]["currency"],
+                for country_option in ratio_preview["countries"]:
+                    country_code = country_option["country_code"]
+                    country_selection = self.preview_service.resolve_selection(
+                        preview=dataset["preview"],
+                        ratio_presets=dataset["ratio_presets"],
+                        category_defs=dataset["category_defs"],
+                        selected_ratio=ratio_label,
+                        selected_country=country_code,
                     )
-                    group.sizes = [
-                        ProdigiStorefrontOfferSizeOrm(
-                            slot_size_label=size["slot_size_label"],
-                            size_label=size["size_label"],
-                            available=True,
-                            is_exact_match=size["is_exact_match"],
-                            centroid_size_label=size["centroid_size_label"],
-                            member_size_labels=size["member_size_labels"],
-                            sku=size["sku"],
-                            source_country=size["source_country"],
-                            currency=size["currency"],
-                            product_price=size["product_price"],
-                            shipping_price=size["shipping_price"],
-                            total_cost=size["total_cost"],
-                            delivery_days=size["delivery_days"],
-                            default_shipping_tier=size["default_shipping_tier"],
-                            shipping_method=size["shipping_method"],
-                            service_name=size["service_name"],
-                            service_level=size["service_level"],
-                            shipping_profiles=size["shipping_profiles"],
+                    preview_payload = self._make_preview_payload(
+                        dataset=dataset,
+                        selection=country_selection,
+                    )
+                    storefront_preview = self.build_storefront_country_preview(
+                        preview_payload=preview_payload,
+                        include_notice_level=include_notice_level,
+                    )
+                    await self._enrich_storefront_print_areas(
+                        storefront_preview,
+                        print_area_resolver,
+                    )
+                    self._keep_only_provider_print_area_sizes(storefront_preview)
+                    self._assert_provider_print_area_sizes(storefront_preview)
+
+                    if not storefront_preview["visible_cards"]:
+                        continue
+
+                    visible_country_codes.add(country_code)
+                    visible_ratio_labels.add(ratio_label)
+
+                    for card in storefront_preview["visible_cards"]:
+                        totals = [
+                            size["total_cost"]
+                            for size in card["size_options"]
+                            if size.get("total_cost") is not None
+                        ]
+                        group = ProdigiStorefrontOfferGroupOrm(
+                            bake_id=bake.id,
+                            ratio_label=ratio_label,
+                            ratio_title=ratio_meta["title"],
+                            destination_country=storefront_preview["country_code"],
+                            destination_country_name=storefront_preview["country_name"],
+                            category_id=card["category_id"],
+                            category_label=card["label"],
+                            material_label=card["material_label"],
+                            frame_label=card["frame_label"],
+                            storefront_action=card["storefront_action"],
+                            fulfillment_level=card["fulfillment_level"],
+                            geography_scope=card["geography_scope"],
+                            tax_risk=card["tax_risk"],
+                            source_countries=card["source_countries"],
+                            fastest_delivery_days=card["fastest_delivery_days"],
+                            note=card["note"],
+                            fixed_attributes=card["storefront_policy"]["fixed_attributes"],
+                            recommended_defaults=card["storefront_policy"][
+                                "recommended_defaults"
+                            ],
+                            allowed_attributes=card["storefront_policy"]["allowed_attributes"],
+                            available_shipping_tiers=card["available_shipping_tiers"],
+                            default_shipping_tier=card["default_shipping_tier"],
+                            available_size_count=len(card["size_options"]),
+                            min_total_cost=min(totals) if totals else None,
+                            max_total_cost=max(totals) if totals else None,
+                            currency=card["price_range"]["currency"],
                         )
-                        for size in card["size_options"]
-                    ]
-                    self.db.session.add(group)
-                    group_count += 1
-                    size_count += len(group.sizes)
+                        group.sizes = [
+                            ProdigiStorefrontOfferSizeOrm(
+                                slot_size_label=size["slot_size_label"],
+                                size_label=size["size_label"],
+                                available=True,
+                                is_exact_match=size["is_exact_match"],
+                                centroid_size_label=size["centroid_size_label"],
+                                member_size_labels=size["member_size_labels"],
+                                sku=size["sku"],
+                                supplier_size_cm=size.get("size_cm"),
+                                supplier_size_inches=size.get("size_inches"),
+                                print_area_width_px=size.get("print_area_width_px"),
+                                print_area_height_px=size.get("print_area_height_px"),
+                                print_area_name=size.get("print_area_name"),
+                                print_area_source=size.get("print_area_source"),
+                                print_area_dimensions=size.get("print_area_dimensions"),
+                                source_country=size["source_country"],
+                                currency=size["currency"],
+                                product_price=size["product_price"],
+                                shipping_price=size["shipping_price"],
+                                total_cost=size["total_cost"],
+                                delivery_days=size["delivery_days"],
+                                default_shipping_tier=size["default_shipping_tier"],
+                                shipping_method=size["shipping_method"],
+                                service_name=size["service_name"],
+                                service_level=size["service_level"],
+                                shipping_profiles=size["shipping_profiles"],
+                            )
+                            for size in card["size_options"]
+                        ]
+                        self.db.session.add(group)
+                        group_count += 1
+                        size_count += len(group.sizes)
 
         bake.ratio_count = len(visible_ratio_labels)
         bake.country_count = len(visible_country_codes)
@@ -243,6 +275,9 @@ class ProdigiStorefrontBakeService:
                     "centroid_size_label": cell["centroid_size_label"],
                     "member_size_labels": cell["member_size_labels"],
                     "sku": cell["offer"]["sku"],
+                    "size_cm": cell["offer"].get("size_cm"),
+                    "size_inches": cell["offer"].get("size_inches"),
+                    "variant_key": cell["offer"].get("variant_key"),
                     "source_country": cell["offer"]["source_country"],
                     "currency": cell["offer"]["currency"],
                     "product_price": cell["offer"]["product_price"],
@@ -346,6 +381,137 @@ class ProdigiStorefrontBakeService:
             "visible_cards": visible_cards,
             "hidden_cards": hidden_cards,
         }
+
+    async def _enrich_storefront_print_areas(
+        self,
+        storefront_preview: dict[str, Any],
+        print_area_resolver: ProdigiPrintAreaResolver,
+    ) -> None:
+        for card in storefront_preview.get("visible_cards", []):
+            category_id = card["category_id"]
+            default_attributes = self._build_default_attributes(
+                fixed_attributes=card["storefront_policy"]["fixed_attributes"],
+                recommended_defaults=card["storefront_policy"]["recommended_defaults"],
+                allowed_attributes=card["storefront_policy"]["allowed_attributes"],
+            )
+            for size in card.get("size_options", []):
+                dimensions = await print_area_resolver.resolve(
+                    sku=size.get("sku"),
+                    destination_country=storefront_preview.get("country_code"),
+                    category_id=category_id,
+                    attributes=default_attributes,
+                    optional_attribute_keys=self._optional_provider_attribute_keys(category_id),
+                    supplier_size_inches=size.get("size_inches"),
+                    supplier_size_cm=size.get("size_cm"),
+                    slot_size_label=size.get("slot_size_label"),
+                    wrap_margin_pct=MIRROR_WRAP_FALLBACK_MARGIN_PCT,
+                )
+                size.update(dimensions)
+
+    def _keep_only_provider_print_area_sizes(self, storefront_preview: dict[str, Any]) -> None:
+        visible_cards: list[dict[str, Any]] = []
+        hidden_cards = list(storefront_preview.get("hidden_cards", []))
+        removed_sizes: list[dict[str, Any]] = []
+
+        for card in storefront_preview.get("visible_cards", []):
+            kept_sizes = []
+            for size in card.get("size_options", []):
+                if size.get("print_area_source") in PROVIDER_PRINT_AREA_SOURCES:
+                    kept_sizes.append(size)
+                    continue
+                removed_sizes.append(
+                    {
+                        "country_code": storefront_preview.get("country_code"),
+                        "ratio": storefront_preview.get("ratio"),
+                        "category_id": card.get("category_id"),
+                        "slot_size_label": size.get("slot_size_label"),
+                        "sku": size.get("sku"),
+                        "print_area_source": size.get("print_area_source"),
+                    }
+                )
+
+            if not kept_sizes:
+                hidden_cards.append(
+                    {
+                        "category_id": card.get("category_id"),
+                        "label": card.get("label"),
+                        "reason": (
+                            "No size options have provider pixel targets from Prodigi Product Details."
+                        ),
+                        "storefront_action": card.get("storefront_action"),
+                        "fulfillment_level": card.get("fulfillment_level"),
+                        "geography_scope": card.get("geography_scope"),
+                        "tax_risk": card.get("tax_risk"),
+                    }
+                )
+                continue
+
+            card["size_options"] = kept_sizes
+            card["available_size_count"] = len(kept_sizes)
+            card["size_labels"] = [item["size_label"] for item in kept_sizes]
+            totals = [item["total_cost"] for item in kept_sizes if item.get("total_cost") is not None]
+            currency = next((item.get("currency") for item in kept_sizes if item.get("currency")), None)
+            card["price_range"] = {
+                "currency": currency,
+                "min_total": min(totals) if totals else None,
+                "max_total": max(totals) if totals else None,
+            }
+            visible_cards.append(card)
+
+        storefront_preview["visible_cards"] = visible_cards
+        storefront_preview["hidden_cards"] = hidden_cards
+        storefront_preview["removed_size_options_without_provider_print_area"] = removed_sizes
+
+    def _assert_provider_print_area_sizes(self, storefront_preview: dict[str, Any]) -> None:
+        missing: list[str] = []
+        for card in storefront_preview.get("visible_cards", []):
+            for size in card.get("size_options", []):
+                if size.get("print_area_source") in PROVIDER_PRINT_AREA_SOURCES:
+                    continue
+                missing.append(
+                    " / ".join(
+                        [
+                            str(storefront_preview.get("country_code") or "?"),
+                            str(storefront_preview.get("ratio") or "?"),
+                            str(card.get("category_id") or "?"),
+                            str(size.get("slot_size_label") or "?"),
+                            str(size.get("sku") or "?"),
+                            str(size.get("print_area_source") or "unresolved"),
+                        ]
+                    )
+                )
+
+        if not missing:
+            return
+
+        examples = "; ".join(missing[:10])
+        extra = f" (+{len(missing) - 10} more)" if len(missing) > 10 else ""
+        raise ProdigiPrintAreaBakeError(
+            "Prodigi storefront bake requires provider pixel targets for every visible "
+            "offer size. Accepted sources are Product Details printAreaSizes or Product "
+            "Details productDimensions. Missing provider pixels: "
+            f"{examples}{extra}. Check PRODIGI_API_KEY and Product Details API coverage."
+        )
+
+    def _build_default_attributes(
+        self,
+        *,
+        fixed_attributes: dict[str, Any],
+        recommended_defaults: dict[str, Any],
+        allowed_attributes: dict[str, list[Any]],
+    ) -> dict[str, Any]:
+        defaults: dict[str, Any] = {}
+        for key, value in fixed_attributes.items():
+            defaults[key] = value
+        for key, value in recommended_defaults.items():
+            defaults.setdefault(key, value)
+        for key, values in allowed_attributes.items():
+            if key not in defaults and values:
+                defaults[key] = values[0]
+        return defaults
+
+    def _optional_provider_attribute_keys(self, category_id: str) -> set[str]:
+        return set()
 
     def _is_visible_category(
         self,

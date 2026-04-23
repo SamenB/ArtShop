@@ -67,7 +67,7 @@ STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
             "default_method": "Express",
         },
         "notes": [
-            "MirrorWrap is only a recommended default for the future artwork-specific setup stage.",
+            "MirrorWrap is the brand default; Prodigi generates the canvas sides from the clean front image.",
             "19mm and metallic canvas were already removed upstream.",
         ],
     },
@@ -77,7 +77,9 @@ STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
         "allowed_attributes": {
             "color": ["black", "white", "brown"],
         },
-        "recommended_defaults": {},
+        "recommended_defaults": {
+            "wrap": "MirrorWrap",
+        },
         "shipping": {
             "visible_methods": ["Express", "Standard"],
             "preferred_order": ["Express", "Standard"],
@@ -85,6 +87,7 @@ STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
         },
         "notes": [
             "Classic frame is kept separate from stretched canvas.",
+            "Wrap is not customer-facing; Prodigi generates MirrorWrap from the clean front image.",
             "Secondary colors are hidden because their geographic coverage is weaker.",
         ],
     },
@@ -94,13 +97,16 @@ STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
         "allowed_attributes": {
             "color": ["black", "white", "natural", "brown", "gold", "silver"],
         },
-        "recommended_defaults": {},
+        "recommended_defaults": {
+            "wrap": "MirrorWrap",
+        },
         "shipping": {
             "visible_methods": ["Express", "Standard"],
             "preferred_order": ["Express", "Standard"],
             "default_method": "Express",
         },
         "notes": [
+            "Wrap is not customer-facing; Prodigi generates MirrorWrap from the clean front image.",
             "All six floating-frame colors stay visible because coverage is consistently strong.",
         ],
     },

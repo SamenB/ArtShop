@@ -153,6 +153,13 @@ class ProdigiStorefrontOfferSizeOrm(Base):
     member_size_labels: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     sku: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    supplier_size_cm: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    supplier_size_inches: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    print_area_width_px: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    print_area_height_px: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    print_area_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    print_area_source: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    print_area_dimensions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     source_country: Mapped[str | None] = mapped_column(String(8), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     product_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

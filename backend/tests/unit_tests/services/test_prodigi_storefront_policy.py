@@ -44,7 +44,7 @@ def test_policy_removes_float_glass_from_paper_box_frame() -> None:
     }
 
 
-def test_policy_does_not_force_canvas_stretched_wrap_yet() -> None:
+def test_policy_uses_canvas_mirrorwrap_as_non_filtering_default() -> None:
     service = ProdigiStorefrontPolicyService()
     rows = [
         make_row(category_id="canvasStretched", wrap="MirrorWrap"),
@@ -54,6 +54,7 @@ def test_policy_does_not_force_canvas_stretched_wrap_yet() -> None:
     result = service.apply(rows)
 
     assert len(result["rows"]) == 2
+    assert result["policy_summary"]["canvasStretched"]["fixed_attributes"] == {}
     assert result["policy_summary"]["canvasStretched"]["recommended_defaults"] == {
         "wrap": "MirrorWrap"
     }

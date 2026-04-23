@@ -35,11 +35,11 @@ class FakePrintProfileService:
             "source_quality_summary": {"status": "ready"},
             "effective_profiles": {
                 "canvasStretched": {
-                    "editor_mode": "canvas_wrap",
-                    "edge_extension_mode": "mirror",
+                    "editor_mode": "provider_mirror_wrap",
+                    "edge_extension_mode": "prodigi_mirror",
                     "target_dpi": 300,
                     "minimum_dpi": 150,
-                    "wrap_margin_pct": 8.0,
+                    "wrap_margin_pct": 0.0,
                 }
             },
         }
@@ -221,8 +221,8 @@ async def test_artwork_storefront_filters_hidden_sizes_and_disabled_mediums() ->
         "color": "black",
     }
     assert canvas_card["edition_context"]["limited_quantity"] == 15
-    assert canvas_card["print_profile"]["edge_extension_mode"] == "mirror"
-    assert canvas_card["print_profile"]["wrap_margin_pct"] == 8.0
+    assert canvas_card["print_profile"]["edge_extension_mode"] == "prodigi_mirror"
+    assert canvas_card["print_profile"]["wrap_margin_pct"] == 0.0
     assert len(canvas_card["size_options"]) == 1
     assert canvas_card["size_options"][0]["sku"] == "SKU-40x50"
     assert canvas_card["size_options"][0]["supplier_product_price"] == 49.0

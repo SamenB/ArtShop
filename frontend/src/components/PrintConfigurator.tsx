@@ -203,6 +203,8 @@ function buildPreflightMetrics(
     const wrapMarginPct = Number(card.print_profile?.wrap_margin_pct || 0);
     const targetDpi = Number(card.print_profile?.target_dpi || 300);
     const minimumDpi = Number(card.print_profile?.minimum_dpi || 150);
+    const printAreaWidthPx = Number(size.print_area?.width_px || 0);
+    const printAreaHeightPx = Number(size.print_area?.height_px || 0);
     const frontWidthIn = parsedSize.widthCm / 2.54;
     const frontHeightIn = parsedSize.heightCm / 2.54;
     const totalWidthIn = frontWidthIn * (1 + (wrapMarginPct / 100) * 2);
@@ -242,6 +244,11 @@ function buildPreflightMetrics(
         hasWrap: wrapMarginPct > 0 && card.print_profile?.editor_mode === "canvas_wrap",
         widthPx,
         heightPx,
+        targetPrintAreaPxLabel:
+            printAreaWidthPx > 0 && printAreaHeightPx > 0
+                ? `${printAreaWidthPx} x ${printAreaHeightPx} px`
+                : null,
+        printAreaSource: size.print_area?.source || null,
         frontSizeLabel: `${parsedSize.widthCm} x ${parsedSize.heightCm} cm`,
         totalSizeLabel:
             wrapMarginPct > 0
@@ -324,9 +331,10 @@ export default function PrintConfigurator({
     const finalAttributes = useMemo(() => {
         return {
             ...(selectedCard?.default_prodigi_attributes || {}),
+            ...(selectedSize?.provider_attributes || {}),
             ...selectedAttributes,
         };
-    }, [selectedAttributes, selectedCard]);
+    }, [selectedAttributes, selectedCard, selectedSize]);
 
     const editionType = resolveEditionType(purchaseType, mediumOffers);
     const finalPrice =
@@ -828,7 +836,9 @@ export default function PrintConfigurator({
                             <p className="info-badge-title" style={{ marginBottom: "0.15rem" }}>
                                 Total Print Area
                             </p>
-                            <p className="info-badge-desc">{preflight?.totalSizeLabel || "N/A"}</p>
+                            <p className="info-badge-desc">
+                                {preflight?.targetPrintAreaPxLabel || preflight?.totalSizeLabel || "N/A"}
+                            </p>
                         </div>
                     </div>
 
@@ -841,7 +851,11 @@ export default function PrintConfigurator({
                                           preflight.hasWrap
                                               ? `, ${formatDpiValue(preflight.totalDpi)} after wrap allowance`
                                               : ""
-                                      }.`
+                                      }.${
+                                          preflight.targetPrintAreaPxLabel
+                                              ? ` Exact provider target: ${preflight.targetPrintAreaPxLabel}.`
+                                              : ""
+                                      }`
                                     : "A hi-res source and selected print size are both required for exact DPI validation."}
                             </p>
                         </div>

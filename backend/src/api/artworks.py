@@ -366,10 +366,9 @@ async def upload_artwork_print_asset(
             note=note,
         )
         generated_assets = []
-        if category_id and asset_role and slot_size_label is None:
-            generated_assets = await service.generate_category_derivatives_from_master(
+        if slot_size_label is None:
+            generated_assets = await service.generate_derivatives_for_master(
                 artwork_id=artwork_id,
-                category_id=category_id,
                 asset_role=asset_role,
             )
         await db.commit()

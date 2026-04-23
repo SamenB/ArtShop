@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from src.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
+import pytest
+
+from src.services.prodigi_storefront_bake import (
+    ProdigiPrintAreaBakeError,
+    ProdigiStorefrontBakeService,
+)
 
 
 def make_preview_payload(storefront_action: str) -> dict:
@@ -125,3 +130,90 @@ def test_storefront_preview_keeps_notice_level_when_enabled() -> None:
     assert preview["visible_cards"][0]["available_shipping_tiers"] == ["express", "standard"]
     assert preview["visible_cards"][0]["shipping_support"]["status"] == "covered"
     assert preview["visible_cards"][0]["size_options"][0]["shipping_support"]["chosen_tier"] == "express"
+
+
+def test_bake_rejects_visible_sizes_without_prodigi_print_area_pixels() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+    preview = service.build_storefront_country_preview(
+        preview_payload=make_preview_payload("show"),
+        include_notice_level=True,
+    )
+    preview["visible_cards"][0]["size_options"][0].update(
+        {
+            "print_area_width_px": 4724,
+            "print_area_height_px": 5905,
+            "print_area_source": "supplier_size_cm_fallback",
+        }
+    )
+
+    with pytest.raises(ProdigiPrintAreaBakeError):
+        service._assert_provider_print_area_sizes(preview)
+
+
+def test_bake_accepts_visible_sizes_with_prodigi_print_area_pixels() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+    preview = service.build_storefront_country_preview(
+        preview_payload=make_preview_payload("show"),
+        include_notice_level=True,
+    )
+    preview["visible_cards"][0]["size_options"][0].update(
+        {
+            "print_area_width_px": 4724,
+            "print_area_height_px": 5905,
+            "print_area_source": "prodigi_product_details",
+        }
+    )
+
+    service._assert_provider_print_area_sizes(preview)
+
+
+def test_bake_accepts_prodigi_product_dimensions_as_provider_pixels() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+    preview = service.build_storefront_country_preview(
+        preview_payload=make_preview_payload("show"),
+        include_notice_level=True,
+    )
+    preview["visible_cards"][0]["size_options"][0].update(
+        {
+            "print_area_width_px": 4200,
+            "print_area_height_px": 4200,
+            "print_area_source": "prodigi_product_dimensions",
+        }
+    )
+
+    service._assert_provider_print_area_sizes(preview)
+
+
+def test_bake_filters_visible_sizes_without_prodigi_print_area_pixels() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+    preview = service.build_storefront_country_preview(
+        preview_payload=make_preview_payload("show"),
+        include_notice_level=True,
+    )
+    original_size = preview["visible_cards"][0]["size_options"][0]
+    preview["visible_cards"][0]["size_options"] = [
+        {
+            **original_size,
+            "slot_size_label": "40x50",
+            "print_area_source": "supplier_size_cm_fallback",
+        },
+        {
+            **original_size,
+            "slot_size_label": "50x70",
+            "print_area_source": "prodigi_product_dimensions",
+        },
+    ]
+
+    service._keep_only_provider_print_area_sizes(preview)
+
+    kept_sizes = preview["visible_cards"][0]["size_options"]
+    assert [item["slot_size_label"] for item in kept_sizes] == ["50x70"]
+    assert len(preview["removed_size_options_without_provider_print_area"]) == 1
+
+
+def test_bake_requires_exact_canvas_wrap_provider_variant() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+
+    assert service._optional_provider_attribute_keys("canvasStretched") == set()
+    assert service._optional_provider_attribute_keys("canvasClassicFrame") == set()
+    assert service._optional_provider_attribute_keys("canvasFloatingFrame") == set()

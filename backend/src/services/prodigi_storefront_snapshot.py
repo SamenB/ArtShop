@@ -372,6 +372,10 @@ class ProdigiStorefrontSnapshotService:
                         "size_label": slot_size_label,
                         "available": False,
                         "sku": None,
+                        "supplier_size_cm": None,
+                        "supplier_size_inches": None,
+                        "print_area": None,
+                        "provider_attributes": {},
                         "source_country": None,
                         "currency": None,
                         "product_price": None,
@@ -403,6 +407,10 @@ class ProdigiStorefrontSnapshotService:
                 "size_label": size.size_label or slot_size_label,
                 "available": bool(size.available),
                 "sku": getattr(size, "sku", None),
+                "supplier_size_cm": getattr(size, "supplier_size_cm", None),
+                "supplier_size_inches": getattr(size, "supplier_size_inches", None),
+                "print_area": self._serialize_print_area(size),
+                "provider_attributes": self._serialize_provider_attributes(size),
                 "source_country": size.source_country,
                 "currency": size.currency,
                 "product_price": self._to_float(getattr(size, "product_price", None)),
@@ -519,6 +527,9 @@ class ProdigiStorefrontSnapshotService:
                     "size_label": slot_size_label,
                     "available": False,
                     "sku": None,
+                    "supplier_size_cm": None,
+                    "supplier_size_inches": None,
+                    "print_area": None,
                     "source_country": None,
                     "currency": None,
                     "product_price": None,
@@ -782,6 +793,31 @@ class ProdigiStorefrontSnapshotService:
         if value is None:
             return None
         return round(float(value), 2)
+
+    def _serialize_print_area(self, size: Any) -> dict[str, Any] | None:
+        width = getattr(size, "print_area_width_px", None)
+        height = getattr(size, "print_area_height_px", None)
+        if width is None or height is None:
+            return None
+        return {
+            "width_px": int(width),
+            "height_px": int(height),
+            "name": getattr(size, "print_area_name", None) or "default",
+            "source": getattr(size, "print_area_source", None),
+            "dimensions": getattr(size, "print_area_dimensions", None) or {},
+        }
+
+    def _serialize_provider_attributes(self, size: Any) -> dict[str, Any]:
+        dimensions = getattr(size, "print_area_dimensions", None) or {}
+        if isinstance(dimensions, str):
+            try:
+                dimensions = json.loads(dimensions)
+            except json.JSONDecodeError:
+                return {}
+        if not isinstance(dimensions, dict):
+            return {}
+        attributes = dimensions.get("variant_attributes") or {}
+        return dict(attributes) if isinstance(attributes, dict) else {}
 
     def _serialize_business_decision(self, decision: dict[str, Any]) -> dict[str, Any]:
         return {

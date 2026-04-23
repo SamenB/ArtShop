@@ -1,14 +1,24 @@
+"""
+Print pipeline workflow built around 2 production master slots.
+
+The admin uploads at most 2 files per artwork:
+1. paper_bordered
+2. clean_master
+
+Smaller baked variants are generated automatically from those masters.
+"""
+
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 from collections import defaultdict
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageOps
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -16,51 +26,38 @@ from src.exeptions import ObjectNotFoundException
 from src.models.artworks import ArtworksOrm
 from src.print_on_demand import get_print_provider
 from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
-from src.schemas.artwork_print_assets import ArtworkPrintAssetAdd, ArtworkPrintAssetPatch
-from src.services.artwork_print_profiles import ArtworkPrintProfileService
-from src.services.prodigi_catalog_preview import (
-    DEFAULT_PAPER_MATERIAL,
-    ProdigiCatalogPreviewService,
-)
 
 SIZE_PATTERN = re.compile(r"(?P<w>\d+(?:\.\d+)?)x(?P<h>\d+(?:\.\d+)?)")
+RATIO_PATTERN = re.compile(r"(?P<w>\d+(?:\.\d+)?)[x:](?P<h>\d+(?:\.\d+)?)")
+TARGET_DPI = 300
+WRAPPED_CANVAS_CATEGORIES = {
+    "canvasStretched",
+    "canvasClassicFrame",
+    "canvasFloatingFrame",
+}
 
-CATEGORY_WORKFLOW_DEFAULTS: dict[str, dict[str, Any]] = {
-    "paperPrintRolled": {
-        "asset_strategy": "manual_white_border",
+MASTER_SLOTS: dict[str, dict[str, Any]] = {
+    "paper_bordered": {
+        "label": "Paper Bordered Master",
         "asset_role": "paper_border_ready",
-        "asset_label": "Bordered paper print file",
-        "review_label": "Paper composition reviewed",
+        "description": "Artwork with white borders for rolled paper prints.",
+        "covers_categories": ["paperPrintRolled"],
+        "derives_categories": [],
+        "wrap_margin_pct": 0.0,
     },
-    "paperPrintBoxFramed": {
-        "asset_strategy": "manual_white_border",
-        "asset_role": "paper_border_ready",
-        "asset_label": "Bordered framed-paper file",
-        "review_label": "Framed paper presentation reviewed",
-    },
-    "canvasRolled": {
-        "asset_strategy": "source_master_only",
-        "asset_role": None,
-        "asset_label": None,
-        "review_label": "Rolled canvas reviewed",
-    },
-    "canvasStretched": {
-        "asset_strategy": "manual_wrap_asset",
-        "asset_role": "canvas_wrap_ready",
-        "asset_label": "Wrap-ready canvas composite",
-        "review_label": "Stretched canvas edges reviewed",
-    },
-    "canvasClassicFrame": {
-        "asset_strategy": "manual_wrap_asset",
-        "asset_role": "canvas_wrap_ready",
-        "asset_label": "Classic-frame canvas composite",
-        "review_label": "Classic framed canvas reviewed",
-    },
-    "canvasFloatingFrame": {
-        "asset_strategy": "manual_wrap_asset",
-        "asset_role": "canvas_wrap_ready",
-        "asset_label": "Floating-frame canvas composite",
-        "review_label": "Floating framed canvas reviewed",
+    "clean_master": {
+        "label": "Clean Production Master",
+        "asset_role": "clean_master",
+        "description": "Clean edge-to-edge artwork for framed paper and all canvas products.",
+        "covers_categories": [
+            "paperPrintBoxFramed",
+            "canvasRolled",
+            "canvasStretched",
+            "canvasClassicFrame",
+            "canvasFloatingFrame",
+        ],
+        "derives_categories": [],
+        "wrap_margin_pct": 0.0,
     },
 }
 
@@ -69,52 +66,69 @@ ASSET_ROLE_RULES: dict[str, dict[str, Any]] = {
         "label": "Bordered print asset",
         "allowed_extensions": {".jpg", ".jpeg", ".png"},
     },
-    "canvas_wrap_ready": {
-        "label": "Wrap-ready canvas asset",
+    "clean_master": {
+        "label": "Clean production asset",
         "allowed_extensions": {".jpg", ".jpeg", ".png"},
     },
 }
 
 
 class ArtworkPrintWorkflowService:
-    """
-    Provider-neutral admin workflow/readiness layer for artwork print preparation.
-
-    The service intentionally focuses on structured validation and checklist
-    generation instead of storefront rendering. The admin UI can then rely on a
-    single payload for:
-    - workflow steps,
-    - missing provider-facing settings,
-    - required prepared assets by category and size,
-    - compact readiness summaries for list views.
-    """
-
     def __init__(self, db):
         self.db = db
-        self.profile_service = ArtworkPrintProfileService(db)
         self.storefront_repository = ProdigiStorefrontRepository(db.session)
 
     async def get_workflow(self, artwork_id: int) -> dict[str, Any]:
         artwork = await self._get_artwork_orm(artwork_id)
         assets = await self.db.artwork_print_assets.list_for_artwork(artwork.id)
         bake = await self.storefront_repository.get_active_bake()
-        size_catalog, category_defs = await self._build_size_catalog(
+
+        ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
+        size_catalog, provider_attribute_coverage = await self._build_size_catalog_with_provider_coverage(
             bake=bake,
-            ratio_label=artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None,
+            ratio_label=ratio_label,
         )
-        return self._build_workflow_payload(
-            artwork=artwork,
-            bake=bake,
-            size_catalog=size_catalog,
-            category_defs=category_defs,
-            assets=assets,
-        )
+
+        print_enabled = self._artwork_has_prints(artwork)
+        orientation = str(getattr(artwork, "orientation", "") or "").lower()
+        master_assets = self._index_master_assets(assets)
+
+        slots = [
+            self._build_slot_status(
+                slot_id=slot_id,
+                slot_def=slot_def,
+                artwork=artwork,
+                orientation=orientation,
+                size_catalog=size_catalog,
+                master_assets=master_assets,
+                all_assets=assets,
+                print_enabled=print_enabled,
+                provider_attribute_coverage=provider_attribute_coverage,
+            )
+            for slot_id, slot_def in MASTER_SLOTS.items()
+        ]
+        overall_status = self._compute_overall_status(slots, print_enabled)
+
+        return {
+            "artwork_id": int(artwork.id),
+            "provider_key": get_print_provider().provider_key,
+            "print_enabled": print_enabled,
+            "active_bake": {
+                "id": bake.id,
+                "bake_key": bake.bake_key,
+            }
+            if bake
+            else None,
+            "master_slots": slots,
+            "overall_status": overall_status,
+            "readiness_summary": self._build_readiness_summary(slots, overall_status),
+        }
 
     async def build_bulk_readiness_summaries(self, artworks: list[Any]) -> dict[int, dict[str, Any]]:
         if not artworks:
             return {}
 
-        artwork_ids = [int(artwork.id) for artwork in artworks]
+        artwork_ids = [int(a.id) for a in artworks]
         assets = await self.db.artwork_print_assets.list_for_artwork_ids(artwork_ids)
         assets_by_artwork: dict[int, list[Any]] = defaultdict(list)
         for asset in assets:
@@ -123,30 +137,42 @@ class ArtworkPrintWorkflowService:
         bake = await self.storefront_repository.get_active_bake()
         ratio_labels = sorted(
             {
-                artwork.print_aspect_ratio.label
-                for artwork in artworks
-                if getattr(artwork, "print_aspect_ratio", None)
-                and getattr(artwork.print_aspect_ratio, "label", None)
+                a.print_aspect_ratio.label
+                for a in artworks
+                if getattr(a, "print_aspect_ratio", None)
+                and getattr(a.print_aspect_ratio, "label", None)
             }
         )
-        size_catalog_by_ratio, category_defs_by_ratio = await self._build_bulk_size_catalog(
-            bake=bake,
-            ratio_labels=ratio_labels,
-        )
+        size_catalogs: dict[str, dict[str, dict[str, Any]]] = {}
+        for ratio in ratio_labels:
+            size_catalogs[ratio] = await self._build_size_catalog(bake=bake, ratio_label=ratio)
 
         summaries: dict[int, dict[str, Any]] = {}
         for artwork in artworks:
-            ratio_label = (
-                artwork.print_aspect_ratio.label if getattr(artwork, "print_aspect_ratio", None) else None
+            ratio_label = artwork.print_aspect_ratio.label if getattr(artwork, "print_aspect_ratio", None) else None
+            size_catalog = size_catalogs.get(ratio_label or "", {})
+            print_enabled = self._artwork_has_prints(artwork)
+            orientation = str(getattr(artwork, "orientation", "") or "").lower()
+            artwork_assets = assets_by_artwork.get(int(artwork.id), [])
+            master_assets = self._index_master_assets(artwork_assets)
+
+            slots = [
+                self._build_slot_status(
+                    slot_id=slot_id,
+                    slot_def=slot_def,
+                    artwork=artwork,
+                    orientation=orientation,
+                    size_catalog=size_catalog,
+                    master_assets=master_assets,
+                all_assets=artwork_assets,
+                print_enabled=print_enabled,
+                provider_attribute_coverage={},
             )
-            payload = self._build_workflow_payload(
-                artwork=artwork,
-                bake=bake,
-                size_catalog=size_catalog_by_ratio.get(ratio_label or "", {}),
-                category_defs=category_defs_by_ratio.get(ratio_label or ""),
-                assets=assets_by_artwork.get(int(artwork.id), []),
-            )
-            summaries[int(artwork.id)] = payload["readiness_summary"]
+            for slot_id, slot_def in MASTER_SLOTS.items()
+        ]
+            overall_status = self._compute_overall_status(slots, print_enabled)
+            summaries[int(artwork.id)] = self._build_readiness_summary(slots, overall_status)
+
         return summaries
 
     async def upsert_prepared_asset(
@@ -166,6 +192,8 @@ class ArtworkPrintWorkflowService:
         file_metadata: dict[str, Any] | None,
         note: str | None = None,
     ) -> Any:
+        from src.schemas.artwork_print_assets import ArtworkPrintAssetAdd, ArtworkPrintAssetPatch
+
         existing = await self.db.artwork_print_assets.get_one_or_none(
             artwork_id=artwork_id,
             provider_key=provider_key,
@@ -210,12 +238,7 @@ class ArtworkPrintWorkflowService:
     async def delete_prepared_asset(self, asset_id: int) -> None:
         await self.db.artwork_print_assets.delete_one(asset_id)
 
-    def validate_asset_upload_scope(
-        self,
-        *,
-        asset_role: str,
-        file_ext: str,
-    ) -> None:
+    def validate_asset_upload_scope(self, *, asset_role: str, file_ext: str) -> None:
         rule = ASSET_ROLE_RULES.get(asset_role)
         if rule is None:
             raise ValueError(f"Unsupported asset role: {asset_role}")
@@ -226,21 +249,14 @@ class ArtworkPrintWorkflowService:
             )
 
     @staticmethod
-    def extract_prepared_asset_metadata(
-        file_path: str,
-        public_url: str | None = None,
-    ) -> dict[str, Any]:
+    def extract_prepared_asset_metadata(file_path: str, public_url: str | None = None) -> dict[str, Any]:
         path = Path(file_path)
         with Image.open(path) as img:
             dpi_info = img.info.get("dpi")
-            dpi_x = None
-            dpi_y = None
-            if isinstance(dpi_info, tuple) and len(dpi_info) >= 2:
-                dpi_x = round(float(dpi_info[0]), 2)
-                dpi_y = round(float(dpi_info[1]), 2)
-
+            dpi_x = round(float(dpi_info[0]), 2) if isinstance(dpi_info, tuple) and len(dpi_info) >= 2 else None
+            dpi_y = round(float(dpi_info[1]), 2) if isinstance(dpi_info, tuple) and len(dpi_info) >= 2 else None
             width_px, height_px = img.size
-            metadata = {
+            return {
                 "public_url": public_url,
                 "file_name": path.name,
                 "file_size_bytes": os.path.getsize(path),
@@ -252,7 +268,6 @@ class ArtworkPrintWorkflowService:
                 "dpi_y": dpi_y,
                 "icc_profile_present": bool(img.info.get("icc_profile")),
             }
-            return metadata
 
     @staticmethod
     def compute_sha256(file_path: str) -> str:
@@ -261,6 +276,772 @@ class ArtworkPrintWorkflowService:
             for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
                 hasher.update(chunk)
         return hasher.hexdigest()
+
+    async def generate_derivatives_for_master(self, *, artwork_id: int, asset_role: str) -> list[Any]:
+        slot_id, slot_def = self._find_slot_by_asset_role(asset_role)
+        artwork = await self._get_artwork_orm(artwork_id)
+        assets = await self.db.artwork_print_assets.list_for_artwork(artwork_id)
+        master_assets = self._index_master_assets(assets)
+        master_asset = master_assets.get(asset_role)
+        if master_asset is None:
+            return []
+
+        await self.delete_generated_assets_for_master(master_asset)
+
+        master_path = str(master_asset.file_url or "").lstrip("/")
+        if not master_path or not os.path.exists(master_path):
+            return []
+
+        bake = await self.storefront_repository.get_active_bake()
+        ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
+        size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
+        orientation = str(getattr(artwork, "orientation", "") or "").lower()
+
+        generated_assets: list[Any] = []
+        with Image.open(master_path) as source_img:
+            for category_id in slot_def["covers_categories"]:
+                generated_assets.extend(
+                    await self._generate_category_resize_derivatives(
+                        artwork_id=artwork_id,
+                        master_asset=master_asset,
+                        source_img=source_img,
+                        category_id=category_id,
+                        size_catalog=size_catalog,
+                        orientation=orientation,
+                        wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
+                        slot_id=slot_id,
+                    )
+                )
+
+            for category_id in slot_def.get("derives_categories", []):
+                generated_assets.extend(
+                    await self._generate_canvas_rolled_derivatives(
+                        artwork_id=artwork_id,
+                        master_asset=master_asset,
+                        source_img=source_img,
+                        category_id=category_id,
+                        size_catalog=size_catalog,
+                        orientation=orientation,
+                        wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
+                        slot_id=slot_id,
+                    )
+                )
+
+        return generated_assets
+
+    async def delete_generated_assets_for_master(self, master_asset: Any) -> None:
+        assets = await self.db.artwork_print_assets.list_for_artwork(int(master_asset.artwork_id))
+        for asset in assets:
+            metadata = asset.file_metadata or {}
+            if not isinstance(metadata, dict):
+                continue
+            if metadata.get("generated_from_asset_id") != master_asset.id:
+                continue
+            await self.db.artwork_print_assets.delete_one(asset.id)
+            file_path = str(asset.file_url or "").lstrip("/")
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+
+    def _build_slot_status(
+        self,
+        *,
+        slot_id: str,
+        slot_def: dict[str, Any],
+        artwork: Any,
+        orientation: str,
+        size_catalog: dict[str, dict[str, Any]],
+        master_assets: dict[str, Any],
+        all_assets: list[Any],
+        print_enabled: bool,
+        provider_attribute_coverage: dict[str, Any],
+    ) -> dict[str, Any]:
+        asset_role = slot_def["asset_role"]
+        covers = list(slot_def["covers_categories"])
+        derives = list(slot_def.get("derives_categories", []))
+        slot_categories = covers + derives
+        slot_relevant = (
+            print_enabled
+            and self._slot_has_active_categories(artwork, slot_categories)
+            and self._slot_has_available_sizes(slot_categories, size_catalog)
+        )
+        largest_size = self._find_largest_size(
+            covers=covers,
+            size_catalog=size_catalog,
+            orientation=orientation,
+            wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
+        )
+
+        uploaded_asset = master_assets.get(asset_role)
+        asset_metadata = (uploaded_asset.file_metadata or {}) if uploaded_asset else {}
+        issues: list[str] = []
+        warnings: list[str] = []
+
+        if slot_relevant and uploaded_asset is None:
+            issues.append("Upload the production master for this slot.")
+
+        if slot_relevant and uploaded_asset is not None and largest_size:
+            uploaded_w = int(asset_metadata.get("width_px") or 0)
+            uploaded_h = int(asset_metadata.get("height_px") or 0)
+            required_w = largest_size["required_width_px"]
+            required_h = largest_size["required_height_px"]
+            if uploaded_w < required_w or uploaded_h < required_h:
+                issues.append(
+                    f"Uploaded file is {uploaded_w}x{uploaded_h} px but the largest size "
+                    f"requires at least {required_w}x{required_h} px at {TARGET_DPI} DPI."
+                )
+
+            aspect_error_px = self._aspect_error_px(uploaded_w, uploaded_h, required_w, required_h)
+            if aspect_error_px is not None and aspect_error_px > 1.0:
+                issues.append(
+                    "Uploaded master aspect ratio does not match the target print area. "
+                    f"Expected {required_w}x{required_h} ratio; current file would drift "
+                    f"by about {round(aspect_error_px, 2)} px on one edge."
+                )
+
+            mode = str(asset_metadata.get("mode") or "")
+            if mode and mode not in {"RGB", "RGBA"}:
+                warnings.append(
+                    f"Color mode is {mode}. Prodigi expects RGB and may auto-convert the file."
+                )
+
+        if slot_relevant and largest_size is None:
+            warnings.append(
+                "No baked storefront sizes were found for this artwork ratio yet."
+            )
+
+        status = "ready"
+        if not slot_relevant:
+            status = "not_required"
+        elif issues:
+            status = "blocked"
+        elif warnings:
+            status = "attention"
+
+        required_for_sizes = self._collect_required_for_sizes(covers + derives, size_catalog)
+        generated_derivatives_count = self._count_generated_derivatives(uploaded_asset, all_assets)
+
+        return {
+            "slot_id": slot_id,
+            "label": slot_def["label"],
+            "description": slot_def["description"],
+            "asset_role": asset_role,
+            "covers_categories": covers,
+            "derives_categories": derives,
+            "relevant": slot_relevant,
+            "status": status,
+            "required_min_px": {
+                "width": largest_size["required_width_px"],
+                "height": largest_size["required_height_px"],
+                "source": largest_size["print_area_source"],
+                "print_area_name": largest_size["print_area_name"],
+            }
+            if largest_size
+            else None,
+            "required_min_px_source": largest_size["print_area_source"] if largest_size else None,
+            "export_guidance": self._build_export_guidance(
+                slot_id=slot_id,
+                artwork=artwork,
+                orientation=orientation,
+                largest_size=largest_size,
+            ),
+            "derivative_plan": self._build_derivative_plan(
+                slot_id=slot_id,
+                covers=covers,
+                derives=derives,
+                size_catalog=size_catalog,
+                orientation=orientation,
+                wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
+                largest_size=largest_size,
+            ),
+            "provider_attribute_coverage": self._build_slot_provider_attribute_coverage(
+                categories=slot_categories,
+                provider_attribute_coverage=provider_attribute_coverage,
+            ),
+            "largest_size_label": largest_size["label"] if largest_size else None,
+            "required_for_sizes": required_for_sizes,
+            "covered_size_count": len(required_for_sizes),
+            "generated_derivatives_count": generated_derivatives_count,
+            "uploaded_asset": uploaded_asset.model_dump(mode="json") if uploaded_asset else None,
+            "validation": {
+                "issues": issues,
+                "warnings": warnings,
+            },
+            "issues": issues,
+            "warnings": warnings,
+        }
+
+    def _build_export_guidance(
+        self,
+        *,
+        slot_id: str,
+        artwork: Any,
+        orientation: str,
+        largest_size: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if largest_size is None:
+            return None
+
+        target_width = int(largest_size["required_width_px"])
+        target_height = int(largest_size["required_height_px"])
+        artwork_ratio = self._ratio_from_artwork(artwork, orientation=orientation)
+        target_ratio = self._safe_ratio(target_width, target_height)
+        ratio_diff_px = None
+        ratio_warning = False
+        if artwork_ratio and target_ratio:
+            expected_height = target_width / artwork_ratio
+            expected_width = target_height * artwork_ratio
+            ratio_diff_px = round(min(abs(target_height - expected_height), abs(target_width - expected_width)), 2)
+            ratio_warning = ratio_diff_px > 1.0
+
+        if slot_id == "clean_master":
+            message = (
+                "Create a clean front artwork file exactly at the provider target size. "
+                "Use it for framed paper and canvas. Prodigi receives canvas files with "
+                "wrap=MirrorWrap and generates the sides itself, so do not include manual "
+                "wrap margins in this file."
+            )
+        elif slot_id == "paper_bordered":
+            message = (
+                "Create a PNG artboard exactly at the provider target size. The white border is "
+                "part of this file, so place the artwork inside the artboard and export the final "
+                "bordered print area without relying on automatic proportional upscale."
+            )
+        else:
+            message = (
+                "Create a PNG artboard exactly at the provider target size. Preserve the artwork "
+                "ratio inside the file and export the final clean print area at these exact pixels."
+            )
+
+        return {
+            "mode": "exact_artboard",
+            "title": "Export exact target artboard",
+            "message": message,
+            "target_width_px": target_width,
+            "target_height_px": target_height,
+            "source": largest_size["print_area_source"],
+            "print_area_name": largest_size["print_area_name"],
+            "artwork_ratio": round(artwork_ratio, 6) if artwork_ratio else None,
+            "target_ratio": round(target_ratio, 6) if target_ratio else None,
+            "full_file_ratio_diff_px": ratio_diff_px,
+            "full_file_ratio_diff_warning": ratio_warning,
+        }
+
+    async def _generate_category_resize_derivatives(
+        self,
+        *,
+        artwork_id: int,
+        master_asset: Any,
+        source_img: Image.Image,
+        category_id: str,
+        size_catalog: dict[str, dict[str, Any]],
+        orientation: str,
+        wrap_margin_pct: float,
+        slot_id: str,
+    ) -> list[Any]:
+        generated: list[Any] = []
+        master_width = int((master_asset.file_metadata or {}).get("width_px") or 0)
+        master_height = int((master_asset.file_metadata or {}).get("height_px") or 0)
+        out_dir = self._build_derivative_output_dir(artwork_id, slot_id, category_id)
+        os.makedirs(out_dir, exist_ok=True)
+        icc_profile = source_img.info.get("icc_profile")
+
+        for label, dims in sorted(size_catalog.get(category_id, {}).items(), key=lambda item: item[1]["short_cm"]):
+            if not dims["available"]:
+                continue
+            required_width, required_height = self._resolve_required_pixels(
+                dims=dims,
+                orientation=orientation,
+                wrap_margin_pct=wrap_margin_pct,
+            )
+            if required_width > master_width or required_height > master_height:
+                continue
+            derivative, derivative_kind = self._build_exact_derivative_image(
+                source_img=source_img,
+                target_width=required_width,
+                target_height=required_height,
+                slot_id=slot_id,
+            )
+            generated.append(
+                await self._store_generated_derivative(
+                    artwork_id=artwork_id,
+                    master_asset=master_asset,
+                    derivative_img=derivative,
+                    category_id=category_id,
+                    slot_size_label=label,
+                    output_dir=out_dir,
+                    base_name=self._sanitize_path_fragment(label, "variant"),
+                    derivative_kind=derivative_kind,
+                    icc_profile=icc_profile,
+                )
+            )
+
+        return generated
+
+    async def _generate_canvas_rolled_derivatives(
+        self,
+        *,
+        artwork_id: int,
+        master_asset: Any,
+        source_img: Image.Image,
+        category_id: str,
+        size_catalog: dict[str, dict[str, Any]],
+        orientation: str,
+        wrap_margin_pct: float,
+        slot_id: str,
+    ) -> list[Any]:
+        generated: list[Any] = []
+        out_dir = self._build_derivative_output_dir(artwork_id, slot_id, category_id)
+        os.makedirs(out_dir, exist_ok=True)
+        icc_profile = source_img.info.get("icc_profile")
+        for label, dims in sorted(size_catalog.get(category_id, {}).items(), key=lambda item: item[1]["short_cm"]):
+            if not dims["available"]:
+                continue
+            required_width, required_height = self._resolve_required_pixels(
+                dims=dims,
+                orientation=orientation,
+                wrap_margin_pct=0.0,
+            )
+            derivative, derivative_kind = self._build_exact_derivative_image(
+                source_img=source_img,
+                target_width=required_width,
+                target_height=required_height,
+                slot_id=slot_id,
+            )
+            generated.append(
+                await self._store_generated_derivative(
+                    artwork_id=artwork_id,
+                    master_asset=master_asset,
+                    derivative_img=derivative,
+                    category_id=category_id,
+                    slot_size_label=label,
+                    output_dir=out_dir,
+                    base_name=self._sanitize_path_fragment(label, "variant"),
+                    derivative_kind=derivative_kind,
+                    icc_profile=icc_profile,
+                )
+            )
+
+        return generated
+
+    async def _store_generated_derivative(
+        self,
+        *,
+        artwork_id: int,
+        master_asset: Any,
+        derivative_img: Image.Image,
+        category_id: str,
+        slot_size_label: str,
+        output_dir: str,
+        base_name: str,
+        derivative_kind: str,
+        icc_profile: Any,
+    ) -> Any:
+        filename = f"{base_name}_{master_asset.id}.png"
+        dest_path = os.path.join(output_dir, filename)
+        save_kwargs: dict[str, Any] = {}
+        if icc_profile:
+            save_kwargs["icc_profile"] = icc_profile
+        if derivative_img.mode not in {"RGB", "RGBA", "L"}:
+            derivative_img = derivative_img.convert("RGBA" if "A" in derivative_img.getbands() else "RGB")
+        derivative_img.save(dest_path, format="PNG", **save_kwargs)
+        public_url = "/" + dest_path.replace("\\", "/")
+        metadata = self.extract_prepared_asset_metadata(dest_path, public_url=public_url)
+        metadata.update(
+            {
+                "generated_from_asset_id": master_asset.id,
+                "generated_from_asset_role": master_asset.asset_role,
+                "derivative_kind": derivative_kind,
+            }
+        )
+        return await self.upsert_prepared_asset(
+            artwork_id=artwork_id,
+            provider_key=get_print_provider().provider_key,
+            category_id=category_id,
+            asset_role=master_asset.asset_role,
+            slot_size_label=slot_size_label,
+            file_url=public_url,
+            file_name=filename,
+            file_ext=".png",
+            mime_type="image/png",
+            file_size_bytes=metadata.get("file_size_bytes"),
+            checksum_sha256=self.compute_sha256(dest_path),
+            file_metadata=metadata,
+            note="Auto-generated from master slot",
+        )
+
+    def _build_exact_derivative_image(
+        self,
+        *,
+        source_img: Image.Image,
+        target_width: int,
+        target_height: int,
+        slot_id: str,
+    ) -> tuple[Image.Image, str]:
+        source_width, source_height = source_img.size
+        aspect_error_px = self._aspect_error_px(
+            source_width,
+            source_height,
+            target_width,
+            target_height,
+        )
+        if aspect_error_px is None or aspect_error_px <= 1.0:
+            return (
+                source_img.resize((target_width, target_height), Image.Resampling.LANCZOS),
+                "resize",
+            )
+
+        if slot_id == "paper_bordered":
+            return (
+                self._contain_on_white_artboard(source_img, target_width, target_height),
+                "contain_pad_resize",
+            )
+
+        return (
+            source_img.resize((target_width, target_height), Image.Resampling.LANCZOS),
+            "resize",
+        )
+
+    def _contain_on_white_artboard(
+        self,
+        source_img: Image.Image,
+        target_width: int,
+        target_height: int,
+    ) -> Image.Image:
+        fitted = ImageOps.contain(
+            source_img,
+            (target_width, target_height),
+            method=Image.Resampling.LANCZOS,
+        )
+        if fitted.mode not in {"RGB", "RGBA", "L"}:
+            fitted = fitted.convert("RGBA" if "A" in fitted.getbands() else "RGB")
+        canvas_mode = "RGBA" if fitted.mode == "RGBA" else "RGB"
+        background = (255, 255, 255, 0) if canvas_mode == "RGBA" else "white"
+        canvas = Image.new(canvas_mode, (target_width, target_height), background)
+        left = round((target_width - fitted.width) / 2)
+        top = round((target_height - fitted.height) / 2)
+        if fitted.mode == "RGBA":
+            canvas.alpha_composite(fitted, (left, top))
+        else:
+            canvas.paste(fitted, (left, top))
+        return canvas
+
+    def _find_slot_by_asset_role(self, asset_role: str) -> tuple[str, dict[str, Any]]:
+        for slot_id, slot_def in MASTER_SLOTS.items():
+            if slot_def["asset_role"] == asset_role:
+                return slot_id, slot_def
+        raise ValueError(f"Unsupported asset role: {asset_role}")
+
+    def _count_generated_derivatives(self, uploaded_asset: Any | None, all_assets: list[Any]) -> int:
+        if uploaded_asset is None:
+            return 0
+        count = 0
+        for asset in all_assets:
+            metadata = asset.file_metadata or {}
+            if not isinstance(metadata, dict):
+                continue
+            if metadata.get("generated_from_asset_id") == uploaded_asset.id:
+                count += 1
+        return count
+
+    def _find_largest_size(
+        self,
+        *,
+        covers: list[str],
+        size_catalog: dict[str, dict[str, Any]],
+        orientation: str,
+        wrap_margin_pct: float,
+    ) -> dict[str, Any] | None:
+        largest = None
+        largest_area = 0
+        for category_id in covers:
+            for label, dims in size_catalog.get(category_id, {}).items():
+                if not dims["available"]:
+                    continue
+                required_width, required_height = self._resolve_required_pixels(
+                    dims=dims,
+                    orientation=orientation,
+                    wrap_margin_pct=wrap_margin_pct,
+                )
+                area = required_width * required_height
+                if area > largest_area:
+                    largest_area = area
+                    largest = {
+                        "label": label,
+                        "required_width_px": required_width,
+                        "required_height_px": required_height,
+                        "print_area_source": dims.get("print_area_source") or "computed_fallback",
+                        "print_area_name": dims.get("print_area_name") or "default",
+                        "print_area_dimensions": dims.get("print_area_dimensions"),
+                        "supplier_size_inches": dims.get("supplier_size_inches"),
+                        "supplier_size_cm": dims.get("supplier_size_cm"),
+                    }
+        return largest
+
+    def _build_derivative_plan(
+        self,
+        *,
+        slot_id: str,
+        covers: list[str],
+        derives: list[str],
+        size_catalog: dict[str, dict[str, Any]],
+        orientation: str,
+        wrap_margin_pct: float,
+        largest_size: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if largest_size is None:
+            return {
+                "strategy": "missing_targets",
+                "target_count": 0,
+                "direct_resize_count": 0,
+                "exact_recompose_count": 0,
+                "can_direct_resize_all": False,
+            }
+
+        target_categories = covers + derives
+        target_count = 0
+        direct_count = 0
+        recompose_count = 0
+        for category_id in target_categories:
+            for dims in size_catalog.get(category_id, {}).values():
+                if not dims["available"]:
+                    continue
+                target_count += 1
+                target_width, target_height = self._resolve_required_pixels(
+                    dims=dims,
+                    orientation=orientation,
+                    wrap_margin_pct=0.0 if category_id in derives else wrap_margin_pct,
+                )
+                error_px = self._aspect_error_px(
+                    largest_size["required_width_px"],
+                    largest_size["required_height_px"],
+                    target_width,
+                    target_height,
+                )
+                if error_px is None or error_px <= 1.0:
+                    direct_count += 1
+                else:
+                    recompose_count += 1
+
+        if slot_id == "clean_master":
+            direct_count = target_count
+            recompose_count = 0
+            strategy = "exact_lanczos_resize"
+            note = (
+                "The clean master is resized directly to each provider target artboard. "
+                "This preserves the whole image and avoids white strips; minor provider "
+                "ratio drift is absorbed by the final exact resize."
+            )
+        elif recompose_count == 0:
+            strategy = "direct_lanczos_resize"
+            note = "Every generated target has the same full-file ratio as the master."
+        elif slot_id == "paper_bordered":
+            strategy = "exact_contain_pad"
+            note = (
+                "Some paper targets differ slightly by ratio, so the bordered master is "
+                "fitted onto an exact white artboard instead of being stretched."
+            )
+        else:
+            strategy = "exact_center_crop"
+            note = (
+                "Some targets differ slightly by ratio, so the clean master is center-cropped "
+                "onto exact provider artboards instead of being stretched."
+            )
+
+        return {
+            "strategy": strategy,
+            "target_count": target_count,
+            "direct_resize_count": direct_count,
+            "exact_recompose_count": recompose_count,
+            "can_direct_resize_all": recompose_count == 0,
+            "note": note,
+        }
+
+    def _build_slot_provider_attribute_coverage(
+        self,
+        *,
+        categories: list[str],
+        provider_attribute_coverage: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if not any(category in WRAPPED_CANVAS_CATEGORIES for category in categories):
+            return None
+
+        canvas_wrap = provider_attribute_coverage.get("canvas_wrap")
+        if not canvas_wrap:
+            return None
+
+        category_set = set(categories)
+        category_rows = [
+            row
+            for row in canvas_wrap.get("by_category", [])
+            if row.get("category_id") in category_set
+        ]
+        total_options = sum(int(row.get("total_options") or 0) for row in category_rows)
+        if total_options <= 0:
+            return None
+
+        by_wrap: dict[str, int] = defaultdict(int)
+        for row in category_rows:
+            for wrap, count in (row.get("by_wrap") or {}).items():
+                by_wrap[str(wrap)] += int(count or 0)
+
+        preferred_value = canvas_wrap["preferred_value"]
+        preferred_count = int(by_wrap.get(preferred_value, 0))
+        non_preferred_count = total_options - preferred_count
+
+        return {
+            "kind": "canvas_wrap",
+            "attribute": "wrap",
+            "preferred_value": preferred_value,
+            "total_options": total_options,
+            "preferred_count": preferred_count,
+            "non_preferred_count": non_preferred_count,
+            "strict_preferred_hidden_count": non_preferred_count,
+            "coverage_pct": self._percentage(preferred_count, total_options),
+            "by_wrap": dict(sorted(by_wrap.items())),
+            "by_category": category_rows,
+            "note": (
+                f"If we enforce {preferred_value} strictly, "
+                f"{non_preferred_count} option(s) in this artwork ratio would be hidden."
+            ),
+        }
+
+    def _resolve_required_pixels(
+        self,
+        *,
+        dims: dict[str, Any],
+        orientation: str,
+        wrap_margin_pct: float,
+    ) -> tuple[int, int]:
+        exact_width = dims.get("print_area_width_px")
+        exact_height = dims.get("print_area_height_px")
+        if exact_width and exact_height:
+            return self._orient_pixels(
+                int(exact_width),
+                int(exact_height),
+                orientation=orientation,
+            )
+        return self._compute_required_pixels(
+            short_cm=dims["short_cm"],
+            long_cm=dims["long_cm"],
+            orientation=orientation,
+            wrap_margin_pct=wrap_margin_pct,
+        )
+
+    def _orient_pixels(self, width: int, height: int, *, orientation: str) -> tuple[int, int]:
+        if orientation == "horizontal" and width < height:
+            return height, width
+        if orientation != "horizontal" and width > height:
+            return height, width
+        return width, height
+
+    def _compute_required_pixels(
+        self,
+        *,
+        short_cm: float,
+        long_cm: float,
+        orientation: str,
+        wrap_margin_pct: float,
+    ) -> tuple[int, int]:
+        if orientation == "horizontal":
+            width_cm, height_cm = long_cm, short_cm
+        else:
+            width_cm, height_cm = short_cm, long_cm
+        multiplier = 1.0 + (wrap_margin_pct / 100.0) * 2.0
+        required_width = round((width_cm / 2.54) * TARGET_DPI * multiplier)
+        required_height = round((height_cm / 2.54) * TARGET_DPI * multiplier)
+        return required_width, required_height
+
+    def _collect_required_for_sizes(
+        self,
+        categories: list[str],
+        size_catalog: dict[str, dict[str, Any]],
+    ) -> list[str]:
+        seen: set[str] = set()
+        ordered: list[tuple[float, str]] = []
+        for category_id in categories:
+            for label, dims in size_catalog.get(category_id, {}).items():
+                if not dims["available"]:
+                    continue
+                if label in seen:
+                    continue
+                seen.add(label)
+                ordered.append((float(dims["short_cm"]), label))
+        ordered.sort(key=lambda item: item[0])
+        return [label for _, label in ordered]
+
+    def _slot_has_active_categories(self, artwork: Any, categories: list[str]) -> bool:
+        for category_id in categories:
+            medium = "paper" if category_id.startswith("paper") else "canvas"
+            if medium == "paper":
+                if getattr(artwork, "has_paper_print", False) or getattr(artwork, "has_paper_print_limited", False):
+                    return True
+            else:
+                if getattr(artwork, "has_canvas_print", False) or getattr(artwork, "has_canvas_print_limited", False):
+                    return True
+        return False
+
+    def _slot_has_available_sizes(
+        self,
+        categories: list[str],
+        size_catalog: dict[str, dict[str, Any]],
+    ) -> bool:
+        return any(
+            bool(dims.get("available"))
+            for category_id in categories
+            for dims in size_catalog.get(category_id, {}).values()
+        )
+
+    def _compute_overall_status(self, slots: list[dict[str, Any]], print_enabled: bool) -> str:
+        if not print_enabled:
+            return "not_required"
+        relevant = [slot for slot in slots if slot["relevant"]]
+        if not relevant:
+            return "not_required"
+        if any(slot["status"] == "blocked" for slot in relevant):
+            return "blocked"
+        if any(slot["status"] == "attention" for slot in relevant):
+            return "attention"
+        return "ready"
+
+    def _build_readiness_summary(self, slots: list[dict[str, Any]], overall_status: str) -> dict[str, Any]:
+        relevant = [slot for slot in slots if slot["relevant"]]
+        ready_count = sum(1 for slot in relevant if slot["status"] == "ready")
+        blocked_count = sum(1 for slot in relevant if slot["status"] == "blocked")
+        attention_count = sum(1 for slot in relevant if slot["status"] == "attention")
+
+        messages = {
+            "ready": "All print masters are uploaded and validated.",
+            "blocked": f"{blocked_count} master slot(s) still need attention.",
+            "attention": "Print pipeline has warnings to review.",
+            "not_required": "No print offerings are enabled.",
+        }
+        return {
+            "status": overall_status,
+            "message": messages.get(overall_status, ""),
+            "total_slots": len(MASTER_SLOTS),
+            "relevant_slots": len(relevant),
+            "ready_slots": ready_count,
+            "blocked_slots": blocked_count,
+            "highlight_variant": (
+                "danger" if overall_status == "blocked" else "warning" if overall_status == "attention" else "success"
+            ),
+            "blocking_step_count": blocked_count,
+            "attention_step_count": attention_count,
+            "blocking_category_count": blocked_count,
+            "ready_category_count": ready_count,
+            "enabled_category_count": len(relevant),
+        }
+
+    def _index_master_assets(self, assets: list[Any]) -> dict[str, Any]:
+        index: dict[str, Any] = {}
+        for asset in assets:
+            if asset.slot_size_label is not None:
+                continue
+            asset_role = "clean_master" if asset.asset_role in {"paper_clean", "canvas_clean"} else asset.asset_role
+            existing = index.get(asset_role)
+            if existing is None or int(asset.id) > int(existing.id):
+                index[asset_role] = asset
+        return index
 
     async def _get_artwork_orm(self, artwork_id: int) -> ArtworksOrm:
         query = (
@@ -274,724 +1055,148 @@ class ArtworkPrintWorkflowService:
             raise ObjectNotFoundException(detail="Artwork not found in artworks")
         return artwork
 
-    async def _build_size_catalog(
+    async def _build_size_catalog(self, *, bake: Any | None, ratio_label: str | None) -> dict[str, dict[str, Any]]:
+        catalog, _coverage = await self._build_size_catalog_with_provider_coverage(
+            bake=bake,
+            ratio_label=ratio_label,
+        )
+        return catalog
+
+    async def _build_size_catalog_with_provider_coverage(
         self,
         *,
         bake: Any | None,
         ratio_label: str | None,
-    ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
-        category_defs = self._get_category_defs(bake)
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
         if bake is None or not ratio_label:
-            return {}, category_defs
-
+            return {}, {}
         groups = await self.storefront_repository.get_groups_for_bake_ratios(bake.id, [ratio_label])
-        return self._collapse_groups_to_size_catalog(groups), category_defs
+        return self._collapse_groups(groups), self._build_provider_attribute_coverage(groups)
 
-    async def _build_bulk_size_catalog(
-        self,
-        *,
-        bake: Any | None,
-        ratio_labels: list[str],
-    ) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
-        category_defs = self._get_category_defs(bake)
-        category_defs_by_ratio = {ratio: category_defs for ratio in ratio_labels}
-        if bake is None or not ratio_labels:
-            return {}, category_defs_by_ratio
+    def _build_provider_attribute_coverage(self, groups: list[Any]) -> dict[str, Any]:
+        by_category: dict[str, dict[str, Any]] = {}
+        by_wrap: dict[str, int] = defaultdict(int)
+        total_options = 0
+        preferred_value = "MirrorWrap"
 
-        groups = await self.storefront_repository.get_groups_for_bake_ratios(bake.id, ratio_labels)
-        groups_by_ratio: dict[str, list[Any]] = defaultdict(list)
         for group in groups:
-            groups_by_ratio[group.ratio_label].append(group)
-        return (
-            {
-                ratio: self._collapse_groups_to_size_catalog(items)
-                for ratio, items in groups_by_ratio.items()
-            },
-            category_defs_by_ratio,
-        )
+            category_id = getattr(group, "category_id", None)
+            if category_id not in WRAPPED_CANVAS_CATEGORIES:
+                continue
 
-    def _build_workflow_payload(
-        self,
-        *,
-        artwork: Any,
-        bake: Any | None,
-        size_catalog: dict[str, dict[str, Any]],
-        category_defs: list[dict[str, Any]] | None,
-        assets: list[Any],
-    ) -> dict[str, Any]:
-        category_defs = category_defs or self._get_category_defs(bake)
-        profile_bundle = self.profile_service.build_profile_bundle_for_artwork(
-            artwork=artwork,
-            bake=bake,
-            ratio_supported=bool(size_catalog),
-        )
-        workflow_config = self._merge_workflow_config(artwork.print_workflow_config or {})
-        assets_by_scope = self._index_assets(assets)
-
-        print_enabled = self._artwork_has_prints(artwork)
-        source_summary = self._build_source_master_summary(artwork, workflow_config, print_enabled)
-
-        category_workflows = []
-        for category_def in category_defs:
-            category_id = category_def["id"]
-            category_workflows.append(
-                self._build_category_workflow(
-                    artwork=artwork,
-                    category_def=category_def,
-                    category_sizes=size_catalog.get(category_id, {}),
-                    effective_profile=(profile_bundle.get("effective_profiles") or {}).get(category_id, {}),
-                    workflow_config=workflow_config["categories"].get(category_id, {}),
-                    assets_by_scope=assets_by_scope,
-                )
-            )
-
-        steps = self._build_steps(
-            artwork=artwork,
-            print_enabled=print_enabled,
-            size_catalog=size_catalog,
-            source_summary=source_summary,
-            category_workflows=category_workflows,
-        )
-        readiness_summary = self._build_readiness_summary(steps, category_workflows, source_summary)
-        preparation_matrix = self._build_preparation_matrix(
-            category_workflows=category_workflows,
-            source_summary=source_summary,
-        )
-
-        return {
-            "artwork_id": int(artwork.id),
-            "provider_key": get_print_provider().provider_key,
-            "active_bake": {
-                "id": bake.id,
-                "bake_key": bake.bake_key,
-                "paper_material": bake.paper_material,
-                "include_notice_level": bake.include_notice_level,
-            }
-            if bake
-            else None,
-            "print_enabled": print_enabled,
-            "source_master": source_summary,
-            "workflow_config": workflow_config,
-            "profile_bundle": {
-                "print_aspect_ratio": profile_bundle.get("print_aspect_ratio"),
-                "source_quality_summary": profile_bundle.get("source_quality_summary"),
-            },
-            "preparation_matrix": preparation_matrix,
-            "category_workflows": category_workflows,
-            "steps": steps,
-            "assets": [asset.model_dump(mode="json") for asset in assets],
-            "readiness_summary": readiness_summary,
-        }
-
-    def _build_source_master_summary(
-        self,
-        artwork: Any,
-        workflow_config: dict[str, Any],
-        print_enabled: bool,
-    ) -> dict[str, Any]:
-        source_present = bool(getattr(artwork, "print_quality_url", None))
-        source_metadata = getattr(artwork, "print_source_metadata", None) or {}
-        issues: list[str] = []
-        warnings: list[str] = []
-
-        if print_enabled and not source_present:
-            issues.append("Upload a hi-res source master before print preparation can be completed.")
-        if source_present and not source_metadata:
-            warnings.append("Source master exists, but metadata is missing.")
-
-        reviewed = bool(workflow_config.get("source_master_reviewed"))
-        if source_present and not reviewed:
-            warnings.append("The source master has not been manually approved yet.")
-
-        status = "ready"
-        if issues:
-            status = "blocked"
-        elif warnings:
-            status = "attention"
-
-        return {
-            "required": print_enabled,
-            "present": source_present,
-            "reviewed": reviewed,
-            "status": status,
-            "issues": issues,
-            "warnings": warnings,
-            "url": getattr(artwork, "print_quality_url", None),
-            "metadata": source_metadata,
-        }
-
-    def _build_category_workflow(
-        self,
-        *,
-        artwork: Any,
-        category_def: dict[str, Any],
-        category_sizes: dict[str, Any],
-        effective_profile: dict[str, Any],
-        workflow_config: dict[str, Any],
-        assets_by_scope: dict[tuple[str | None, str, str | None], Any],
-    ) -> dict[str, Any]:
-        category_id = category_def["id"]
-        defaults = CATEGORY_WORKFLOW_DEFAULTS[category_id]
-        strategy = workflow_config.get("asset_strategy") or defaults["asset_strategy"]
-        category_enabled = self._is_category_enabled(
-            artwork=artwork,
-            category_def=category_def,
-            workflow_config=workflow_config,
-        )
-        provider_attributes = dict(workflow_config.get("provider_attributes") or {})
-        attribute_choices = self._build_attribute_choices(effective_profile)
-        admin_managed_attributes = self._build_admin_managed_attributes(attribute_choices)
-        client_selectable_attributes = self._build_client_selectable_attributes(attribute_choices)
-        settings_issues = self._validate_provider_attributes(admin_managed_attributes, provider_attributes)
-
-        size_requirements = []
-        blocking_count = len(settings_issues)
-        ready_count = 0
-        required_count = 0
-
-        for slot_size_label, dims in sorted(
-            category_sizes.items(),
-            key=lambda item: item[1]["short_cm"],
-        ):
-            requirement = self._build_size_requirement(
-                artwork=artwork,
-                category_id=category_id,
-                slot_size_label=slot_size_label,
-                dims=dims,
-                strategy=strategy,
-                effective_profile=effective_profile,
-                assets_by_scope=assets_by_scope,
-            )
-            size_requirements.append(requirement)
-            if requirement["required"]:
-                required_count += 1
-            if requirement["validation"]["status"] == "ready":
-                ready_count += 1
-            elif requirement["validation"]["status"] == "blocked":
-                blocking_count += 1
-
-        issues = list(settings_issues)
-        if category_enabled and defaults["asset_role"] and not category_sizes:
-            issues.append("No storefront sizes are currently baked for this category.")
-            blocking_count += 1
-
-        reviewed = bool(workflow_config.get("reviewed"))
-        if category_enabled and not reviewed:
-            issues.append(f"{defaults['review_label']} checkbox is still not confirmed.")
-            blocking_count += 1
-
-        status = "ready"
-        if blocking_count > 0:
-            status = "blocked"
-        elif category_enabled and required_count == 0 and defaults["asset_role"]:
-            status = "attention"
-
-        return {
-            "category_id": category_id,
-            "label": category_def["label"],
-            "medium": category_def["medium"],
-            "material_label": category_def["material_label"],
-            "frame_label": category_def["frame_label"],
-            "enabled": category_enabled,
-            "offered_in_active_bake": bool(category_sizes),
-            "asset_strategy": strategy,
-            "reviewed": reviewed,
-            "provider_attributes": provider_attributes,
-            "attribute_choices": attribute_choices,
-            "admin_managed_attributes": admin_managed_attributes,
-            "client_selectable_attributes": client_selectable_attributes,
-            "provider_submission_defaults": self._build_provider_submission_defaults(
-                admin_managed_attributes,
-                provider_attributes,
-            ),
-            "effective_profile": effective_profile,
-            "issues": issues,
-            "size_requirements": size_requirements,
-            "summary": {
-                "required_count": required_count,
-                "ready_count": ready_count,
-                "blocking_count": blocking_count,
-                "status": status,
-            },
-        }
-
-    def _build_size_requirement(
-        self,
-        *,
-        artwork: Any,
-        category_id: str,
-        slot_size_label: str,
-        dims: dict[str, Any],
-        strategy: str,
-        effective_profile: dict[str, Any],
-        assets_by_scope: dict[tuple[str | None, str, str | None], Any],
-    ) -> dict[str, Any]:
-        defaults = CATEGORY_WORKFLOW_DEFAULTS[category_id]
-        asset_role = defaults["asset_role"]
-        required = bool(asset_role) and strategy in {"manual_white_border", "manual_wrap_asset"}
-
-        base_target_dpi = int(effective_profile.get("target_dpi") or 300)
-        wrap_margin_pct = float(effective_profile.get("wrap_margin_pct") or 0.0)
-        width_cm, height_cm = self._orient_size_for_artwork(artwork, dims["short_cm"], dims["long_cm"])
-        target_dpi = self._resolve_target_dpi(
-            category_id=category_id,
-            width_cm=width_cm,
-            height_cm=height_cm,
-            base_target_dpi=base_target_dpi,
-        )
-        multiplier = 1.0
-        if strategy == "manual_wrap_asset":
-            multiplier += (wrap_margin_pct / 100.0) * 2.0
-
-        required_width_px = round((width_cm / 2.54) * target_dpi * multiplier)
-        required_height_px = round((height_cm / 2.54) * target_dpi * multiplier)
-
-        asset = None
-        asset_source = "missing"
-        if asset_role:
-            exact_asset = assets_by_scope.get((category_id, asset_role, slot_size_label))
-            shared_asset = assets_by_scope.get((category_id, asset_role, None))
-            if exact_asset is not None:
-                asset = exact_asset
-                asset_source = "exact"
-            elif shared_asset is not None:
-                asset = shared_asset
-                asset_source = "category_master"
-
-        validation = self._validate_size_asset(
-            asset=asset,
-            required=required,
-            asset_role=asset_role,
-            required_width_px=required_width_px,
-            required_height_px=required_height_px,
-        )
-
-        return {
-            "slot_size_label": slot_size_label,
-            "physical_size_cm": {"width": width_cm, "height": height_cm},
-            "required": required,
-            "asset_role": asset_role,
-            "asset_role_label": defaults["asset_label"],
-            "strategy": strategy,
-            "target_dpi": target_dpi,
-            "base_target_dpi": base_target_dpi,
-            "dpi_policy_note": self._build_dpi_policy_note(
-                category_id=category_id,
-                width_cm=width_cm,
-                height_cm=height_cm,
-                target_dpi=target_dpi,
-                base_target_dpi=base_target_dpi,
-            ),
-            "wrap_margin_pct": wrap_margin_pct,
-            "required_dimensions_px": {
-                "width": required_width_px,
-                "height": required_height_px,
-            },
-            "asset_source": asset_source,
-            "asset": asset.model_dump(mode="json") if asset else None,
-            "validation": validation,
-        }
-
-    def _validate_size_asset(
-        self,
-        *,
-        asset: Any | None,
-        required: bool,
-        asset_role: str | None,
-        required_width_px: int,
-        required_height_px: int,
-    ) -> dict[str, Any]:
-        issues: list[str] = []
-        warnings: list[str] = []
-
-        if not required:
-            return {
-                "status": "not_required",
-                "issues": issues,
-                "warnings": warnings,
-            }
-
-        if asset is None:
-            issues.append("Required prepared asset is missing.")
-            return {
-                "status": "blocked",
-                "issues": issues,
-                "warnings": warnings,
-            }
-
-        metadata = asset.file_metadata or {}
-        width_px = metadata.get("width_px")
-        height_px = metadata.get("height_px")
-        file_ext = (asset.file_ext or "").lower()
-        rule = ASSET_ROLE_RULES.get(asset_role or "")
-        if rule and file_ext not in rule["allowed_extensions"]:
-            issues.append(
-                f"Unexpected file extension {file_ext or '(missing)'}. "
-                f"Allowed: {', '.join(sorted(rule['allowed_extensions']))}"
-            )
-
-        if not width_px or not height_px:
-            issues.append("Prepared asset metadata is incomplete, so size validation cannot run.")
-        else:
-            if int(width_px) < required_width_px or int(height_px) < required_height_px:
-                issues.append(
-                    "Prepared asset is undersized for the configured DPI and print geometry."
-                )
-
-        status = "ready" if not issues else "blocked"
-        return {
-            "status": status,
-            "issues": issues,
-            "warnings": warnings,
-        }
-
-    def _build_steps(
-        self,
-        *,
-        artwork: Any,
-        print_enabled: bool,
-        size_catalog: dict[str, dict[str, Any]],
-        source_summary: dict[str, Any],
-        category_workflows: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        basics_issues: list[str] = []
-        if not getattr(artwork, "title", "").strip():
-            basics_issues.append("Title is missing.")
-        if print_enabled and not getattr(artwork, "print_aspect_ratio", None):
-            basics_issues.append("Assign a print aspect ratio before preparing print variants.")
-
-        basics_status = "ready" if not basics_issues else "blocked"
-        if print_enabled and getattr(artwork, "print_aspect_ratio", None) and not size_catalog:
-            basics_status = "attention"
-            basics_issues.append("The active bake does not currently expose sizes for this ratio.")
-
-        category_blockers = sum(
-            1 for item in category_workflows if item["enabled"] and item["summary"]["status"] == "blocked"
-        )
-        preparation_status = "ready"
-        preparation_issues: list[str] = []
-        if category_blockers:
-            preparation_status = "blocked"
-            preparation_issues.append(f"{category_blockers} print category workflows are incomplete.")
-        elif print_enabled and not any(item["enabled"] for item in category_workflows):
-            preparation_status = "attention"
-            preparation_issues.append("No sellable print categories are currently enabled.")
-
-        return [
-            {
-                "id": "artwork_basics",
-                "label": "Artwork Basics",
-                "status": basics_status,
-                "issues": basics_issues,
-            },
-            {
-                "id": "source_master",
-                "label": "Source Master",
-                "status": source_summary["status"],
-                "issues": list(source_summary["issues"]),
-                "warnings": list(source_summary["warnings"]),
-            },
-            {
-                "id": "print_preparation",
-                "label": "Print Preparation",
-                "status": preparation_status,
-                "issues": preparation_issues,
-            },
-        ]
-
-    def _build_readiness_summary(
-        self,
-        steps: list[dict[str, Any]],
-        category_workflows: list[dict[str, Any]],
-        source_summary: dict[str, Any],
-    ) -> dict[str, Any]:
-        blocking_steps = [step for step in steps if step["status"] == "blocked"]
-        attention_steps = [step for step in steps if step["status"] == "attention"]
-        blocking_categories = [
-            item for item in category_workflows if item["enabled"] and item["summary"]["status"] == "blocked"
-        ]
-        ready_categories = [
-            item for item in category_workflows if item["enabled"] and item["summary"]["status"] == "ready"
-        ]
-
-        status = "ready"
-        if blocking_steps or blocking_categories:
-            status = "blocked"
-        elif attention_steps or source_summary["status"] == "attention":
-            status = "attention"
-
-        return {
-            "status": status,
-            "step_count": len(steps),
-            "blocking_step_count": len(blocking_steps),
-            "attention_step_count": len(attention_steps),
-            "enabled_category_count": sum(1 for item in category_workflows if item["enabled"]),
-            "ready_category_count": len(ready_categories),
-            "blocking_category_count": len(blocking_categories),
-            "source_master_present": source_summary["present"],
-            "source_master_reviewed": source_summary["reviewed"],
-            "highlight_variant": (
-                "danger" if status == "blocked" else "warning" if status == "attention" else "success"
-            ),
-            "message": (
-                "Print workflow is ready."
-                if status == "ready"
-                else "Artwork still has blocking print-prep gaps."
-                if status == "blocked"
-                else "Artwork is usable, but still needs manual print-prep attention."
-            ),
-        }
-
-    def _build_preparation_matrix(
-        self,
-        *,
-        category_workflows: list[dict[str, Any]],
-        source_summary: dict[str, Any],
-    ) -> list[dict[str, Any]]:
-        matrix: list[dict[str, Any]] = []
-        for category in category_workflows:
-            size_requirements = list(category.get("size_requirements") or [])
-            manual_requirements = [
-                requirement for requirement in size_requirements if requirement.get("required")
-            ]
-            anchor_requirement = None
-            if manual_requirements:
-                anchor_requirement = max(
-                    manual_requirements,
-                    key=lambda item: (
-                        int(item["required_dimensions_px"]["width"]),
-                        int(item["required_dimensions_px"]["height"]),
-                    ),
-                )
-
-            matrix.append(
+            category_stats = by_category.setdefault(
+                category_id,
                 {
-                    "category_id": category["category_id"],
-                    "label": category["label"],
-                    "enabled": category["enabled"],
-                    "status": category["summary"]["status"],
-                    "asset_strategy": category["asset_strategy"],
-                    "uses_source_master_only": category["asset_strategy"] == "source_master_only",
-                    "category_master_supported": bool(anchor_requirement),
-                    "required_asset_role": anchor_requirement.get("asset_role")
-                    if anchor_requirement
-                    else None,
-                    "required_asset_label": anchor_requirement.get("asset_role_label")
-                    if anchor_requirement
-                    else None,
-                    "suggested_master_size_label": anchor_requirement.get("slot_size_label")
-                    if anchor_requirement
-                    else None,
-                    "suggested_master_target_dpi": anchor_requirement.get("target_dpi")
-                    if anchor_requirement
-                    else None,
-                    "suggested_master_dpi_policy_note": anchor_requirement.get("dpi_policy_note")
-                    if anchor_requirement
-                    else None,
-                    "minimum_master_dimensions_px": anchor_requirement.get("required_dimensions_px")
-                    if anchor_requirement
-                    else None,
-                    "covered_size_count": len(manual_requirements) if manual_requirements else 0,
-                    "source_master_present": source_summary["present"],
-                    "source_master_reviewed": source_summary["reviewed"],
-                    "client_selectable_attributes": list(
-                        category.get("client_selectable_attributes") or []
-                    ),
-                    "provider_submission_defaults": dict(
-                        category.get("provider_submission_defaults") or {}
-                    ),
+                    "category_id": category_id,
+                    "total_options": 0,
+                    "preferred_count": 0,
+                    "non_preferred_count": 0,
+                    "coverage_pct": None,
+                    "by_wrap": defaultdict(int),
+                },
+            )
+            for size in getattr(group, "sizes", []) or []:
+                if not getattr(size, "available", False):
+                    continue
+                attributes = self._extract_provider_attributes(size)
+                wrap = str(attributes.get("wrap") or "unknown")
+                total_options += 1
+                by_wrap[wrap] += 1
+                category_stats["total_options"] += 1
+                category_stats["by_wrap"][wrap] += 1
+                if wrap == preferred_value:
+                    category_stats["preferred_count"] += 1
+                else:
+                    category_stats["non_preferred_count"] += 1
+
+        category_rows = []
+        for category_id, stats in sorted(by_category.items()):
+            total = int(stats["total_options"])
+            preferred_count = int(stats["preferred_count"])
+            category_rows.append(
+                {
+                    **stats,
+                    "by_wrap": dict(sorted(stats["by_wrap"].items())),
+                    "coverage_pct": self._percentage(preferred_count, total),
                 }
             )
-        return matrix
 
-    def _collapse_groups_to_size_catalog(self, groups: list[Any]) -> dict[str, dict[str, Any]]:
+        preferred_count = int(by_wrap.get(preferred_value, 0))
+        return {
+            "canvas_wrap": {
+                "attribute": "wrap",
+                "preferred_value": preferred_value,
+                "total_options": total_options,
+                "preferred_count": preferred_count,
+                "non_preferred_count": total_options - preferred_count,
+                "strict_preferred_hidden_count": total_options - preferred_count,
+                "coverage_pct": self._percentage(preferred_count, total_options),
+                "by_wrap": dict(sorted(by_wrap.items())),
+                "by_category": category_rows,
+            }
+        }
+
+    def _extract_provider_attributes(self, size: Any) -> dict[str, Any]:
+        dimensions = getattr(size, "print_area_dimensions", None) or {}
+        if isinstance(dimensions, str):
+            try:
+                dimensions = json.loads(dimensions)
+            except json.JSONDecodeError:
+                return {}
+        if not isinstance(dimensions, dict):
+            return {}
+        attributes = dimensions.get("variant_attributes") or {}
+        return dict(attributes) if isinstance(attributes, dict) else {}
+
+    def _percentage(self, count: int, total: int) -> float | None:
+        if total <= 0:
+            return None
+        return round((count / total) * 100, 1)
+
+    def _collapse_groups(self, groups: list[Any]) -> dict[str, dict[str, Any]]:
         catalog: dict[str, dict[str, Any]] = defaultdict(dict)
         for group in groups:
             for size in group.sizes:
-                slot_size_label = size.slot_size_label
-                if not slot_size_label:
+                label = size.slot_size_label
+                if not label:
                     continue
-                dims = self._parse_size_label(slot_size_label)
+                dims = self._parse_size_label(label)
                 if dims is None:
                     continue
-                existing = catalog[group.category_id].get(slot_size_label)
+                existing = catalog[group.category_id].get(label)
                 candidate = {
+                    "label": label,
                     "short_cm": dims["short_cm"],
                     "long_cm": dims["long_cm"],
                     "available": bool(size.available),
+                    "print_area_width_px": getattr(size, "print_area_width_px", None),
+                    "print_area_height_px": getattr(size, "print_area_height_px", None),
+                    "print_area_name": getattr(size, "print_area_name", None),
+                    "print_area_source": getattr(size, "print_area_source", None),
+                    "print_area_dimensions": getattr(size, "print_area_dimensions", None),
+                    "supplier_size_cm": getattr(size, "supplier_size_cm", None),
+                    "supplier_size_inches": getattr(size, "supplier_size_inches", None),
                 }
-                if existing is None or (not existing["available"] and candidate["available"]):
-                    catalog[group.category_id][slot_size_label] = candidate
+                if (
+                    existing is None
+                    or (not existing["available"] and candidate["available"])
+                    or (
+                        existing["available"] == candidate["available"]
+                        and self._candidate_print_area(candidate) > self._candidate_print_area(existing)
+                    )
+                ):
+                    catalog[group.category_id][label] = candidate
         return {category_id: dict(items) for category_id, items in catalog.items()}
 
-    def _merge_workflow_config(self, existing: dict[str, Any]) -> dict[str, Any]:
-        categories = {}
-        existing_categories = existing.get("categories") if isinstance(existing, dict) else {}
-        if not isinstance(existing_categories, dict):
-            existing_categories = {}
-
-        for category_id, defaults in CATEGORY_WORKFLOW_DEFAULTS.items():
-            category_existing = existing_categories.get(category_id)
-            if not isinstance(category_existing, dict):
-                category_existing = {}
-            categories[category_id] = {
-                "enabled": category_existing.get("enabled"),
-                "reviewed": bool(category_existing.get("reviewed")),
-                "asset_strategy": category_existing.get("asset_strategy", defaults["asset_strategy"]),
-                "provider_attributes": dict(category_existing.get("provider_attributes") or {}),
-                "notes": category_existing.get("notes", ""),
-            }
-
-        return {
-            "source_master_reviewed": bool(existing.get("source_master_reviewed"))
-            if isinstance(existing, dict)
-            else False,
-            "categories": categories,
-        }
-
-    def _build_attribute_choices(self, effective_profile: dict[str, Any]) -> list[dict[str, Any]]:
-        fixed_attributes = dict(effective_profile.get("fixed_attributes") or {})
-        recommended_defaults = dict(effective_profile.get("recommended_defaults") or {})
-        allowed_attributes = dict(effective_profile.get("allowed_attributes") or {})
-
-        choices: list[dict[str, Any]] = []
-        for key, value in fixed_attributes.items():
-            choices.append(
-                {
-                    "key": key,
-                    "mode": "fixed",
-                    "value": value,
-                    "options": [value],
-                    "default_value": value,
-                }
-            )
-
-        for key, options in allowed_attributes.items():
-            if key in fixed_attributes:
-                continue
-            choices.append(
-                {
-                    "key": key,
-                    "mode": "select",
-                    "value": None,
-                    "options": list(options),
-                    "default_value": recommended_defaults.get(key),
-                }
-            )
-
-        for key, value in recommended_defaults.items():
-            if key in fixed_attributes or key in allowed_attributes:
-                continue
-            choices.append(
-                {
-                    "key": key,
-                    "mode": "default",
-                    "value": value,
-                    "options": [value],
-                    "default_value": value,
-                }
-            )
-        return choices
-
-    def _build_admin_managed_attributes(
-        self,
-        attribute_choices: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        return [choice for choice in attribute_choices if choice["mode"] in {"fixed", "default"}]
-
-    def _build_client_selectable_attributes(
-        self,
-        attribute_choices: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        return [choice for choice in attribute_choices if choice["mode"] == "select"]
-
-    def _build_provider_submission_defaults(
-        self,
-        attribute_choices: list[dict[str, Any]],
-        provider_attributes: dict[str, Any],
-    ) -> dict[str, Any]:
-        defaults: dict[str, Any] = {}
-        for choice in attribute_choices:
-            resolved_value = provider_attributes.get(choice["key"])
-            if not resolved_value:
-                resolved_value = choice.get("value") or choice.get("default_value")
-            if resolved_value:
-                defaults[choice["key"]] = resolved_value
-        return defaults
-
-    def _resolve_target_dpi(
-        self,
-        *,
-        category_id: str,
-        width_cm: float,
-        height_cm: float,
-        base_target_dpi: int,
-    ) -> int:
-        return base_target_dpi
-
-    def _build_dpi_policy_note(
-        self,
-        *,
-        category_id: str,
-        width_cm: float,
-        height_cm: float,
-        target_dpi: int,
-        base_target_dpi: int,
-    ) -> str:
-        long_edge_cm = round(max(width_cm, height_cm), 1)
-        return f"Target remains {target_dpi} DPI for this size ({long_edge_cm} cm long edge)."
-
-    def _validate_provider_attributes(
-        self,
-        attribute_choices: list[dict[str, Any]],
-        provider_attributes: dict[str, Any],
-    ) -> list[str]:
-        issues: list[str] = []
-        for choice in attribute_choices:
-            selected_value = provider_attributes.get(choice["key"]) or choice.get("default_value")
-            if not selected_value:
-                issues.append(f"Choose a value for {choice['key']}.")
-        return issues
-
-    def _index_assets(self, assets: list[Any]) -> dict[tuple[str | None, str, str | None], Any]:
-        return {
-            (asset.category_id, asset.asset_role, asset.slot_size_label): asset for asset in assets
-        }
-
-    def _is_category_enabled(
-        self,
-        *,
-        artwork: Any,
-        category_def: dict[str, Any],
-        workflow_config: dict[str, Any],
-    ) -> bool:
-        medium = category_def["medium"]
-        if medium == "paper":
-            medium_enabled = bool(
-                getattr(artwork, "has_paper_print", False)
-                or getattr(artwork, "has_paper_print_limited", False)
-            )
-        else:
-            medium_enabled = bool(
-                getattr(artwork, "has_canvas_print", False)
-                or getattr(artwork, "has_canvas_print_limited", False)
-            )
-
-        explicit_enabled = workflow_config.get("enabled")
-        if explicit_enabled is None:
-            return medium_enabled
-        return bool(explicit_enabled) and medium_enabled
-
-    def _orient_size_for_artwork(
-        self,
-        artwork: Any,
-        short_cm: float,
-        long_cm: float,
-    ) -> tuple[float, float]:
-        orientation = str(getattr(artwork, "orientation", "") or "").lower()
-        if orientation == "horizontal":
-            return long_cm, short_cm
-        return short_cm, long_cm
+    def _parse_size_label(self, size_label: str) -> dict[str, float] | None:
+        normalized = size_label.lower().replace("×", "x").replace("Ã—", "x").strip()
+        match = SIZE_PATTERN.search(normalized)
+        if not match:
+            return None
+        first = round(float(match.group("w")), 1)
+        second = round(float(match.group("h")), 1)
+        short_cm, long_cm = sorted((first, second))
+        return {"short_cm": short_cm, "long_cm": long_cm}
 
     def _artwork_has_prints(self, artwork: Any) -> bool:
         return bool(
@@ -1001,178 +1206,55 @@ class ArtworkPrintWorkflowService:
             or getattr(artwork, "has_canvas_print_limited", False)
         )
 
-    def _parse_size_label(self, size_label: str) -> dict[str, float] | None:
-        normalized = size_label.lower().replace("×", "x").strip()
-        match = SIZE_PATTERN.search(normalized)
-        if not match:
-            return None
-        first = round(float(match.group("w")), 1)
-        second = round(float(match.group("h")), 1)
-        short_cm, long_cm = sorted((first, second))
-        return {"short_cm": short_cm, "long_cm": long_cm}
-
-    def _get_category_defs(self, bake: Any | None) -> list[dict[str, Any]]:
-        paper_material = bake.paper_material if bake else DEFAULT_PAPER_MATERIAL
-        return ProdigiCatalogPreviewService(SimpleNamespace(session=None)).get_category_defs(
-            paper_material
-        )
-
-    async def generate_category_derivatives_from_master(
-        self,
-        *,
-        artwork_id: int,
-        category_id: str,
-        asset_role: str,
-    ) -> list[Any]:
-        artwork = await self._get_artwork_orm(artwork_id)
-        assets = await self.db.artwork_print_assets.list_for_artwork(artwork_id)
-        master_asset = next(
-            (
-                asset
-                for asset in assets
-                if asset.category_id == category_id
-                and asset.asset_role == asset_role
-                and asset.slot_size_label is None
-            ),
-            None,
-        )
-        if master_asset is None:
-            return []
-
-        master_path = str(master_asset.file_url or "").lstrip("/")
-        if not master_path or not os.path.exists(master_path):
-            return []
-
-        master_metadata = master_asset.file_metadata or {}
-        master_width_px = int(master_metadata.get("width_px") or 0)
-        master_height_px = int(master_metadata.get("height_px") or 0)
-        if master_width_px <= 0 or master_height_px <= 0:
-            return []
-
-        bake = await self.storefront_repository.get_active_bake()
-        size_catalog, _ = await self._build_size_catalog(
-            bake=bake,
-            ratio_label=artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None,
-        )
-        profile_bundle = self.profile_service.build_profile_bundle_for_artwork(
-            artwork=artwork,
-            bake=bake,
-            ratio_supported=bool(size_catalog),
-        )
-        workflow_config = self._merge_workflow_config(artwork.print_workflow_config or {})
-        category_config = workflow_config["categories"].get(category_id, {})
-        strategy = category_config.get("asset_strategy") or CATEGORY_WORKFLOW_DEFAULTS[category_id][
-            "asset_strategy"
-        ]
-        effective_profile = (profile_bundle.get("effective_profiles") or {}).get(category_id, {})
-
-        out_dir = os.path.join(
+    def _build_derivative_output_dir(self, artwork_id: int, slot_id: str, category_id: str) -> str:
+        return os.path.join(
             "static",
             "print-prep",
             str(artwork_id),
-            self._sanitize_path_fragment(category_id, "shared"),
-            self._sanitize_path_fragment(asset_role, "asset"),
+            self._sanitize_path_fragment(slot_id, "slot"),
+            self._sanitize_path_fragment(category_id, "category"),
             "derived",
         )
-        os.makedirs(out_dir, exist_ok=True)
-
-        ext = ".png"
-        save_format = "PNG"
-        generated_assets: list[Any] = []
-
-        with Image.open(master_path) as source_img:
-            icc_profile = source_img.info.get("icc_profile")
-            for slot_size_label, dims in sorted(
-                size_catalog.get(category_id, {}).items(),
-                key=lambda item: item[1]["short_cm"],
-            ):
-                requirement = self._build_size_requirement(
-                    artwork=artwork,
-                    category_id=category_id,
-                    slot_size_label=slot_size_label,
-                    dims=dims,
-                    strategy=strategy,
-                    effective_profile=effective_profile,
-                    assets_by_scope={},
-                )
-                if not requirement["required"]:
-                    continue
-
-                target_width = int(requirement["required_dimensions_px"]["width"])
-                target_height = int(requirement["required_dimensions_px"]["height"])
-                if target_width > master_width_px or target_height > master_height_px:
-                    continue
-
-                safe_slot = self._sanitize_path_fragment(slot_size_label, "variant")
-                filename = f"{safe_slot}_{master_asset.id}.png"
-                dest_path = os.path.join(out_dir, filename)
-
-                existing = await self.db.artwork_print_assets.get_one_or_none(
-                    artwork_id=artwork_id,
-                    provider_key=get_print_provider().provider_key,
-                    category_id=category_id,
-                    asset_role=asset_role,
-                    slot_size_label=slot_size_label,
-                )
-                if existing and existing.file_url:
-                    existing_path = str(existing.file_url).lstrip("/")
-                    if existing_path and os.path.exists(existing_path):
-                        os.remove(existing_path)
-
-                resized = source_img.resize((target_width, target_height), Image.Resampling.LANCZOS)
-                save_kwargs: dict[str, Any] = {}
-                if icc_profile:
-                    save_kwargs["icc_profile"] = icc_profile
-                if resized.mode not in {"RGB", "RGBA", "L"}:
-                    resized = resized.convert("RGBA" if "A" in resized.getbands() else "RGB")
-                resized.save(dest_path, format=save_format, **save_kwargs)
-
-                public_url = "/" + dest_path.replace("\\", "/")
-                metadata = self.extract_prepared_asset_metadata(dest_path, public_url=public_url)
-                metadata.update(
-                    {
-                        "generated_from_asset_id": master_asset.id,
-                        "generated_from_slot_size_label": None,
-                        "derivative": True,
-                    }
-                )
-                stored = await self.upsert_prepared_asset(
-                    artwork_id=artwork_id,
-                    provider_key=get_print_provider().provider_key,
-                    category_id=category_id,
-                    asset_role=asset_role,
-                    slot_size_label=slot_size_label,
-                    file_url=public_url,
-                    file_name=filename,
-                    file_ext=".png",
-                    mime_type="image/png",
-                    file_size_bytes=metadata.get("file_size_bytes"),
-                    checksum_sha256=self.compute_sha256(dest_path),
-                    file_metadata=metadata,
-                    note="Auto-generated from category master",
-                )
-                generated_assets.append(stored)
-
-        return generated_assets
-
-    async def delete_generated_assets_for_master(self, master_asset: Any) -> None:
-        assets = await self.db.artwork_print_assets.list_for_artwork(int(master_asset.artwork_id))
-        generated_assets = [
-            asset
-            for asset in assets
-            if asset.category_id == master_asset.category_id
-            and asset.asset_role == master_asset.asset_role
-            and asset.slot_size_label is not None
-            and isinstance(asset.file_metadata, dict)
-            and asset.file_metadata.get("generated_from_asset_id") == master_asset.id
-        ]
-        for asset in generated_assets:
-            await self.db.artwork_print_assets.delete_one(asset.id)
-            file_path = str(asset.file_url or "").lstrip("/")
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
 
     def _sanitize_path_fragment(self, value: str | None, fallback: str) -> str:
         raw = (value or "").strip()
         sanitized = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw).strip("-_.")
         return sanitized or fallback
+
+    def _safe_ratio(self, width: int, height: int) -> float | None:
+        if width <= 0 or height <= 0:
+            return None
+        return width / height
+
+    def _ratio_from_artwork(self, artwork: Any, *, orientation: str) -> float | None:
+        aspect_ratio = getattr(artwork, "print_aspect_ratio", None)
+        label = str(getattr(aspect_ratio, "label", "") or "")
+        match = RATIO_PATTERN.search(label)
+        if not match:
+            return None
+        first = float(match.group("w"))
+        second = float(match.group("h"))
+        if first <= 0 or second <= 0:
+            return None
+        short_side, long_side = sorted((first, second))
+        if orientation == "horizontal":
+            return long_side / short_side
+        return short_side / long_side
+
+    def _candidate_print_area(self, dims: dict[str, Any]) -> int:
+        width = int(dims.get("print_area_width_px") or 0)
+        height = int(dims.get("print_area_height_px") or 0)
+        return width * height
+
+    def _aspect_error_px(
+        self,
+        width: int,
+        height: int,
+        target_width: int,
+        target_height: int,
+    ) -> float | None:
+        if width <= 0 or height <= 0 or target_width <= 0 or target_height <= 0:
+            return None
+        expected_height = width * target_height / target_width
+        expected_width = height * target_width / target_height
+        return min(abs(height - expected_height), abs(width - expected_width))

@@ -47,6 +47,16 @@ export interface StorefrontSizeOption {
     slot_size_label: string;
     size_label: string;
     sku?: string | null;
+    supplier_size_cm?: string | null;
+    supplier_size_inches?: string | null;
+    print_area?: {
+        width_px?: number | null;
+        height_px?: number | null;
+        name?: string | null;
+        source?: string | null;
+        dimensions?: Record<string, unknown>;
+    } | null;
+    provider_attributes?: Record<string, string>;
     source_country?: string | null;
     currency?: string | null;
     delivery_days?: string | null;
