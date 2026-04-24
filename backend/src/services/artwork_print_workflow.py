@@ -84,6 +84,7 @@ class ArtworkPrintWorkflowService:
         bake = await self.storefront_repository.get_active_bake()
 
         ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
+        ratio_assigned = bool(ratio_label)
         size_catalog, provider_attribute_coverage = await self._build_size_catalog_with_provider_coverage(
             bake=bake,
             ratio_label=ratio_label,
@@ -103,6 +104,7 @@ class ArtworkPrintWorkflowService:
                 master_assets=master_assets,
                 all_assets=assets,
                 print_enabled=print_enabled,
+                ratio_assigned=ratio_assigned,
                 provider_attribute_coverage=provider_attribute_coverage,
             )
             for slot_id, slot_def in MASTER_SLOTS.items()
@@ -113,6 +115,8 @@ class ArtworkPrintWorkflowService:
             "artwork_id": int(artwork.id),
             "provider_key": get_print_provider().provider_key,
             "print_enabled": print_enabled,
+            "ratio_assigned": ratio_assigned,
+            "ratio_label": ratio_label,
             "active_bake": {
                 "id": bake.id,
                 "bake_key": bake.bake_key,
@@ -121,7 +125,12 @@ class ArtworkPrintWorkflowService:
             else None,
             "master_slots": slots,
             "overall_status": overall_status,
-            "readiness_summary": self._build_readiness_summary(slots, overall_status),
+            "readiness_summary": self._build_readiness_summary(
+                slots,
+                overall_status,
+                print_enabled=print_enabled,
+                ratio_assigned=ratio_assigned,
+            ),
         }
 
     async def build_bulk_readiness_summaries(self, artworks: list[Any]) -> dict[int, dict[str, Any]]:
@@ -150,6 +159,7 @@ class ArtworkPrintWorkflowService:
         summaries: dict[int, dict[str, Any]] = {}
         for artwork in artworks:
             ratio_label = artwork.print_aspect_ratio.label if getattr(artwork, "print_aspect_ratio", None) else None
+            ratio_assigned = bool(ratio_label)
             size_catalog = size_catalogs.get(ratio_label or "", {})
             print_enabled = self._artwork_has_prints(artwork)
             orientation = str(getattr(artwork, "orientation", "") or "").lower()
@@ -166,12 +176,18 @@ class ArtworkPrintWorkflowService:
                     master_assets=master_assets,
                 all_assets=artwork_assets,
                 print_enabled=print_enabled,
+                ratio_assigned=ratio_assigned,
                 provider_attribute_coverage={},
             )
             for slot_id, slot_def in MASTER_SLOTS.items()
         ]
             overall_status = self._compute_overall_status(slots, print_enabled)
-            summaries[int(artwork.id)] = self._build_readiness_summary(slots, overall_status)
+            summaries[int(artwork.id)] = self._build_readiness_summary(
+                slots,
+                overall_status,
+                print_enabled=print_enabled,
+                ratio_assigned=ratio_assigned,
+            )
 
         return summaries
 
@@ -353,17 +369,16 @@ class ArtworkPrintWorkflowService:
         master_assets: dict[str, Any],
         all_assets: list[Any],
         print_enabled: bool,
+        ratio_assigned: bool,
         provider_attribute_coverage: dict[str, Any],
     ) -> dict[str, Any]:
         asset_role = slot_def["asset_role"]
         covers = list(slot_def["covers_categories"])
         derives = list(slot_def.get("derives_categories", []))
         slot_categories = covers + derives
-        slot_relevant = (
-            print_enabled
-            and self._slot_has_active_categories(artwork, slot_categories)
-            and self._slot_has_available_sizes(slot_categories, size_catalog)
-        )
+        slot_active = print_enabled and self._slot_has_active_categories(artwork, slot_categories)
+        slot_relevant = slot_active
+        slot_has_available_sizes = self._slot_has_available_sizes(slot_categories, size_catalog)
         largest_size = self._find_largest_size(
             covers=covers,
             size_catalog=size_catalog,
@@ -376,10 +391,14 @@ class ArtworkPrintWorkflowService:
         issues: list[str] = []
         warnings: list[str] = []
 
-        if slot_relevant and uploaded_asset is None:
+        if slot_relevant and not ratio_assigned:
+            issues.append("Choose a print aspect ratio in Basics before uploading masters.")
+        elif slot_relevant and not slot_has_available_sizes:
+            warnings.append("No baked storefront sizes were found for this artwork ratio yet.")
+        elif slot_relevant and uploaded_asset is None:
             issues.append("Upload the production master for this slot.")
 
-        if slot_relevant and uploaded_asset is not None and largest_size:
+        if slot_relevant and ratio_assigned and uploaded_asset is not None and largest_size:
             uploaded_w = int(asset_metadata.get("width_px") or 0)
             uploaded_h = int(asset_metadata.get("height_px") or 0)
             required_w = largest_size["required_width_px"]
@@ -403,11 +422,6 @@ class ArtworkPrintWorkflowService:
                 warnings.append(
                     f"Color mode is {mode}. Prodigi expects RGB and may auto-convert the file."
                 )
-
-        if slot_relevant and largest_size is None:
-            warnings.append(
-                "No baked storefront sizes were found for this artwork ratio yet."
-            )
 
         status = "ready"
         if not slot_relevant:
@@ -1003,7 +1017,14 @@ class ArtworkPrintWorkflowService:
             return "attention"
         return "ready"
 
-    def _build_readiness_summary(self, slots: list[dict[str, Any]], overall_status: str) -> dict[str, Any]:
+    def _build_readiness_summary(
+        self,
+        slots: list[dict[str, Any]],
+        overall_status: str,
+        *,
+        print_enabled: bool,
+        ratio_assigned: bool,
+    ) -> dict[str, Any]:
         relevant = [slot for slot in slots if slot["relevant"]]
         ready_count = sum(1 for slot in relevant if slot["status"] == "ready")
         blocked_count = sum(1 for slot in relevant if slot["status"] == "blocked")
@@ -1015,6 +1036,8 @@ class ArtworkPrintWorkflowService:
             "attention": "Print pipeline has warnings to review.",
             "not_required": "No print offerings are enabled.",
         }
+        if print_enabled and not ratio_assigned:
+            messages["blocked"] = "Choose a print aspect ratio in Basics to unlock the print pipeline."
         return {
             "status": overall_status,
             "message": messages.get(overall_status, ""),

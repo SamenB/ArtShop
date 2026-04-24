@@ -1,6 +1,9 @@
 """
-Service layer for print pricing and aspect ratio management.
-Handles CRUD operations for both aspect ratio categories and their pricing rows.
+Service layer for normalized print aspect ratios and legacy manual pricing rows.
+
+Aspect ratios remain part of the active admin and artwork workflow.
+Manual pricing rows remain only for compatibility and should not be treated as
+the runtime storefront price source.
 """
 
 from sqlalchemy import select
@@ -12,48 +15,78 @@ from src.schemas.print_pricing import (
     AspectRatioCreate,
     AspectRatioItem,
     AspectRatioUpdate,
-    AspectRatioWithPricing,
     PrintPricingCreate,
     PrintPricingItem,
     PrintPricingUpdate,
 )
 from src.services.base import BaseService
 
+DEFAULT_ASPECT_RATIO_PRESETS = (
+    {
+        "label": "4:5",
+        "description": "Primary gallery ratio for most flagship works.",
+        "sort_order": 0,
+    },
+    {
+        "label": "1:1",
+        "description": "Square format for central, balanced compositions.",
+        "sort_order": 1,
+    },
+    {
+        "label": "2:3",
+        "description": "Classic fine art print ratio with broad frame availability.",
+        "sort_order": 2,
+    },
+    {
+        "label": "3:4",
+        "description": "Collector portrait ratio for taller compositions.",
+        "sort_order": 3,
+    },
+    {
+        "label": "5:7",
+        "description": "Editorial portrait ratio for selective catalog expansion.",
+        "sort_order": 4,
+    },
+)
+
 
 class PrintPricingService(BaseService):
     """
-    Provides high-level methods for managing print aspect ratios and pricing entries.
+    Provides high-level methods for managing normalized print aspect ratios and
+    legacy manual pricing entries.
     """
-
-    # ── Aspect Ratio CRUD ─────────────────────────────────────────────────────
 
     async def get_all_aspect_ratios(self) -> list[AspectRatioItem]:
         """Returns all aspect ratio categories sorted by sort_order, then label."""
         try:
+            await self._ensure_default_aspect_ratios()
             rows = await self.db.aspect_ratios.get_all_ordered()
-            return [AspectRatioItem.model_validate(r, from_attributes=True) for r in rows]
+            return [AspectRatioItem.model_validate(row, from_attributes=True) for row in rows]
         except SQLAlchemyError:
-            raise DatabaseException
+            raise DatabaseException from None
 
-    async def get_aspect_ratio_with_pricing(self, aspect_ratio_id: int) -> AspectRatioWithPricing:
-        """Returns a single aspect ratio with all nested pricing rows."""
+    async def _ensure_default_aspect_ratios(self) -> None:
+        existing_rows = await self.db.aspect_ratios.get_all_ordered()
+        existing_labels = {row.label for row in existing_rows}
+        missing_presets = [
+            preset for preset in DEFAULT_ASPECT_RATIO_PRESETS if preset["label"] not in existing_labels
+        ]
+        if not missing_presets:
+            return
+
         try:
-            row = await self.db.aspect_ratios.get_with_pricing(aspect_ratio_id)
-            if not row:
-                raise ObjectNotFoundException
-            return AspectRatioWithPricing.model_validate(row, from_attributes=True)
-        except ObjectNotFoundException:
+            for preset in missing_presets:
+                self.db.session.add(
+                    PrintAspectRatioOrm(
+                        label=preset["label"],
+                        description=preset["description"],
+                        sort_order=preset["sort_order"],
+                    )
+                )
+            await self.db.session.commit()
+        except SQLAlchemyError:
+            await self.db.session.rollback()
             raise
-        except SQLAlchemyError:
-            raise DatabaseException
-
-    async def get_all_with_pricing(self) -> list[AspectRatioWithPricing]:
-        """Returns all aspect ratios with their nested pricing rows. Used by admin tab."""
-        try:
-            rows = await self.db.aspect_ratios.get_all_ordered()
-            return [AspectRatioWithPricing.model_validate(r, from_attributes=True) for r in rows]
-        except SQLAlchemyError:
-            raise DatabaseException
 
     async def create_aspect_ratio(self, data: AspectRatioCreate) -> AspectRatioItem:
         """Creates a new aspect ratio category."""
@@ -69,7 +102,7 @@ class PrintPricingService(BaseService):
             return AspectRatioItem.model_validate(row, from_attributes=True)
         except SQLAlchemyError:
             await self.db.rollback()
-            raise DatabaseException
+            raise DatabaseException from None
 
     async def update_aspect_ratio(self, aspect_ratio_id: int, data: AspectRatioUpdate) -> AspectRatioItem:
         """Applies a partial update to an aspect ratio category."""
@@ -95,13 +128,12 @@ class PrintPricingService(BaseService):
             raise
         except SQLAlchemyError:
             await self.db.rollback()
-            raise DatabaseException
+            raise DatabaseException from None
 
     async def delete_aspect_ratio(self, aspect_ratio_id: int) -> None:
         """
-        Deletes an aspect ratio and all its pricing rows (via CASCADE).
-        Also nullifies print_aspect_ratio_id on any artworks referencing this ratio
-        (handled at DB level via ON DELETE SET NULL).
+        Deletes an aspect ratio and all its legacy pricing rows via cascade.
+        Any artworks referencing this ratio are nullified by the foreign key.
         """
         try:
             result = await self.db.session.execute(
@@ -110,28 +142,25 @@ class PrintPricingService(BaseService):
             row = result.scalars().one_or_none()
             if not row:
                 raise ObjectNotFoundException
+
             await self.db.session.delete(row)
             await self.db.commit()
         except ObjectNotFoundException:
             raise
         except SQLAlchemyError:
             await self.db.rollback()
-            raise DatabaseException
-
-    # ── Pricing Row CRUD ─────────────────────────────────────────────────────
+            raise DatabaseException from None
 
     async def get_all(self) -> list[PrintPricingItem]:
-        """Returns all pricing entries ordered by aspect_ratio_id, print_type, price."""
+        """Returns all legacy manual pricing entries ordered by ratio, type, and price."""
         try:
-            rows = await self.db.print_pricing.get_all()
-            return rows
+            return await self.db.print_pricing.get_all()
         except SQLAlchemyError:
-            raise DatabaseException
+            raise DatabaseException from None
 
     async def create(self, data: PrintPricingCreate) -> PrintPricingItem:
-        """Creates a new pricing entry under the specified aspect ratio."""
+        """Creates a new legacy manual pricing entry under the specified aspect ratio."""
         try:
-            # Ensure parent exists
             parent = await self.db.session.get(PrintAspectRatioOrm, data.aspect_ratio_id)
             if not parent:
                 raise ObjectNotFoundException(detail="Aspect ratio not found")
@@ -150,10 +179,10 @@ class PrintPricingService(BaseService):
             raise
         except SQLAlchemyError:
             await self.db.rollback()
-            raise DatabaseException
+            raise DatabaseException from None
 
     async def update(self, item_id: int, data: PrintPricingUpdate) -> PrintPricingItem:
-        """Applies a partial update to an existing pricing entry."""
+        """Applies a partial update to an existing legacy pricing entry."""
         try:
             result = await self.db.session.execute(
                 select(PrintPricingOrm).where(PrintPricingOrm.id == item_id)
@@ -174,10 +203,10 @@ class PrintPricingService(BaseService):
             raise
         except SQLAlchemyError:
             await self.db.rollback()
-            raise DatabaseException
+            raise DatabaseException from None
 
     async def delete(self, item_id: int) -> None:
-        """Deletes a pricing entry by ID."""
+        """Deletes a legacy pricing entry by ID."""
         try:
             result = await self.db.session.execute(
                 select(PrintPricingOrm).where(PrintPricingOrm.id == item_id)
@@ -185,10 +214,11 @@ class PrintPricingService(BaseService):
             row = result.scalars().one_or_none()
             if not row:
                 raise ObjectNotFoundException
+
             await self.db.session.delete(row)
             await self.db.commit()
         except ObjectNotFoundException:
             raise
         except SQLAlchemyError:
             await self.db.rollback()
-            raise DatabaseException
+            raise DatabaseException from None

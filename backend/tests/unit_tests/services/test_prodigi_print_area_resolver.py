@@ -91,6 +91,8 @@ async def test_resolver_selects_mirrorwrap_variant_for_canvas_clean_assets() -> 
 
     assert result["print_area_width_px"] == 14454
     assert result["print_area_height_px"] == 18054
+    assert result["visible_art_width_px"] == 14400
+    assert result["visible_art_height_px"] == 18000
     assert result["print_area_source"] == "prodigi_product_details"
     assert result["print_area_dimensions"]["variant_attributes"]["wrap"] == "MirrorWrap"
 
@@ -204,4 +206,6 @@ async def test_resolver_uses_prodigi_product_dimensions_when_variant_print_area_
 
     assert result["print_area_width_px"] == 4200
     assert result["print_area_height_px"] == 4200
+    assert result["visible_art_width_px"] == 4200
+    assert result["visible_art_height_px"] == 4200
     assert result["print_area_source"] == "prodigi_product_dimensions"

@@ -11,7 +11,7 @@ else
 	ACTIVATE = source venv/bin/activate
 endif
 
-.PHONY: infra api worker beat frontend migrate migrate-gen test down
+.PHONY: infra api worker beat frontend migrate migrate-gen test down prodigi-rebuild
 
 # Start infrastructure (PostgreSQL + Redis in Docker)
 infra:
@@ -57,3 +57,7 @@ test:
 # Run Ruff linter and formatter
 lint:
 	cd backend && $(ACTIVATE) && ruff check --fix . && ruff format .
+
+# Rebuild baked Prodigi storefront directly from local CSV files
+prodigi-rebuild:
+	cd backend && $(ACTIVATE) && python -m src.tasks.prodigi_rebuild_storefront

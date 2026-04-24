@@ -62,5 +62,5 @@ def setup_logging():
         retention="7 days",
         compression="zip",
         serialize=True,
-        enqueue=True,
+        enqueue=settings.MODE != "TEST",
     )

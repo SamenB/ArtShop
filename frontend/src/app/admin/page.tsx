@@ -9,17 +9,15 @@ import OrdersTab from "@/app/admin/components/OrdersTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
 import FooterTab from "@/app/admin/components/FooterTab";
 import EmailTemplatesTab from "@/app/admin/components/EmailTemplatesTab";
-import PrintPricingTab from "@/app/admin/components/PrintPricingTab";
 import PrintPartnersTab from "@/app/admin/components/PrintPartnersTab";
 import ProdigiHubTab from "@/app/admin/components/ProdigiHubTab";
 import ProdigiSnapshotTab from "@/app/admin/components/ProdigiSnapshotTab";
 
-type Tab = "artwork" | "orders" | "print-pricing" | "prodigi-hub" | "prodigi-snapshot" | "print-partners" | "email-templates" | "label" | "setting" | "footer";
+type Tab = "artwork" | "orders" | "prodigi-hub" | "prodigi-snapshot" | "print-partners" | "email-templates" | "label" | "setting" | "footer";
 
 const TAB_LABELS: Record<Tab, string> = {
     "artwork": "Artworks",
     "orders": "Orders",
-    "print-pricing": "Print Pricing",
     "prodigi-hub": "Prodigi Hub",
     "prodigi-snapshot": "Snapshot Visualization",
     "print-partners": "Print Partners",
@@ -90,7 +88,6 @@ export default function AdminDashboardPage() {
                     <div className="p-8 md:p-10 min-h-[600px] bg-white">
                         {activeTab === "artwork" && <ArtworksTab />}
                         {activeTab === "orders" && <OrdersTab />}
-                        {activeTab === "print-pricing" && <PrintPricingTab />}
                         {activeTab === "prodigi-hub" && <ProdigiHubTab />}
                         {activeTab === "prodigi-snapshot" && <ProdigiSnapshotTab />}
                         {activeTab === "print-partners" && <PrintPartnersTab />}

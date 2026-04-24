@@ -1,5 +1,5 @@
 """
-Repository for print pricing and aspect ratio data access.
+Repository for normalized print aspect ratios and legacy manual pricing rows.
 """
 
 from sqlalchemy import select
@@ -8,19 +8,18 @@ from sqlalchemy.orm import selectinload
 from src.models.print_pricing import PrintAspectRatioOrm, PrintPricingOrm
 from src.repositories.base import BaseRepository
 from src.repositories.mappers.mappers import AspectRatioMapper, PrintPricingMapper
-from src.schemas.print_pricing import AspectRatioItem, PrintPricingItem
 
 
 class PrintAspectRatioRepository(BaseRepository):
     """
-    Provides data access for PrintAspectRatioOrm records.
+    Provides data access for normalized print aspect ratio records.
     """
 
     model = PrintAspectRatioOrm
     mapper = AspectRatioMapper
 
     async def get_all_ordered(self) -> list:
-        """Returns all aspect ratios sorted by sort_order, then label, with pricing rows."""
+        """Returns all aspect ratios sorted by sort_order, then label."""
         result = await self.session.execute(
             select(self.model)
             .options(selectinload(self.model.pricing_rows))
@@ -28,29 +27,17 @@ class PrintAspectRatioRepository(BaseRepository):
         )
         return list(result.scalars().unique().all())
 
-    async def get_with_pricing(self, aspect_ratio_id: int) -> PrintAspectRatioOrm | None:
-        """
-        Fetches a single aspect ratio with eagerly-loaded pricing rows.
-        Used by the admin pricing tab to render the full nested grid.
-        """
-        result = await self.session.execute(
-            select(self.model)
-            .options(selectinload(self.model.pricing_rows))
-            .where(self.model.id == aspect_ratio_id)
-        )
-        return result.scalars().one_or_none()
-
 
 class PrintPricingRepository(BaseRepository):
     """
-    Provides data access for PrintPricingOrm records.
+    Provides data access for legacy manual pricing rows.
     """
 
     model = PrintPricingOrm
     mapper = PrintPricingMapper
 
     async def get_by_aspect_ratio(self, aspect_ratio_id: int) -> list[PrintPricingOrm]:
-        """Returns all pricing rows for a specific aspect ratio, sorted by type then price."""
+        """Returns all legacy pricing rows for a specific aspect ratio."""
         result = await self.session.execute(
             select(self.model)
             .where(self.model.aspect_ratio_id == aspect_ratio_id)
@@ -60,7 +47,7 @@ class PrintPricingRepository(BaseRepository):
 
     async def get_by_type(self, print_type: str) -> list[PrintPricingOrm]:
         """
-        Retrieves all pricing entries for a specific print type,
+        Retrieves all legacy pricing entries for a specific print type,
         ordered by price ascending.
         """
         result = await self.session.execute(

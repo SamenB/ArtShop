@@ -29,7 +29,9 @@ class ArtworksOrm(Base):
         has_paper_print         — Open edition paper print is available
         has_paper_print_limited — Limited edition paper print (signed/numbered)
 
-    Pricing for prints lives in the PrintPricingOrm table (shared catalog).
+    Storefront pricing and concrete size availability are resolved later from
+    the active print-provider catalog. The artwork itself stores only
+    provider-neutral selling intent plus its normalized print ratio.
     """
 
     __tablename__ = "artworks"
@@ -74,8 +76,8 @@ class ArtworksOrm(Base):
     paper_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
 
     # ── Print configuration ────────────────────────────────────────────────────
-    # References the aspect ratio category for this artwork's print price grid.
-    # If null, no specific ratio is assigned and all sizes are available.
+    # References the normalized print aspect ratio family for this artwork.
+    # Provider catalogs later resolve concrete size/price offers for that ratio.
     print_aspect_ratio_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("print_aspect_ratios.id", ondelete="SET NULL"),
@@ -83,11 +85,6 @@ class ArtworksOrm(Base):
         default=None,
         index=True,
     )
-    # Restricts which sizes from the ratio's grid are offered for this artwork.
-    # Sizes are matched by exact size_label string comparison.
-    # e.g. print_min_size_label="30×40 cm" means nothing smaller is offered.
-    print_min_size_label: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
-    print_max_size_label: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
 
     # Relationships
     print_aspect_ratio: Mapped["PrintAspectRatioOrm | None"] = relationship(

@@ -122,6 +122,8 @@ interface ArtworkPrintWorkflowPayload {
     artwork_id: number;
     provider_key: string;
     print_enabled: boolean;
+    ratio_assigned?: boolean;
+    ratio_label?: string | null;
     master_slots: MasterSlot[];
     overall_status: string;
     readiness_summary: PrintReadinessSummary;
@@ -146,8 +148,6 @@ interface Artwork {
     canvas_print_limited_quantity?: number | null;
     paper_print_limited_quantity?: number | null;
     print_aspect_ratio_id?: number | null;
-    print_min_size_label?: string | null;
-    print_max_size_label?: string | null;
     orientation?: string | null;
     print_quality_url?: string | null;
     print_readiness_summary?: PrintReadinessSummary | null;
@@ -186,8 +186,6 @@ interface ArtworkFormState {
     canvas_print_limited_quantity: number | string;
     paper_print_limited_quantity: number | string;
     print_aspect_ratio_id: number | null;
-    print_min_size_label: string;
-    print_max_size_label: string;
     orientation: string;
     labels: number[];
     original_status: string;
@@ -248,8 +246,6 @@ function createDefaultFormState(): ArtworkFormState {
         canvas_print_limited_quantity: "",
         paper_print_limited_quantity: "",
         print_aspect_ratio_id: null,
-        print_min_size_label: "",
-        print_max_size_label: "",
         orientation: "Horizontal",
         labels: [],
         original_status: "available",
@@ -270,6 +266,19 @@ function hasPrintOfferings(formData: ArtworkFormState): boolean {
             formData.has_canvas_print_limited ||
             formData.has_paper_print ||
             formData.has_paper_print_limited
+    );
+}
+
+function hasMissingPrintRatio(formData: ArtworkFormState): boolean {
+    return hasPrintOfferings(formData) && !formData.print_aspect_ratio_id;
+}
+
+function hasOfferingValidationIssues(formData: ArtworkFormState): boolean {
+    return Boolean(
+        (formData.has_canvas_print_limited &&
+            !Number(formData.canvas_print_limited_quantity || 0)) ||
+            (formData.has_paper_print_limited &&
+                !Number(formData.paper_print_limited_quantity || 0))
     );
 }
 
@@ -628,7 +637,7 @@ export default function ArtworksTab() {
         setWorkflowLoading(true);
         setWorkflowError(null);
         try {
-            const response = await apiFetch(`${getApiUrl()}/artworks/${artworkId}/print-workflow`);
+            const response = await apiFetch(`${getApiUrl()}/artworks/${artworkId}/print-workflow?t=${Date.now()}`);
             if (!response.ok) {
                 throw new Error(`Workflow request failed with ${response.status}`);
             }
@@ -690,6 +699,11 @@ export default function ArtworksTab() {
     const saveArtwork = async () => {
         if (!formData.title.trim()) {
             window.alert("Title is required.");
+            return null;
+        }
+
+        if (hasPrintOfferings(formData) && !formData.print_aspect_ratio_id) {
+            window.alert("Please choose a print aspect ratio in the Basics section before enabling print offerings.");
             return null;
         }
 
@@ -765,8 +779,10 @@ export default function ArtworksTab() {
             if (hasPrintOfferings(formData)) {
                 await fetchWorkflow(targetId);
                 if (!editingId) {
-                    setActiveStep("pipeline");
+                    setActiveStep(formData.print_aspect_ratio_id ? "pipeline" : "basics");
                 }
+            } else {
+                setWorkflowData(null);
             }
 
             return targetId;
@@ -804,8 +820,6 @@ export default function ArtworksTab() {
                 canvas_print_limited_quantity: full.canvas_print_limited_quantity || "",
                 paper_print_limited_quantity: full.paper_print_limited_quantity || "",
                 print_aspect_ratio_id: full.print_aspect_ratio_id || null,
-                print_min_size_label: full.print_min_size_label || "",
-                print_max_size_label: full.print_max_size_label || "",
                 orientation: full.orientation || "Horizontal",
                 labels: (full.labels || []).map((label) => label.id),
                 original_status: full.original_status || "available",
@@ -916,22 +930,33 @@ export default function ArtworksTab() {
     };
 
     const stepStatusMap: Record<(typeof WORKFLOW_STEP_ORDER)[number]["id"], string> = {
-        basics: formData.title.trim() ? "ready" : "blocked",
-        offerings:
-            hasPrintOfferings(formData) && !formData.print_aspect_ratio_id ? "attention" : "ready",
-        pipeline: hasPrintOfferings(formData)
-            ? editingId
-                ? workflowData
-                    ? workflowData.overall_status === "ready"
-                        ? "ready"
-                        : workflowData.overall_status === "blocked"
-                        ? "blocked"
-                        : "attention"
+        basics: !formData.title.trim()
+            ? "blocked"
+            : hasMissingPrintRatio(formData)
+            ? "attention"
+            : "ready",
+        offerings: hasOfferingValidationIssues(formData) ? "attention" : "ready",
+        pipeline: !hasPrintOfferings(formData)
+            ? "ready"
+            : hasMissingPrintRatio(formData)
+            ? "blocked"
+            : editingId
+            ? workflowData
+                ? workflowData.overall_status === "ready"
+                    ? "ready"
+                    : workflowData.overall_status === "blocked"
+                    ? "blocked"
                     : "attention"
                 : "attention"
-            : "ready",
+            : "attention",
         media: imageItems.length > 0 ? "ready" : "attention",
     };
+
+    const headerReadiness = hasPrintOfferings(formData)
+        ? hasMissingPrintRatio(formData)
+            ? { status: "blocked", message: "Choose a print aspect ratio in Basics." }
+            : workflowData?.readiness_summary || null
+        : null;
 
     if (loading) {
         return (
@@ -989,11 +1014,11 @@ export default function ArtworksTab() {
                                 </p>
                             </div>
 
-                            {workflowData?.readiness_summary ? (
+                            {headerReadiness ? (
                                 <div className="text-right">
                                     <StatusBadge
-                                        status={workflowData.readiness_summary.status}
-                                        label={workflowData.readiness_summary.message}
+                                        status={headerReadiness.status}
+                                        label={headerReadiness.message}
                                     />
                                 </div>
                             ) : null}
@@ -1040,7 +1065,7 @@ export default function ArtworksTab() {
                                 <div>
                                     <FormSection
                                         title="Artwork Basics"
-                                        description="Core identity, physical dimensions and original-sales information."
+                                        description="Core identity, physical dimensions, original-sales information, and the normalized print ratio family for this artwork."
                                     />
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         <div>
@@ -1149,6 +1174,37 @@ export default function ArtworksTab() {
                                         </div>
 
                                         <div className="md:col-span-2">
+                                            <FieldLabel
+                                                text="Print aspect ratio"
+                                                valid={!hasPrintOfferings(formData) || Boolean(formData.print_aspect_ratio_id)}
+                                            />
+                                            <select
+                                                value={formData.print_aspect_ratio_id || ""}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        print_aspect_ratio_id: event.target.value
+                                                            ? Number(event.target.value)
+                                                            : null,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                            >
+                                                <option value="">Select ratio</option>
+                                                {aspectRatios.map((ratio) => (
+                                                    <option key={ratio.id} value={ratio.id}>
+                                                        {ratio.label}
+                                                        {ratio.description ? ` - ${ratio.description}` : ""}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="mt-2 text-xs font-medium text-[#31323E]/45">
+                                                Choose the normalized ratio family here. Exact sizes and prices come
+                                                from the active provider snapshot.
+                                            </p>
+                                        </div>
+
+                                        <div className="md:col-span-2">
                                             <label className="flex items-center gap-3 rounded-2xl border border-[#31323E]/12 bg-white px-4 py-3">
                                                 <input
                                                     type="checkbox"
@@ -1215,7 +1271,7 @@ export default function ArtworksTab() {
                                 <div>
                                     <FormSection
                                         title="Offerings"
-                                        description="Turn print families on or off, define edition logic and bind the artwork to the storefront ratio grid."
+                                        description="Define the provider-neutral selling intent for this artwork: which print families are enabled and whether limited editions exist."
                                     />
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1309,63 +1365,18 @@ export default function ArtworksTab() {
                                 </div>
 
                                 {hasPrintOfferings(formData) ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                        <div>
-                                            <FieldLabel
-                                                text="Print aspect ratio"
-                                                valid={Boolean(formData.print_aspect_ratio_id)}
-                                            />
-                                            <select
-                                                value={formData.print_aspect_ratio_id || ""}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        print_aspect_ratio_id: event.target.value
-                                                            ? Number(event.target.value)
-                                                            : null,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                            >
-                                                <option value="">Select ratio</option>
-                                                {aspectRatios.map((ratio) => (
-                                                    <option key={ratio.id} value={ratio.id}>
-                                                        {ratio.label}
-                                                        {ratio.description ? ` - ${ratio.description}` : ""}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Min size label" valid={true} />
-                                            <input
-                                                value={formData.print_min_size_label}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        print_min_size_label: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                                placeholder="e.g. 30x40 cm"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Max size label" valid={true} />
-                                            <input
-                                                value={formData.print_max_size_label}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        print_max_size_label: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                                placeholder="e.g. 80x100 cm"
-                                            />
-                                        </div>
+                                    <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/60">
+                                        <p className="font-semibold text-[#31323E]">Print ratio is chosen in Basics.</p>
+                                        <p className="mt-1">
+                                            Offerings only defines what this artwork can sell. The exact storefront
+                                            size grid is resolved later from the active provider catalog.
+                                        </p>
+                                        {hasMissingPrintRatio(formData) ? (
+                                            <p className="mt-2 text-amber-700">
+                                                Choose a print aspect ratio in Basics before continuing to the print
+                                                pipeline.
+                                            </p>
+                                        ) : null}
                                     </div>
                                 ) : (
                                     <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
@@ -1388,6 +1399,11 @@ export default function ArtworksTab() {
                                     <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
                                         Enable at least one print family in the Offerings step to unlock the
                                         print pipeline.
+                                    </div>
+                                ) : !formData.print_aspect_ratio_id ? (
+                                    <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm font-medium text-amber-700">
+                                        Choose a print aspect ratio in Basics first. The pipeline cannot calculate
+                                        required pixels or unlock master uploads without a normalized ratio family.
                                     </div>
                                 ) : !editingId ? (
                                     <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm font-medium text-amber-700">

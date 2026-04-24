@@ -76,6 +76,7 @@ async def db():
 @pytest.fixture(scope="session", autouse=True)
 async def check_test_mode():
     assert settings.MODE == "TEST"
+    settings.ensure_safe_test_database()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -84,6 +85,9 @@ async def setup_database(check_test_mode):
     # We use DROP SCHEMA CASCADE to ensure orphaned tables from legacy code (like artwork_tags)
     # are removed even if they are not present in the current Base.metadata.
     async with engine_null_pool.begin() as conn:
+        current_database = await conn.scalar(text("SELECT current_database()"))
+        assert current_database == settings.ACTIVE_POSTGRES_DB
+        settings.ensure_safe_test_database(current_database)
         await conn.execute(text("DROP SCHEMA public CASCADE;"))
         await conn.execute(text("CREATE SCHEMA public;"))
         await conn.run_sync(Base.metadata.create_all)

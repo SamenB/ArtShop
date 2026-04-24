@@ -55,13 +55,19 @@ class FakeDB:
         self.artwork_print_assets = FakeArtworkPrintAssetsRepository(assets)
 
 
-def make_artwork(*, artwork_id: int = 1, paper: bool = True, canvas: bool = False):
+def make_artwork(
+    *,
+    artwork_id: int = 1,
+    paper: bool = True,
+    canvas: bool = False,
+    ratio_label: str | None = "3:4",
+):
     return SimpleNamespace(
         id=artwork_id,
         slug=f"artwork-{artwork_id}",
         title="Test Artwork",
         orientation="Vertical",
-        print_aspect_ratio=SimpleNamespace(label="3:4"),
+        print_aspect_ratio=SimpleNamespace(label=ratio_label) if ratio_label else None,
         has_paper_print=paper,
         has_paper_print_limited=False,
         has_canvas_print=canvas,
@@ -155,6 +161,24 @@ async def test_bulk_readiness_blocks_when_relevant_master_is_missing():
 
 
 @pytest.mark.asyncio
+async def test_get_workflow_blocks_when_prints_enabled_but_ratio_is_missing():
+    artwork = make_artwork(paper=True, canvas=False, ratio_label=None)
+    service = make_service(groups=[make_group("paperPrintRolled", "30x40 cm")])
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    payload = await service.get_workflow(artwork.id)
+
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "paper_bordered")
+    assert payload["print_enabled"] is True
+    assert payload["ratio_assigned"] is False
+    assert payload["overall_status"] == "blocked"
+    assert payload["readiness_summary"]["message"] == "Choose a print aspect ratio in Basics to unlock the print pipeline."
+    assert slot["relevant"] is True
+    assert slot["status"] == "blocked"
+    assert slot["issues"] == ["Choose a print aspect ratio in Basics before uploading masters."]
+
+
+@pytest.mark.asyncio
 async def test_get_workflow_ignores_unavailable_sizes_for_required_dimensions():
     artwork = make_artwork(paper=True, canvas=False)
     asset = make_master_asset(
@@ -178,7 +202,7 @@ async def test_get_workflow_ignores_unavailable_sizes_for_required_dimensions():
     payload = await service.get_workflow(artwork.id)
 
     slot = next(item for item in payload["master_slots"] if item["slot_id"] == "paper_bordered")
-    assert payload["overall_status"] == "ready"
+    assert payload["overall_status"] == "attention"
     assert slot["status"] == "ready"
     assert slot["largest_size_label"] == "30x40 cm"
     assert slot["required_for_sizes"] == ["30x40 cm"]

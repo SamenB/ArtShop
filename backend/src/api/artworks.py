@@ -10,6 +10,7 @@ import shutil
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from src.api.dependencies import AdminDep, DBDep
 from src.exeptions import ObjectNotFoundException
@@ -226,8 +227,13 @@ async def upload_artwork_images(
             shutil.copyfileobj(file.file, buffer)
         temp_paths.append(temp_path)
 
-    process_and_attach_image.delay(model_type="artwork", model_id=artwork_id, temp_paths=temp_paths)
-    return {"status": "processing"}
+    await run_in_threadpool(
+        process_and_attach_image,
+        model_type="artwork",
+        model_id=artwork_id,
+        temp_paths=temp_paths
+    )
+    return {"status": "success"}
 
 
 @router.post("/{artwork_id}/print-image")

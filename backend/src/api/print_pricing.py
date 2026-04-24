@@ -1,9 +1,9 @@
 """
-API endpoints for managing the print pricing catalog and aspect ratio categories.
+API endpoints for normalized print aspect ratios and legacy manual pricing rows.
 
-Provides:
-  - Publicly readable aspect ratio list and full pricing grid.
-  - Admin-only CRUD for aspect ratios (groups) and individual pricing rows.
+The active storefront no longer reads runtime prices from this module. Live
+pricing comes from baked provider catalogs. The aspect ratio endpoints remain
+active because artwork creation and print workflow still depend on them.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -14,34 +14,22 @@ from src.schemas.print_pricing import (
     AspectRatioCreate,
     AspectRatioItem,
     AspectRatioUpdate,
-    AspectRatioWithPricing,
     PrintPricingCreate,
     PrintPricingItem,
     PrintPricingUpdate,
 )
 from src.services.print_pricing import PrintPricingService
 
-router = APIRouter(prefix="/print-pricing", tags=["Print Pricing"])
+router = APIRouter(prefix="/print-pricing", tags=["Print Catalog"])
 
-
-# ── Aspect Ratio Endpoints ────────────────────────────────────────────────────
 
 @router.get("/aspect-ratios", response_model=list[AspectRatioItem])
 async def get_aspect_ratios(db: DBDep):
     """
-    Returns all aspect ratio categories (without nested pricing rows).
-    Publicly accessible — used by artwork creation forms.
+    Returns all normalized print aspect ratio families.
+    Publicly accessible because artwork forms and workflow editors use it.
     """
     return await PrintPricingService(db).get_all_aspect_ratios()
-
-
-@router.get("/aspect-ratios/with-pricing", response_model=list[AspectRatioWithPricing])
-async def get_aspect_ratios_with_pricing(db: DBDep):
-    """
-    Returns all aspect ratios with their full nested pricing grids.
-    Used by the admin Print Pricing tab to render the grouped structure.
-    """
-    return await PrintPricingService(db).get_all_with_pricing()
 
 
 @router.post("/aspect-ratios", response_model=AspectRatioItem, status_code=201)
@@ -50,7 +38,7 @@ async def create_aspect_ratio(data: AspectRatioCreate, admin_id: AdminDep, db: D
     try:
         return await PrintPricingService(db).create_aspect_ratio(data)
     except DatabaseException:
-        raise HTTPException(status_code=500, detail="Failed to create aspect ratio")
+        raise HTTPException(status_code=500, detail="Failed to create aspect ratio") from None
 
 
 @router.put("/aspect-ratios/{ratio_id}", response_model=AspectRatioItem)
@@ -59,68 +47,62 @@ async def update_aspect_ratio(ratio_id: int, data: AspectRatioUpdate, admin_id: 
     try:
         return await PrintPricingService(db).update_aspect_ratio(ratio_id, data)
     except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Aspect ratio not found")
+        raise HTTPException(status_code=404, detail="Aspect ratio not found") from None
     except DatabaseException:
-        raise HTTPException(status_code=500, detail="Failed to update aspect ratio")
+        raise HTTPException(status_code=500, detail="Failed to update aspect ratio") from None
 
 
 @router.delete("/aspect-ratios/{ratio_id}", status_code=204)
 async def delete_aspect_ratio(ratio_id: int, admin_id: AdminDep, db: DBDep):
     """
-    Deletes an aspect ratio and all its pricing rows.
-    All artworks referencing this ratio will have their print_aspect_ratio_id set to NULL.
-    Requires admin privileges.
+    Deletes an aspect ratio and all legacy pricing rows under it.
+    Artworks referencing this ratio will have print_aspect_ratio_id set to NULL.
     """
     try:
         await PrintPricingService(db).delete_aspect_ratio(ratio_id)
     except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Aspect ratio not found")
+        raise HTTPException(status_code=404, detail="Aspect ratio not found") from None
     except DatabaseException:
-        raise HTTPException(status_code=500, detail="Failed to delete aspect ratio")
+        raise HTTPException(status_code=500, detail="Failed to delete aspect ratio") from None
 
-
-# ── Pricing Row Endpoints ─────────────────────────────────────────────────────
 
 @router.get("", response_model=list[PrintPricingItem])
 async def get_print_pricing(db: DBDep):
     """
-    Returns the full pricing grid (flat list).
-    Publicly accessible — used by the shop frontend.
+    Returns the flat legacy manual pricing grid.
+    Kept for compatibility; the storefront no longer uses this endpoint for live pricing.
     """
     return await PrintPricingService(db).get_all()
 
 
 @router.post("", response_model=PrintPricingItem, status_code=201)
 async def create_print_pricing(data: PrintPricingCreate, admin_id: AdminDep, db: DBDep):
-    """
-    Adds a new size/price entry to the pricing grid under a specific aspect ratio.
-    Requires admin privileges.
-    """
+    """Adds a legacy pricing entry under a specific aspect ratio. Requires admin privileges."""
     try:
         return await PrintPricingService(db).create(data)
     except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Aspect ratio not found")
+        raise HTTPException(status_code=404, detail="Aspect ratio not found") from None
     except DatabaseException:
-        raise HTTPException(status_code=500, detail="Failed to create pricing entry")
+        raise HTTPException(status_code=500, detail="Failed to create pricing entry") from None
 
 
 @router.put("/{item_id}", response_model=PrintPricingItem)
 async def update_print_pricing(item_id: int, data: PrintPricingUpdate, admin_id: AdminDep, db: DBDep):
-    """Updates an existing pricing entry. Requires admin privileges."""
+    """Updates an existing legacy pricing entry. Requires admin privileges."""
     try:
         return await PrintPricingService(db).update(item_id, data)
     except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Pricing entry not found")
+        raise HTTPException(status_code=404, detail="Pricing entry not found") from None
     except DatabaseException:
-        raise HTTPException(status_code=500, detail="Failed to update pricing entry")
+        raise HTTPException(status_code=500, detail="Failed to update pricing entry") from None
 
 
 @router.delete("/{item_id}", status_code=204)
 async def delete_print_pricing(item_id: int, admin_id: AdminDep, db: DBDep):
-    """Deletes a pricing entry. Requires admin privileges."""
+    """Deletes a legacy pricing entry. Requires admin privileges."""
     try:
         await PrintPricingService(db).delete(item_id)
     except ObjectNotFoundException:
-        raise HTTPException(status_code=404, detail="Pricing entry not found")
+        raise HTTPException(status_code=404, detail="Pricing entry not found") from None
     except DatabaseException:
-        raise HTTPException(status_code=500, detail="Failed to delete pricing entry")
+        raise HTTPException(status_code=500, detail="Failed to delete pricing entry") from None

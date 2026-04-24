@@ -29,6 +29,7 @@ class ProdigiPrintAreaResolver:
         self.target_dpi = target_dpi
         self._client: ProdigiClient | None = None
         self._product_cache: dict[str, ProductDetails | None] = {}
+        self._resolution_cache: dict[tuple[Any, ...], dict[str, Any]] = {}
 
     async def __aenter__(self) -> "ProdigiPrintAreaResolver":
         if settings.PRODIGI_API_KEY:
@@ -54,6 +55,21 @@ class ProdigiPrintAreaResolver:
         slot_size_label: str | None,
         wrap_margin_pct: float = 0.0,
     ) -> dict[str, Any]:
+        cache_key = (
+            (sku or "").strip().upper(),
+            (destination_country or "").upper(),
+            category_id,
+            tuple(sorted((attributes or {}).items())),
+            tuple(sorted(optional_attribute_keys or set())),
+            supplier_size_inches,
+            supplier_size_cm,
+            slot_size_label,
+            wrap_margin_pct,
+        )
+        cached = self._resolution_cache.get(cache_key)
+        if cached is not None:
+            return dict(cached)
+
         api_dimensions = await self._resolve_from_product_details(
             sku=sku,
             destination_country=destination_country,
@@ -61,11 +77,13 @@ class ProdigiPrintAreaResolver:
             optional_attribute_keys=optional_attribute_keys or set(),
         )
         if api_dimensions is not None:
-            return {
+            resolved = {
                 **api_dimensions,
                 "target_dpi": self.target_dpi,
                 "wrap_margin_pct": None,
             }
+            self._resolution_cache[cache_key] = dict(resolved)
+            return resolved
 
         fallback = self._resolve_from_physical_size(
             supplier_size_inches=supplier_size_inches,
@@ -73,12 +91,14 @@ class ProdigiPrintAreaResolver:
             slot_size_label=slot_size_label,
             wrap_margin_pct=wrap_margin_pct,
         )
-        return {
+        resolved = {
             **fallback,
             "target_dpi": self.target_dpi,
             "wrap_margin_pct": wrap_margin_pct,
             "category_id": category_id,
         }
+        self._resolution_cache[cache_key] = dict(resolved)
+        return resolved
 
     async def _resolve_from_product_details(
         self,
@@ -111,10 +131,14 @@ class ProdigiPrintAreaResolver:
             height = self._positive_int(dimensions.get("verticalResolution"))
             if width is None or height is None:
                 return None
+            visible_width = self._decimal_px(Decimal(str(product.width_in)))
+            visible_height = self._decimal_px(Decimal(str(product.height_in)))
 
             return {
                 "print_area_width_px": width,
                 "print_area_height_px": height,
+                "visible_art_width_px": visible_width,
+                "visible_art_height_px": visible_height,
                 "print_area_name": area_name,
                 "print_area_source": "prodigi_product_details",
                 "print_area_dimensions": {
@@ -123,12 +147,20 @@ class ProdigiPrintAreaResolver:
                     "variant_attributes": variant.attributes,
                     "horizontalResolution": width,
                     "verticalResolution": height,
+                    "visible_art_width_px": visible_width,
+                    "visible_art_height_px": visible_height,
+                    "physical_width_in": product.width_in,
+                    "physical_height_in": product.height_in,
                 },
             }
 
+        visible_width = self._decimal_px(Decimal(str(product.width_in)))
+        visible_height = self._decimal_px(Decimal(str(product.height_in)))
         return {
-            "print_area_width_px": self._decimal_px(Decimal(str(product.width_in))),
-            "print_area_height_px": self._decimal_px(Decimal(str(product.height_in))),
+            "print_area_width_px": visible_width,
+            "print_area_height_px": visible_height,
+            "visible_art_width_px": visible_width,
+            "visible_art_height_px": visible_height,
             "print_area_name": "product_dimensions",
             "print_area_source": "prodigi_product_dimensions",
             "print_area_dimensions": {
@@ -138,6 +170,8 @@ class ProdigiPrintAreaResolver:
                 "width_in": product.width_in,
                 "height_in": product.height_in,
                 "dpi": self.target_dpi,
+                "visible_art_width_px": visible_width,
+                "visible_art_height_px": visible_height,
             },
         }
 
@@ -243,6 +277,8 @@ class ProdigiPrintAreaResolver:
         return {
             "print_area_width_px": width_px,
             "print_area_height_px": height_px,
+            "visible_art_width_px": width_px,
+            "visible_art_height_px": height_px,
             "print_area_name": "default",
             "print_area_source": source,
             "print_area_dimensions": {
@@ -254,6 +290,8 @@ class ProdigiPrintAreaResolver:
                 "height_in": str(inches[1]),
                 "dpi": self.target_dpi,
                 "wrap_margin_pct": wrap_margin_pct,
+                "visible_art_width_px": width_px,
+                "visible_art_height_px": height_px,
             },
         }
 

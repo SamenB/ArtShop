@@ -27,6 +27,7 @@ PROVIDER_PRINT_AREA_SOURCES = {
     "prodigi_product_details",
     "prodigi_product_dimensions",
 }
+PIXEL_RATIO_TOLERANCE = 0.003
 
 
 class ProdigiPrintAreaBakeError(RuntimeError):
@@ -416,19 +417,42 @@ class ProdigiStorefrontBakeService:
         for card in storefront_preview.get("visible_cards", []):
             kept_sizes = []
             for size in card.get("size_options", []):
-                if size.get("print_area_source") in PROVIDER_PRINT_AREA_SOURCES:
-                    kept_sizes.append(size)
+                if size.get("print_area_source") not in PROVIDER_PRINT_AREA_SOURCES:
+                    removed_sizes.append(
+                        {
+                            "country_code": storefront_preview.get("country_code"),
+                            "ratio": storefront_preview.get("ratio"),
+                            "category_id": card.get("category_id"),
+                            "slot_size_label": size.get("slot_size_label"),
+                            "sku": size.get("sku"),
+                            "print_area_source": size.get("print_area_source"),
+                            "reason": "missing_provider_pixels",
+                        }
+                    )
                     continue
-                removed_sizes.append(
-                    {
-                        "country_code": storefront_preview.get("country_code"),
-                        "ratio": storefront_preview.get("ratio"),
-                        "category_id": card.get("category_id"),
-                        "slot_size_label": size.get("slot_size_label"),
-                        "sku": size.get("sku"),
-                        "print_area_source": size.get("print_area_source"),
-                    }
+
+                ratio_delta = self._pixel_ratio_delta(
+                    ratio_label=storefront_preview.get("ratio"),
+                    size=size,
                 )
+                if ratio_delta is not None and ratio_delta > PIXEL_RATIO_TOLERANCE:
+                    removed_sizes.append(
+                        {
+                            "country_code": storefront_preview.get("country_code"),
+                            "ratio": storefront_preview.get("ratio"),
+                            "category_id": card.get("category_id"),
+                            "slot_size_label": size.get("slot_size_label"),
+                            "sku": size.get("sku"),
+                            "print_area_source": size.get("print_area_source"),
+                            "reason": "visible_art_ratio_mismatch",
+                            "ratio_delta": round(ratio_delta, 6),
+                            "visible_art_width_px": self._visible_art_width_px(size),
+                            "visible_art_height_px": self._visible_art_height_px(size),
+                        }
+                    )
+                    continue
+
+                kept_sizes.append(size)
 
             if not kept_sizes:
                 hidden_cards.append(
@@ -436,7 +460,7 @@ class ProdigiStorefrontBakeService:
                         "category_id": card.get("category_id"),
                         "label": card.get("label"),
                         "reason": (
-                            "No size options have provider pixel targets from Prodigi Product Details."
+                            "No size options remain after provider pixel validation."
                         ),
                         "storefront_action": card.get("storefront_action"),
                         "fulfillment_level": card.get("fulfillment_level"),
@@ -461,6 +485,7 @@ class ProdigiStorefrontBakeService:
         storefront_preview["visible_cards"] = visible_cards
         storefront_preview["hidden_cards"] = hidden_cards
         storefront_preview["removed_size_options_without_provider_print_area"] = removed_sizes
+        storefront_preview["removed_size_options"] = removed_sizes
 
     def _assert_provider_print_area_sizes(self, storefront_preview: dict[str, Any]) -> None:
         missing: list[str] = []
@@ -512,6 +537,46 @@ class ProdigiStorefrontBakeService:
 
     def _optional_provider_attribute_keys(self, category_id: str) -> set[str]:
         return set()
+
+    def _pixel_ratio_delta(
+        self,
+        *,
+        ratio_label: str | None,
+        size: dict[str, Any],
+    ) -> float | None:
+        if not ratio_label or ":" not in ratio_label:
+            return None
+
+        width = self._visible_art_width_px(size)
+        height = self._visible_art_height_px(size)
+        if width is None or height is None or width <= 0 or height <= 0:
+            return None
+
+        short_edge, long_edge = sorted((width, height))
+        target_left, target_right = ratio_label.split(":", 1)
+        try:
+            target_ratio = int(target_left) / int(target_right)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+        actual_ratio = short_edge / long_edge
+        return abs(actual_ratio - target_ratio)
+
+    def _visible_art_width_px(self, size: dict[str, Any]) -> int | None:
+        direct = size.get("visible_art_width_px")
+        if direct:
+            return int(direct)
+        dimensions = size.get("print_area_dimensions") or {}
+        value = dimensions.get("visible_art_width_px")
+        return int(value) if value else size.get("print_area_width_px")
+
+    def _visible_art_height_px(self, size: dict[str, Any]) -> int | None:
+        direct = size.get("visible_art_height_px")
+        if direct:
+            return int(direct)
+        dimensions = size.get("print_area_dimensions") or {}
+        value = dimensions.get("visible_art_height_px")
+        return int(value) if value else size.get("print_area_height_px")
 
     def _is_visible_category(
         self,

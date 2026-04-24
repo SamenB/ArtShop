@@ -20,14 +20,13 @@ interface SiteSettings {
     hero_ken_burns_enabled: boolean;
     hero_slide_duration: number;
 }
-
 const COVER_FIELDS: { desktop: keyof SiteSettings; mobile: keyof SiteSettings }[] = [
     { desktop: "main_bg_desktop_url", mobile: "main_bg_mobile_url" },
     { desktop: "cover_2_desktop_url", mobile: "cover_2_mobile_url" },
     { desktop: "cover_3_desktop_url", mobile: "cover_3_mobile_url" },
 ];
 
-// ── Shared Primitives ─────────────────────────────────────────────────────────
+// Shared Primitives
 
 const inp = "w-full bg-white border border-[#31323E]/15 rounded-lg px-4 py-3 text-sm font-medium text-[#31323E] focus:border-[#31323E]/50 focus:ring-2 focus:ring-[#31323E]/10 focus:outline-none placeholder-[#31323E]/30 transition-all shadow-sm";
 const labelCls = "block text-[10px] font-bold uppercase tracking-[0.18em] text-[#31323E]/50 mb-1.5";
@@ -43,7 +42,6 @@ function SectionCard({ title, desc, children }: { title: string; desc?: string; 
         </div>
     );
 }
-
 function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div>
@@ -52,7 +50,6 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
         </div>
     );
 }
-
 function PhotoUploadSlot({
     label,
     url,
@@ -95,7 +92,6 @@ function PhotoUploadSlot({
         </div>
     );
 }
-
 export default function SettingsTab() {
     const [settings, setSettings] = useState<SiteSettings | null>(null);
     const [loading, setLoading] = useState(true);
@@ -224,10 +220,10 @@ export default function SettingsTab() {
 
             {/* Info Banner */}
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-0.5">Print Pricing</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-0.5">Artwork Basics</p>
                 <p className="text-sm text-blue-700 font-medium">
-                    Print prices are now managed in the <span className="font-bold">Print Pricing</span> tab.
-                    Each print type has its own size → price grid.
+                    Artwork ratio families are now selected directly in the <span className="font-bold">Basics</span> step of the artwork editor.
+                    Runtime print prices and exact options come from the active provider storefront snapshot.
                 </p>
             </div>
 

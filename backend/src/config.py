@@ -7,7 +7,7 @@ and system environment variables.
 import json
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     DB_HOST: str
     DB_PORT: int
+    TEST_POSTGRES_DB: str | None = None
+    TEST_POSTGRES_USER: str | None = None
+    TEST_POSTGRES_PASSWORD: str | None = None
+    TEST_DB_HOST: str | None = None
+    TEST_DB_PORT: int | None = None
 
     # Redis Configuration
     REDIS_HOST: str
@@ -39,12 +44,46 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
 
     @property
+    def ACTIVE_POSTGRES_DB(self) -> str:
+        if self.MODE == "TEST":
+            return self.TEST_POSTGRES_DB or self.POSTGRES_DB
+        return self.POSTGRES_DB
+
+    @property
+    def ACTIVE_POSTGRES_USER(self) -> str:
+        if self.MODE == "TEST":
+            return self.TEST_POSTGRES_USER or self.POSTGRES_USER
+        return self.POSTGRES_USER
+
+    @property
+    def ACTIVE_POSTGRES_PASSWORD(self) -> str:
+        if self.MODE == "TEST":
+            return self.TEST_POSTGRES_PASSWORD or self.POSTGRES_PASSWORD
+        return self.POSTGRES_PASSWORD
+
+    @property
+    def ACTIVE_DB_HOST(self) -> str:
+        if self.MODE == "TEST":
+            return self.TEST_DB_HOST or self.DB_HOST
+        return self.DB_HOST
+
+    @property
+    def ACTIVE_DB_PORT(self) -> int:
+        if self.MODE == "TEST":
+            return self.TEST_DB_PORT or self.DB_PORT
+        return self.DB_PORT
+
+    @property
     def DB_URL(self) -> str:
         """
         Returns the formatted PostgreSQL connection URL for SQLAlchemy.
         Uses the asyncpg driver for asynchronous operations.
         """
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.POSTGRES_DB}"
+        return (
+            "postgresql+asyncpg://"
+            f"{self.ACTIVE_POSTGRES_USER}:{self.ACTIVE_POSTGRES_PASSWORD}"
+            f"@{self.ACTIVE_DB_HOST}:{self.ACTIVE_DB_PORT}/{self.ACTIVE_POSTGRES_DB}"
+        )
 
     # Authentication (JWT) Configuration
     JWT_SECRET_KEY: str
@@ -78,6 +117,34 @@ class Settings(BaseSettings):
             # Fallback to comma-separated string format.
             return [email.strip().lower() for email in v.split(",") if email.strip()]
         return v
+
+    @model_validator(mode="after")
+    def validate_test_database_safety(self) -> "Settings":
+        if self.MODE == "TEST":
+            self.ensure_safe_test_database()
+        return self
+
+    def is_safe_test_database_name(self, db_name: str | None = None) -> bool:
+        normalized = (db_name or self.ACTIVE_POSTGRES_DB).strip().lower()
+        if not normalized:
+            return False
+        return (
+            normalized.startswith("test_")
+            or normalized.endswith("_test")
+            or normalized in {"pytest", "tests"}
+        )
+
+    def ensure_safe_test_database(self, db_name: str | None = None) -> None:
+        normalized = (db_name or self.ACTIVE_POSTGRES_DB).strip().lower()
+        if self.MODE != "TEST":
+            raise ValueError("Destructive test-database operations are only allowed in MODE=TEST.")
+        if self.is_safe_test_database_name(normalized):
+            return
+        raise ValueError(
+            "MODE=TEST refuses to run against a non-test PostgreSQL database name. "
+            f"Resolved database: '{normalized}'. Use a database like 'test_artshop' or "
+            "'artshop_test', or set TEST_POSTGRES_DB explicitly."
+        )
 
     # External Integrations
     GOOGLE_CLIENT_ID: str | None = None

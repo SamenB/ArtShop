@@ -1,14 +1,12 @@
 """
-SQLAlchemy database models for print pricing and aspect ratio configuration.
+SQLAlchemy models for normalized print aspect ratios and legacy manual pricing rows.
 
 Architecture:
-    PrintAspectRatioOrm  — Defines canvas proportions (e.g. "3:4 — Portrait").
-        └── PrintPricingOrm  — Price entries for each print type + size within a ratio.
+    PrintAspectRatioOrm  - Stable ratio family used by artworks and provider catalogs.
+        |- PrintPricingOrm - Optional legacy manual pricing row kept for compatibility.
 
-Each artwork then references one PrintAspectRatioOrm to indicate which
-ratio's price grid applies to its prints. The artwork also stores
-print_min_size_label / print_max_size_label to restrict which sizes from
-the full grid are offered (e.g. due to quality limits at very large sizes).
+Artworks now store only a provider-neutral aspect ratio reference. Concrete sizes,
+prices, and availability are resolved later from the active print-provider storefront.
 """
 
 from __future__ import annotations
@@ -21,16 +19,11 @@ from src.database import Base
 
 class PrintAspectRatioOrm(Base):
     """
-    Defines a canvas aspect ratio category that groups print pricing rows.
+    Defines a normalized print aspect ratio family.
 
-    Examples of labels: "3:4", "2:3", "1:1", "9:16"
-    Each ratio has its own independent price grid for all four print types.
-
-    Attributes:
-        id          – Primary key.
-        label       – Short ratio label shown in dropdowns, e.g. "3:4".
-        description – Optional human-readable name, e.g. "Portrait (A4 family)".
-        sort_order  – Controls display order in the admin UI (lower = first).
+    Examples of labels: "3:4", "2:3", "1:1", "9:16".
+    These ratio families are referenced by artworks and later matched against
+    provider-specific catalogs such as the baked Prodigi storefront.
     """
 
     __tablename__ = "print_aspect_ratios"
@@ -40,7 +33,7 @@ class PrintAspectRatioOrm(Base):
     description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
-    # All pricing rows belonging to this aspect ratio
+    # Optional legacy manual pricing rows kept for backward compatibility.
     pricing_rows: Mapped[list["PrintPricingOrm"]] = relationship(
         "PrintPricingOrm",
         back_populates="aspect_ratio",
@@ -55,16 +48,17 @@ class PrintAspectRatioOrm(Base):
 
 class PrintPricingOrm(Base):
     """
-    Represents a single price entry in the print catalog pricing grid.
+    Represents a single legacy manual price entry.
 
-    Each row defines the price for a specific aspect_ratio + print_type + size combination.
-    The admin populates and manages these rows through the Print Pricing tab.
+    Each row defines the price for a specific aspect_ratio + print_type + size
+    combination. Runtime storefront pricing no longer depends on this table;
+    the active provider snapshot is now the source of truth for live offers.
 
     Print types:
-        canvas          — Open edition canvas print
-        canvas_limited  — Limited edition canvas print (signed, numbered)
-        paper           — Open edition paper print
-        paper_limited   — Limited edition paper print (signed, numbered)
+        canvas          - Open edition canvas print
+        canvas_limited  - Limited edition canvas print (signed, numbered)
+        paper           - Open edition paper print
+        paper_limited   - Limited edition paper print (signed, numbered)
     """
 
     __tablename__ = "print_pricing"
@@ -83,14 +77,13 @@ class PrintPricingOrm(Base):
     )
     size_label: Mapped[str] = mapped_column(
         String(50),
-        comment='Human-readable size string, e.g. "30×40 cm" or "12×16 in"',
+        comment='Human-readable size string, e.g. "30x40 cm" or "12x16 in"',
     )
     price: Mapped[int] = mapped_column(
         Integer,
         comment="Price in whole USD",
     )
 
-    # Parent aspect ratio
     aspect_ratio: Mapped["PrintAspectRatioOrm"] = relationship(
         "PrintAspectRatioOrm",
         back_populates="pricing_rows",

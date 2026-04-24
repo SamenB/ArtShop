@@ -211,6 +211,35 @@ def test_bake_filters_visible_sizes_without_prodigi_print_area_pixels() -> None:
     assert len(preview["removed_size_options_without_provider_print_area"]) == 1
 
 
+def test_bake_filters_visible_sizes_with_mismatched_visible_art_ratio() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+    preview = service.build_storefront_country_preview(
+        preview_payload=make_preview_payload("show"),
+        include_notice_level=True,
+    )
+    preview["visible_cards"][0]["size_options"][0].update(
+        {
+            "slot_size_label": "40x50",
+            "print_area_width_px": 5000,
+            "print_area_height_px": 6300,
+            "visible_art_width_px": 5000,
+            "visible_art_height_px": 6300,
+            "print_area_source": "prodigi_product_details",
+            "print_area_dimensions": {
+                "visible_art_width_px": 5000,
+                "visible_art_height_px": 6300,
+            },
+        }
+    )
+
+    service._keep_only_provider_print_area_sizes(preview)
+
+    assert len(preview["visible_cards"]) == 0
+    assert preview["removed_size_options_without_provider_print_area"][0]["reason"] == (
+        "visible_art_ratio_mismatch"
+    )
+
+
 def test_bake_requires_exact_canvas_wrap_provider_variant() -> None:
     service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
 

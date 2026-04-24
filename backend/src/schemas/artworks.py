@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.schemas.labels import Label
-from src.schemas.print_pricing import AspectRatioWithPricing
+from src.schemas.print_pricing import AspectRatioItem
 
 
 class OriginalStatus(str, enum.Enum):
@@ -71,13 +71,8 @@ class ArtworkAddRequest(BaseModel):
 
     # ── Print configuration ────────────────────────────────────────────────────
     print_aspect_ratio_id: int | None = Field(
-        None, description="ID of the print aspect ratio category to apply for this artwork"
-    )
-    print_min_size_label: str | None = Field(
-        None, description="Minimum available print size label (e.g. '30×40 cm')"
-    )
-    print_max_size_label: str | None = Field(
-        None, description="Maximum available print size label (e.g. '60×80 cm')"
+        None,
+        description="ID of the normalized print aspect ratio family for this artwork",
     )
 
     labels: list[int] = Field([], description="List of label IDs")
@@ -141,8 +136,6 @@ class ArtworkAdd(BaseModel):
 
     # Print configuration
     print_aspect_ratio_id: int | None = Field(None)
-    print_min_size_label: str | None = Field(None)
-    print_max_size_label: str | None = Field(None)
 
 
 class Artwork(ArtworkAdd):
@@ -171,7 +164,7 @@ class ArtworkWithLabels(Artwork):
         None, description="Array of image URLs or image objects."
     )
     # Nested aspect ratio object (serialized from the SQLAlchemy relationship)
-    print_aspect_ratio: AspectRatioWithPricing | None = None
+    print_aspect_ratio: AspectRatioItem | None = None
     print_source_metadata: dict[str, Any] | None = None
     print_profile_overrides: dict[str, Any] | None = None
     print_workflow_config: dict[str, Any] | None = None
@@ -212,8 +205,6 @@ class ArtworkPatchRequest(BaseModel):
 
     # Print configuration (optional for partial updates)
     print_aspect_ratio_id: int | None = Field(None)
-    print_min_size_label: str | None = Field(None)
-    print_max_size_label: str | None = Field(None)
 
     labels: list[int] = Field([], description="List of label IDs")
     images: list[str | dict] | None = Field(
@@ -272,8 +263,6 @@ class ArtworkPatch(BaseModel):
 
     # Print configuration
     print_aspect_ratio_id: int | None = Field(None)
-    print_min_size_label: str | None = Field(None)
-    print_max_size_label: str | None = Field(None)
 
 
 class ArtworkAddBulk(BaseModel):

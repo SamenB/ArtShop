@@ -55,6 +55,17 @@ class ProdigiSizeSelectorService:
             ratio_category_size_stats[ratio][category_id][dims]["countries"].add(country_code)
             country_size_presence[ratio][country_code][category_id].add(dims)
 
+        return self.build_size_plan_from_stats(
+            ratio_category_size_stats=ratio_category_size_stats,
+            country_size_presence=country_size_presence,
+        )
+
+    def build_size_plan_from_stats(
+        self,
+        *,
+        ratio_category_size_stats: dict[str, dict[str, dict[SizeDims, dict[str, Any]]]],
+        country_size_presence: dict[str, dict[str, dict[str, set[SizeDims]]]],
+    ) -> dict[str, Any]:
         global_shortlists: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(dict)
         country_shortlists: dict[str, dict[str, dict[str, list[dict[str, Any]]]]] = defaultdict(
             lambda: defaultdict(dict)
