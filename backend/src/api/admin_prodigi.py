@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, Query
 from src.api.dependencies import AdminDep, DBDep
 from src.api.print_options import MARKUP
 from src.connectors.prodigi import ProdigiClient
+from src.init import redis_manager
+from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
 from src.services.prodigi_catalog import ProdigiCatalogService
 from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
 from src.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
@@ -10,6 +12,57 @@ from src.services.prodigi_storefront_snapshot import ProdigiStorefrontSnapshotSe
 
 router = APIRouter(prefix="/v1/admin/prodigi", tags=["Admin Prodigi Diagnostics"])
 catalog_service = ProdigiCatalogService()
+ARTWORK_PRINT_CACHE_PREFIXES = (
+    "api:artwork-prints:v1:",
+    "prodigi:artwork-storefront:v1:",
+)
+
+
+def _resolve_refresh_bake_config(active_bake) -> dict[str, object]:
+    return {
+        "selected_paper_material": getattr(active_bake, "paper_material", None),
+        "include_notice_level": bool(
+            getattr(active_bake, "include_notice_level", True)
+            if active_bake is not None
+            else True
+        ),
+    }
+
+
+async def _clear_artwork_print_storefront_cache() -> dict[str, object]:
+    redis_client = redis_manager.redis
+    if redis_client is None:
+        return {
+            "status": "skipped",
+            "deleted_keys": 0,
+            "reason": "Redis is not connected.",
+        }
+
+    keys: list[str] = []
+    if hasattr(redis_client, "scan_iter"):
+        seen: set[str] = set()
+        for prefix in ARTWORK_PRINT_CACHE_PREFIXES:
+            async for key in redis_client.scan_iter(match=f"{prefix}*"):
+                key_str = str(key)
+                if key_str not in seen:
+                    seen.add(key_str)
+                    keys.append(key_str)
+    elif hasattr(redis_client, "data") and isinstance(redis_client.data, dict):
+        keys = [
+            str(key)
+            for key in redis_client.data.keys()
+            if any(str(key).startswith(prefix) for prefix in ARTWORK_PRINT_CACHE_PREFIXES)
+        ]
+
+    deleted = 0
+    for key in keys:
+        await redis_manager.delete(key)
+        deleted += 1
+
+    return {
+        "status": "cleared",
+        "deleted_keys": deleted,
+    }
 
 @router.get("/probe")
 async def probe_prodigi(
@@ -146,6 +199,44 @@ async def create_catalog_database_preview(
             selected_paper_material=paper_material,
             include_notice_level=include_notice_level,
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/refresh-artwork-payloads")
+async def refresh_artwork_payloads(
+    admin_id: AdminDep,
+    db: DBDep,
+):
+    """
+    Rebuild the active storefront bake for all ratios/countries, materialize
+    fresh per-artwork payloads, and clear runtime artwork print caches.
+    """
+    try:
+        repository = ProdigiStorefrontRepository(db.session)
+        active_bake = await repository.get_active_bake()
+        config = _resolve_refresh_bake_config(active_bake)
+        bake_result = await ProdigiStorefrontBakeService(db).bake_storefront(
+            selected_paper_material=str(config["selected_paper_material"] or "") or None,
+            include_notice_level=bool(config["include_notice_level"]),
+        )
+        cache_clear = await _clear_artwork_print_storefront_cache()
+        return {
+            "status": "refreshed",
+            "message": (
+                "Active storefront bake, materialized artwork payloads, and runtime "
+                "artwork print caches were refreshed."
+            ),
+            "config": {
+                "paper_material": config["selected_paper_material"],
+                "include_notice_level": config["include_notice_level"],
+            },
+            "bake": bake_result.get("bake"),
+            "artwork_storefront_materialization": bake_result.get(
+                "artwork_storefront_materialization"
+            ),
+            "cache_clear": cache_clear,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

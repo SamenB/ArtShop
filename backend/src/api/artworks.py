@@ -3,7 +3,6 @@ API endpoints for managing artworks.
 Includes CRUD operations, bulk creation, and image uploading.
 """
 
-import json
 import os
 import re
 import shutil
@@ -14,7 +13,6 @@ from fastapi.concurrency import run_in_threadpool
 
 from src.api.dependencies import AdminDep, DBDep
 from src.exeptions import ObjectNotFoundException
-from src.init import redis_manager
 from src.print_on_demand import get_print_provider
 from src.schemas.artworks import ArtworkAddBulk, ArtworkAddRequest, ArtworkPatchRequest
 from src.services.artwork_print_workflow import ArtworkPrintWorkflowService
@@ -434,24 +432,12 @@ async def _get_artwork_print_storefront(
     The response is built from the active provider's baked snapshot plus artwork-specific
     print profile metadata, so the storefront can stop depending on raw supplier probing.
     """
-    cache_key = f"api:artwork-prints:v1:{artwork_id_or_slug}:{(country or '').upper()}"
-    if redis_manager.redis is not None:
-        cached = await redis_manager.get(cache_key)
-        if cached:
-            try:
-                return json.loads(cached)
-            except json.JSONDecodeError:
-                pass
-
     try:
-        payload = await get_print_provider().get_artwork_storefront(
+        return await get_print_provider().get_artwork_storefront(
             db=db,
             artwork_id_or_slug=artwork_id_or_slug,
             country_code=country,
         )
-        if redis_manager.redis is not None:
-            await redis_manager.set(cache_key, json.dumps(payload), expire=900)
-        return payload
     except ObjectNotFoundException:
         raise HTTPException(status_code=404, detail="Artwork not found")
 

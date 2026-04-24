@@ -79,6 +79,7 @@ def make_group(
     category_id: str,
     label: str,
     *,
+    ratio_label: str = "3:4",
     available: bool = True,
     print_area_width_px: int | None = None,
     print_area_height_px: int | None = None,
@@ -88,7 +89,7 @@ def make_group(
     print_area_dimensions: dict | None = None,
 ):
     return SimpleNamespace(
-        ratio_label="3:4",
+        ratio_label=ratio_label,
         category_id=category_id,
         sizes=[
             SimpleNamespace(
@@ -213,7 +214,7 @@ async def test_get_workflow_ignores_unavailable_sizes_for_required_dimensions():
 
 @pytest.mark.asyncio
 async def test_get_workflow_prefers_baked_print_area_pixels_over_rounded_size_label():
-    artwork = make_artwork(paper=False, canvas=True)
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
     asset = make_master_asset(
         asset_id=11,
         artwork_id=artwork.id,
@@ -229,9 +230,17 @@ async def test_get_workflow_prefers_baked_print_area_pixels_over_rounded_size_la
             make_group(
                 "canvasStretched",
                 "122x152",
+                ratio_label="4:5",
                 print_area_width_px=14454,
                 print_area_height_px=18054,
                 print_area_source="prodigi_product_details",
+                print_area_dimensions={
+                    "visible_art_width_px": 14400,
+                    "visible_art_height_px": 18000,
+                    "physical_width_in": 48,
+                    "physical_height_in": 60,
+                    "variant_attributes": {"wrap": "MirrorWrap"},
+                },
             ),
         ],
     )
@@ -244,11 +253,82 @@ async def test_get_workflow_prefers_baked_print_area_pixels_over_rounded_size_la
     assert slot["required_min_px"]["width"] == 14454
     assert slot["required_min_px"]["height"] == 18054
     assert slot["required_min_px"]["source"] == "prodigi_product_details"
-    assert slot["export_guidance"]["mode"] == "exact_artboard"
-    assert slot["export_guidance"]["target_width_px"] == 14454
-    assert slot["export_guidance"]["target_height_px"] == 18054
+    assert slot["required_min_px"]["visible_art_width_px"] == 14400
+    assert slot["required_min_px"]["visible_art_height_px"] == 18000
+    assert slot["required_min_px"]["physical_width_in"] == 48
+    assert slot["required_min_px"]["physical_height_in"] == 60
+    assert slot["export_guidance"]["mode"] == "strict_ratio_cover_master"
+    assert slot["export_guidance"]["target_width_px"] == 16800
+    assert slot["export_guidance"]["target_height_px"] == 21000
+    assert slot["export_guidance"]["provider_target_width_px"] == 14454
+    assert slot["export_guidance"]["provider_target_height_px"] == 18054
+    assert slot["export_guidance"]["visible_art_width_px"] == 14400
+    assert slot["export_guidance"]["visible_art_height_px"] == 18000
+    assert slot["export_guidance"]["physical_width_in"] == 48
+    assert slot["export_guidance"]["physical_height_in"] == 60
+    assert slot["export_guidance"]["provider_target_differs_from_visible_art"] is True
     assert slot["export_guidance"]["full_file_ratio_diff_warning"] is True
-    assert slot["derivative_plan"]["strategy"] == "exact_lanczos_resize"
+    assert slot["derivative_plan"]["strategy"] == "exact_cover_crop"
+
+
+def test_build_strict_ratio_cover_target_uses_universal_ratio_presets() -> None:
+    service = make_service()
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="2:3")
+
+    target = service._build_strict_ratio_cover_target(
+        artwork=artwork,
+        orientation="vertical",
+        exact_width=12000,
+        exact_height=18000,
+    )
+
+    assert target is not None
+    assert target["width_px"] == 17000
+    assert target["height_px"] == 25500
+    assert target["ratio_label"] == "2:3"
+    assert target["preset_applied"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_accepts_strict_ratio_clean_master_that_covers_provider_target():
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
+    asset = make_master_asset(
+        asset_id=31,
+        artwork_id=artwork.id,
+        category_id="clean_master",
+        asset_role="clean_master",
+        file_url="/static/print-prep/1/canvas/master-strict.png",
+        width_px=14456,
+        height_px=18070,
+    )
+    service = make_service(
+        assets=[asset],
+        groups=[
+            make_group(
+                "canvasStretched",
+                "122x152",
+                ratio_label="4:5",
+                print_area_width_px=14454,
+                print_area_height_px=18054,
+                print_area_source="prodigi_product_details",
+                print_area_dimensions={
+                    "visible_art_width_px": 14400,
+                    "visible_art_height_px": 18000,
+                    "physical_width_in": 48,
+                    "physical_height_in": 60,
+                    "variant_attributes": {"wrap": "MirrorWrap"},
+                },
+            ),
+        ],
+    )
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    payload = await service.get_workflow(artwork.id)
+
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
+    assert slot["status"] == "attention"
+    assert slot["issues"] == []
+    assert any("tiny cover crop" in warning for warning in slot["warnings"])
 
 
 @pytest.mark.asyncio
@@ -383,7 +463,7 @@ async def test_generate_clean_master_derivatives_include_canvas_and_framed_paper
 
 @pytest.mark.asyncio
 async def test_generate_clean_master_derivative_resizes_to_exact_target_when_ratio_differs(tmp_path):
-    artwork = make_artwork(paper=False, canvas=True)
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
     master_path = tmp_path / "canvas-clean.png"
     Image.new("RGB", (6000, 8000), color="white").save(master_path)
 
@@ -402,6 +482,7 @@ async def test_generate_clean_master_derivative_resizes_to_exact_target_when_rat
             make_group(
                 "canvasStretched",
                 "20x25",
+                ratio_label="4:5",
                 print_area_width_px=3600,
                 print_area_height_px=4200,
                 print_area_source="prodigi_product_details",
@@ -429,7 +510,7 @@ async def test_generate_clean_master_derivative_resizes_to_exact_target_when_rat
     derivative = generated[0]
     assert derivative.file_metadata["width_px"] == 3600
     assert derivative.file_metadata["height_px"] == 4200
-    assert derivative.file_metadata["derivative_kind"] == "resize"
+    assert derivative.file_metadata["derivative_kind"] == "cover_crop_resize"
 
 
 @pytest.mark.asyncio

@@ -62,6 +62,10 @@ interface MasterSlot {
         height: number;
         source?: string | null;
         print_area_name?: string | null;
+        visible_art_width_px?: number | null;
+        visible_art_height_px?: number | null;
+        physical_width_in?: number | null;
+        physical_height_in?: number | null;
     } | null;
     required_min_px_source?: string | null;
     export_guidance?: {
@@ -76,6 +80,16 @@ interface MasterSlot {
         target_ratio?: number | null;
         full_file_ratio_diff_px?: number | null;
         full_file_ratio_diff_warning?: boolean;
+        visible_art_width_px?: number | null;
+        visible_art_height_px?: number | null;
+        physical_width_in?: number | null;
+        physical_height_in?: number | null;
+        provider_target_differs_from_visible_art?: boolean;
+        provider_target_width_px?: number | null;
+        provider_target_height_px?: number | null;
+        estimated_cover_crop_width_px?: number | null;
+        estimated_cover_crop_height_px?: number | null;
+        ratio_label?: string | null;
     } | null;
     derivative_plan?: {
         strategy: string;
@@ -351,6 +365,28 @@ function formatPrintCategory(categoryId: string): string {
     return PRINT_CATEGORY_LABELS[categoryId] || titleCase(categoryId);
 }
 
+function formatInchesValue(value: number | null | undefined): string | null {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+        return null;
+    }
+    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function formatCoverCropNotice(
+    widthPx: number | null | undefined,
+    heightPx: number | null | undefined
+): string | null {
+    const safeWidth = widthPx ?? 0;
+    const safeHeight = heightPx ?? 0;
+    if (safeHeight >= safeWidth && safeHeight > 0) {
+        return `${safeHeight} px on the height`;
+    }
+    if (safeWidth > 0) {
+        return `${safeWidth} px on the width`;
+    }
+    return null;
+}
+
 function FormSection({ title, description }: { title: string; description?: string }) {
     return (
         <div className="mb-5">
@@ -600,6 +636,9 @@ export default function ArtworksTab() {
     const [workflowError, setWorkflowError] = useState<string | null>(null);
     const [assetUploadingSlot, setAssetUploadingSlot] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [payloadRefreshLoading, setPayloadRefreshLoading] = useState(false);
+    const [payloadRefreshMessage, setPayloadRefreshMessage] = useState<string | null>(null);
+    const [payloadRefreshError, setPayloadRefreshError] = useState<string | null>(null);
     const [activeStep, setActiveStep] =
         useState<(typeof WORKFLOW_STEP_ORDER)[number]["id"]>("basics");
     const [formData, setFormData] = useState<ArtworkFormState>(createDefaultFormState());
@@ -654,6 +693,55 @@ export default function ArtworksTab() {
     useEffect(() => {
         fetchData();
     }, []);
+
+    const refreshArtworkPayloads = async () => {
+        const confirmed = window.confirm(
+            "Refresh storefront payloads for all artworks now? This rebuilds the active Prodigi bake, rematerializes artwork payloads, and clears runtime print caches."
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        setPayloadRefreshLoading(true);
+        setPayloadRefreshMessage(null);
+        setPayloadRefreshError(null);
+
+        try {
+            const response = await apiFetch(`${getApiUrl()}/v1/admin/prodigi/refresh-artwork-payloads`, {
+                method: "POST",
+            });
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+
+            const payload = await response.json();
+            const bakeSummary = payload?.bake
+                ? `${payload.bake.offer_group_count} groups / ${payload.bake.offer_size_count} sizes`
+                : "bake updated";
+            const materializedCount =
+                payload?.artwork_storefront_materialization?.payload_count ?? null;
+            const cacheCleared = payload?.cache_clear?.deleted_keys ?? 0;
+
+            setPayloadRefreshMessage(
+                `Storefront payloads refreshed: ${bakeSummary}${
+                    materializedCount !== null ? `, ${materializedCount} artwork-country payloads` : ""
+                }, cache cleared ${cacheCleared} key${cacheCleared === 1 ? "" : "s"}.`
+            );
+            await fetchData();
+            if (editingId) {
+                await fetchWorkflow(editingId);
+            }
+        } catch (error) {
+            console.error("Failed to refresh artwork storefront payloads", error);
+            setPayloadRefreshError(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to refresh storefront payloads."
+            );
+        } finally {
+            setPayloadRefreshLoading(false);
+        }
+    };
 
     const resetEditor = () => {
         setFormData(createDefaultFormState());
@@ -981,24 +1069,47 @@ export default function ArtworksTab() {
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={() => {
-                        if (isFormOpen) {
-                            resetEditor();
-                        } else {
-                            openNewEditor();
-                        }
-                    }}
-                    className={`px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-[0.14em] transition-colors ${
-                        isFormOpen
-                            ? "bg-[#31323E]/10 text-[#31323E] border border-[#31323E]/15"
-                            : "bg-[#31323E] text-white hover:bg-[#434455]"
-                    }`}
-                >
-                    {isFormOpen ? "Close Editor" : "New Artwork"}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => void refreshArtworkPayloads()}
+                        disabled={payloadRefreshLoading}
+                        className="px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-[0.14em] border border-[#31323E]/15 bg-white text-[#31323E] hover:bg-[#31323E]/5 disabled:opacity-50"
+                    >
+                        {payloadRefreshLoading ? "Refreshing payloads..." : "Refresh Payloads"}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (isFormOpen) {
+                                resetEditor();
+                            } else {
+                                openNewEditor();
+                            }
+                        }}
+                        className={`px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-[0.14em] transition-colors ${
+                            isFormOpen
+                                ? "bg-[#31323E]/10 text-[#31323E] border border-[#31323E]/15"
+                                : "bg-[#31323E] text-white hover:bg-[#434455]"
+                        }`}
+                    >
+                        {isFormOpen ? "Close Editor" : "New Artwork"}
+                    </button>
+                </div>
             </div>
+
+            {payloadRefreshMessage ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                    {payloadRefreshMessage}
+                </div>
+            ) : null}
+
+            {payloadRefreshError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                    {payloadRefreshError}
+                </div>
+            ) : null}
 
             {isFormOpen ? (
                 <div className="bg-[#FCFBF8] border border-[#31323E]/10 rounded-[28px] shadow-sm overflow-hidden">
@@ -1514,7 +1625,10 @@ export default function ArtworksTab() {
                                                             {slot.required_min_px ? (
                                                                 <div className="rounded-xl bg-white/80 px-3 py-2 border border-[#31323E]/10">
                                                                     <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
-                                                                        Min required px
+                                                                        {slot.export_guidance?.mode ===
+                                                                        "strict_ratio_cover_master"
+                                                                            ? "Largest exact provider target"
+                                                                            : "Min required px"}
                                                                     </p>
                                                                     <p className="text-sm font-bold text-[#31323E] mt-1">
                                                                         {slot.required_min_px.width} x {slot.required_min_px.height}
@@ -1522,6 +1636,47 @@ export default function ArtworksTab() {
                                                                     {slot.required_min_px.source ? (
                                                                         <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/35 mt-1">
                                                                             {titleCase(slot.required_min_px.source)}
+                                                                        </p>
+                                                                    ) : null}
+                                                                    {slot.required_min_px.visible_art_width_px &&
+                                                                    slot.required_min_px.visible_art_height_px ? (
+                                                                        <p className="text-[11px] font-medium leading-relaxed text-[#31323E]/55 mt-2">
+                                                                            Visible art at 300 DPI:{" "}
+                                                                            {slot.required_min_px.visible_art_width_px} x{" "}
+                                                                            {slot.required_min_px.visible_art_height_px} px
+                                                                        </p>
+                                                                    ) : null}
+                                                                    {slot.required_min_px.physical_width_in &&
+                                                                    slot.required_min_px.physical_height_in ? (
+                                                                        <p className="text-[11px] font-medium leading-relaxed text-[#31323E]/45 mt-1">
+                                                                            Nominal product size:{" "}
+                                                                            {formatInchesValue(
+                                                                                slot.required_min_px.physical_width_in
+                                                                            )}{" "}
+                                                                            x{" "}
+                                                                            {formatInchesValue(
+                                                                                slot.required_min_px.physical_height_in
+                                                                            )}{" "}
+                                                                            in
+                                                                        </p>
+                                                                    ) : null}
+                                                                    {slot.export_guidance?.mode ===
+                                                                    "strict_ratio_cover_master" ? (
+                                                                        <p className="text-[11px] font-semibold leading-relaxed text-emerald-700 mt-2">
+                                                                            Upload clean master at:{" "}
+                                                                            {slot.export_guidance.target_width_px} x{" "}
+                                                                            {slot.export_guidance.target_height_px} px
+                                                                            {slot.export_guidance.ratio_label
+                                                                                ? ` (${slot.export_guidance.ratio_label})`
+                                                                                : ""}
+                                                                        </p>
+                                                                    ) : null}
+                                                                    {slot.export_guidance?.mode ===
+                                                                    "strict_ratio_cover_master" ? (
+                                                                        <p className="text-[11px] font-medium leading-relaxed text-emerald-700/80 mt-1">
+                                                                            Use this strict-ratio size for the uploaded
+                                                                            master. Exact provider artboards are generated
+                                                                            automatically.
                                                                         </p>
                                                                     ) : null}
                                                                 </div>
@@ -1542,12 +1697,51 @@ export default function ArtworksTab() {
                                                                 <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/60">
                                                                     {slot.export_guidance.message}
                                                                 </p>
+                                                                {slot.export_guidance.provider_target_width_px &&
+                                                                slot.export_guidance.provider_target_height_px ? (
+                                                                    <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/58">
+                                                                        Largest exact provider artboard:{" "}
+                                                                        {slot.export_guidance.provider_target_width_px} x{" "}
+                                                                        {slot.export_guidance.provider_target_height_px} px.
+                                                                    </p>
+                                                                ) : null}
+                                                                {slot.export_guidance.provider_target_differs_from_visible_art &&
+                                                                slot.export_guidance.visible_art_width_px &&
+                                                                slot.export_guidance.visible_art_height_px ? (
+                                                                    <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/58">
+                                                                        Prodigi Product Details gives an exact provider
+                                                                        target of{" "}
+                                                                        {slot.export_guidance.provider_target_width_px ??
+                                                                            slot.export_guidance.target_width_px}{" "}
+                                                                        x{" "}
+                                                                        {slot.export_guidance.provider_target_height_px ??
+                                                                            slot.export_guidance.target_height_px} px, while
+                                                                        the nominal visible art area is{" "}
+                                                                        {slot.export_guidance.visible_art_width_px} x{" "}
+                                                                        {slot.export_guidance.visible_art_height_px} px
+                                                                        at 300 DPI.
+                                                                        {slot.export_guidance.physical_width_in &&
+                                                                        slot.export_guidance.physical_height_in
+                                                                            ? ` That comes from the product's ${formatInchesValue(slot.export_guidance.physical_width_in)} x ${formatInchesValue(slot.export_guidance.physical_height_in)} in size.`
+                                                                            : ""}
+                                                                    </p>
+                                                                ) : null}
                                                                 {slot.export_guidance.full_file_ratio_diff_warning ? (
                                                                     <p className="mt-2 text-xs font-semibold leading-relaxed text-amber-700">
-                                                                        Full file ratio differs from the artwork ratio by about{" "}
-                                                                        {slot.export_guidance.full_file_ratio_diff_px} px.
-                                                                        This is expected for wrap, bleed, or bordered targets:
-                                                                        build the exact artboard instead of stretching the source.
+                                                                        {slot.export_guidance.mode ===
+                                                                        "strict_ratio_cover_master"
+                                                                            ? `Exact provider target differs from the artwork ratio by about ${slot.export_guidance.full_file_ratio_diff_px} px. We will use a tiny cover crop${
+                                                                                  formatCoverCropNotice(
+                                                                                      slot.export_guidance.estimated_cover_crop_width_px,
+                                                                                      slot.export_guidance.estimated_cover_crop_height_px
+                                                                                  )
+                                                                                      ? ` of ${formatCoverCropNotice(
+                                                                                            slot.export_guidance.estimated_cover_crop_width_px,
+                                                                                            slot.export_guidance.estimated_cover_crop_height_px
+                                                                                        )}`
+                                                                                      : ""
+                                                                              } instead of stretching or leaving white strips.`
+                                                                            : `Full file ratio differs from the artwork ratio by about ${slot.export_guidance.full_file_ratio_diff_px} px. This is expected for wrap, bleed, or bordered targets: build the exact artboard instead of stretching the source.`}
                                                                     </p>
                                                                 ) : null}
                                                             </div>

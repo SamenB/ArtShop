@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from collections import defaultdict
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,16 @@ from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
 SIZE_PATTERN = re.compile(r"(?P<w>\d+(?:\.\d+)?)x(?P<h>\d+(?:\.\d+)?)")
 RATIO_PATTERN = re.compile(r"(?P<w>\d+(?:\.\d+)?)[x:](?P<h>\d+(?:\.\d+)?)")
 TARGET_DPI = 300
+CLEAN_MASTER_RATIO_PRESET_TARGETS: dict[str, tuple[int, int]] = {
+    # short_edge_px, long_edge_px
+    # These universal clean-master targets stay exact by ratio while covering
+    # the current ArtShop paper + canvas scope from the local Prodigi CSV set.
+    "1:1": (18000, 18000),
+    "2:3": (17000, 25500),
+    "3:4": (18000, 24000),
+    "4:5": (16800, 21000),
+    "5:7": (17500, 24500),
+}
 WRAPPED_CANVAS_CATEGORIES = {
     "canvasStretched",
     "canvasClassicFrame",
@@ -390,6 +402,7 @@ class ArtworkPrintWorkflowService:
         asset_metadata = (uploaded_asset.file_metadata or {}) if uploaded_asset else {}
         issues: list[str] = []
         warnings: list[str] = []
+        artwork_ratio = self._ratio_from_artwork(artwork, orientation=orientation)
 
         if slot_relevant and not ratio_assigned:
             issues.append("Choose a print aspect ratio in Basics before uploading masters.")
@@ -403,19 +416,85 @@ class ArtworkPrintWorkflowService:
             uploaded_h = int(asset_metadata.get("height_px") or 0)
             required_w = largest_size["required_width_px"]
             required_h = largest_size["required_height_px"]
-            if uploaded_w < required_w or uploaded_h < required_h:
-                issues.append(
-                    f"Uploaded file is {uploaded_w}x{uploaded_h} px but the largest size "
-                    f"requires at least {required_w}x{required_h} px at {TARGET_DPI} DPI."
+            if slot_id == "clean_master":
+                strict_ratio_target = self._build_strict_ratio_cover_target(
+                    artwork=artwork,
+                    orientation=orientation,
+                    exact_width=required_w,
+                    exact_height=required_h,
+                )
+                can_cover_exact = self._can_cover_target(
+                    uploaded_w,
+                    uploaded_h,
+                    target_width=required_w,
+                    target_height=required_h,
+                )
+                provider_aspect_error = self._aspect_error_px(
+                    uploaded_w,
+                    uploaded_h,
+                    required_w,
+                    required_h,
+                )
+                strict_aspect_error = None
+                if strict_ratio_target is not None:
+                    strict_aspect_error = self._aspect_error_px(
+                        uploaded_w,
+                        uploaded_h,
+                        strict_ratio_target["width_px"],
+                        strict_ratio_target["height_px"],
+                    )
+
+                matches_provider_ratio = provider_aspect_error is None or provider_aspect_error <= 1.0
+                matches_artwork_ratio = (
+                    strict_aspect_error is not None and strict_aspect_error <= 1.0
                 )
 
-            aspect_error_px = self._aspect_error_px(uploaded_w, uploaded_h, required_w, required_h)
-            if aspect_error_px is not None and aspect_error_px > 1.0:
-                issues.append(
-                    "Uploaded master aspect ratio does not match the target print area. "
-                    f"Expected {required_w}x{required_h} ratio; current file would drift "
-                    f"by about {round(aspect_error_px, 2)} px on one edge."
-                )
+                if not can_cover_exact:
+                    recommended = (
+                        f"{strict_ratio_target['width_px']}x{strict_ratio_target['height_px']} px"
+                        if strict_ratio_target is not None
+                        else f"{required_w}x{required_h} px"
+                    )
+                    issues.append(
+                        f"Uploaded file is {uploaded_w}x{uploaded_h} px but the largest size "
+                        f"needs enough pixels to cover the exact provider target "
+                        f"{required_w}x{required_h} px. Safe strict-ratio upload target: {recommended}."
+                    )
+                elif not matches_provider_ratio and not matches_artwork_ratio:
+                    issues.append(
+                        "Uploaded clean master does not match either the artwork ratio or the "
+                        "exact provider target ratio. The workflow can crop a few edge pixels for "
+                        "minor provider drift, but it will not stretch arbitrary ratios."
+                    )
+                elif matches_artwork_ratio and not matches_provider_ratio:
+                    cover_crop = self._estimated_cover_crop_px(
+                        uploaded_w,
+                        uploaded_h,
+                        target_width=required_w,
+                        target_height=required_h,
+                    )
+                    crop_axis = "height" if cover_crop["height_px"] >= cover_crop["width_px"] else "width"
+                    crop_amount = cover_crop[f"{crop_axis}_px"]
+                    if crop_amount > 0:
+                        warnings.append(
+                            "Largest provider target drifts slightly from the artwork ratio. "
+                            f"Generated clean derivatives will use a tiny cover crop on the {crop_axis} "
+                            f"(about {crop_amount} px after resize) instead of stretching."
+                        )
+            else:
+                if uploaded_w < required_w or uploaded_h < required_h:
+                    issues.append(
+                        f"Uploaded file is {uploaded_w}x{uploaded_h} px but the largest size "
+                        f"requires at least {required_w}x{required_h} px at {TARGET_DPI} DPI."
+                    )
+
+                aspect_error_px = self._aspect_error_px(uploaded_w, uploaded_h, required_w, required_h)
+                if aspect_error_px is not None and aspect_error_px > 1.0:
+                    issues.append(
+                        "Uploaded master aspect ratio does not match the target print area. "
+                        f"Expected {required_w}x{required_h} ratio; current file would drift "
+                        f"by about {round(aspect_error_px, 2)} px on one edge."
+                    )
 
             mode = str(asset_metadata.get("mode") or "")
             if mode and mode not in {"RGB", "RGBA"}:
@@ -448,6 +527,10 @@ class ArtworkPrintWorkflowService:
                 "height": largest_size["required_height_px"],
                 "source": largest_size["print_area_source"],
                 "print_area_name": largest_size["print_area_name"],
+                "visible_art_width_px": largest_size.get("visible_art_width_px"),
+                "visible_art_height_px": largest_size.get("visible_art_height_px"),
+                "physical_width_in": largest_size.get("physical_width_in"),
+                "physical_height_in": largest_size.get("physical_height_in"),
             }
             if largest_size
             else None,
@@ -466,6 +549,7 @@ class ArtworkPrintWorkflowService:
                 orientation=orientation,
                 wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
                 largest_size=largest_size,
+                artwork_ratio=artwork_ratio,
             ),
             "provider_attribute_coverage": self._build_slot_provider_attribute_coverage(
                 categories=slot_categories,
@@ -507,6 +591,54 @@ class ArtworkPrintWorkflowService:
             ratio_diff_px = round(min(abs(target_height - expected_height), abs(target_width - expected_width)), 2)
             ratio_warning = ratio_diff_px > 1.0
 
+        strict_ratio_target = None
+        if slot_id == "clean_master":
+            strict_ratio_target = self._build_strict_ratio_cover_target(
+                artwork=artwork,
+                orientation=orientation,
+                exact_width=target_width,
+                exact_height=target_height,
+            )
+
+        if slot_id == "clean_master" and strict_ratio_target is not None:
+            cover_crop = self._estimated_cover_crop_px(
+                strict_ratio_target["width_px"],
+                strict_ratio_target["height_px"],
+                target_width=target_width,
+                target_height=target_height,
+            )
+            message = (
+                "Export one large clean master in the artwork ratio. We will generate exact "
+                "provider artboards from it and use a tiny cover crop for drifted targets "
+                "instead of stretching or padding. Prodigi still receives clean front artwork "
+                "with wrap=MirrorWrap, so do not add manual wrap margins."
+            )
+            return {
+                "mode": "strict_ratio_cover_master",
+                "title": "Export strict-ratio clean master",
+                "message": message,
+                "target_width_px": strict_ratio_target["width_px"],
+                "target_height_px": strict_ratio_target["height_px"],
+                "source": largest_size["print_area_source"],
+                "print_area_name": largest_size["print_area_name"],
+                "artwork_ratio": round(artwork_ratio, 6) if artwork_ratio else None,
+                "target_ratio": round(target_ratio, 6) if target_ratio else None,
+                "full_file_ratio_diff_px": ratio_diff_px,
+                "full_file_ratio_diff_warning": ratio_warning,
+                "visible_art_width_px": largest_size.get("visible_art_width_px"),
+                "visible_art_height_px": largest_size.get("visible_art_height_px"),
+                "physical_width_in": largest_size.get("physical_width_in"),
+                "physical_height_in": largest_size.get("physical_height_in"),
+                "provider_target_width_px": target_width,
+                "provider_target_height_px": target_height,
+                "provider_target_differs_from_visible_art": (
+                    largest_size.get("visible_art_width_px") not in {None, target_width}
+                    or largest_size.get("visible_art_height_px") not in {None, target_height}
+                ),
+                "estimated_cover_crop_width_px": cover_crop["width_px"],
+                "estimated_cover_crop_height_px": cover_crop["height_px"],
+                "ratio_label": strict_ratio_target["ratio_label"],
+            }
         if slot_id == "clean_master":
             message = (
                 "Create a clean front artwork file exactly at the provider target size. "
@@ -538,6 +670,14 @@ class ArtworkPrintWorkflowService:
             "target_ratio": round(target_ratio, 6) if target_ratio else None,
             "full_file_ratio_diff_px": ratio_diff_px,
             "full_file_ratio_diff_warning": ratio_warning,
+            "visible_art_width_px": largest_size.get("visible_art_width_px"),
+            "visible_art_height_px": largest_size.get("visible_art_height_px"),
+            "physical_width_in": largest_size.get("physical_width_in"),
+            "physical_height_in": largest_size.get("physical_height_in"),
+            "provider_target_differs_from_visible_art": (
+                largest_size.get("visible_art_width_px") not in {None, target_width}
+                or largest_size.get("visible_art_height_px") not in {None, target_height}
+            ),
         }
 
     async def _generate_category_resize_derivatives(
@@ -710,6 +850,12 @@ class ArtworkPrintWorkflowService:
                 "contain_pad_resize",
             )
 
+        if slot_id == "clean_master":
+            return (
+                self._cover_crop_to_exact_artboard(source_img, target_width, target_height),
+                "cover_crop_resize",
+            )
+
         return (
             source_img.resize((target_width, target_height), Image.Resampling.LANCZOS),
             "resize",
@@ -738,6 +884,19 @@ class ArtworkPrintWorkflowService:
         else:
             canvas.paste(fitted, (left, top))
         return canvas
+
+    def _cover_crop_to_exact_artboard(
+        self,
+        source_img: Image.Image,
+        target_width: int,
+        target_height: int,
+    ) -> Image.Image:
+        return ImageOps.fit(
+            source_img,
+            (target_width, target_height),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
 
     def _find_slot_by_asset_role(self, asset_role: str) -> tuple[str, dict[str, Any]]:
         for slot_id, slot_def in MASTER_SLOTS.items():
@@ -771,6 +930,9 @@ class ArtworkPrintWorkflowService:
             for label, dims in size_catalog.get(category_id, {}).items():
                 if not dims["available"]:
                     continue
+                print_area_dimensions = self._normalize_print_area_dimensions(
+                    dims.get("print_area_dimensions")
+                )
                 required_width, required_height = self._resolve_required_pixels(
                     dims=dims,
                     orientation=orientation,
@@ -788,6 +950,12 @@ class ArtworkPrintWorkflowService:
                         "print_area_dimensions": dims.get("print_area_dimensions"),
                         "supplier_size_inches": dims.get("supplier_size_inches"),
                         "supplier_size_cm": dims.get("supplier_size_cm"),
+                        "visible_art_width_px": print_area_dimensions.get("visible_art_width_px"),
+                        "visible_art_height_px": print_area_dimensions.get("visible_art_height_px"),
+                        "physical_width_in": print_area_dimensions.get("physical_width_in")
+                        or print_area_dimensions.get("width_in"),
+                        "physical_height_in": print_area_dimensions.get("physical_height_in")
+                        or print_area_dimensions.get("height_in"),
                     }
         return largest
 
@@ -801,6 +969,7 @@ class ArtworkPrintWorkflowService:
         orientation: str,
         wrap_margin_pct: float,
         largest_size: dict[str, Any] | None,
+        artwork_ratio: float | None,
     ) -> dict[str, Any]:
         if largest_size is None:
             return {
@@ -825,26 +994,38 @@ class ArtworkPrintWorkflowService:
                     orientation=orientation,
                     wrap_margin_pct=0.0 if category_id in derives else wrap_margin_pct,
                 )
-                error_px = self._aspect_error_px(
-                    largest_size["required_width_px"],
-                    largest_size["required_height_px"],
-                    target_width,
-                    target_height,
-                )
+                if slot_id == "clean_master" and artwork_ratio:
+                    error_px = self._ratio_delta_px_for_ratio(
+                        target_width,
+                        target_height,
+                        artwork_ratio=artwork_ratio,
+                    )
+                else:
+                    error_px = self._aspect_error_px(
+                        largest_size["required_width_px"],
+                        largest_size["required_height_px"],
+                        target_width,
+                        target_height,
+                    )
                 if error_px is None or error_px <= 1.0:
                     direct_count += 1
                 else:
                     recompose_count += 1
 
         if slot_id == "clean_master":
-            direct_count = target_count
-            recompose_count = 0
-            strategy = "exact_lanczos_resize"
-            note = (
-                "The clean master is resized directly to each provider target artboard. "
-                "This preserves the whole image and avoids white strips; minor provider "
-                "ratio drift is absorbed by the final exact resize."
-            )
+            if recompose_count == 0:
+                strategy = "direct_lanczos_resize"
+                note = (
+                    "All provider targets already match the artwork ratio, so the clean "
+                    "master can be scaled directly without crop or stretch."
+                )
+            else:
+                strategy = "exact_cover_crop"
+                note = (
+                    "Targets with minor provider ratio drift are derived by a tiny "
+                    "cover-crop onto exact provider artboards. This avoids white strips "
+                    "and avoids stretching the artwork."
+                )
         elif recompose_count == 0:
             strategy = "direct_lanczos_resize"
             note = "Every generated target has the same full-file ratio as the master."
@@ -1160,16 +1341,19 @@ class ArtworkPrintWorkflowService:
         }
 
     def _extract_provider_attributes(self, size: Any) -> dict[str, Any]:
-        dimensions = getattr(size, "print_area_dimensions", None) or {}
-        if isinstance(dimensions, str):
-            try:
-                dimensions = json.loads(dimensions)
-            except json.JSONDecodeError:
-                return {}
-        if not isinstance(dimensions, dict):
-            return {}
+        dimensions = self._normalize_print_area_dimensions(
+            getattr(size, "print_area_dimensions", None)
+        )
         attributes = dimensions.get("variant_attributes") or {}
         return dict(attributes) if isinstance(attributes, dict) else {}
+
+    def _normalize_print_area_dimensions(self, value: Any) -> dict[str, Any]:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return {}
+        return dict(value) if isinstance(value, dict) else {}
 
     def _percentage(self, count: int, total: int) -> float | None:
         if total <= 0:
@@ -1263,6 +1447,149 @@ class ArtworkPrintWorkflowService:
         if orientation == "horizontal":
             return long_side / short_side
         return short_side / long_side
+
+    def _ratio_components_from_artwork(self, artwork: Any, *, orientation: str) -> tuple[int, int] | None:
+        aspect_ratio = getattr(artwork, "print_aspect_ratio", None)
+        label = str(getattr(aspect_ratio, "label", "") or "")
+        return self._ratio_components_from_label(label, orientation=orientation)
+
+    def _ratio_components_from_label(self, label: str, *, orientation: str) -> tuple[int, int] | None:
+        match = RATIO_PATTERN.search(str(label or ""))
+        if not match:
+            return None
+        left = Fraction(match.group("w"))
+        right = Fraction(match.group("h"))
+        if left <= 0 or right <= 0:
+            return None
+
+        short_side, long_side = sorted((left, right))
+        width_fraction = long_side if orientation == "horizontal" else short_side
+        height_fraction = short_side if orientation == "horizontal" else long_side
+
+        common_denominator = math.lcm(width_fraction.denominator, height_fraction.denominator)
+        width_units = width_fraction.numerator * (common_denominator // width_fraction.denominator)
+        height_units = height_fraction.numerator * (common_denominator // height_fraction.denominator)
+        divisor = math.gcd(width_units, height_units)
+        return width_units // divisor, height_units // divisor
+
+    def _build_strict_ratio_cover_target(
+        self,
+        *,
+        artwork: Any,
+        orientation: str,
+        exact_width: int,
+        exact_height: int,
+    ) -> dict[str, Any] | None:
+        ratio_components = self._ratio_components_from_artwork(artwork, orientation=orientation)
+        if ratio_components is None:
+            return None
+
+        width_units, height_units = ratio_components
+        minimum_multiplier = max(
+            math.ceil(exact_width / width_units),
+            math.ceil(exact_height / height_units),
+        )
+        minimum_width_px = width_units * minimum_multiplier
+        minimum_height_px = height_units * minimum_multiplier
+
+        width_px = minimum_width_px
+        height_px = minimum_height_px
+        preset_target = self._get_clean_master_ratio_preset(
+            width_units=width_units,
+            height_units=height_units,
+        )
+        if preset_target is not None and self._can_cover_target(
+            preset_target["width_px"],
+            preset_target["height_px"],
+            target_width=exact_width,
+            target_height=exact_height,
+        ):
+            width_px = preset_target["width_px"]
+            height_px = preset_target["height_px"]
+
+        if width_px == exact_width and height_px == exact_height:
+            return None
+
+        return {
+            "width_px": width_px,
+            "height_px": height_px,
+            "ratio_width_units": width_units,
+            "ratio_height_units": height_units,
+            "ratio_label": f"{width_units}:{height_units}",
+            "minimum_cover_width_px": minimum_width_px,
+            "minimum_cover_height_px": minimum_height_px,
+            "preset_applied": preset_target is not None
+            and width_px == preset_target["width_px"]
+            and height_px == preset_target["height_px"],
+        }
+
+    def _get_clean_master_ratio_preset(
+        self,
+        *,
+        width_units: int,
+        height_units: int,
+    ) -> dict[str, int] | None:
+        if width_units <= 0 or height_units <= 0:
+            return None
+
+        short_units, long_units = sorted((width_units, height_units))
+        preset = CLEAN_MASTER_RATIO_PRESET_TARGETS.get(f"{short_units}:{long_units}")
+        if preset is None:
+            return None
+
+        short_edge_px, long_edge_px = preset
+        if width_units >= height_units:
+            return {
+                "width_px": long_edge_px,
+                "height_px": short_edge_px,
+            }
+        return {
+            "width_px": short_edge_px,
+            "height_px": long_edge_px,
+        }
+
+    def _can_cover_target(
+        self,
+        width: int,
+        height: int,
+        *,
+        target_width: int,
+        target_height: int,
+    ) -> bool:
+        if width <= 0 or height <= 0 or target_width <= 0 or target_height <= 0:
+            return False
+        return max(target_width / width, target_height / height) <= 1.0000001
+
+    def _estimated_cover_crop_px(
+        self,
+        width: int,
+        height: int,
+        *,
+        target_width: int,
+        target_height: int,
+    ) -> dict[str, float]:
+        if width <= 0 or height <= 0 or target_width <= 0 or target_height <= 0:
+            return {"width_px": 0.0, "height_px": 0.0}
+        scale = max(target_width / width, target_height / height)
+        scaled_width = width * scale
+        scaled_height = height * scale
+        return {
+            "width_px": round(max(0.0, scaled_width - target_width), 2),
+            "height_px": round(max(0.0, scaled_height - target_height), 2),
+        }
+
+    def _ratio_delta_px_for_ratio(
+        self,
+        width: int,
+        height: int,
+        *,
+        artwork_ratio: float,
+    ) -> float | None:
+        if width <= 0 or height <= 0 or artwork_ratio <= 0:
+            return None
+        expected_height = width / artwork_ratio
+        expected_width = height * artwork_ratio
+        return min(abs(height - expected_height), abs(width - expected_width))
 
     def _candidate_print_area(self, dims: dict[str, Any]) -> int:
         width = int(dims.get("print_area_width_px") or 0)
