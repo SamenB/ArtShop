@@ -6,7 +6,10 @@ from typing import Any
 
 from src.init import redis_manager
 from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
-from src.services.artwork_print_profiles import ArtworkPrintProfileService
+from src.services.artwork_print_profiles import (
+    ArtworkPrintProfileService,
+    resolve_profile_attribute_config,
+)
 from src.services.artworks import ArtworkService
 from src.services.prodigi_artwork_collection_storefront import (
     ProdigiArtworkCollectionStorefrontService,
@@ -298,10 +301,16 @@ class ProdigiArtworkStorefrontService:
         if not size_options:
             return None
 
-        default_attributes = self._build_default_attributes(
+        resolved_fixed, resolved_defaults, resolved_allowed = resolve_profile_attribute_config(
             fixed_attributes=cell.get("fixed_attributes") or {},
             recommended_defaults=cell.get("recommended_defaults") or {},
             allowed_attributes=cell.get("allowed_attributes") or {},
+            effective_profile=effective_profile,
+        )
+        default_attributes = self._build_default_attributes(
+            fixed_attributes=resolved_fixed,
+            recommended_defaults=resolved_defaults,
+            allowed_attributes=resolved_allowed,
         )
 
         return {
@@ -328,7 +337,7 @@ class ProdigiArtworkStorefrontService:
                 "limited_quantity": medium_state["limited_quantity"],
             },
             "default_prodigi_attributes": default_attributes,
-            "allowed_attribute_options": cell.get("allowed_attributes") or {},
+            "allowed_attribute_options": resolved_allowed,
             "print_profile": effective_profile or {},
             "size_options": size_options,
         }

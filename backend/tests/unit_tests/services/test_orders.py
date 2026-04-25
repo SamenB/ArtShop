@@ -87,6 +87,8 @@ async def test_create_order_print_sold_out_fails(order_service):
                 "edition_type": EditionType.PAPER_PRINT,
                 "finish": "none",
                 "price": 1000,
+                "prodigi_category_id": "paperPrintRolled",
+                "prodigi_slot_size_label": "40x50",
             }
         ],
     )
@@ -167,6 +169,8 @@ async def test_create_order_print_success(order_service):
                 "edition_type": EditionType.PAPER_PRINT,
                 "finish": "none",
                 "price": 1000,
+                "prodigi_category_id": "paperPrintRolled",
+                "prodigi_slot_size_label": "40x50",
             }
         ],
     )
@@ -177,6 +181,10 @@ async def test_create_order_print_success(order_service):
 
     # Print purchase no longer edits artworks.
     order_service.db.artworks.edit.assert_not_called()
+
+    order_item_args, _order_item_kwargs = order_service.db.order_items.add.await_args
+    assert order_item_args[0].prodigi_category_id == "paperPrintRolled"
+    assert order_item_args[0].prodigi_slot_size_label == "40x50"
 
     order_service.db.orders.add.assert_awaited_once()
     order_service.db.commit.assert_awaited_once()

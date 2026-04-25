@@ -10,6 +10,10 @@ from src.models.prodigi_storefront import (
     ProdigiStorefrontOfferGroupOrm,
     ProdigiStorefrontOfferSizeOrm,
 )
+from src.services.artwork_print_profiles import (
+    CANVAS_WRAP_OPTIONS,
+    WRAPPED_CANVAS_CATEGORIES,
+)
 from src.services.prodigi_artwork_storefront_materializer import (
     ProdigiArtworkStorefrontMaterializerService,
 )
@@ -80,6 +84,10 @@ class ProdigiStorefrontBakeService:
                 print_area_resolver,
             )
             self._keep_only_provider_print_area_sizes(selected_storefront_preview)
+            await self._keep_only_supported_canvas_wrap_sizes(
+                selected_storefront_preview,
+                print_area_resolver,
+            )
             self._assert_provider_print_area_sizes(selected_storefront_preview)
 
             bake = ProdigiStorefrontBakeOrm(
@@ -134,6 +142,10 @@ class ProdigiStorefrontBakeService:
                         print_area_resolver,
                     )
                     self._keep_only_provider_print_area_sizes(storefront_preview)
+                    await self._keep_only_supported_canvas_wrap_sizes(
+                        storefront_preview,
+                        print_area_resolver,
+                    )
                     self._assert_provider_print_area_sizes(storefront_preview)
 
                     if not storefront_preview["visible_cards"]:
@@ -486,6 +498,79 @@ class ProdigiStorefrontBakeService:
         storefront_preview["hidden_cards"] = hidden_cards
         storefront_preview["removed_size_options_without_provider_print_area"] = removed_sizes
         storefront_preview["removed_size_options"] = removed_sizes
+
+    async def _keep_only_supported_canvas_wrap_sizes(
+        self,
+        storefront_preview: dict[str, Any],
+        print_area_resolver: ProdigiPrintAreaResolver,
+    ) -> None:
+        visible_cards: list[dict[str, Any]] = []
+        hidden_cards = list(storefront_preview.get("hidden_cards", []))
+        removed_sizes = list(storefront_preview.get("removed_size_options") or [])
+        required_wraps = set(CANVAS_WRAP_OPTIONS)
+
+        for card in storefront_preview.get("visible_cards", []):
+            category_id = card.get("category_id")
+            if category_id not in WRAPPED_CANVAS_CATEGORIES:
+                visible_cards.append(card)
+                continue
+
+            kept_sizes = []
+            for size in card.get("size_options", []):
+                available_wraps = await print_area_resolver.get_available_attribute_values(
+                    sku=size.get("sku"),
+                    destination_country=storefront_preview.get("country_code"),
+                    attribute_key="wrap",
+                )
+                if required_wraps.issubset(available_wraps):
+                    kept_sizes.append(size)
+                    continue
+
+                removed_sizes.append(
+                    {
+                        "country_code": storefront_preview.get("country_code"),
+                        "ratio": storefront_preview.get("ratio"),
+                        "category_id": category_id,
+                        "slot_size_label": size.get("slot_size_label"),
+                        "sku": size.get("sku"),
+                        "reason": "missing_required_canvas_wraps",
+                        "required_wraps": sorted(required_wraps),
+                        "available_wraps": sorted(available_wraps),
+                    }
+                )
+
+            if not kept_sizes:
+                hidden_cards.append(
+                    {
+                        "category_id": card.get("category_id"),
+                        "label": card.get("label"),
+                        "reason": (
+                            "No size options remain after canvas wrap support validation."
+                        ),
+                        "storefront_action": card.get("storefront_action"),
+                        "fulfillment_level": card.get("fulfillment_level"),
+                        "geography_scope": card.get("geography_scope"),
+                        "tax_risk": card.get("tax_risk"),
+                    }
+                )
+                continue
+
+            card["size_options"] = kept_sizes
+            card["available_size_count"] = len(kept_sizes)
+            card["size_labels"] = [item["size_label"] for item in kept_sizes]
+            totals = [item["total_cost"] for item in kept_sizes if item.get("total_cost") is not None]
+            currency = next((item.get("currency") for item in kept_sizes if item.get("currency")), None)
+            card["price_range"] = {
+                "currency": currency,
+                "min_total": min(totals) if totals else None,
+                "max_total": max(totals) if totals else None,
+            }
+            visible_cards.append(card)
+
+        storefront_preview["visible_cards"] = visible_cards
+        storefront_preview["hidden_cards"] = hidden_cards
+        storefront_preview["removed_size_options"] = removed_sizes
+        storefront_preview["removed_size_options_without_provider_print_area"] = removed_sizes
 
     def _assert_provider_print_area_sizes(self, storefront_preview: dict[str, Any]) -> None:
         missing: list[str] = []

@@ -5,6 +5,9 @@ from src.api.print_options import MARKUP
 from src.connectors.prodigi import ProdigiClient
 from src.init import redis_manager
 from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
+from src.services.prodigi_artwork_storefront_materializer import (
+    ProdigiArtworkStorefrontMaterializerService,
+)
 from src.services.prodigi_catalog import ProdigiCatalogService
 from src.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
 from src.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
@@ -16,17 +19,6 @@ ARTWORK_PRINT_CACHE_PREFIXES = (
     "api:artwork-prints:v1:",
     "prodigi:artwork-storefront:v1:",
 )
-
-
-def _resolve_refresh_bake_config(active_bake) -> dict[str, object]:
-    return {
-        "selected_paper_material": getattr(active_bake, "paper_material", None),
-        "include_notice_level": bool(
-            getattr(active_bake, "include_notice_level", True)
-            if active_bake is not None
-            else True
-        ),
-    }
 
 
 async def _clear_artwork_print_storefront_cache() -> dict[str, object]:
@@ -209,34 +201,42 @@ async def refresh_artwork_payloads(
     db: DBDep,
 ):
     """
-    Rebuild the active storefront bake for all ratios/countries, materialize
-    fresh per-artwork payloads, and clear runtime artwork print caches.
+    Rematerialize per-artwork storefront payloads from the already active bake
+    and clear runtime artwork print caches.
     """
     try:
         repository = ProdigiStorefrontRepository(db.session)
         active_bake = await repository.get_active_bake()
-        config = _resolve_refresh_bake_config(active_bake)
-        bake_result = await ProdigiStorefrontBakeService(db).bake_storefront(
-            selected_paper_material=str(config["selected_paper_material"] or "") or None,
-            include_notice_level=bool(config["include_notice_level"]),
-        )
+        if active_bake is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No active storefront bake exists yet. Build or activate a bake in "
+                    "Prodigi Hub before refreshing artwork payloads."
+                ),
+            )
+
+        materialization = await ProdigiArtworkStorefrontMaterializerService(
+            db
+        ).materialize_active_bake()
         cache_clear = await _clear_artwork_print_storefront_cache()
         return {
             "status": "refreshed",
             "message": (
-                "Active storefront bake, materialized artwork payloads, and runtime "
-                "artwork print caches were refreshed."
+                "Artwork payloads were regenerated from the active storefront bake "
+                "and runtime artwork print caches were cleared."
             ),
-            "config": {
-                "paper_material": config["selected_paper_material"],
-                "include_notice_level": config["include_notice_level"],
+            "bake": {
+                "id": active_bake.id,
+                "bake_key": active_bake.bake_key,
+                "paper_material": active_bake.paper_material,
+                "include_notice_level": active_bake.include_notice_level,
             },
-            "bake": bake_result.get("bake"),
-            "artwork_storefront_materialization": bake_result.get(
-                "artwork_storefront_materialization"
-            ),
+            "artwork_storefront_materialization": materialization,
             "cache_clear": cache_clear,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

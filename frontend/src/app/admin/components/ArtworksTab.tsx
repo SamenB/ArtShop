@@ -164,6 +164,7 @@ interface Artwork {
     print_aspect_ratio_id?: number | null;
     orientation?: string | null;
     print_quality_url?: string | null;
+    print_profile_overrides?: Record<string, unknown> | null;
     print_readiness_summary?: PrintReadinessSummary | null;
     labels?: { id: number; title: string; category_id?: number }[];
 }
@@ -204,6 +205,8 @@ interface ArtworkFormState {
     labels: number[];
     original_status: string;
     print_quality_url: string;
+    print_profile_overrides: Record<string, unknown> | null;
+    canvas_wrap_style: string;
 }
 
 interface DragItem {
@@ -239,6 +242,13 @@ const PRINT_CATEGORY_LABELS: Record<string, string> = {
     canvasFloatingFrame: "Floating framed canvas",
 };
 
+const CANVAS_WRAP_OPTIONS = [
+    { value: "White", label: "White" },
+    { value: "Black", label: "Black" },
+    { value: "ImageWrap", label: "Image Wrap" },
+    { value: "MirrorWrap", label: "Mirror Wrap" },
+] as const;
+
 const INPUT_CLASS =
     "w-full bg-white border border-[#31323E]/15 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#31323E] focus:outline-none focus:border-[#31323E]/45 focus:ring-2 focus:ring-[#31323E]/10 transition-all";
 
@@ -264,6 +274,8 @@ function createDefaultFormState(): ArtworkFormState {
         labels: [],
         original_status: "available",
         print_quality_url: "",
+        print_profile_overrides: null,
+        canvas_wrap_style: "",
     };
 }
 
@@ -283,6 +295,10 @@ function hasPrintOfferings(formData: ArtworkFormState): boolean {
     );
 }
 
+function hasCanvasOfferings(formData: ArtworkFormState): boolean {
+    return Boolean(formData.has_canvas_print || formData.has_canvas_print_limited);
+}
+
 function hasMissingPrintRatio(formData: ArtworkFormState): boolean {
     return hasPrintOfferings(formData) && !formData.print_aspect_ratio_id;
 }
@@ -291,9 +307,72 @@ function hasOfferingValidationIssues(formData: ArtworkFormState): boolean {
     return Boolean(
         (formData.has_canvas_print_limited &&
             !Number(formData.canvas_print_limited_quantity || 0)) ||
+            (hasCanvasOfferings(formData) && !formData.canvas_wrap_style) ||
             (formData.has_paper_print_limited &&
                 !Number(formData.paper_print_limited_quantity || 0))
     );
+}
+
+function extractCanvasWrapSelectionFromOverrides(
+    overrides: Record<string, unknown> | null | undefined
+): string {
+    if (!overrides || typeof overrides !== "object") {
+        return "";
+    }
+    for (const categoryId of ["canvasStretched", "canvasClassicFrame", "canvasFloatingFrame"]) {
+        const categoryOverride = overrides[categoryId];
+        if (!categoryOverride || typeof categoryOverride !== "object") {
+            continue;
+        }
+        const recommendedDefaults = (categoryOverride as Record<string, unknown>).recommended_defaults;
+        if (!recommendedDefaults || typeof recommendedDefaults !== "object") {
+            continue;
+        }
+        const wrap = (recommendedDefaults as Record<string, unknown>).wrap;
+        if (typeof wrap === "string") {
+            return wrap;
+        }
+    }
+    return "";
+}
+
+function mergeCanvasWrapIntoOverrides(
+    existingOverrides: Record<string, unknown> | null | undefined,
+    wrap: string
+): Record<string, unknown> | null {
+    const nextOverrides: Record<string, unknown> = { ...(existingOverrides || {}) };
+    for (const categoryId of ["canvasStretched", "canvasClassicFrame", "canvasFloatingFrame"]) {
+        const categoryOverride =
+            nextOverrides[categoryId] && typeof nextOverrides[categoryId] === "object"
+                ? { ...(nextOverrides[categoryId] as Record<string, unknown>) }
+                : {};
+        const recommendedDefaults =
+            categoryOverride.recommended_defaults &&
+            typeof categoryOverride.recommended_defaults === "object"
+                ? { ...(categoryOverride.recommended_defaults as Record<string, unknown>) }
+                : {};
+
+        if (wrap) {
+            recommendedDefaults.wrap = wrap;
+            categoryOverride.recommended_defaults = recommendedDefaults;
+            nextOverrides[categoryId] = categoryOverride;
+            continue;
+        }
+
+        delete recommendedDefaults.wrap;
+        if (Object.keys(recommendedDefaults).length > 0) {
+            categoryOverride.recommended_defaults = recommendedDefaults;
+        } else {
+            delete categoryOverride.recommended_defaults;
+        }
+
+        if (Object.keys(categoryOverride).length > 0) {
+            nextOverrides[categoryId] = categoryOverride;
+        } else {
+            delete nextOverrides[categoryId];
+        }
+    }
+    return Object.keys(nextOverrides).length > 0 ? nextOverrides : null;
 }
 
 function toNumber(value: number | string | null | undefined, isFloat = false): number | null {
@@ -314,6 +393,10 @@ function buildFormPayload(formData: ArtworkFormState) {
         canvas_print_limited_quantity: toNumber(formData.canvas_print_limited_quantity),
         paper_print_limited_quantity: toNumber(formData.paper_print_limited_quantity),
         print_aspect_ratio_id: formData.print_aspect_ratio_id,
+        print_profile_overrides: mergeCanvasWrapIntoOverrides(
+            formData.print_profile_overrides,
+            hasCanvasOfferings(formData) ? formData.canvas_wrap_style : ""
+        ),
     };
 
     if (payload.width_cm !== null) {
@@ -338,6 +421,13 @@ function buildFormPayload(formData: ArtworkFormState) {
         payload.width_in = null;
         payload.height_in = null;
     }
+
+    delete payload.canvas_wrap_style;
+    delete payload.print_profile_overrides;
+    payload.print_profile_overrides = mergeCanvasWrapIntoOverrides(
+        formData.print_profile_overrides,
+        hasCanvasOfferings(formData) ? formData.canvas_wrap_style : ""
+    );
 
     return payload;
 }
@@ -372,19 +462,27 @@ function formatInchesValue(value: number | null | undefined): string | null {
     return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
 }
 
-function formatCoverCropNotice(
-    widthPx: number | null | undefined,
-    heightPx: number | null | undefined
-): string | null {
-    const safeWidth = widthPx ?? 0;
-    const safeHeight = heightPx ?? 0;
-    if (safeHeight >= safeWidth && safeHeight > 0) {
-        return `${safeHeight} px on the height`;
+function formatPxSize(width: number | null | undefined, height: number | null | undefined): string | null {
+    if (!width || !height) {
+        return null;
     }
-    if (safeWidth > 0) {
-        return `${safeWidth} px on the width`;
+    return `${width} x ${height} px`;
+}
+
+function getDerivativeStrategyLabel(strategy: string | null | undefined): string | null {
+    if (!strategy) {
+        return null;
     }
-    return null;
+    if (strategy === "exact_cover_crop") {
+        return "Per-size cover fit + exact crop";
+    }
+    if (strategy === "exact_contain_pad") {
+        return "Exact white artboards with centered fit";
+    }
+    if (strategy === "direct_resize") {
+        return "Direct resize only";
+    }
+    return titleCase(strategy);
 }
 
 function FormSection({ title, description }: { title: string; description?: string }) {
@@ -647,7 +745,7 @@ export default function ArtworksTab() {
         setLoading(true);
         try {
             const [artworksRes, categoriesRes, labelsRes, ratiosRes] = await Promise.all([
-                apiFetch(`${getApiUrl()}/artworks/admin/list?limit=200&include_print_readiness=true`),
+                apiFetch(`${getApiUrl()}/artworks/admin/list?limit=200`),
                 apiFetch(`${getApiUrl()}/labels/categories`),
                 apiFetch(`${getApiUrl()}/labels`),
                 apiFetch(`${getApiUrl()}/print-pricing/aspect-ratios`),
@@ -690,58 +788,51 @@ export default function ArtworksTab() {
         }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, []);
-
     const refreshArtworkPayloads = async () => {
-        const confirmed = window.confirm(
-            "Refresh storefront payloads for all artworks now? This rebuilds the active Prodigi bake, rematerializes artwork payloads, and clears runtime print caches."
-        );
-        if (!confirmed) {
-            return;
-        }
-
         setPayloadRefreshLoading(true);
         setPayloadRefreshMessage(null);
         setPayloadRefreshError(null);
-
         try {
             const response = await apiFetch(`${getApiUrl()}/v1/admin/prodigi/refresh-artwork-payloads`, {
                 method: "POST",
             });
+            const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
-                throw new Error(await response.text());
+                throw new Error(
+                    payload.detail || payload.message || "Could not refresh artwork payloads."
+                );
             }
 
-            const payload = await response.json();
-            const bakeSummary = payload?.bake
-                ? `${payload.bake.offer_group_count} groups / ${payload.bake.offer_size_count} sizes`
-                : "bake updated";
-            const materializedCount =
-                payload?.artwork_storefront_materialization?.payload_count ?? null;
-            const cacheCleared = payload?.cache_clear?.deleted_keys ?? 0;
-
-            setPayloadRefreshMessage(
-                `Storefront payloads refreshed: ${bakeSummary}${
-                    materializedCount !== null ? `, ${materializedCount} artwork-country payloads` : ""
-                }, cache cleared ${cacheCleared} key${cacheCleared === 1 ? "" : "s"}.`
-            );
             await fetchData();
             if (editingId) {
                 await fetchWorkflow(editingId);
             }
+
+            const bakeId = payload?.bake?.id;
+            const materializedCount = payload?.artwork_storefront_materialization?.materialized_count;
+            const deletedKeys = payload?.cache_clear?.deleted_keys;
+            const summaryParts = [
+                "Payloads refreshed.",
+                typeof bakeId === "number" ? `Bake #${bakeId}.` : null,
+                typeof materializedCount === "number"
+                    ? `${materializedCount} artwork payloads rebuilt.`
+                    : null,
+                typeof deletedKeys === "number" ? `${deletedKeys} cache keys cleared.` : null,
+            ].filter(Boolean);
+            setPayloadRefreshMessage(summaryParts.join(" "));
         } catch (error) {
-            console.error("Failed to refresh artwork storefront payloads", error);
+            console.error(error);
             setPayloadRefreshError(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to refresh storefront payloads."
+                error instanceof Error ? error.message : "Could not refresh artwork payloads."
             );
         } finally {
             setPayloadRefreshLoading(false);
         }
     };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     const resetEditor = () => {
         setFormData(createDefaultFormState());
@@ -792,6 +883,11 @@ export default function ArtworksTab() {
 
         if (hasPrintOfferings(formData) && !formData.print_aspect_ratio_id) {
             window.alert("Please choose a print aspect ratio in the Basics section before enabling print offerings.");
+            return null;
+        }
+
+        if (hasCanvasOfferings(formData) && !formData.canvas_wrap_style) {
+            window.alert("Please choose a canvas wrap in Offerings before saving canvas prints.");
             return null;
         }
 
@@ -912,6 +1008,10 @@ export default function ArtworksTab() {
                 labels: (full.labels || []).map((label) => label.id),
                 original_status: full.original_status || "available",
                 print_quality_url: full.print_quality_url || "",
+                print_profile_overrides: (full.print_profile_overrides as Record<string, unknown> | null) || null,
+                canvas_wrap_style: extractCanvasWrapSelectionFromOverrides(
+                    full.print_profile_overrides as Record<string, unknown> | null
+                ),
             });
             setImageItems(
                 (full.images || []).map((image) => ({
@@ -961,6 +1061,11 @@ export default function ArtworksTab() {
 
     const uploadMasterAsset = async (slotId: string, assetRole: string, file: File) => {
         if (!editingId) {
+            return;
+        }
+
+        if (assetRole === "clean_master" && hasCanvasOfferings(formData) && !formData.canvas_wrap_style) {
+            setWorkflowError("Choose a canvas wrap and save the artwork draft before uploading the clean master.");
             return;
         }
 
@@ -1051,7 +1156,7 @@ export default function ArtworksTab() {
             <div className="flex items-center gap-3 py-10">
                 <div className="w-5 h-5 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
                 <span className="text-sm font-semibold text-[#31323E]/50 uppercase tracking-[0.14em]">
-                    Synchronizing admin catalog
+                    Loading artworks
                 </span>
             </div>
         );
@@ -1065,7 +1170,7 @@ export default function ArtworksTab() {
                         Artwork Workbench
                     </h2>
                     <p className="text-sm text-[#31323E]/50 font-medium">
-                        {artworks.length} artworks, drafts and sellable works together
+                        {artworks.length} artworks in one editor
                     </p>
                 </div>
 
@@ -1074,11 +1179,10 @@ export default function ArtworksTab() {
                         type="button"
                         onClick={() => void refreshArtworkPayloads()}
                         disabled={payloadRefreshLoading}
-                        className="px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-[0.14em] border border-[#31323E]/15 bg-white text-[#31323E] hover:bg-[#31323E]/5 disabled:opacity-50"
+                        className="px-5 py-2.5 rounded-xl border border-[#31323E]/15 bg-white text-[#31323E] text-sm font-bold uppercase tracking-[0.14em] disabled:opacity-50"
                     >
-                        {payloadRefreshLoading ? "Refreshing payloads..." : "Refresh Payloads"}
+                        {payloadRefreshLoading ? "Refreshing..." : "Refresh Payloads"}
                     </button>
-
                     <button
                         type="button"
                         onClick={() => {
@@ -1120,8 +1224,7 @@ export default function ArtworksTab() {
                                     {editingId ? "Edit Artwork" : "Create Artwork Draft"}
                                 </h3>
                                 <p className="text-sm font-medium text-[#31323E]/45 mt-1">
-                                    Build the artwork step by step, then complete strict print-prep
-                                    validation directly in admin.
+                                    Set the artwork, then upload the production masters only where needed.
                                 </p>
                             </div>
 
@@ -1473,6 +1576,37 @@ export default function ArtworksTab() {
                                             </label>
                                         ))}
                                     </div>
+
+                                    {hasCanvasOfferings(formData) ? (
+                                        <div className="mt-4 rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4">
+                                            <FieldLabel
+                                                text="Canvas wrap"
+                                                required
+                                                valid={Boolean(formData.canvas_wrap_style)}
+                                            />
+                                            <select
+                                                value={formData.canvas_wrap_style}
+                                                onChange={(event) =>
+                                                    setFormData((previous) => ({
+                                                        ...previous,
+                                                        canvas_wrap_style: event.target.value,
+                                                    }))
+                                                }
+                                                className={INPUT_CLASS}
+                                            >
+                                                <option value="">Select wrap</option>
+                                                {CANVAS_WRAP_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/50">
+                                                This wrap will be used for stretched and framed canvas variants of
+                                                this artwork.
+                                            </p>
+                                        </div>
+                                    ) : null}
                                 </div>
 
                                 {hasPrintOfferings(formData) ? (
@@ -1503,7 +1637,7 @@ export default function ArtworksTab() {
                             <div className="space-y-6">
                                 <FormSection
                                     title="Print Pipeline"
-                                    description="Upload up to two production masters: one bordered paper file and one clean master for framed paper plus canvas. The backend validates the largest required size and pre-generates exact PNG derivatives for active baked storefront sizes."
+                                    description="Upload only the production masters. Exact provider files are generated automatically."
                                 />
 
                                 {!hasPrintOfferings(formData) ? (
@@ -1548,7 +1682,45 @@ export default function ArtworksTab() {
                                                 const assetUrl = asset?.file_url
                                                     ? `${getApiUrl().replace("/api", "")}${asset.file_url}`
                                                     : null;
-
+                                                const uploadSizeLabel =
+                                                    formatPxSize(
+                                                        slot.export_guidance?.target_width_px ??
+                                                            slot.required_min_px?.width,
+                                                        slot.export_guidance?.target_height_px ??
+                                                            slot.required_min_px?.height
+                                                    ) || "Size pending";
+                                                const providerTargetLabel = formatPxSize(
+                                                    slot.required_min_px?.width,
+                                                    slot.required_min_px?.height
+                                                );
+                                                const isStrictRatioMaster =
+                                                    slot.export_guidance?.mode === "strict_ratio_cover_master";
+                                                const uploadModeLabel = isStrictRatioMaster
+                                                    ? `PNG · ${slot.export_guidance?.ratio_label || "Strict ratio"}`
+                                                    : "PNG · Exact target";
+                                                const uploadNote = isStrictRatioMaster
+                                                    ? "Upload one clean master. Each provider size is cover-fitted and cropped only if needed."
+                                                    : "Upload the final exact artboard for this slot.";
+                                                const resultSummary = slot.derivative_plan
+                                                    ? `${slot.derivative_plan.target_count} provider-ready PNG${
+                                                          slot.derivative_plan.target_count === 1 ? "" : "s"
+                                                      } from this master`
+                                                    : "Provider-ready PNGs are generated automatically after upload";
+                                                const strategyLabel = getDerivativeStrategyLabel(
+                                                    slot.derivative_plan?.strategy
+                                                );
+                                                const categoriesLabel = slot.covers_categories
+                                                    .map((categoryId) => formatPrintCategory(categoryId))
+                                                    .join(", ");
+                                                const derivesLabel =
+                                                    slot.derives_categories &&
+                                                    slot.derives_categories.length > 0
+                                                        ? slot.derives_categories
+                                                              .map((categoryId) =>
+                                                                  formatPrintCategory(categoryId)
+                                                              )
+                                                              .join(", ")
+                                                        : null;
                                                 if (!slot.relevant) {
                                                     return (
                                                         <div
@@ -1589,25 +1761,6 @@ export default function ArtworksTab() {
                                                                     </p>
                                                                     <StatusBadge status={slot.status} />
                                                                 </div>
-                                                                <p className="text-xs font-medium text-[#31323E]/50 mt-1">
-                                                                    {slot.description}
-                                                                </p>
-                                                                <p className="text-xs font-medium text-[#31323E]/45 mt-2">
-                                                                    For:{" "}
-                                                                    {slot.covers_categories
-                                                                        .map((categoryId) =>
-                                                                            formatPrintCategory(categoryId)
-                                                                        )
-                                                                        .join(", ")}
-                                                                    {slot.derives_categories &&
-                                                                    slot.derives_categories.length > 0
-                                                                        ? ` | Derives: ${slot.derives_categories
-                                                                              .map((categoryId) =>
-                                                                                  formatPrintCategory(categoryId)
-                                                                              )
-                                                                              .join(", ")}`
-                                                                        : ""}
-                                                                </p>
                                                                 <div className="flex flex-wrap gap-3 mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
                                                                     <span>
                                                                         Covers {slot.covered_size_count} size
@@ -1621,207 +1774,109 @@ export default function ArtworksTab() {
                                                                     ) : null}
                                                                 </div>
                                                             </div>
-
-                                                            {slot.required_min_px ? (
-                                                                <div className="rounded-xl bg-white/80 px-3 py-2 border border-[#31323E]/10">
-                                                                    <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/40">
-                                                                        {slot.export_guidance?.mode ===
-                                                                        "strict_ratio_cover_master"
-                                                                            ? "Largest exact provider target"
-                                                                            : "Min required px"}
-                                                                    </p>
-                                                                    <p className="text-sm font-bold text-[#31323E] mt-1">
-                                                                        {slot.required_min_px.width} x {slot.required_min_px.height}
-                                                                    </p>
-                                                                    {slot.required_min_px.source ? (
-                                                                        <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-[#31323E]/35 mt-1">
-                                                                            {titleCase(slot.required_min_px.source)}
-                                                                        </p>
-                                                                    ) : null}
-                                                                    {slot.required_min_px.visible_art_width_px &&
-                                                                    slot.required_min_px.visible_art_height_px ? (
-                                                                        <p className="text-[11px] font-medium leading-relaxed text-[#31323E]/55 mt-2">
-                                                                            Visible art at 300 DPI:{" "}
-                                                                            {slot.required_min_px.visible_art_width_px} x{" "}
-                                                                            {slot.required_min_px.visible_art_height_px} px
-                                                                        </p>
-                                                                    ) : null}
-                                                                    {slot.required_min_px.physical_width_in &&
-                                                                    slot.required_min_px.physical_height_in ? (
-                                                                        <p className="text-[11px] font-medium leading-relaxed text-[#31323E]/45 mt-1">
-                                                                            Nominal product size:{" "}
-                                                                            {formatInchesValue(
-                                                                                slot.required_min_px.physical_width_in
-                                                                            )}{" "}
-                                                                            x{" "}
-                                                                            {formatInchesValue(
-                                                                                slot.required_min_px.physical_height_in
-                                                                            )}{" "}
-                                                                            in
-                                                                        </p>
-                                                                    ) : null}
-                                                                    {slot.export_guidance?.mode ===
-                                                                    "strict_ratio_cover_master" ? (
-                                                                        <p className="text-[11px] font-semibold leading-relaxed text-emerald-700 mt-2">
-                                                                            Upload clean master at:{" "}
-                                                                            {slot.export_guidance.target_width_px} x{" "}
-                                                                            {slot.export_guidance.target_height_px} px
-                                                                            {slot.export_guidance.ratio_label
-                                                                                ? ` (${slot.export_guidance.ratio_label})`
-                                                                                : ""}
-                                                                        </p>
-                                                                    ) : null}
-                                                                    {slot.export_guidance?.mode ===
-                                                                    "strict_ratio_cover_master" ? (
-                                                                        <p className="text-[11px] font-medium leading-relaxed text-emerald-700/80 mt-1">
-                                                                            Use this strict-ratio size for the uploaded
-                                                                            master. Exact provider artboards are generated
-                                                                            automatically.
-                                                                        </p>
-                                                                    ) : null}
-                                                                </div>
-                                                            ) : null}
                                                         </div>
 
-                                                        {slot.export_guidance ? (
-                                                            <div className="mt-4 rounded-xl border border-[#31323E]/10 bg-white px-3.5 py-3">
-                                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                                                        {slot.export_guidance.title}
-                                                                    </p>
-                                                                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/35">
-                                                                        {slot.export_guidance.target_width_px} x{" "}
-                                                                        {slot.export_guidance.target_height_px} px
-                                                                    </span>
+                                                        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+                                                            <div className="space-y-3">
+                                                                <div className="grid gap-3 sm:grid-cols-3">
+                                                                    <div className="rounded-xl border border-[#31323E]/10 bg-white/90 px-3.5 py-3">
+                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
+                                                                            Used For
+                                                                        </p>
+                                                                        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#31323E]/72">
+                                                                            {categoriesLabel}
+                                                                        </p>
+                                                                        {derivesLabel ? (
+                                                                            <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
+                                                                                Also derives: {derivesLabel}
+                                                                            </p>
+                                                                        ) : null}
+                                                                    </div>
+
+                                                                    <div className="rounded-xl border border-[#31323E]/10 bg-white/90 px-3.5 py-3">
+                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
+                                                                            Result
+                                                                        </p>
+                                                                        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#31323E]/72">
+                                                                            {resultSummary}
+                                                                        </p>
+                                                                        <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
+                                                                            Generated automatically after upload.
+                                                                        </p>
+                                                                    </div>
+
+                                                                    <div className="rounded-xl border border-[#31323E]/10 bg-white/90 px-3.5 py-3">
+                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
+                                                                            Covers
+                                                                        </p>
+                                                                        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#31323E]/72">
+                                                                            {slot.covered_size_count} size
+                                                                            {slot.covered_size_count === 1 ? "" : "s"}
+                                                                            {slot.largest_size_label
+                                                                                ? ` · Largest ${slot.largest_size_label}`
+                                                                                : ""}
+                                                                        </p>
+                                                                        {slot.required_for_sizes.length > 0 ? (
+                                                                            <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
+                                                                                {slot.required_for_sizes.join(", ")}
+                                                                            </p>
+                                                                        ) : null}
+                                                                    </div>
                                                                 </div>
-                                                                <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/60">
-                                                                    {slot.export_guidance.message}
-                                                                </p>
-                                                                {slot.export_guidance.provider_target_width_px &&
-                                                                slot.export_guidance.provider_target_height_px ? (
-                                                                    <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/58">
-                                                                        Largest exact provider artboard:{" "}
-                                                                        {slot.export_guidance.provider_target_width_px} x{" "}
-                                                                        {slot.export_guidance.provider_target_height_px} px.
-                                                                    </p>
-                                                                ) : null}
-                                                                {slot.export_guidance.provider_target_differs_from_visible_art &&
-                                                                slot.export_guidance.visible_art_width_px &&
-                                                                slot.export_guidance.visible_art_height_px ? (
-                                                                    <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/58">
-                                                                        Prodigi Product Details gives an exact provider
-                                                                        target of{" "}
-                                                                        {slot.export_guidance.provider_target_width_px ??
-                                                                            slot.export_guidance.target_width_px}{" "}
-                                                                        x{" "}
-                                                                        {slot.export_guidance.provider_target_height_px ??
-                                                                            slot.export_guidance.target_height_px} px, while
-                                                                        the nominal visible art area is{" "}
-                                                                        {slot.export_guidance.visible_art_width_px} x{" "}
-                                                                        {slot.export_guidance.visible_art_height_px} px
-                                                                        at 300 DPI.
-                                                                        {slot.export_guidance.physical_width_in &&
-                                                                        slot.export_guidance.physical_height_in
-                                                                            ? ` That comes from the product's ${formatInchesValue(slot.export_guidance.physical_width_in)} x ${formatInchesValue(slot.export_guidance.physical_height_in)} in size.`
+
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {strategyLabel ? (
+                                                                        <span className="rounded-full border border-[#31323E]/10 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#31323E]/62">
+                                                                            {strategyLabel}
+                                                                        </span>
+                                                                    ) : null}
+                                                                    {slot.slot_id === "clean_master" &&
+                                                                    hasCanvasOfferings(formData) &&
+                                                                    formData.canvas_wrap_style ? (
+                                                                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                                                                            Canvas wrap: {formData.canvas_wrap_style}
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+
+                                                                {slot.required_min_px?.visible_art_width_px &&
+                                                                slot.required_min_px?.visible_art_height_px ? (
+                                                                    <p className="text-[11px] font-medium leading-relaxed text-[#31323E]/48">
+                                                                        Visible art at 300 DPI:{" "}
+                                                                        {formatPxSize(
+                                                                            slot.required_min_px.visible_art_width_px,
+                                                                            slot.required_min_px.visible_art_height_px
+                                                                        )}
+                                                                        {slot.required_min_px.physical_width_in &&
+                                                                        slot.required_min_px.physical_height_in
+                                                                            ? ` · Product ${formatInchesValue(slot.required_min_px.physical_width_in)} x ${formatInchesValue(slot.required_min_px.physical_height_in)} in`
                                                                             : ""}
                                                                     </p>
                                                                 ) : null}
-                                                                {slot.export_guidance.full_file_ratio_diff_warning ? (
-                                                                    <p className="mt-2 text-xs font-semibold leading-relaxed text-amber-700">
-                                                                        {slot.export_guidance.mode ===
-                                                                        "strict_ratio_cover_master"
-                                                                            ? `Exact provider target differs from the artwork ratio by about ${slot.export_guidance.full_file_ratio_diff_px} px. We will use a tiny cover crop${
-                                                                                  formatCoverCropNotice(
-                                                                                      slot.export_guidance.estimated_cover_crop_width_px,
-                                                                                      slot.export_guidance.estimated_cover_crop_height_px
-                                                                                  )
-                                                                                      ? ` of ${formatCoverCropNotice(
-                                                                                            slot.export_guidance.estimated_cover_crop_width_px,
-                                                                                            slot.export_guidance.estimated_cover_crop_height_px
-                                                                                        )}`
-                                                                                      : ""
-                                                                              } instead of stretching or leaving white strips.`
-                                                                            : `Full file ratio differs from the artwork ratio by about ${slot.export_guidance.full_file_ratio_diff_px} px. This is expected for wrap, bleed, or bordered targets: build the exact artboard instead of stretching the source.`}
+                                                            </div>
+
+                                                            <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4">
+                                                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#31323E]/40">
+                                                                    Upload This File
+                                                                </p>
+                                                                <p className="mt-2 text-2xl font-bold leading-none tracking-[-0.03em] text-[#31323E]">
+                                                                    {uploadSizeLabel}
+                                                                </p>
+                                                                <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                                                                    {uploadModeLabel}
+                                                                </p>
+                                                                <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/58">
+                                                                    {uploadNote}
+                                                                </p>
+                                                                {slot.export_guidance?.provider_target_differs_from_visible_art &&
+                                                                slot.export_guidance.full_file_ratio_diff_warning ? (
+                                                                    <p className="mt-3 text-[11px] font-semibold leading-relaxed text-amber-700">
+                                                                        We fit this to Prodigi&apos;s exact target automatically
+                                                                        without stretch or white lines.
                                                                     </p>
                                                                 ) : null}
                                                             </div>
-                                                        ) : null}
-
-                                                        {slot.provider_attribute_coverage ? (
-                                                            <div className="mt-3 rounded-xl border border-[#31323E]/10 bg-white/80 px-3.5 py-3">
-                                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                                                        Canvas wrap coverage
-                                                                    </p>
-                                                                    <span
-                                                                        className={`text-[10px] font-bold uppercase tracking-[0.14em] ${
-                                                                            slot.provider_attribute_coverage.non_preferred_count === 0
-                                                                                ? "text-emerald-700"
-                                                                                : "text-amber-700"
-                                                                        }`}
-                                                                    >
-                                                                        {slot.provider_attribute_coverage.preferred_value}{" "}
-                                                                        {slot.provider_attribute_coverage.coverage_pct ?? 0}%
-                                                                    </span>
-                                                                </div>
-                                                                <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/60">
-                                                                    {slot.provider_attribute_coverage.preferred_count} of{" "}
-                                                                    {slot.provider_attribute_coverage.total_options} canvas wrap
-                                                                    options for this artwork ratio support{" "}
-                                                                    {slot.provider_attribute_coverage.preferred_value}.
-                                                                    Enforcing it strictly would hide{" "}
-                                                                    {slot.provider_attribute_coverage.strict_preferred_hidden_count} option
-                                                                    {slot.provider_attribute_coverage.strict_preferred_hidden_count === 1
-                                                                        ? ""
-                                                                        : "s"}
-                                                                    .
-                                                                </p>
-                                                                {slot.provider_attribute_coverage.non_preferred_count > 0 ? (
-                                                                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#31323E]/45">
-                                                                        {Object.entries(slot.provider_attribute_coverage.by_wrap).map(
-                                                                            ([wrap, count]) => (
-                                                                                <span
-                                                                                    key={wrap}
-                                                                                    className="rounded-full border border-[#31323E]/10 bg-white px-2 py-1"
-                                                                                >
-                                                                                    {wrap}: {count}
-                                                                                </span>
-                                                                            )
-                                                                        )}
-                                                                    </div>
-                                                                ) : null}
-                                                            </div>
-                                                        ) : null}
-
-                                                        {slot.derivative_plan ? (
-                                                            <div className="mt-3 rounded-xl border border-[#31323E]/10 bg-white/80 px-3.5 py-3">
-                                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                                                        Derivative generation
-                                                                    </p>
-                                                                    <span
-                                                                        className={`text-[10px] font-bold uppercase tracking-[0.14em] ${
-                                                                            slot.derivative_plan.can_direct_resize_all
-                                                                                ? "text-emerald-700"
-                                                                                : "text-amber-700"
-                                                                        }`}
-                                                                    >
-                                                                        {titleCase(slot.derivative_plan.strategy)}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/60">
-                                                                    {slot.derivative_plan.note}
-                                                                </p>
-                                                                <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#31323E]/35">
-                                                                    {slot.derivative_plan.direct_resize_count} direct resize
-                                                                    {" / "}
-                                                                    {slot.derivative_plan.exact_recompose_count} exact
-                                                                    recompose
-                                                                    {" / "}
-                                                                    {slot.derivative_plan.target_count} total targets
-                                                                </p>
-                                                            </div>
-                                                        ) : null}
+                                                        </div>
 
                                                         {/* Upload / asset status */}
                                                         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1883,16 +1938,6 @@ export default function ArtworksTab() {
 
                                                         {/* Issues & warnings */}
                                                         <div className="mt-3 space-y-2">
-                                                            {slot.required_for_sizes.length > 0 ? (
-                                                                <div className="rounded-xl border border-[#31323E]/10 bg-white px-3.5 py-3">
-                                                                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                                                        Covers sizes
-                                                                    </p>
-                                                                    <p className="text-xs font-medium text-[#31323E]/60 mt-2">
-                                                                        {slot.required_for_sizes.join(", ")}
-                                                                    </p>
-                                                                </div>
-                                                            ) : null}
                                                             <IssueList title="Issues" items={slot.issues} tone="danger" />
                                                             <IssueList title="Warnings" items={slot.warnings} tone="warning" />
                                                         </div>

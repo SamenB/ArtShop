@@ -13,6 +13,10 @@ from src.models.prodigi_storefront import (
     ProdigiStorefrontOfferGroupOrm,
     ProdigiStorefrontOfferSizeOrm,
 )
+from src.services.artwork_print_profiles import (
+    CANVAS_WRAP_OPTIONS,
+    WRAPPED_CANVAS_CATEGORIES,
+)
 from src.services.prodigi_artwork_storefront_materializer import (
     ProdigiArtworkStorefrontMaterializerService,
 )
@@ -171,6 +175,10 @@ class ProdigiCsvStorefrontRebuildService:
                     )
                     self.bake_service._keep_only_provider_print_area_sizes(
                         storefront_preview
+                    )
+                    await self.bake_service._keep_only_supported_canvas_wrap_sizes(
+                        storefront_preview,
+                        print_area_resolver,
                     )
                     self.bake_service._assert_provider_print_area_sizes(
                         storefront_preview
@@ -336,6 +344,11 @@ class ProdigiCsvStorefrontRebuildService:
                 lambda: defaultdict(lambda: defaultdict(dict))
             )
         )
+        canvas_wraps_by_slot: dict[str, Any] = defaultdict(
+            lambda: defaultdict(
+                lambda: defaultdict(lambda: defaultdict(set))
+            )
+        )
         kept_by_category: Counter = Counter()
         removed_by_category: Counter = Counter()
         matched_row_count = 0
@@ -403,6 +416,11 @@ class ProdigiCsvStorefrontRebuildService:
                     )
 
                     offer = self._build_offer(parsed)
+                    wrap = str(parsed.get("wrap") or "").strip()
+                    if category_id in WRAPPED_CANVAS_CATEGORIES and wrap:
+                        canvas_wraps_by_slot[ratio][destination_country][category_id][
+                            dims.label
+                        ].add(wrap)
                     tier = self.shipping_policy.normalize_tier(
                         offer.get("shipping_method"),
                         offer.get("service_level"),
@@ -418,6 +436,12 @@ class ProdigiCsvStorefrontRebuildService:
                             tier
                         ] = offer
 
+        self._prune_incomplete_canvas_wrap_slots(
+            country_size_presence=country_size_presence,
+            offers_by_slot=offers_by_slot,
+            canvas_wraps_by_slot=canvas_wraps_by_slot,
+        )
+
         return (
             ratio_category_size_stats,
             country_size_presence,
@@ -428,6 +452,43 @@ class ProdigiCsvStorefrontRebuildService:
             removed_by_category,
             matched_row_count,
         )
+
+    def _prune_incomplete_canvas_wrap_slots(
+        self,
+        *,
+        country_size_presence: dict[str, Any],
+        offers_by_slot: dict[str, Any],
+        canvas_wraps_by_slot: dict[str, Any],
+    ) -> None:
+        required_wraps = set(CANVAS_WRAP_OPTIONS)
+        for ratio, country_map in canvas_wraps_by_slot.items():
+            for country_code, category_map in country_map.items():
+                for category_id, size_map in category_map.items():
+                    blocked_labels = {
+                        size_label
+                        for size_label, wraps in size_map.items()
+                        if not required_wraps.issubset(set(wraps))
+                    }
+                    if not blocked_labels:
+                        continue
+
+                    presence = country_size_presence.get(ratio, {}).get(country_code, {}).get(
+                        category_id
+                    )
+                    if presence:
+                        country_size_presence[ratio][country_code][category_id] = {
+                            dims
+                            for dims in presence
+                            if getattr(dims, "label", None) not in blocked_labels
+                        }
+
+                    slot_offers = (
+                        offers_by_slot.get(ratio, {})
+                        .get(country_code, {})
+                        .get(category_id, {})
+                    )
+                    for size_label in blocked_labels:
+                        slot_offers.pop(size_label, None)
 
     def _match_category_id(
         self,

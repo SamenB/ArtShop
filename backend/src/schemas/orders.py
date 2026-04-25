@@ -122,6 +122,8 @@ class OrderItemBase(BaseModel):
 
     # Prodigi Print-on-Demand Fields
     prodigi_sku: Optional[str] = None
+    prodigi_category_id: Optional[str] = None
+    prodigi_slot_size_label: Optional[str] = None
     prodigi_attributes: Optional[dict] = None
     prodigi_shipping_method: Optional[str] = None
     prodigi_order_id: Optional[str] = None

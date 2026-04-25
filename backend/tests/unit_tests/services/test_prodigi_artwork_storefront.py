@@ -40,6 +40,7 @@ class FakePrintProfileService:
                     "target_dpi": 300,
                     "minimum_dpi": 150,
                     "wrap_margin_pct": 0.0,
+                    "recommended_defaults": {"wrap": "White"},
                 }
             },
         }
@@ -217,7 +218,7 @@ async def test_artwork_storefront_filters_hidden_sizes_and_disabled_mediums() ->
     canvas_card = payload["mediums"]["canvas"]["cards"][0]
     assert canvas_card["category_id"] == "canvasStretched"
     assert canvas_card["default_prodigi_attributes"] == {
-        "wrap": "MirrorWrap",
+        "wrap": "White",
         "color": "black",
     }
     assert canvas_card["edition_context"]["limited_quantity"] == 15

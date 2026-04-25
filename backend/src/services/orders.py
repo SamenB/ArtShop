@@ -147,6 +147,8 @@ class OrderService(BaseService):
                     size=item_data.size,
                     price=item_data.price,
                     prodigi_sku=item_data.prodigi_sku,
+                    prodigi_category_id=item_data.prodigi_category_id,
+                    prodigi_slot_size_label=item_data.prodigi_slot_size_label,
                     prodigi_attributes=item_data.prodigi_attributes,
                     prodigi_shipping_method=item_data.prodigi_shipping_method,
                     prodigi_wholesale_eur=item_data.prodigi_wholesale_eur,

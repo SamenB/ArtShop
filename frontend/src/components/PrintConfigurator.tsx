@@ -330,8 +330,8 @@ export default function PrintConfigurator({
 
     const finalAttributes = useMemo(() => {
         return {
-            ...(selectedCard?.default_prodigi_attributes || {}),
             ...(selectedSize?.provider_attributes || {}),
+            ...(selectedCard?.default_prodigi_attributes || {}),
             ...selectedAttributes,
         };
     }, [selectedAttributes, selectedCard, selectedSize]);
@@ -975,6 +975,9 @@ export default function PrintConfigurator({
                             ),
                             edition_type: editionType,
                             prodigi_sku: selectedSize.sku || undefined,
+                            prodigi_category_id: selectedCard.category_id,
+                            prodigi_slot_size_label:
+                                selectedSize.slot_size_label || selectedSize.size_label,
                             prodigi_attributes: finalAttributes,
                             prodigi_shipping_method:
                                 selectedSize.shipping_method ||

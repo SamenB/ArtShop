@@ -991,6 +991,8 @@ export default function CheckoutPage() {
                     size: item.size,
                     price: item.price,
                     prodigi_sku: item.prodigi_sku,
+                    prodigi_category_id: item.prodigi_category_id,
+                    prodigi_slot_size_label: item.prodigi_slot_size_label,
                     prodigi_attributes: item.prodigi_attributes,
                     prodigi_shipping_method: item.prodigi_shipping_method,
                     prodigi_wholesale_eur: item.prodigi_wholesale_eur,

@@ -61,7 +61,14 @@ def make_artwork(
     paper: bool = True,
     canvas: bool = False,
     ratio_label: str | None = "3:4",
+    print_profile_overrides: dict | None = None,
 ):
+    if canvas and print_profile_overrides is None:
+        print_profile_overrides = {
+            "canvasStretched": {"recommended_defaults": {"wrap": "MirrorWrap"}},
+            "canvasClassicFrame": {"recommended_defaults": {"wrap": "MirrorWrap"}},
+            "canvasFloatingFrame": {"recommended_defaults": {"wrap": "MirrorWrap"}},
+        }
     return SimpleNamespace(
         id=artwork_id,
         slug=f"artwork-{artwork_id}",
@@ -72,6 +79,7 @@ def make_artwork(
         has_paper_print_limited=False,
         has_canvas_print=canvas,
         has_canvas_print_limited=False,
+        print_profile_overrides=print_profile_overrides,
     )
 
 
@@ -289,6 +297,35 @@ def test_build_strict_ratio_cover_target_uses_universal_ratio_presets() -> None:
     assert target["preset_applied"] is True
 
 
+def test_estimated_cover_crop_px_is_computed_per_target() -> None:
+    service = make_service()
+
+    largest_target_crop = service._estimated_cover_crop_px(
+        16800,
+        21000,
+        target_width=14454,
+        target_height=18054,
+    )
+    assert largest_target_crop == {"width_px": 0.0, "height_px": 13.5}
+
+    same_ratio_crop = service._estimated_cover_crop_px(
+        16800,
+        21000,
+        target_width=12000,
+        target_height=15000,
+    )
+    assert same_ratio_crop == {"width_px": 0.0, "height_px": 0.0}
+
+    width_trim_crop = service._estimated_cover_crop_px(
+        16800,
+        21000,
+        target_width=15000,
+        target_height=20000,
+    )
+    assert width_trim_crop["width_px"] == 1000.0
+    assert width_trim_crop["height_px"] == 0.0
+
+
 @pytest.mark.asyncio
 async def test_get_workflow_accepts_strict_ratio_clean_master_that_covers_provider_target():
     artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
@@ -328,7 +365,7 @@ async def test_get_workflow_accepts_strict_ratio_clean_master_that_covers_provid
     slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
     assert slot["status"] == "attention"
     assert slot["issues"] == []
-    assert any("tiny cover crop" in warning for warning in slot["warnings"])
+    assert any("cover-fitted to its exact target first" in warning for warning in slot["warnings"])
 
 
 @pytest.mark.asyncio
@@ -373,6 +410,32 @@ async def test_get_workflow_reports_canvas_mirrorwrap_coverage():
     assert coverage["preferred_count"] == 2
     assert coverage["strict_preferred_hidden_count"] == 1
     assert coverage["by_wrap"] == {"MirrorWrap": 2, "White": 1}
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_blocks_clean_master_until_canvas_wrap_is_selected():
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5", print_profile_overrides={})
+    service = make_service(
+        groups=[
+            make_group(
+                "canvasStretched",
+                "20x25",
+                ratio_label="4:5",
+                print_area_width_px=2445,
+                print_area_height_px=3045,
+                print_area_source="prodigi_product_details",
+                print_area_dimensions={"variant_attributes": {"wrap": "MirrorWrap"}},
+            )
+        ],
+    )
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    payload = await service.get_workflow(artwork.id)
+
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
+    assert payload["overall_status"] == "blocked"
+    assert slot["status"] == "blocked"
+    assert "Choose a canvas wrap in Offerings before uploading the clean master." in slot["issues"]
 
 
 @pytest.mark.asyncio

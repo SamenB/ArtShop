@@ -16,6 +16,7 @@ import math
 import os
 import re
 from collections import defaultdict
+from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,13 @@ from src.exeptions import ObjectNotFoundException
 from src.models.artworks import ArtworksOrm
 from src.print_on_demand import get_print_provider
 from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
+from src.services.artwork_print_profiles import (
+    WRAPPED_CANVAS_CATEGORIES,
+    extract_canvas_wrap_selection,
+)
+from src.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
+
+Image.MAX_IMAGE_PIXELS = None
 
 SIZE_PATTERN = re.compile(r"(?P<w>\d+(?:\.\d+)?)x(?P<h>\d+(?:\.\d+)?)")
 RATIO_PATTERN = re.compile(r"(?P<w>\d+(?:\.\d+)?)[x:](?P<h>\d+(?:\.\d+)?)")
@@ -42,12 +50,6 @@ CLEAN_MASTER_RATIO_PRESET_TARGETS: dict[str, tuple[int, int]] = {
     "4:5": (16800, 21000),
     "5:7": (17500, 24500),
 }
-WRAPPED_CANVAS_CATEGORIES = {
-    "canvasStretched",
-    "canvasClassicFrame",
-    "canvasFloatingFrame",
-}
-
 MASTER_SLOTS: dict[str, dict[str, Any]] = {
     "paper_bordered": {
         "label": "Paper Bordered Master",
@@ -101,6 +103,12 @@ class ArtworkPrintWorkflowService:
             bake=bake,
             ratio_label=ratio_label,
         )
+        selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
+        if selected_canvas_wrap:
+            size_catalog = await self._apply_canvas_wrap_to_size_catalog(
+                size_catalog=size_catalog,
+                selected_wrap=selected_canvas_wrap,
+            )
 
         print_enabled = self._artwork_has_prints(artwork)
         orientation = str(getattr(artwork, "orientation", "") or "").lower()
@@ -118,6 +126,7 @@ class ArtworkPrintWorkflowService:
                 print_enabled=print_enabled,
                 ratio_assigned=ratio_assigned,
                 provider_attribute_coverage=provider_attribute_coverage,
+                selected_canvas_wrap=selected_canvas_wrap,
             )
             for slot_id, slot_def in MASTER_SLOTS.items()
         ]
@@ -172,7 +181,13 @@ class ArtworkPrintWorkflowService:
         for artwork in artworks:
             ratio_label = artwork.print_aspect_ratio.label if getattr(artwork, "print_aspect_ratio", None) else None
             ratio_assigned = bool(ratio_label)
-            size_catalog = size_catalogs.get(ratio_label or "", {})
+            size_catalog = deepcopy(size_catalogs.get(ratio_label or "", {}))
+            selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
+            if selected_canvas_wrap:
+                size_catalog = await self._apply_canvas_wrap_to_size_catalog(
+                    size_catalog=size_catalog,
+                    selected_wrap=selected_canvas_wrap,
+                )
             print_enabled = self._artwork_has_prints(artwork)
             orientation = str(getattr(artwork, "orientation", "") or "").lower()
             artwork_assets = assets_by_artwork.get(int(artwork.id), [])
@@ -190,6 +205,7 @@ class ArtworkPrintWorkflowService:
                 print_enabled=print_enabled,
                 ratio_assigned=ratio_assigned,
                 provider_attribute_coverage={},
+                selected_canvas_wrap=selected_canvas_wrap,
             )
             for slot_id, slot_def in MASTER_SLOTS.items()
         ]
@@ -323,6 +339,14 @@ class ArtworkPrintWorkflowService:
         bake = await self.storefront_repository.get_active_bake()
         ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
         size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
+        selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
+        if slot_id == "clean_master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
+            raise ValueError("Choose a canvas wrap in Offerings before uploading the clean master.")
+        if selected_canvas_wrap:
+            size_catalog = await self._apply_canvas_wrap_to_size_catalog(
+                size_catalog=size_catalog,
+                selected_wrap=selected_canvas_wrap,
+            )
         orientation = str(getattr(artwork, "orientation", "") or "").lower()
 
         generated_assets: list[Any] = []
@@ -383,6 +407,7 @@ class ArtworkPrintWorkflowService:
         print_enabled: bool,
         ratio_assigned: bool,
         provider_attribute_coverage: dict[str, Any],
+        selected_canvas_wrap: str | None,
     ) -> dict[str, Any]:
         asset_role = slot_def["asset_role"]
         covers = list(slot_def["covers_categories"])
@@ -406,6 +431,13 @@ class ArtworkPrintWorkflowService:
 
         if slot_relevant and not ratio_assigned:
             issues.append("Choose a print aspect ratio in Basics before uploading masters.")
+        elif (
+            slot_relevant
+            and slot_id == "clean_master"
+            and self._artwork_has_wrapped_canvas(artwork)
+            and not selected_canvas_wrap
+        ):
+            issues.append("Choose a canvas wrap in Offerings before uploading the clean master.")
         elif slot_relevant and not slot_has_available_sizes:
             warnings.append("No baked storefront sizes were found for this artwork ratio yet.")
         elif slot_relevant and uploaded_asset is None:
@@ -478,8 +510,9 @@ class ArtworkPrintWorkflowService:
                     if crop_amount > 0:
                         warnings.append(
                             "Largest provider target drifts slightly from the artwork ratio. "
-                            f"Generated clean derivatives will use a tiny cover crop on the {crop_axis} "
-                            f"(about {crop_amount} px after resize) instead of stretching."
+                            "Each clean derivative is cover-fitted to its exact target first, then "
+                            f"only the overflow on the {crop_axis} is center-cropped as needed "
+                            f"(about {crop_amount} px for the largest target after resize) instead of stretching."
                         )
             else:
                 if uploaded_w < required_w or uploaded_h < required_h:
@@ -540,6 +573,7 @@ class ArtworkPrintWorkflowService:
                 artwork=artwork,
                 orientation=orientation,
                 largest_size=largest_size,
+                selected_canvas_wrap=selected_canvas_wrap,
             ),
             "derivative_plan": self._build_derivative_plan(
                 slot_id=slot_id,
@@ -575,6 +609,7 @@ class ArtworkPrintWorkflowService:
         artwork: Any,
         orientation: str,
         largest_size: dict[str, Any] | None,
+        selected_canvas_wrap: str | None,
     ) -> dict[str, Any] | None:
         if largest_size is None:
             return None
@@ -607,11 +642,17 @@ class ArtworkPrintWorkflowService:
                 target_width=target_width,
                 target_height=target_height,
             )
+            wrap_note = (
+                f"Selected canvas wrap: {selected_canvas_wrap}. "
+                if selected_canvas_wrap
+                else ""
+            )
             message = (
                 "Export one large clean master in the artwork ratio. We will generate exact "
-                "provider artboards from it and use a tiny cover crop for drifted targets "
-                "instead of stretching or padding. Prodigi still receives clean front artwork "
-                "with wrap=MirrorWrap, so do not add manual wrap margins."
+                "provider artboards from it. Each target is cover-fitted first, then only the "
+                "overflow edge is center-cropped when provider pixels drift slightly from the "
+                "artwork ratio, instead of stretching or padding. "
+                f"{wrap_note}Do not manually stretch or distort the artwork."
             )
             return {
                 "mode": "strict_ratio_cover_master",
@@ -1022,9 +1063,9 @@ class ArtworkPrintWorkflowService:
             else:
                 strategy = "exact_cover_crop"
                 note = (
-                    "Targets with minor provider ratio drift are derived by a tiny "
-                    "cover-crop onto exact provider artboards. This avoids white strips "
-                    "and avoids stretching the artwork."
+                    "Each drifted provider target is cover-fitted first and then center-cropped "
+                    "only on the overflow edge needed to reach the exact artboard. This avoids "
+                    "white strips and avoids stretching the artwork."
                 )
         elif recompose_count == 0:
             strategy = "direct_lanczos_resize"
@@ -1277,6 +1318,48 @@ class ArtworkPrintWorkflowService:
         groups = await self.storefront_repository.get_groups_for_bake_ratios(bake.id, [ratio_label])
         return self._collapse_groups(groups), self._build_provider_attribute_coverage(groups)
 
+    def _get_selected_canvas_wrap(self, artwork: Any) -> str | None:
+        return extract_canvas_wrap_selection(getattr(artwork, "print_profile_overrides", None))
+
+    def _artwork_has_wrapped_canvas(self, artwork: Any) -> bool:
+        return bool(
+            getattr(artwork, "has_canvas_print", False)
+            or getattr(artwork, "has_canvas_print_limited", False)
+        )
+
+    async def _apply_canvas_wrap_to_size_catalog(
+        self,
+        *,
+        size_catalog: dict[str, dict[str, Any]],
+        selected_wrap: str,
+    ) -> dict[str, dict[str, Any]]:
+        if not size_catalog:
+            return size_catalog
+
+        async with ProdigiPrintAreaResolver() as resolver:
+            for category_id in WRAPPED_CANVAS_CATEGORIES:
+                for dims in size_catalog.get(category_id, {}).values():
+                    sku = dims.get("sku")
+                    if not sku:
+                        continue
+                    resolved = await resolver.resolve(
+                        sku=sku,
+                        destination_country=dims.get("destination_country"),
+                        category_id=category_id,
+                        attributes={"wrap": selected_wrap},
+                        optional_attribute_keys=set(),
+                        supplier_size_inches=dims.get("supplier_size_inches"),
+                        supplier_size_cm=dims.get("supplier_size_cm"),
+                        slot_size_label=dims.get("label"),
+                        wrap_margin_pct=0.0,
+                    )
+                    dims["print_area_width_px"] = resolved.get("print_area_width_px")
+                    dims["print_area_height_px"] = resolved.get("print_area_height_px")
+                    dims["print_area_name"] = resolved.get("print_area_name")
+                    dims["print_area_source"] = resolved.get("print_area_source")
+                    dims["print_area_dimensions"] = resolved.get("print_area_dimensions")
+        return size_catalog
+
     def _build_provider_attribute_coverage(self, groups: list[Any]) -> dict[str, Any]:
         by_category: dict[str, dict[str, Any]] = {}
         by_wrap: dict[str, int] = defaultdict(int)
@@ -1376,6 +1459,9 @@ class ArtworkPrintWorkflowService:
                     "short_cm": dims["short_cm"],
                     "long_cm": dims["long_cm"],
                     "available": bool(size.available),
+                    "sku": getattr(size, "sku", None),
+                    "destination_country": getattr(group, "destination_country", None),
+                    "source_country": getattr(size, "source_country", None),
                     "print_area_width_px": getattr(size, "print_area_width_px", None),
                     "print_area_height_px": getattr(size, "print_area_height_px", None),
                     "print_area_name": getattr(size, "print_area_name", None),

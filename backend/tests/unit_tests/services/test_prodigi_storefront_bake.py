@@ -277,3 +277,52 @@ def test_bake_requires_exact_canvas_wrap_provider_variant() -> None:
     assert service._optional_provider_attribute_keys("canvasStretched") == set()
     assert service._optional_provider_attribute_keys("canvasClassicFrame") == set()
     assert service._optional_provider_attribute_keys("canvasFloatingFrame") == set()
+
+
+@pytest.mark.asyncio
+async def test_bake_filters_canvas_sizes_without_full_wrap_support() -> None:
+    service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
+    preview = {
+        "country_code": "DE",
+        "ratio": "4:5",
+        "visible_cards": [
+            {
+                "category_id": "canvasFloatingFrame",
+                "label": "Floating framed canvas",
+                "storefront_action": "show",
+                "fulfillment_level": "direct",
+                "geography_scope": "global",
+                "tax_risk": "normal",
+                "size_options": [
+                    {
+                        "slot_size_label": "40x50",
+                        "size_label": "40x50",
+                        "sku": "SKU-KEEP",
+                        "currency": "EUR",
+                        "total_cost": 120.0,
+                    },
+                    {
+                        "slot_size_label": "50x70",
+                        "size_label": "50x70",
+                        "sku": "SKU-DROP",
+                        "currency": "EUR",
+                        "total_cost": 150.0,
+                    },
+                ],
+            }
+        ],
+        "hidden_cards": [],
+        "removed_size_options": [],
+    }
+
+    class FakeResolver:
+        async def get_available_attribute_values(self, *, sku, destination_country, attribute_key):
+            if sku == "SKU-KEEP":
+                return {"White", "Black", "ImageWrap", "MirrorWrap"}
+            return {"White", "Black", "MirrorWrap"}
+
+    await service._keep_only_supported_canvas_wrap_sizes(preview, FakeResolver())
+
+    kept_sizes = preview["visible_cards"][0]["size_options"]
+    assert [item["slot_size_label"] for item in kept_sizes] == ["40x50"]
+    assert preview["removed_size_options"][0]["reason"] == "missing_required_canvas_wraps"

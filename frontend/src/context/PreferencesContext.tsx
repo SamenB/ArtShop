@@ -7,7 +7,6 @@
  * Synchronizes state with localStorage and provides live currency conversion.
  */
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { getApiUrl, apiFetch } from "@/utils";
 
 /** Supported application languages. */
 export type Language = "en" | "uk";
@@ -61,6 +60,36 @@ export const UNITS_LABELS: Record<Units, string> = {
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
 
 const STORAGE_KEY = "artshop_preferences";
+const RATE_STORAGE_KEY = "artshop_exchange_rates";
+const DEFAULT_RATES: Record<Currency, number> = {
+    USD: 1,
+    UAH: 39.5,
+};
+
+type StoredRatesPayload = {
+    rates: Record<Currency, number>;
+    fetchedAt: string;
+};
+
+function isValidRatePayload(payload: unknown): payload is StoredRatesPayload {
+    if (!payload || typeof payload !== "object") {
+        return false;
+    }
+
+    const candidate = payload as Partial<StoredRatesPayload>;
+    const usdRate = candidate.rates?.USD;
+    const uahRate = candidate.rates?.UAH;
+
+    return (
+        typeof candidate.fetchedAt === "string" &&
+        typeof usdRate === "number" &&
+        Number.isFinite(usdRate) &&
+        usdRate > 0 &&
+        typeof uahRate === "number" &&
+        Number.isFinite(uahRate) &&
+        uahRate > 0
+    );
+}
 
 /** Initial state for new visitors. */
 const DEFAULTS: { language: Language; currency: Currency; units: Units } = {
@@ -80,10 +109,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     const [loaded, setLoaded] = useState(false);
     
     // Default fallback rates in case of API failure.
-    const [rates, setRates] = useState<Record<Currency, number>>({
-        USD: 1,
-        UAH: 39.5,
-    });
+    const [rates, setRates] = useState<Record<Currency, number>>(DEFAULT_RATES);
     
     const [globalPrintPrice] = useState<number>(0); // Deprecated — kept for backward compat until all call sites are removed
     const [pendingLikes, setPendingLikes] = useState<number[]>([]);
@@ -93,17 +119,46 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         async function fetchRates() {
+            let cachedPayload: StoredRatesPayload | null = null;
+
             try {
-                const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
-                const data = await res.json();
-                if (data && data.rates) {
-                    setRates({
-                        USD: 1,
-                        UAH: data.rates.UAH || 39.5,
-                    });
+                const rawCachedRates = localStorage.getItem(RATE_STORAGE_KEY);
+                if (rawCachedRates) {
+                    const parsed = JSON.parse(rawCachedRates);
+                    if (isValidRatePayload(parsed)) {
+                        cachedPayload = parsed;
+                        setRates(parsed.rates);
+                    }
                 }
-            } catch (err) {
-                console.error("Exchange rate API inaccessible, using cached fallbacks.");
+            } catch {
+                // Ignore malformed local cache and continue with the network refresh.
+            }
+
+            try {
+                const res = await fetch("/api/exchange-rates", { cache: "no-store" });
+                if (!res.ok) {
+                    throw new Error(`Rate endpoint returned ${res.status}`);
+                }
+
+                const data = await res.json();
+                if (!isValidRatePayload(data)) {
+                    throw new Error("Rate endpoint returned an invalid payload");
+                }
+
+                const shouldUseLocalCache = data.source === "fallback" && cachedPayload;
+                if (shouldUseLocalCache) {
+                    return;
+                }
+
+                setRates(data.rates);
+                localStorage.setItem(RATE_STORAGE_KEY, JSON.stringify({
+                    rates: data.rates,
+                    fetchedAt: data.fetchedAt,
+                }));
+            } catch {
+                if (process.env.NODE_ENV !== "production" && !cachedPayload) {
+                    console.warn("Exchange rates unavailable, using local fallback.");
+                }
             }
         }
         fetchRates();

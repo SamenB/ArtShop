@@ -30,6 +30,7 @@ class ProdigiPrintAreaResolver:
         self._client: ProdigiClient | None = None
         self._product_cache: dict[str, ProductDetails | None] = {}
         self._resolution_cache: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self._attribute_values_cache: dict[tuple[str, str, str], set[str]] = {}
 
     async def __aenter__(self) -> "ProdigiPrintAreaResolver":
         if settings.PRODIGI_API_KEY:
@@ -184,6 +185,47 @@ class ProdigiPrintAreaResolver:
                 log.warning("Could not fetch Prodigi product details for %s: %s", sku, exc)
                 self._product_cache[sku] = None
         return self._product_cache[sku]
+
+    async def get_available_attribute_values(
+        self,
+        *,
+        sku: str | None,
+        destination_country: str | None,
+        attribute_key: str,
+    ) -> set[str]:
+        normalized_sku = (sku or "").strip().upper()
+        normalized_country = (destination_country or "").strip().upper()
+        normalized_key = str(attribute_key or "").strip()
+        if not normalized_sku or not normalized_key:
+            return set()
+
+        cache_key = (normalized_sku, normalized_country, normalized_key.lower())
+        cached = self._attribute_values_cache.get(cache_key)
+        if cached is not None:
+            return set(cached)
+
+        product = await self._get_product(normalized_sku)
+        if product is None:
+            self._attribute_values_cache[cache_key] = set()
+            return set()
+
+        variants = product.variants
+        if normalized_country:
+            country_variants = [
+                variant for variant in variants if normalized_country in variant.ships_to
+            ]
+            if not country_variants:
+                self._attribute_values_cache[cache_key] = set()
+                return set()
+            variants = country_variants
+
+        values = {
+            str(variant.attributes.get(normalized_key) or "").strip()
+            for variant in variants
+            if str(variant.attributes.get(normalized_key) or "").strip()
+        }
+        self._attribute_values_cache[cache_key] = set(values)
+        return values
 
     def _select_variant(
         self,

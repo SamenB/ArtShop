@@ -15,7 +15,6 @@ interface SiteSettings {
     cover_2_mobile_url: string | null;
     cover_3_desktop_url: string | null;
     cover_3_mobile_url: string | null;
-    social_link: string | null;
     studio_address: string | null;
     hero_ken_burns_enabled: boolean;
     hero_slide_duration: number;
@@ -242,9 +241,6 @@ export default function SettingsTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <FieldGroup label="Contact Email">
                         <input type="email" name="contact_email" value={settings.contact_email || ""} onChange={handleChange} className={inp} placeholder="artist@example.com" />
-                    </FieldGroup>
-                    <FieldGroup label="Social Handle">
-                        <input type="text" name="social_link" value={settings.social_link || ""} onChange={handleChange} className={inp} placeholder="@artshop_studio" />
                     </FieldGroup>
                     <div className="md:col-span-2">
                         <FieldGroup label="Studio Address">

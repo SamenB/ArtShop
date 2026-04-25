@@ -114,6 +114,8 @@ class OrderItemOrm(Base):
 
     # Prodigi Print-on-Demand Fields
     prodigi_sku: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prodigi_category_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    prodigi_slot_size_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     prodigi_attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     prodigi_shipping_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     prodigi_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

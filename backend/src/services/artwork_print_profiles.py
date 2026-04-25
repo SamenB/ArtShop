@@ -12,6 +12,93 @@ from src.models.artworks import ArtworksOrm
 from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
 from src.services.prodigi_storefront_policy import STOREFRONT_POLICY
 
+CANVAS_WRAP_OPTIONS = ("White", "Black", "ImageWrap", "MirrorWrap")
+WRAPPED_CANVAS_CATEGORIES = (
+    "canvasStretched",
+    "canvasClassicFrame",
+    "canvasFloatingFrame",
+)
+
+
+def extract_canvas_wrap_selection(overrides: dict[str, Any] | None) -> str | None:
+    if not isinstance(overrides, dict):
+        return None
+    for category_id in WRAPPED_CANVAS_CATEGORIES:
+        category_override = overrides.get(category_id)
+        if not isinstance(category_override, dict):
+            continue
+        recommended_defaults = category_override.get("recommended_defaults")
+        if not isinstance(recommended_defaults, dict):
+            continue
+        wrap = recommended_defaults.get("wrap")
+        if wrap in CANVAS_WRAP_OPTIONS:
+            return str(wrap)
+    return None
+
+
+def apply_canvas_wrap_selection(
+    overrides: dict[str, Any] | None,
+    wrap: str | None,
+) -> dict[str, Any] | None:
+    if wrap is not None and wrap not in CANVAS_WRAP_OPTIONS:
+        raise ValueError(f"Unsupported canvas wrap: {wrap}")
+
+    next_overrides: dict[str, Any] = dict(overrides or {})
+    for category_id in WRAPPED_CANVAS_CATEGORIES:
+        category_payload = dict(next_overrides.get(category_id) or {})
+        recommended_defaults = dict(category_payload.get("recommended_defaults") or {})
+        if wrap:
+            recommended_defaults["wrap"] = wrap
+            category_payload["recommended_defaults"] = recommended_defaults
+            next_overrides[category_id] = category_payload
+            continue
+
+        recommended_defaults.pop("wrap", None)
+        if recommended_defaults:
+            category_payload["recommended_defaults"] = recommended_defaults
+        else:
+            category_payload.pop("recommended_defaults", None)
+        if category_payload:
+            next_overrides[category_id] = category_payload
+        else:
+            next_overrides.pop(category_id, None)
+
+    return next_overrides or None
+
+
+def resolve_profile_attribute_config(
+    *,
+    fixed_attributes: dict[str, Any] | None,
+    recommended_defaults: dict[str, Any] | None,
+    allowed_attributes: dict[str, list[Any]] | None,
+    effective_profile: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[Any]]]:
+    resolved_fixed = dict(fixed_attributes or {})
+    resolved_defaults = dict(recommended_defaults or {})
+    resolved_allowed = {
+        key: list(values)
+        for key, values in (allowed_attributes or {}).items()
+    }
+    if not isinstance(effective_profile, dict):
+        return resolved_fixed, resolved_defaults, resolved_allowed
+
+    profile_fixed = effective_profile.get("fixed_attributes")
+    if isinstance(profile_fixed, dict):
+        resolved_fixed.update(profile_fixed)
+
+    profile_defaults = effective_profile.get("recommended_defaults")
+    if isinstance(profile_defaults, dict):
+        resolved_defaults.update(profile_defaults)
+
+    profile_allowed = effective_profile.get("allowed_attributes")
+    if isinstance(profile_allowed, dict):
+        resolved_allowed = {
+            key: list(values) if isinstance(values, list) else [values]
+            for key, values in profile_allowed.items()
+        }
+
+    return resolved_fixed, resolved_defaults, resolved_allowed
+
 CATEGORY_PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
     "paperPrintRolled": {
         "prodigi_sizing": "fillPrintArea",

@@ -1,11 +1,12 @@
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from src.api.admin_prodigi import (
     ARTWORK_PRINT_CACHE_PREFIXES,
     _clear_artwork_print_storefront_cache,
-    _resolve_refresh_bake_config,
+    refresh_artwork_payloads,
 )
 from src.init import redis_manager
 
@@ -16,29 +17,6 @@ class DummyRedis:
 
     async def delete(self, key: str):
         self.data.pop(key, None)
-
-
-def test_resolve_refresh_bake_config_uses_active_bake_settings():
-    config = _resolve_refresh_bake_config(
-        SimpleNamespace(
-            paper_material="hahnemuhle_photo_rag",
-            include_notice_level=False,
-        )
-    )
-
-    assert config == {
-        "selected_paper_material": "hahnemuhle_photo_rag",
-        "include_notice_level": False,
-    }
-
-
-def test_resolve_refresh_bake_config_defaults_when_no_active_bake():
-    config = _resolve_refresh_bake_config(None)
-
-    assert config == {
-        "selected_paper_material": None,
-        "include_notice_level": True,
-    }
 
 
 @pytest.mark.asyncio
@@ -81,3 +59,94 @@ async def test_clear_artwork_print_storefront_cache_skips_when_redis_missing():
         "deleted_keys": 0,
         "reason": "Redis is not connected.",
     }
+
+
+@pytest.mark.asyncio
+async def test_refresh_artwork_payloads_rematerializes_active_bake(monkeypatch):
+    active_bake = SimpleNamespace(
+        id=7,
+        bake_key="active-bake",
+        paper_material="hahnemuhle_photo_rag",
+        include_notice_level=True,
+    )
+
+    class DummyRepository:
+        def __init__(self, session):
+            self.session = session
+
+        async def get_active_bake(self):
+            return active_bake
+
+    class DummyMaterializer:
+        def __init__(self, db):
+            self.db = db
+
+        async def materialize_active_bake(self):
+            return {
+                "status": "materialized",
+                "bake_id": active_bake.id,
+                "artwork_count": 1,
+                "payload_count": 152,
+                "country_count": 152,
+            }
+
+    async def fake_clear():
+        return {"status": "cleared", "deleted_keys": 2}
+
+    monkeypatch.setattr("src.api.admin_prodigi.ProdigiStorefrontRepository", DummyRepository)
+    monkeypatch.setattr(
+        "src.api.admin_prodigi.ProdigiArtworkStorefrontMaterializerService",
+        DummyMaterializer,
+    )
+    monkeypatch.setattr("src.api.admin_prodigi._clear_artwork_print_storefront_cache", fake_clear)
+
+    result = await refresh_artwork_payloads(
+        admin_id=1,
+        db=SimpleNamespace(session=object()),
+    )
+
+    assert result == {
+        "status": "refreshed",
+        "message": (
+            "Artwork payloads were regenerated from the active storefront bake "
+            "and runtime artwork print caches were cleared."
+        ),
+        "bake": {
+            "id": 7,
+            "bake_key": "active-bake",
+            "paper_material": "hahnemuhle_photo_rag",
+            "include_notice_level": True,
+        },
+        "artwork_storefront_materialization": {
+            "status": "materialized",
+            "bake_id": 7,
+            "artwork_count": 1,
+            "payload_count": 152,
+            "country_count": 152,
+        },
+        "cache_clear": {
+            "status": "cleared",
+            "deleted_keys": 2,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_refresh_artwork_payloads_requires_active_bake(monkeypatch):
+    class DummyRepository:
+        def __init__(self, session):
+            self.session = session
+
+        async def get_active_bake(self):
+            return None
+
+    monkeypatch.setattr("src.api.admin_prodigi.ProdigiStorefrontRepository", DummyRepository)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await refresh_artwork_payloads(
+            admin_id=1,
+            db=SimpleNamespace(session=object()),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "No active storefront bake exists yet." in str(exc_info.value.detail)

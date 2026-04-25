@@ -43,6 +43,10 @@ export interface CartItem {
         | "paper_print_limited";
     /** Prodigi SKU for the selected variant. */
     prodigi_sku?: string;
+    /** Normalized storefront category id for exact prepared asset resolution. */
+    prodigi_category_id?: string;
+    /** Raw storefront slot label used for exact derivative lookup. */
+    prodigi_slot_size_label?: string;
     /** Prodigi print attributes (like frame color or wrap border). */
     prodigi_attributes?: Record<string, string>;
     /** Selected shipping method for the item (e.g., Standard, Express). */
