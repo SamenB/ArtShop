@@ -327,7 +327,7 @@ def test_estimated_cover_crop_px_is_computed_per_target() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_workflow_accepts_strict_ratio_clean_master_that_covers_provider_target():
+async def test_get_workflow_accepts_strict_ratio_clean_master_without_warning_for_provider_drift():
     artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
     asset = make_master_asset(
         asset_id=31,
@@ -363,9 +363,9 @@ async def test_get_workflow_accepts_strict_ratio_clean_master_that_covers_provid
     payload = await service.get_workflow(artwork.id)
 
     slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
-    assert slot["status"] == "attention"
+    assert slot["status"] == "ready"
     assert slot["issues"] == []
-    assert any("cover-fitted to its exact target first" in warning for warning in slot["warnings"])
+    assert slot["warnings"] == []
 
 
 @pytest.mark.asyncio

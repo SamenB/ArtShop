@@ -95,9 +95,17 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
 export async function apiJson<T = unknown>(response: Response): Promise<T> {
     const contentType = response.headers.get("content-type") || "";
     const isJson = contentType.toLowerCase().includes("application/json");
+    const bodyText = await response.text().catch(() => "");
+    const parseJsonBody = () => {
+        try {
+            return bodyText ? JSON.parse(bodyText) : null;
+        } catch {
+            return null;
+        }
+    };
 
     if (!response.ok) {
-        const body = isJson ? await response.json().catch(() => null) : await response.text().catch(() => "");
+        const body = isJson ? parseJsonBody() : bodyText;
         const detail =
             body && typeof body === "object" && "detail" in body
                 ? String((body as { detail?: unknown }).detail)
@@ -108,11 +116,14 @@ export async function apiJson<T = unknown>(response: Response): Promise<T> {
     }
 
     if (!isJson) {
-        const body = await response.text().catch(() => "");
-        throw new Error(`Expected JSON but received ${contentType || "unknown content"}: ${body.slice(0, 80)}`);
+        throw new Error(`Expected JSON but received ${contentType || "unknown content"}: ${bodyText.slice(0, 80)}`);
     }
 
-    return response.json() as Promise<T>;
+    const body = parseJsonBody();
+    if (body === null) {
+        throw new Error(`Invalid JSON response: ${bodyText.slice(0, 80)}`);
+    }
+    return body as T;
 }
 
 /**

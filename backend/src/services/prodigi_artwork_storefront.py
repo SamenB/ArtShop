@@ -19,6 +19,9 @@ from src.services.prodigi_storefront_snapshot import ProdigiStorefrontSnapshotSe
 CATEGORY_MEDIUM_MAP = {
     "paperPrintRolled": "paper",
     "paperPrintBoxFramed": "paper",
+    "paperPrintBoxFramedMounted": "paper",
+    "paperPrintClassicFramed": "paper",
+    "paperPrintClassicFramedMounted": "paper",
     "canvasRolled": "canvas",
     "canvasStretched": "canvas",
     "canvasClassicFrame": "canvas",
@@ -327,6 +330,7 @@ class ProdigiArtworkStorefrontService:
             "tax_risk": cell.get("effective_tax_risk") or cell.get("tax_risk"),
             "source_mix": cell.get("source_mix"),
             "source_countries": cell.get("source_countries") or [],
+            "note": cell.get("note"),
             "available_shipping_tiers": cell.get("available_shipping_tiers") or [],
             "default_shipping_tier": cell.get("default_shipping_tier"),
             "shipping_support": cell.get("shipping_support"),

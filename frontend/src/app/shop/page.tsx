@@ -886,7 +886,7 @@ function ShopPageContent() {
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/geo/country`)
-            .then((res) => res.json())
+            .then((res) => apiJson<{ country_code?: string }>(res))
             .then((data) => {
                 if (data.country_code) {
                     setUserCountryCode(String(data.country_code).toUpperCase());

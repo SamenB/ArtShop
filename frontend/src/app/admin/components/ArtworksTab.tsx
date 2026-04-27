@@ -1,722 +1,38 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { apiFetch, getApiUrl, getImageUrl } from "@/utils";
+import { apiFetch, getApiUrl } from "@/utils";
 
 import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
-
-interface ArtworkImage {
-    thumb: string;
-    medium: string;
-    original: string;
-}
-
-type ImageEntry = string | ArtworkImage;
-
-interface Label {
-    id: number;
-    title: string;
-    category_id?: number;
-}
-
-interface LabelCategory {
-    id: number;
-    title: string;
-    accent_color?: string;
-}
-
-interface AspectRatio {
-    id: number;
-    label: string;
-    description: string | null;
-}
-
-interface PrintReadinessSummary {
-    status: "ready" | "attention" | "blocked" | "not_required";
-    message: string;
-    total_slots: number;
-    relevant_slots: number;
-    ready_slots: number;
-    blocked_slots: number;
-    highlight_variant?: string;
-    // Legacy compat
-    blocking_step_count: number;
-    attention_step_count: number;
-    blocking_category_count: number;
-    ready_category_count: number;
-    enabled_category_count: number;
-}
-
-interface MasterSlot {
-    slot_id: string;
-    label: string;
-    description: string;
-    asset_role: string;
-    covers_categories: string[];
-    derives_categories?: string[];
-    relevant: boolean;
-    status: "ready" | "attention" | "blocked" | "not_required";
-    required_min_px: {
-        width: number;
-        height: number;
-        source?: string | null;
-        print_area_name?: string | null;
-        visible_art_width_px?: number | null;
-        visible_art_height_px?: number | null;
-        physical_width_in?: number | null;
-        physical_height_in?: number | null;
-    } | null;
-    required_min_px_source?: string | null;
-    export_guidance?: {
-        mode: string;
-        title: string;
-        message: string;
-        target_width_px: number;
-        target_height_px: number;
-        source?: string | null;
-        print_area_name?: string | null;
-        artwork_ratio?: number | null;
-        target_ratio?: number | null;
-        full_file_ratio_diff_px?: number | null;
-        full_file_ratio_diff_warning?: boolean;
-        visible_art_width_px?: number | null;
-        visible_art_height_px?: number | null;
-        physical_width_in?: number | null;
-        physical_height_in?: number | null;
-        provider_target_differs_from_visible_art?: boolean;
-        provider_target_width_px?: number | null;
-        provider_target_height_px?: number | null;
-        estimated_cover_crop_width_px?: number | null;
-        estimated_cover_crop_height_px?: number | null;
-        ratio_label?: string | null;
-    } | null;
-    derivative_plan?: {
-        strategy: string;
-        target_count: number;
-        direct_resize_count: number;
-        exact_recompose_count: number;
-        can_direct_resize_all: boolean;
-        note?: string | null;
-    } | null;
-    provider_attribute_coverage?: {
-        kind: string;
-        attribute: string;
-        preferred_value: string;
-        total_options: number;
-        preferred_count: number;
-        non_preferred_count: number;
-        strict_preferred_hidden_count: number;
-        coverage_pct?: number | null;
-        by_wrap: Record<string, number>;
-        by_category: Array<{
-            category_id: string;
-            total_options: number;
-            preferred_count: number;
-            non_preferred_count: number;
-            coverage_pct?: number | null;
-            by_wrap: Record<string, number>;
-        }>;
-        note?: string | null;
-    } | null;
-    largest_size_label: string | null;
-    required_for_sizes: string[];
-    covered_size_count: number;
-    generated_derivatives_count: number;
-    uploaded_asset: ArtworkPrintAsset | null;
-    validation: {
-        issues: string[];
-        warnings: string[];
-    };
-    issues: string[];
-    warnings: string[];
-}
-
-interface ArtworkPrintWorkflowPayload {
-    artwork_id: number;
-    provider_key: string;
-    print_enabled: boolean;
-    ratio_assigned?: boolean;
-    ratio_label?: string | null;
-    master_slots: MasterSlot[];
-    overall_status: string;
-    readiness_summary: PrintReadinessSummary;
-}
-
-interface Artwork {
-    id: number;
-    title: string;
-    slug?: string | null;
-    description?: string | null;
-    year?: number | null;
-    width_cm?: number | null;
-    height_cm?: number | null;
-    original_price?: number | null;
-    original_status?: string | null;
-    images?: ImageEntry[];
-    has_original?: boolean;
-    has_canvas_print?: boolean;
-    has_canvas_print_limited?: boolean;
-    has_paper_print?: boolean;
-    has_paper_print_limited?: boolean;
-    canvas_print_limited_quantity?: number | null;
-    paper_print_limited_quantity?: number | null;
-    print_aspect_ratio_id?: number | null;
-    orientation?: string | null;
-    print_quality_url?: string | null;
-    print_profile_overrides?: Record<string, unknown> | null;
-    print_readiness_summary?: PrintReadinessSummary | null;
-    labels?: { id: number; title: string; category_id?: number }[];
-}
-
-interface ArtworkPrintAsset {
-    id: number;
-    artwork_id: number;
-    provider_key: string;
-    category_id: string | null;
-    asset_role: string;
-    slot_size_label: string | null;
-    file_url: string;
-    file_name: string | null;
-    file_ext: string | null;
-    mime_type: string | null;
-    file_size_bytes: number | null;
-    checksum_sha256: string | null;
-    file_metadata?: Record<string, unknown> | null;
-    note?: string | null;
-}
-
-interface ArtworkFormState {
-    title: string;
-    description: string;
-    year: number;
-    width_cm: number | string;
-    height_cm: number | string;
-    original_price: number | string;
-    has_original: boolean;
-    has_canvas_print: boolean;
-    has_canvas_print_limited: boolean;
-    has_paper_print: boolean;
-    has_paper_print_limited: boolean;
-    canvas_print_limited_quantity: number | string;
-    paper_print_limited_quantity: number | string;
-    print_aspect_ratio_id: number | null;
-    orientation: string;
-    labels: number[];
-    original_status: string;
-    print_quality_url: string;
-    print_profile_overrides: Record<string, unknown> | null;
-    canvas_wrap_style: string;
-}
-
-interface DragItem {
-    type: "existing" | "new";
-    url: string;
-    existingData?: ImageEntry;
-    file?: File;
-}
-
-const STATUS_OPTIONS = [
-    { value: "available", label: "Available" },
-    { value: "sold", label: "Sold" },
-    { value: "reserved", label: "Reserved" },
-    { value: "not_for_sale", label: "Not for Sale" },
-    { value: "on_exhibition", label: "On Exhibition" },
-    { value: "archived", label: "Archived" },
-    { value: "digital", label: "Digital" },
-];
-
-const WORKFLOW_STEP_ORDER = [
-    { id: "basics", label: "Basics" },
-    { id: "offerings", label: "Offerings" },
-    { id: "pipeline", label: "Print Pipeline" },
-    { id: "media", label: "Media" },
-] as const;
-
-const PRINT_CATEGORY_LABELS: Record<string, string> = {
-    paperPrintRolled: "Rolled paper prints",
-    paperPrintBoxFramed: "Framed paper prints",
-    canvasRolled: "Rolled canvas",
-    canvasStretched: "Stretched canvas",
-    canvasClassicFrame: "Classic framed canvas",
-    canvasFloatingFrame: "Floating framed canvas",
-};
-
-const CANVAS_WRAP_OPTIONS = [
-    { value: "White", label: "White" },
-    { value: "Black", label: "Black" },
-    { value: "ImageWrap", label: "Image Wrap" },
-    { value: "MirrorWrap", label: "Mirror Wrap" },
-] as const;
-
-const INPUT_CLASS =
-    "w-full bg-white border border-[#31323E]/15 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#31323E] focus:outline-none focus:border-[#31323E]/45 focus:ring-2 focus:ring-[#31323E]/10 transition-all";
-
-const currentYear = new Date().getFullYear();
-
-function createDefaultFormState(): ArtworkFormState {
-    return {
-        title: "",
-        description: "",
-        year: currentYear,
-        width_cm: "",
-        height_cm: "",
-        original_price: 1000,
-        has_original: false,
-        has_canvas_print: false,
-        has_canvas_print_limited: false,
-        has_paper_print: false,
-        has_paper_print_limited: false,
-        canvas_print_limited_quantity: "",
-        paper_print_limited_quantity: "",
-        print_aspect_ratio_id: null,
-        orientation: "Horizontal",
-        labels: [],
-        original_status: "available",
-        print_quality_url: "",
-        print_profile_overrides: null,
-        canvas_wrap_style: "",
-    };
-}
-
-function resolveImageUrl(img: ImageEntry): string {
-    if (typeof img === "string") {
-        return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
-    }
-    return getImageUrl(img, "thumb") || "";
-}
-
-function hasPrintOfferings(formData: ArtworkFormState): boolean {
-    return Boolean(
-        formData.has_canvas_print ||
-            formData.has_canvas_print_limited ||
-            formData.has_paper_print ||
-            formData.has_paper_print_limited
-    );
-}
-
-function hasCanvasOfferings(formData: ArtworkFormState): boolean {
-    return Boolean(formData.has_canvas_print || formData.has_canvas_print_limited);
-}
-
-function hasMissingPrintRatio(formData: ArtworkFormState): boolean {
-    return hasPrintOfferings(formData) && !formData.print_aspect_ratio_id;
-}
-
-function hasOfferingValidationIssues(formData: ArtworkFormState): boolean {
-    return Boolean(
-        (formData.has_canvas_print_limited &&
-            !Number(formData.canvas_print_limited_quantity || 0)) ||
-            (hasCanvasOfferings(formData) && !formData.canvas_wrap_style) ||
-            (formData.has_paper_print_limited &&
-                !Number(formData.paper_print_limited_quantity || 0))
-    );
-}
-
-function extractCanvasWrapSelectionFromOverrides(
-    overrides: Record<string, unknown> | null | undefined
-): string {
-    if (!overrides || typeof overrides !== "object") {
-        return "";
-    }
-    for (const categoryId of ["canvasStretched", "canvasClassicFrame", "canvasFloatingFrame"]) {
-        const categoryOverride = overrides[categoryId];
-        if (!categoryOverride || typeof categoryOverride !== "object") {
-            continue;
-        }
-        const recommendedDefaults = (categoryOverride as Record<string, unknown>).recommended_defaults;
-        if (!recommendedDefaults || typeof recommendedDefaults !== "object") {
-            continue;
-        }
-        const wrap = (recommendedDefaults as Record<string, unknown>).wrap;
-        if (typeof wrap === "string") {
-            return wrap;
-        }
-    }
-    return "";
-}
-
-function mergeCanvasWrapIntoOverrides(
-    existingOverrides: Record<string, unknown> | null | undefined,
-    wrap: string
-): Record<string, unknown> | null {
-    const nextOverrides: Record<string, unknown> = { ...(existingOverrides || {}) };
-    for (const categoryId of ["canvasStretched", "canvasClassicFrame", "canvasFloatingFrame"]) {
-        const categoryOverride =
-            nextOverrides[categoryId] && typeof nextOverrides[categoryId] === "object"
-                ? { ...(nextOverrides[categoryId] as Record<string, unknown>) }
-                : {};
-        const recommendedDefaults =
-            categoryOverride.recommended_defaults &&
-            typeof categoryOverride.recommended_defaults === "object"
-                ? { ...(categoryOverride.recommended_defaults as Record<string, unknown>) }
-                : {};
-
-        if (wrap) {
-            recommendedDefaults.wrap = wrap;
-            categoryOverride.recommended_defaults = recommendedDefaults;
-            nextOverrides[categoryId] = categoryOverride;
-            continue;
-        }
-
-        delete recommendedDefaults.wrap;
-        if (Object.keys(recommendedDefaults).length > 0) {
-            categoryOverride.recommended_defaults = recommendedDefaults;
-        } else {
-            delete categoryOverride.recommended_defaults;
-        }
-
-        if (Object.keys(categoryOverride).length > 0) {
-            nextOverrides[categoryId] = categoryOverride;
-        } else {
-            delete nextOverrides[categoryId];
-        }
-    }
-    return Object.keys(nextOverrides).length > 0 ? nextOverrides : null;
-}
-
-function toNumber(value: number | string | null | undefined, isFloat = false): number | null {
-    if (value === "" || value === null || value === undefined) {
-        return null;
-    }
-    const parsed = isFloat ? Number.parseFloat(String(value)) : Number.parseInt(String(value), 10);
-    return Number.isNaN(parsed) ? null : parsed;
-}
-
-function buildFormPayload(formData: ArtworkFormState) {
-    const payload: Record<string, unknown> = {
-        ...formData,
-        original_price: toNumber(formData.original_price),
-        year: toNumber(formData.year),
-        width_cm: toNumber(formData.width_cm, true),
-        height_cm: toNumber(formData.height_cm, true),
-        canvas_print_limited_quantity: toNumber(formData.canvas_print_limited_quantity),
-        paper_print_limited_quantity: toNumber(formData.paper_print_limited_quantity),
-        print_aspect_ratio_id: formData.print_aspect_ratio_id,
-        print_profile_overrides: mergeCanvasWrapIntoOverrides(
-            formData.print_profile_overrides,
-            hasCanvasOfferings(formData) ? formData.canvas_wrap_style : ""
-        ),
-    };
-
-    if (payload.width_cm !== null) {
-        payload.width_in = Number(((payload.width_cm as number) * 0.393701).toFixed(2));
-    } else {
-        payload.width_in = null;
-    }
-
-    if (payload.height_cm !== null) {
-        payload.height_in = Number(((payload.height_cm as number) * 0.393701).toFixed(2));
-    } else {
-        payload.height_in = null;
-    }
-
-    if (!formData.has_original || formData.original_status !== "available") {
-        payload.original_price = null;
-    }
-
-    if (formData.original_status === "digital") {
-        payload.width_cm = null;
-        payload.height_cm = null;
-        payload.width_in = null;
-        payload.height_in = null;
-    }
-
-    delete payload.canvas_wrap_style;
-    delete payload.print_profile_overrides;
-    payload.print_profile_overrides = mergeCanvasWrapIntoOverrides(
-        formData.print_profile_overrides,
-        hasCanvasOfferings(formData) ? formData.canvas_wrap_style : ""
-    );
-
-    return payload;
-}
-
-function getStatusClasses(status: string): string {
-    if (status === "ready") {
-        return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-    }
-    if (status === "blocked") {
-        return "bg-rose-50 text-rose-700 border border-rose-200";
-    }
-    return "bg-amber-50 text-amber-700 border border-amber-200";
-}
-
-function titleCase(value: string): string {
-    return value
-        .replace(/[_-]/g, " ")
-        .split(" ")
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
-}
-
-function formatPrintCategory(categoryId: string): string {
-    return PRINT_CATEGORY_LABELS[categoryId] || titleCase(categoryId);
-}
-
-function formatInchesValue(value: number | null | undefined): string | null {
-    if (value === null || value === undefined || Number.isNaN(value)) {
-        return null;
-    }
-    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function formatPxSize(width: number | null | undefined, height: number | null | undefined): string | null {
-    if (!width || !height) {
-        return null;
-    }
-    return `${width} x ${height} px`;
-}
-
-function getDerivativeStrategyLabel(strategy: string | null | undefined): string | null {
-    if (!strategy) {
-        return null;
-    }
-    if (strategy === "exact_cover_crop") {
-        return "Per-size cover fit + exact crop";
-    }
-    if (strategy === "exact_contain_pad") {
-        return "Exact white artboards with centered fit";
-    }
-    if (strategy === "direct_resize") {
-        return "Direct resize only";
-    }
-    return titleCase(strategy);
-}
-
-function FormSection({ title, description }: { title: string; description?: string }) {
-    return (
-        <div className="mb-5">
-            <div className="flex items-center gap-3 mb-1.5">
-                <h3 className="text-sm font-bold uppercase tracking-[0.16em] text-[#31323E]">
-                    {title}
-                </h3>
-                <div className="flex-1 h-px bg-[#31323E]/10" />
-            </div>
-            {description ? (
-                <p className="text-xs text-[#31323E]/45 font-medium">{description}</p>
-            ) : null}
-        </div>
-    );
-}
-
-function FieldLabel({
-    text,
-    required = false,
-    valid = true,
-}: {
-    text: string;
-    required?: boolean;
-    valid?: boolean;
-}) {
-    return (
-        <div className="flex items-center gap-2 mb-1.5">
-            <div
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    valid ? "bg-emerald-400" : "bg-amber-400"
-                }`}
-            />
-            <label className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#31323E]/60">
-                {text}
-                {required ? " *" : ""}
-            </label>
-        </div>
-    );
-}
-
-function StatusBadge({ status, label }: { status: string; label?: string }) {
-    return (
-        <span
-            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${getStatusClasses(status)}`}
-        >
-            {label || titleCase(status)}
-        </span>
-    );
-}
-
-function IssueList({
-    title,
-    items,
-    tone,
-}: {
-    title: string;
-    items?: string[];
-    tone: "danger" | "warning";
-}) {
-    if (!items || items.length === 0) {
-        return null;
-    }
-
-    const classes =
-        tone === "danger"
-            ? "bg-rose-50 border border-rose-200 text-rose-700"
-            : "bg-amber-50 border border-amber-200 text-amber-700";
-
-    return (
-        <div className={`rounded-xl px-3.5 py-3 ${classes}`}>
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] mb-2">{title}</p>
-            <ul className="space-y-1.5 text-xs font-medium">
-                {items.map((item) => (
-                    <li key={item}>- {item}</li>
-                ))}
-            </ul>
-        </div>
-    );
-}
-
-function LabelMultiSelect({
-    labels,
-    selected,
-    onChange,
-    placeholder,
-}: {
-    labels: Label[];
-    selected: number[];
-    onChange: (ids: number[]) => void;
-    placeholder: string;
-}) {
-    const toggle = (id: number) => {
-        if (selected.includes(id)) {
-            onChange(selected.filter((item) => item !== id));
-            return;
-        }
-        onChange([...selected, id]);
-    };
-
-    return (
-        <div className="flex flex-wrap gap-2">
-            {labels.map((label) => {
-                const active = selected.includes(label.id);
-                return (
-                    <button
-                        key={label.id}
-                        type="button"
-                        onClick={() => toggle(label.id)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                            active
-                                ? "bg-[#31323E] text-white border border-[#31323E]"
-                                : "bg-white text-[#31323E]/70 border border-[#31323E]/15 hover:bg-[#31323E]/5"
-                        }`}
-                    >
-                        {label.title}
-                    </button>
-                );
-            })}
-            {labels.length === 0 ? (
-                <span className="text-xs font-medium text-[#31323E]/40 italic">{placeholder}</span>
-            ) : null}
-        </div>
-    );
-}
-
-function ImageReorderGrid({
-    items,
-    onReorder,
-    onRemove,
-    onAddFiles,
-    onCropClick,
-    maxItems = 10,
-}: {
-    items: DragItem[];
-    onReorder: (next: DragItem[]) => void;
-    onRemove: (index: number) => void;
-    onAddFiles: (files: File[]) => void;
-    onCropClick?: (index: number) => void;
-    maxItems?: number;
-}) {
-    const dragIndexRef = useRef<number | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    const handleDrop = (index: number) => {
-        if (dragIndexRef.current === null || dragIndexRef.current === index) {
-            return;
-        }
-        const next = [...items];
-        const [moved] = next.splice(dragIndexRef.current, 1);
-        next.splice(index, 0, moved);
-        dragIndexRef.current = null;
-        onReorder(next);
-    };
-
-    return (
-        <div>
-            <div className="flex flex-wrap gap-3 mt-3">
-                {items.map((item, index) => (
-                    <div
-                        key={`${item.url}-${index}`}
-                        draggable
-                        onDragStart={() => {
-                            dragIndexRef.current = index;
-                        }}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={() => handleDrop(index)}
-                        className={`relative w-[104px] h-[104px] rounded-xl overflow-hidden bg-[#31323E]/5 ${
-                            index === 0 ? "ring-2 ring-[#31323E]" : "border border-[#31323E]/10"
-                        }`}
-                    >
-                        <img
-                            src={item.url}
-                            alt=""
-                            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                        />
-                        <div className="absolute top-2 left-2 text-[9px] font-bold uppercase tracking-[0.14em] rounded-full px-2 py-1 bg-white/90 text-[#31323E]">
-                            {index === 0 ? "Cover" : `#${index + 1}`}
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onRemove(index)}
-                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-rose-500 text-white text-xs font-bold"
-                        >
-                            x
-                        </button>
-                        {item.type === "new" && onCropClick ? (
-                            <button
-                                type="button"
-                                onClick={() => onCropClick(index)}
-                                className="absolute bottom-2 right-2 rounded-full bg-[#31323E] text-white text-[10px] font-bold px-2 py-1"
-                            >
-                                Crop
-                            </button>
-                        ) : null}
-                    </div>
-                ))}
-
-                {items.length < maxItems ? (
-                    <button
-                        type="button"
-                        onClick={() => inputRef.current?.click()}
-                        className="w-[104px] h-[104px] rounded-xl border border-dashed border-[#31323E]/20 text-[#31323E]/35 text-3xl font-light hover:bg-[#31323E]/5 transition-colors"
-                    >
-                        +
-                    </button>
-                ) : null}
-            </div>
-
-            <p className="text-[10px] font-semibold text-[#31323E]/40 mt-2 tracking-[0.14em] uppercase">
-                Drag to reorder. First image becomes the cover. Up to {maxItems} photos.
-            </p>
-
-            <input
-                ref={inputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onClick={(event) => {
-                    (event.target as HTMLInputElement).value = "";
-                }}
-                onChange={(event) => {
-                    const files = Array.from(event.target.files || []).slice(0, maxItems - items.length);
-                    if (files.length > 0) {
-                        onAddFiles(files);
-                    }
-                    (event.target as HTMLInputElement).value = "";
-                }}
-            />
-        </div>
-    );
-}
+import { ArtworkBasicsForm } from "./artworks/ArtworkBasicsForm";
+import { ArtworkGrid } from "./artworks/ArtworkGrid";
+import { ArtworkMediaForm } from "./artworks/ArtworkMediaForm";
+import { ArtworkOfferingsForm } from "./artworks/ArtworkOfferingsForm";
+import { ArtworkPipelineForm } from "./artworks/ArtworkPipelineForm";
+import {
+    AspectRatio,
+    Artwork,
+    ArtworkFormState,
+    ArtworkPrintWorkflowPayload,
+    DragItem,
+    Label,
+    LabelCategory,
+} from "./artworks/types";
+import { StatusBadge } from "./artworks/ui";
+import {
+    buildFormPayload,
+    createDefaultFormState,
+    currentYear,
+    extractCanvasWrapSelectionFromOverrides,
+    hasCanvasOfferings,
+    hasMissingPrintRatio,
+    hasOfferingValidationIssues,
+    hasPrintOfferings,
+    resolveImageUrl,
+    uploadFormDataWithProgress,
+    WORKFLOW_STEP_ORDER,
+} from "./artworks/utils";
 
 export default function ArtworksTab() {
     const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -732,7 +48,10 @@ export default function ArtworksTab() {
     const [workflowData, setWorkflowData] = useState<ArtworkPrintWorkflowPayload | null>(null);
     const [workflowLoading, setWorkflowLoading] = useState(false);
     const [workflowError, setWorkflowError] = useState<string | null>(null);
+    const [editingWhiteBorder, setEditingWhiteBorder] = useState(false);
+    const [whiteBorderDraft, setWhiteBorderDraft] = useState("");
     const [assetUploadingSlot, setAssetUploadingSlot] = useState<string | null>(null);
+    const [assetUploadProgress, setAssetUploadProgress] = useState<Record<string, number>>({});
     const [notice, setNotice] = useState<string | null>(null);
     const [payloadRefreshLoading, setPayloadRefreshLoading] = useState(false);
     const [payloadRefreshMessage, setPayloadRefreshMessage] = useState<string | null>(null);
@@ -854,6 +173,9 @@ export default function ArtworksTab() {
         setNotice(null);
         setActiveStep("basics");
         setIsFormOpen(true);
+        window.requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
     };
 
     const handleSaveCrop = async (croppedBlob: Blob) => {
@@ -1003,6 +325,7 @@ export default function ArtworksTab() {
                 has_paper_print_limited: Boolean(full.has_paper_print_limited),
                 canvas_print_limited_quantity: full.canvas_print_limited_quantity || "",
                 paper_print_limited_quantity: full.paper_print_limited_quantity || "",
+                white_border_pct: full.white_border_pct ?? 5,
                 print_aspect_ratio_id: full.print_aspect_ratio_id || null,
                 orientation: full.orientation || "Horizontal",
                 labels: (full.labels || []).map((label) => label.id),
@@ -1023,6 +346,9 @@ export default function ArtworksTab() {
             setEditingId(full.id);
             setIsFormOpen(true);
             setActiveStep("basics");
+            window.requestAnimationFrame(() => {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            });
 
             if (
                 full.has_canvas_print ||
@@ -1064,12 +390,13 @@ export default function ArtworksTab() {
             return;
         }
 
-        if (assetRole === "clean_master" && hasCanvasOfferings(formData) && !formData.canvas_wrap_style) {
-            setWorkflowError("Choose a canvas wrap and save the artwork draft before uploading the clean master.");
+        if (assetRole === "master" && hasCanvasOfferings(formData) && !formData.canvas_wrap_style) {
+            setWorkflowError("Choose a canvas wrap and save the artwork draft before uploading the master.");
             return;
         }
 
         setAssetUploadingSlot(slotId);
+        setAssetUploadProgress((previous) => ({ ...previous, [slotId]: 0 }));
         setWorkflowError(null);
 
         try {
@@ -1078,32 +405,40 @@ export default function ArtworksTab() {
             body.append("asset_role", assetRole);
             body.append("category_id", slotId);
 
-            const response = await apiFetch(`${getApiUrl()}/artworks/${editingId}/print-assets`, {
-                method: "POST",
-                body,
+            const payload = await uploadFormDataWithProgress<{
+                generated_assets?: unknown[];
+                derivatives_scheduled?: boolean;
+            }>(`${getApiUrl()}/artworks/${editingId}/print-assets`, body, (progress) => {
+                setAssetUploadProgress((previous) => ({ ...previous, [slotId]: progress }));
             });
-
-            if (!response.ok) {
-                const errorPayload = await response.json().catch(() => ({}));
-                throw new Error(errorPayload.detail || "Upload failed.");
-            }
-
-            const payload = await response.json();
             await fetchWorkflow(editingId);
-            await fetchData();
             const generatedCount = Array.isArray(payload.generated_assets)
                 ? payload.generated_assets.length
                 : 0;
             setNotice(
-                generatedCount > 0
+                payload.derivatives_scheduled
+                    ? `Master uploaded for ${slotId}. Provider-ready files are being generated in the background.`
+                    : generatedCount > 0
                     ? `Master uploaded for ${slotId}. ${generatedCount} derivatives generated automatically.`
                     : `Master uploaded for ${slotId}.`
             );
+            if (payload.derivatives_scheduled) {
+                window.setTimeout(() => {
+                    void fetchWorkflow(editingId);
+                }, 2500);
+            }
         } catch (error) {
             console.error(error);
             setWorkflowError(error instanceof Error ? error.message : "Upload failed.");
         } finally {
             setAssetUploadingSlot(null);
+            window.setTimeout(() => {
+                setAssetUploadProgress((previous) => {
+                    const next = { ...previous };
+                    delete next[slotId];
+                    return next;
+                });
+            }, 800);
         }
     };
 
@@ -1244,948 +579,120 @@ export default function ArtworksTab() {
                                     key={step.id}
                                     type="button"
                                     onClick={() => setActiveStep(step.id)}
-                                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                                    className={`relative flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
                                         activeStep === step.id
-                                            ? "border-[#31323E] bg-[#31323E] text-white"
-                                            : "border-[#31323E]/12 bg-white hover:bg-[#31323E]/3"
+                                            ? "bg-white border-[#31323E] shadow-[0_2px_12px_rgba(49,50,62,0.08)] z-10"
+                                            : "bg-[#31323E]/3 border-[#31323E]/10 hover:bg-[#31323E]/6"
                                     }`}
                                 >
-                                    <div className="flex items-center justify-between gap-3">
-                                        <span className="text-[11px] font-bold uppercase tracking-[0.14em]">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className={`w-2 h-2 rounded-full ${
+                                                stepStatusMap[step.id] === "ready"
+                                                    ? "bg-emerald-400"
+                                                    : stepStatusMap[step.id] === "attention"
+                                                    ? "bg-amber-400"
+                                                    : "bg-rose-400"
+                                            }`}
+                                        />
+                                        <span
+                                            className={`text-[11px] font-bold uppercase tracking-[0.14em] ${
+                                                activeStep === step.id
+                                                    ? "text-[#31323E]"
+                                                    : "text-[#31323E]/60"
+                                            }`}
+                                        >
                                             {step.label}
                                         </span>
-                                        <StatusBadge status={stepStatusMap[step.id]} />
                                     </div>
+                                    {activeStep === step.id ? (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#31323E]" />
+                                    ) : null}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    <form
-                        onSubmit={async (event) => {
-                            event.preventDefault();
-                            await saveArtwork();
-                        }}
-                        className="p-8 space-y-8"
-                    >
+                    <div className="px-8 py-8 bg-white/50">
                         {notice ? (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                            <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                                 {notice}
                             </div>
                         ) : null}
 
                         {activeStep === "basics" ? (
-                            <div className="space-y-6">
-                                <div>
-                                    <FormSection
-                                        title="Artwork Basics"
-                                        description="Core identity, physical dimensions, original-sales information, and the normalized print ratio family for this artwork."
-                                    />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        <div>
-                                            <FieldLabel text="Title" required valid={Boolean(formData.title.trim())} />
-                                            <input
-                                                value={formData.title}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        title: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                                placeholder="Artwork title"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Year" valid={Boolean(formData.year)} />
-                                            <input
-                                                type="number"
-                                                value={formData.year}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        year: Number(event.target.value || currentYear),
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel
-                                                text="Orientation"
-                                                valid={Boolean(formData.orientation)}
-                                            />
-                                            <select
-                                                value={formData.orientation}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        orientation: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                            >
-                                                <option value="Horizontal">Horizontal</option>
-                                                <option value="Vertical">Vertical</option>
-                                                <option value="Square">Square</option>
-                                            </select>
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Original Status" valid={Boolean(formData.original_status)} />
-                                            <select
-                                                value={formData.original_status}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        original_status: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                            >
-                                                {STATUS_OPTIONS.map((option) => (
-                                                    <option key={option.value} value={option.value}>
-                                                        {option.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Width cm" valid={Boolean(formData.width_cm)} />
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                value={formData.width_cm}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        width_cm: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                                placeholder="e.g. 60"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Height cm" valid={Boolean(formData.height_cm)} />
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                value={formData.height_cm}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        height_cm: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                                placeholder="e.g. 80"
-                                            />
-                                        </div>
-
-                                        <div className="md:col-span-2">
-                                            <FieldLabel
-                                                text="Print aspect ratio"
-                                                valid={!hasPrintOfferings(formData) || Boolean(formData.print_aspect_ratio_id)}
-                                            />
-                                            <select
-                                                value={formData.print_aspect_ratio_id || ""}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        print_aspect_ratio_id: event.target.value
-                                                            ? Number(event.target.value)
-                                                            : null,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                            >
-                                                <option value="">Select ratio</option>
-                                                {aspectRatios.map((ratio) => (
-                                                    <option key={ratio.id} value={ratio.id}>
-                                                        {ratio.label}
-                                                        {ratio.description ? ` - ${ratio.description}` : ""}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <p className="mt-2 text-xs font-medium text-[#31323E]/45">
-                                                Choose the normalized ratio family here. Exact sizes and prices come
-                                                from the active provider snapshot.
-                                            </p>
-                                        </div>
-
-                                        <div className="md:col-span-2">
-                                            <label className="flex items-center gap-3 rounded-2xl border border-[#31323E]/12 bg-white px-4 py-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.has_original}
-                                                    onChange={(event) =>
-                                                        setFormData((previous) => ({
-                                                            ...previous,
-                                                            has_original: event.target.checked,
-                                                        }))
-                                                    }
-                                                    className="w-4 h-4 accent-[#31323E]"
-                                                />
-                                                <span className="text-sm font-semibold text-[#31323E]">
-                                                    Original artwork is offered for sale
-                                                </span>
-                                            </label>
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel
-                                                text="Original price USD"
-                                                valid={
-                                                    !formData.has_original ||
-                                                    Number(formData.original_price || 0) > 0
-                                                }
-                                            />
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={formData.original_price}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        original_price: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                                placeholder="e.g. 2400"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <FieldLabel text="Description" valid={Boolean(formData.description.trim())} />
-                                            <textarea
-                                                value={formData.description}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        description: event.target.value,
-                                                    }))
-                                                }
-                                                rows={4}
-                                                className={INPUT_CLASS}
-                                                placeholder="Artwork story, mood, technique, collector notes"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <ArtworkBasicsForm formData={formData} setFormData={setFormData} aspectRatios={aspectRatios} />
                         ) : null}
 
                         {activeStep === "offerings" ? (
-                            <div className="space-y-6">
-                                <div>
-                                    <FormSection
-                                        title="Offerings"
-                                        description="Define the provider-neutral selling intent for this artwork: which print families are enabled and whether limited editions exist."
-                                    />
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {[
-                                            {
-                                                key: "has_canvas_print",
-                                                label: "Canvas print",
-                                            },
-                                            {
-                                                key: "has_canvas_print_limited",
-                                                label: "Canvas print limited",
-                                            },
-                                            {
-                                                key: "has_paper_print",
-                                                label: "Paper print",
-                                            },
-                                            {
-                                                key: "has_paper_print_limited",
-                                                label: "Paper print limited",
-                                            },
-                                        ].map((item) => (
-                                            <label
-                                                key={item.key}
-                                                className={`rounded-2xl border px-4 py-3 cursor-pointer transition-colors ${
-                                                    formData[item.key as keyof ArtworkFormState]
-                                                        ? "bg-[#31323E]/5 border-[#31323E]/25"
-                                                        : "bg-white border-[#31323E]/12 hover:bg-[#31323E]/3"
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={Boolean(
-                                                            formData[item.key as keyof ArtworkFormState]
-                                                        )}
-                                                        onChange={(event) =>
-                                                            setFormData((previous) => ({
-                                                                ...previous,
-                                                                [item.key]: event.target.checked,
-                                                            }))
-                                                        }
-                                                        className="w-4 h-4 accent-[#31323E]"
-                                                    />
-                                                    <span className="text-sm font-semibold text-[#31323E]">
-                                                        {item.label}
-                                                    </span>
-                                                </div>
-
-                                                {item.key === "has_canvas_print_limited" &&
-                                                formData.has_canvas_print_limited ? (
-                                                    <div className="mt-3">
-                                                        <FieldLabel text="Canvas edition size" valid={Boolean(formData.canvas_print_limited_quantity)} />
-                                                        <input
-                                                            type="number"
-                                                            min={1}
-                                                            value={formData.canvas_print_limited_quantity}
-                                                            onChange={(event) =>
-                                                                setFormData((previous) => ({
-                                                                    ...previous,
-                                                                    canvas_print_limited_quantity:
-                                                                        event.target.value,
-                                                                }))
-                                                            }
-                                                            className={INPUT_CLASS}
-                                                        />
-                                                    </div>
-                                                ) : null}
-
-                                                {item.key === "has_paper_print_limited" &&
-                                                formData.has_paper_print_limited ? (
-                                                    <div className="mt-3">
-                                                        <FieldLabel text="Paper edition size" valid={Boolean(formData.paper_print_limited_quantity)} />
-                                                        <input
-                                                            type="number"
-                                                            min={1}
-                                                            value={formData.paper_print_limited_quantity}
-                                                            onChange={(event) =>
-                                                                setFormData((previous) => ({
-                                                                    ...previous,
-                                                                    paper_print_limited_quantity:
-                                                                        event.target.value,
-                                                                }))
-                                                            }
-                                                            className={INPUT_CLASS}
-                                                        />
-                                                    </div>
-                                                ) : null}
-                                            </label>
-                                        ))}
-                                    </div>
-
-                                    {hasCanvasOfferings(formData) ? (
-                                        <div className="mt-4 rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4">
-                                            <FieldLabel
-                                                text="Canvas wrap"
-                                                required
-                                                valid={Boolean(formData.canvas_wrap_style)}
-                                            />
-                                            <select
-                                                value={formData.canvas_wrap_style}
-                                                onChange={(event) =>
-                                                    setFormData((previous) => ({
-                                                        ...previous,
-                                                        canvas_wrap_style: event.target.value,
-                                                    }))
-                                                }
-                                                className={INPUT_CLASS}
-                                            >
-                                                <option value="">Select wrap</option>
-                                                {CANVAS_WRAP_OPTIONS.map((option) => (
-                                                    <option key={option.value} value={option.value}>
-                                                        {option.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/50">
-                                                This wrap will be used for stretched and framed canvas variants of
-                                                this artwork.
-                                            </p>
-                                        </div>
-                                    ) : null}
-                                </div>
-
-                                {hasPrintOfferings(formData) ? (
-                                    <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/60">
-                                        <p className="font-semibold text-[#31323E]">Print ratio is chosen in Basics.</p>
-                                        <p className="mt-1">
-                                            Offerings only defines what this artwork can sell. The exact storefront
-                                            size grid is resolved later from the active provider catalog.
-                                        </p>
-                                        {hasMissingPrintRatio(formData) ? (
-                                            <p className="mt-2 text-amber-700">
-                                                Choose a print aspect ratio in Basics before continuing to the print
-                                                pipeline.
-                                            </p>
-                                        ) : null}
-                                    </div>
-                                ) : (
-                                    <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
-                                        No print families are enabled yet. The print source and print workflow
-                                        steps will unlock automatically once you enable at least one paper or
-                                        canvas offering.
-                                    </div>
-                                )}
-                            </div>
+                            <ArtworkOfferingsForm 
+                                formData={formData} 
+                                setFormData={setFormData} 
+                                editingWhiteBorder={editingWhiteBorder} 
+                                setEditingWhiteBorder={setEditingWhiteBorder} 
+                                whiteBorderDraft={whiteBorderDraft} 
+                                setWhiteBorderDraft={setWhiteBorderDraft} 
+                            />
                         ) : null}
 
                         {activeStep === "pipeline" ? (
-                            <div className="space-y-6">
-                                <FormSection
-                                    title="Print Pipeline"
-                                    description="Upload only the production masters. Exact provider files are generated automatically."
-                                />
-
-                                {!hasPrintOfferings(formData) ? (
-                                    <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
-                                        Enable at least one print family in the Offerings step to unlock the
-                                        print pipeline.
-                                    </div>
-                                ) : !formData.print_aspect_ratio_id ? (
-                                    <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm font-medium text-amber-700">
-                                        Choose a print aspect ratio in Basics first. The pipeline cannot calculate
-                                        required pixels or unlock master uploads without a normalized ratio family.
-                                    </div>
-                                ) : !editingId ? (
-                                    <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-4 text-sm font-medium text-amber-700">
-                                        Save the artwork draft first. The pipeline will calculate size
-                                        requirements once saved.
-                                    </div>
-                                ) : workflowLoading ? (
-                                    <div className="flex items-center gap-3 py-6">
-                                        <div className="w-5 h-5 border-2 border-[#31323E]/20 border-t-[#31323E] rounded-full animate-spin" />
-                                        <span className="text-sm font-semibold text-[#31323E]/55">
-                                            Loading print pipeline
-                                        </span>
-                                    </div>
-                                ) : workflowError ? (
-                                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-semibold text-rose-700">
-                                        {workflowError}
-                                    </div>
-                                ) : workflowData ? (
-                                    <>
-                                        <div className="flex items-center gap-3">
-                                            <StatusBadge status={workflowData.readiness_summary.status} />
-                                            <span className="text-sm font-semibold text-[#31323E]/70">
-                                                {workflowData.readiness_summary.message}
-                                            </span>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            {workflowData.master_slots.map((slot) => {
-                                                const asset = slot.uploaded_asset;
-                                                const assetMeta = (asset?.file_metadata || {}) as Record<string, unknown>;
-                                                const assetUrl = asset?.file_url
-                                                    ? `${getApiUrl().replace("/api", "")}${asset.file_url}`
-                                                    : null;
-                                                const uploadSizeLabel =
-                                                    formatPxSize(
-                                                        slot.export_guidance?.target_width_px ??
-                                                            slot.required_min_px?.width,
-                                                        slot.export_guidance?.target_height_px ??
-                                                            slot.required_min_px?.height
-                                                    ) || "Size pending";
-                                                const providerTargetLabel = formatPxSize(
-                                                    slot.required_min_px?.width,
-                                                    slot.required_min_px?.height
-                                                );
-                                                const isStrictRatioMaster =
-                                                    slot.export_guidance?.mode === "strict_ratio_cover_master";
-                                                const uploadModeLabel = isStrictRatioMaster
-                                                    ? `PNG · ${slot.export_guidance?.ratio_label || "Strict ratio"}`
-                                                    : "PNG · Exact target";
-                                                const uploadNote = isStrictRatioMaster
-                                                    ? "Upload one clean master. Each provider size is cover-fitted and cropped only if needed."
-                                                    : "Upload the final exact artboard for this slot.";
-                                                const resultSummary = slot.derivative_plan
-                                                    ? `${slot.derivative_plan.target_count} provider-ready PNG${
-                                                          slot.derivative_plan.target_count === 1 ? "" : "s"
-                                                      } from this master`
-                                                    : "Provider-ready PNGs are generated automatically after upload";
-                                                const strategyLabel = getDerivativeStrategyLabel(
-                                                    slot.derivative_plan?.strategy
-                                                );
-                                                const categoriesLabel = slot.covers_categories
-                                                    .map((categoryId) => formatPrintCategory(categoryId))
-                                                    .join(", ");
-                                                const derivesLabel =
-                                                    slot.derives_categories &&
-                                                    slot.derives_categories.length > 0
-                                                        ? slot.derives_categories
-                                                              .map((categoryId) =>
-                                                                  formatPrintCategory(categoryId)
-                                                              )
-                                                              .join(", ")
-                                                        : null;
-                                                if (!slot.relevant) {
-                                                    return (
-                                                        <div
-                                                            key={slot.slot_id}
-                                                            className="rounded-2xl border border-[#31323E]/8 bg-[#31323E]/3 px-5 py-4"
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <p className="text-sm font-bold text-[#31323E]/40">
-                                                                    {slot.label}
-                                                                </p>
-                                                                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/35">
-                                                                    Not required
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-xs font-medium text-[#31323E]/35 mt-1">
-                                                                {slot.description}
-                                                            </p>
-                                                        </div>
-                                                    );
-                                                }
-
-                                                return (
-                                                    <div
-                                                        key={slot.slot_id}
-                                                        className={`rounded-2xl border px-5 py-5 ${
-                                                            slot.status === "ready"
-                                                                ? "border-emerald-200 bg-emerald-50/40"
-                                                                : slot.status === "blocked"
-                                                                ? "border-rose-200 bg-rose-50/40"
-                                                                : "border-amber-200 bg-amber-50/40"
-                                                        }`}
-                                                    >
-                                                        <div className="flex flex-wrap items-start justify-between gap-4">
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-3 flex-wrap">
-                                                                    <p className="text-sm font-bold text-[#31323E]">
-                                                                        {slot.label}
-                                                                    </p>
-                                                                    <StatusBadge status={slot.status} />
-                                                                </div>
-                                                                <div className="flex flex-wrap gap-3 mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                                                    <span>
-                                                                        Covers {slot.covered_size_count} size
-                                                                        {slot.covered_size_count === 1 ? "" : "s"}
-                                                                    </span>
-                                                                    {slot.largest_size_label ? (
-                                                                        <span>Largest: {slot.largest_size_label}</span>
-                                                                    ) : null}
-                                                                    {slot.generated_derivatives_count > 0 ? (
-                                                                        <span>{slot.generated_derivatives_count} pre-generated</span>
-                                                                    ) : null}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-                                                            <div className="space-y-3">
-                                                                <div className="grid gap-3 sm:grid-cols-3">
-                                                                    <div className="rounded-xl border border-[#31323E]/10 bg-white/90 px-3.5 py-3">
-                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
-                                                                            Used For
-                                                                        </p>
-                                                                        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#31323E]/72">
-                                                                            {categoriesLabel}
-                                                                        </p>
-                                                                        {derivesLabel ? (
-                                                                            <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
-                                                                                Also derives: {derivesLabel}
-                                                                            </p>
-                                                                        ) : null}
-                                                                    </div>
-
-                                                                    <div className="rounded-xl border border-[#31323E]/10 bg-white/90 px-3.5 py-3">
-                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
-                                                                            Result
-                                                                        </p>
-                                                                        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#31323E]/72">
-                                                                            {resultSummary}
-                                                                        </p>
-                                                                        <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
-                                                                            Generated automatically after upload.
-                                                                        </p>
-                                                                    </div>
-
-                                                                    <div className="rounded-xl border border-[#31323E]/10 bg-white/90 px-3.5 py-3">
-                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/40">
-                                                                            Covers
-                                                                        </p>
-                                                                        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#31323E]/72">
-                                                                            {slot.covered_size_count} size
-                                                                            {slot.covered_size_count === 1 ? "" : "s"}
-                                                                            {slot.largest_size_label
-                                                                                ? ` · Largest ${slot.largest_size_label}`
-                                                                                : ""}
-                                                                        </p>
-                                                                        {slot.required_for_sizes.length > 0 ? (
-                                                                            <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
-                                                                                {slot.required_for_sizes.join(", ")}
-                                                                            </p>
-                                                                        ) : null}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {strategyLabel ? (
-                                                                        <span className="rounded-full border border-[#31323E]/10 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#31323E]/62">
-                                                                            {strategyLabel}
-                                                                        </span>
-                                                                    ) : null}
-                                                                    {slot.slot_id === "clean_master" &&
-                                                                    hasCanvasOfferings(formData) &&
-                                                                    formData.canvas_wrap_style ? (
-                                                                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                                                                            Canvas wrap: {formData.canvas_wrap_style}
-                                                                        </span>
-                                                                    ) : null}
-                                                                </div>
-
-                                                                {slot.required_min_px?.visible_art_width_px &&
-                                                                slot.required_min_px?.visible_art_height_px ? (
-                                                                    <p className="text-[11px] font-medium leading-relaxed text-[#31323E]/48">
-                                                                        Visible art at 300 DPI:{" "}
-                                                                        {formatPxSize(
-                                                                            slot.required_min_px.visible_art_width_px,
-                                                                            slot.required_min_px.visible_art_height_px
-                                                                        )}
-                                                                        {slot.required_min_px.physical_width_in &&
-                                                                        slot.required_min_px.physical_height_in
-                                                                            ? ` · Product ${formatInchesValue(slot.required_min_px.physical_width_in)} x ${formatInchesValue(slot.required_min_px.physical_height_in)} in`
-                                                                            : ""}
-                                                                    </p>
-                                                                ) : null}
-                                                            </div>
-
-                                                            <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4">
-                                                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#31323E]/40">
-                                                                    Upload This File
-                                                                </p>
-                                                                <p className="mt-2 text-2xl font-bold leading-none tracking-[-0.03em] text-[#31323E]">
-                                                                    {uploadSizeLabel}
-                                                                </p>
-                                                                <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700">
-                                                                    {uploadModeLabel}
-                                                                </p>
-                                                                <p className="mt-2 text-xs font-medium leading-relaxed text-[#31323E]/58">
-                                                                    {uploadNote}
-                                                                </p>
-                                                                {slot.export_guidance?.provider_target_differs_from_visible_art &&
-                                                                slot.export_guidance.full_file_ratio_diff_warning ? (
-                                                                    <p className="mt-3 text-[11px] font-semibold leading-relaxed text-amber-700">
-                                                                        We fit this to Prodigi&apos;s exact target automatically
-                                                                        without stretch or white lines.
-                                                                    </p>
-                                                                ) : null}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Upload / asset status */}
-                                                        <div className="mt-4 flex flex-wrap items-center gap-3">
-                                                            <label className="px-4 py-2 rounded-xl bg-[#31323E] text-white text-sm font-bold cursor-pointer hover:bg-[#31323E]/85 transition-colors">
-                                                                {assetUploadingSlot === slot.slot_id
-                                                                    ? "Uploading..."
-                                                                    : asset
-                                                                    ? "Replace"
-                                                                    : "Upload Master"}
-                                                                <input
-                                                                    type="file"
-                                                                    accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-                                                                    className="hidden"
-                                                                    disabled={assetUploadingSlot !== null}
-                                                                    onChange={(event) => {
-                                                                        const file = event.target.files?.[0];
-                                                                        if (file) {
-                                                                            void uploadMasterAsset(
-                                                                                slot.slot_id,
-                                                                                slot.asset_role,
-                                                                                file
-                                                                            );
-                                                                        }
-                                                                        (event.target as HTMLInputElement).value = "";
-                                                                    }}
-                                                                />
-                                                            </label>
-
-                                                            {asset ? (
-                                                                <>
-                                                                    <span className="text-xs font-medium text-[#31323E]/55">
-                                                                        {String(assetMeta.width_px || "?")} x {String(assetMeta.height_px || "?")} px
-                                                                    </span>
-                                                                    {slot.generated_derivatives_count > 0 ? (
-                                                                        <span className="text-xs font-medium text-emerald-700">
-                                                                            {slot.generated_derivatives_count} derivatives ready
-                                                                        </span>
-                                                                    ) : null}
-                                                                    {assetUrl ? (
-                                                                        <a
-                                                                            href={assetUrl}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E] underline"
-                                                                        >
-                                                                            Open
-                                                                        </a>
-                                                                    ) : null}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => void deleteMasterAsset(asset.id)}
-                                                                        className="text-xs font-bold uppercase tracking-[0.14em] text-rose-600"
-                                                                    >
-                                                                        Remove
-                                                                    </button>
-                                                                </>
-                                                            ) : null}
-                                                        </div>
-
-                                                        {/* Issues & warnings */}
-                                                        <div className="mt-3 space-y-2">
-                                                            <IssueList title="Issues" items={slot.issues} tone="danger" />
-                                                            <IssueList title="Warnings" items={slot.warnings} tone="warning" />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </>
-                                ) : null}
-                            </div>
+                            <ArtworkPipelineForm
+                                formData={formData}
+                                editingId={editingId}
+                                workflowData={workflowData}
+                                workflowLoading={workflowLoading}
+                                workflowError={workflowError}
+                                assetUploadingSlot={assetUploadingSlot}
+                                assetUploadProgress={assetUploadProgress}
+                                uploadMasterAsset={uploadMasterAsset}
+                                deleteMasterAsset={deleteMasterAsset}
+                            />
                         ) : null}
 
                         {activeStep === "media" ? (
-                            <div className="space-y-6">
-                                <div>
-                                    <FormSection
-                                        title="Labels and Photos"
-                                        description="Tag the artwork for discovery and manage the gallery imagery shown on the site."
-                                    />
-
-                                    <div className="space-y-5">
-                                        {categories.map((category) => {
-                                            const categoryLabels = labels.filter(
-                                                (label) => label.category_id === category.id
-                                            );
-                                            return (
-                                                <div key={category.id}>
-                                                    <FieldLabel
-                                                        text={category.title}
-                                                        valid={Boolean(
-                                                            formData.labels.some((labelId) =>
-                                                                categoryLabels.find(
-                                                                    (label) => label.id === labelId
-                                                                )
-                                                            )
-                                                        )}
-                                                    />
-                                                    <LabelMultiSelect
-                                                        labels={categoryLabels}
-                                                        selected={formData.labels}
-                                                        onChange={(selectedIds) =>
-                                                            setFormData((previous) => ({
-                                                                ...previous,
-                                                                labels: selectedIds,
-                                                            }))
-                                                        }
-                                                        placeholder={`No ${category.title} labels yet.`}
-                                                    />
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <FormSection title="Artwork Photos" description="Cover image first, supporting shots after that." />
-                                    <ImageReorderGrid
-                                        items={imageItems}
-                                        onReorder={setImageItems}
-                                        onRemove={(index) =>
-                                            setImageItems((previous) =>
-                                                previous.filter((_, itemIndex) => itemIndex !== index)
-                                            )
-                                        }
-                                        onAddFiles={(files) => {
-                                            const nextItems = files.map((file) => ({
-                                                type: "new" as const,
-                                                url: URL.createObjectURL(file),
-                                                file,
-                                            }));
-                                            setImageItems((previous) => [...previous, ...nextItems].slice(0, 10));
-                                        }}
-                                        onCropClick={(index) => setCropImageIndex(index)}
-                                    />
-                                </div>
-                            </div>
+                            <ArtworkMediaForm
+                                formData={formData}
+                                setFormData={setFormData}
+                                categories={categories}
+                                labels={labels}
+                                imageItems={imageItems}
+                                setImageItems={setImageItems}
+                                setCropImageIndex={setCropImageIndex}
+                            />
                         ) : null}
+                    </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[#31323E]/8">
-                            <div className="flex items-center gap-2">
-                                {WORKFLOW_STEP_ORDER.map((step, index) =>
-                                    step.id === activeStep ? (
-                                        <span
-                                            key={step.id}
-                                            className="text-xs font-bold uppercase tracking-[0.14em] text-[#31323E]/45"
-                                        >
-                                            Step {index + 1} of {WORKFLOW_STEP_ORDER.length}
-                                        </span>
-                                    ) : null
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const currentIndex = WORKFLOW_STEP_ORDER.findIndex(
-                                            (step) => step.id === activeStep
-                                        );
-                                        if (currentIndex > 0) {
-                                            setActiveStep(WORKFLOW_STEP_ORDER[currentIndex - 1].id);
-                                        }
-                                    }}
-                                    className="px-4 py-2 rounded-xl border border-[#31323E]/12 text-sm font-semibold text-[#31323E]"
-                                >
-                                    Previous
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const currentIndex = WORKFLOW_STEP_ORDER.findIndex(
-                                            (step) => step.id === activeStep
-                                        );
-                                        if (currentIndex < WORKFLOW_STEP_ORDER.length - 1) {
-                                            setActiveStep(WORKFLOW_STEP_ORDER[currentIndex + 1].id);
-                                        }
-                                    }}
-                                    className="px-4 py-2 rounded-xl border border-[#31323E]/12 text-sm font-semibold text-[#31323E]"
-                                >
-                                    Next
-                                </button>
-
-                                <button
-                                    type="submit"
-                                    disabled={savingArtwork}
-                                    className="px-5 py-2.5 rounded-xl bg-[#31323E] text-white text-sm font-bold uppercase tracking-[0.14em] disabled:opacity-50"
-                                >
-                                    {savingArtwork
-                                        ? "Saving..."
-                                        : editingId
-                                        ? "Save Artwork Draft"
-                                        : "Create Draft"}
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                    <div className="px-8 py-5 border-t border-[#31323E]/8 bg-[#FCFBF8] flex items-center justify-end gap-3 sticky bottom-0 z-20">
+                        <span className="text-xs font-semibold text-[#31323E]/45 mr-3">
+                            {editingId ? "Editing existing artwork" : "Creating new artwork"}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={resetEditor}
+                            className="px-5 py-2.5 rounded-xl border border-[#31323E]/15 bg-white text-[#31323E] text-sm font-bold uppercase tracking-[0.14em]"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void saveArtwork()}
+                            disabled={savingArtwork}
+                            className="px-6 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold uppercase tracking-[0.14em] shadow-sm hover:bg-emerald-600 disabled:opacity-50"
+                        >
+                            {savingArtwork ? "Saving..." : "Save Draft & Calculate Requirements"}
+                        </button>
+                    </div>
                 </div>
             ) : null}
 
+            <ArtworkGrid artworks={artworks} handleEditClick={handleEditClick} handleDelete={handleDelete} />
+
             <SimpleArtworkCropperModal
                 isOpen={cropImageIndex !== null}
-                imageSrc={
-                    cropImageIndex !== null && imageItems[cropImageIndex]?.url
-                        ? imageItems[cropImageIndex].url
-                        : ""
-                }
+                imageSrc={cropImageIndex !== null ? imageItems[cropImageIndex]?.url || "" : ""}
                 onClose={() => setCropImageIndex(null)}
-                onSaveCrop={handleSaveCrop}
+                onSaveCrop={(blob) => handleSaveCrop(blob)}
             />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {artworks.map((artwork) => {
-                    const readiness = artwork.print_readiness_summary;
-                    return (
-                        <div
-                            key={artwork.id}
-                            className={`rounded-[24px] overflow-hidden border bg-white shadow-sm ${
-                                readiness?.status === "blocked"
-                                    ? "border-rose-200"
-                                    : readiness?.status === "attention"
-                                    ? "border-amber-200"
-                                    : "border-[#31323E]/10"
-                            }`}
-                        >
-                            <div className="aspect-[4/5] bg-[#31323E]/5 relative overflow-hidden">
-                                {artwork.images && artwork.images.length > 0 ? (
-                                    <img
-                                        src={resolveImageUrl(artwork.images[0])}
-                                        alt={artwork.title}
-                                        className="absolute inset-0 w-full h-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold uppercase tracking-[0.14em] text-[#31323E]/35">
-                                        No image
-                                    </div>
-                                )}
-                                <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/50 to-transparent flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleEditClick(artwork)}
-                                        className="flex-1 rounded-xl bg-white text-[#31323E] text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-2"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleDelete(artwork.id)}
-                                        className="flex-1 rounded-xl bg-rose-500 text-white text-[11px] font-bold uppercase tracking-[0.14em] px-3 py-2"
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="px-4 py-4 space-y-3">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-base font-bold text-[#31323E] leading-tight">
-                                            {artwork.title}
-                                        </h3>
-                                        <p className="text-sm font-semibold text-[#31323E]/45 mt-1">
-                                            Original:{" "}
-                                            {artwork.original_price ? `$${artwork.original_price}` : "not priced"}
-                                        </p>
-                                    </div>
-                                    {readiness ? <StatusBadge status={readiness.status} /> : null}
-                                </div>
-
-                                {readiness ? (
-                                    <div className="rounded-2xl bg-[#31323E]/4 px-3.5 py-3">
-                                        <p className="text-sm font-semibold text-[#31323E]">
-                                            {readiness.message}
-                                        </p>
-                                        <div className="flex flex-wrap gap-3 mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                            <span>Ready slots: {readiness.ready_slots}</span>
-                                            <span>Blocked slots: {readiness.blocked_slots}</span>
-                                            <span>Attention slots: {readiness.attention_step_count}</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-2xl bg-[#31323E]/4 px-3.5 py-3 text-sm font-medium text-[#31323E]/55">
-                                        No print-prep summary yet.
-                                    </div>
-                                )}
-
-                                <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
-                                    {artwork.has_paper_print || artwork.has_paper_print_limited ? (
-                                        <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
-                                            Paper
-                                        </span>
-                                    ) : null}
-                                    {artwork.has_canvas_print || artwork.has_canvas_print_limited ? (
-                                        <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
-                                            Canvas
-                                        </span>
-                                    ) : null}
-                                    {artwork.print_quality_url ? (
-                                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                                            Source linked
-                                        </span>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
         </div>
     );
 }

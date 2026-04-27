@@ -1,23 +1,12 @@
 import logging
 from typing import Any
 
-from sqlalchemy import select
-
 from src.config import settings
 from src.connectors.prodigi import ProdigiClient
-from src.models.artwork_print_assets import ArtworkPrintAssetOrm
 from src.models.orders import OrdersOrm
+from src.services.prodigi_order_assets import ProdigiOrderAssetService
 
 log = logging.getLogger(__name__)
-
-PREPARED_ASSET_ROLE_BY_CATEGORY = {
-    "paperPrintRolled": "paper_border_ready",
-    "paperPrintBoxFramed": "clean_master",
-    "canvasRolled": "clean_master",
-    "canvasStretched": "clean_master",
-    "canvasClassicFrame": "clean_master",
-    "canvasFloatingFrame": "clean_master",
-}
 
 class ProdigiOrderService:
     @staticmethod
@@ -43,30 +32,33 @@ class ProdigiOrderService:
                     item.prodigi_status = "Failed - Missing Category"
                     continue
 
-                prepared_asset = await ProdigiOrderService._resolve_prepared_asset(
-                    db_session=db_session,
+                order_asset = await ProdigiOrderAssetService(db_session).prepare_order_asset(
+                    order_id=int(order.id),
+                    order_item_id=int(item.id),
                     artwork_id=item.artwork_id,
                     category_id=category_id,
                     slot_size_label=getattr(item, "prodigi_slot_size_label", None) or item.size,
+                    sku=item.prodigi_sku,
+                    country_code=order.shipping_country_code,
                 )
-                if prepared_asset is None:
+                if order_asset is None:
                     log.error(
-                        "Prepared asset missing for artwork %s category %s size %s.",
+                        "Could not prepare order print asset for artwork %s category %s size %s.",
                         item.artwork_id,
                         category_id,
                         item.size,
                     )
-                    item.prodigi_status = "Failed - Missing Prepared Asset"
+                    item.prodigi_status = "Failed - Missing Order Asset"
                     continue
 
-                asset_url = ProdigiOrderService._public_asset_url(prepared_asset.file_url)
+                asset_url = ProdigiOrderService._public_asset_url(order_asset.get("file_url"))
                 if not asset_url:
                     log.error(
-                        "Prepared asset %s for artwork %s has no usable file URL.",
-                        getattr(prepared_asset, "id", None),
+                        "Order print asset for artwork %s item %s has no usable file URL.",
                         item.artwork_id,
+                        item.id,
                     )
-                    item.prodigi_status = "Failed - Invalid Prepared Asset"
+                    item.prodigi_status = "Failed - Invalid Order Asset"
                     continue
 
                 body = {
@@ -121,33 +113,6 @@ class ProdigiOrderService:
                     item.prodigi_status = "Failed - Execution Error"
 
         await db_session.commit()
-
-    @staticmethod
-    async def _resolve_prepared_asset(
-        *,
-        db_session,
-        artwork_id: int,
-        category_id: str,
-        slot_size_label: str | None,
-    ) -> ArtworkPrintAssetOrm | None:
-        asset_role = PREPARED_ASSET_ROLE_BY_CATEGORY.get(category_id)
-        if asset_role is None or not slot_size_label:
-            return None
-
-        query = (
-            select(ArtworkPrintAssetOrm)
-            .where(
-                ArtworkPrintAssetOrm.artwork_id == artwork_id,
-                ArtworkPrintAssetOrm.provider_key == "prodigi",
-                ArtworkPrintAssetOrm.category_id == category_id,
-                ArtworkPrintAssetOrm.asset_role == asset_role,
-                ArtworkPrintAssetOrm.slot_size_label == slot_size_label,
-            )
-            .order_by(ArtworkPrintAssetOrm.id.desc())
-            .limit(1)
-        )
-        result = await db_session.execute(query)
-        return result.scalar_one_or_none()
 
     @staticmethod
     def _resolve_category_id(item: Any) -> str | None:

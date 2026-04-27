@@ -133,7 +133,7 @@ def _normalize_frame_type(
         return "floating_frame"
     if "box frame" in haystack or frame == "Box":
         return "box_frame"
-    if "classic framed" in haystack and "canvas" in haystack:
+    if "classic frame" in haystack or "classic framed" in haystack or frame == "Classic":
         return "classic_frame"
     if "stretched canvas" in haystack:
         return "stretched_canvas"
@@ -156,6 +156,8 @@ def _is_relevant_for_artshop(
     if medium == "paper" and presentation == "rolled":
         return True
     if medium == "paper" and frame_type == "box_frame":
+        return True
+    if medium == "paper" and frame_type == "classic_frame":
         return True
     if medium == "canvas" and material == "metallic_canvas":
         return False

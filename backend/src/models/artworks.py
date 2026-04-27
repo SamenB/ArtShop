@@ -75,6 +75,12 @@ class ArtworksOrm(Base):
     canvas_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
     paper_print_limited_quantity: Mapped[int | None] = mapped_column(default=None, nullable=True)
 
+    # ── White border configuration ────────────────────────────────────────────
+    # Percentage of white border added programmatically around the artwork
+    # for all paper print products.  Default 5% means the artwork is scaled
+    # to 90 % of the artboard and centered on a white background.
+    white_border_pct: Mapped[float] = mapped_column(default=5.0, server_default="5.0")
+
     # ── Print configuration ────────────────────────────────────────────────────
     # References the normalized print aspect ratio family for this artwork.
     # Provider catalogs later resolve concrete size/price offers for that ratio.

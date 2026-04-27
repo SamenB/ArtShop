@@ -376,17 +376,12 @@ async def upload_artwork_print_asset(
             file_metadata=metadata,
             note=note,
         )
-        generated_assets = []
-        if slot_size_label is None:
-            generated_assets = await service.generate_derivatives_for_master(
-                artwork_id=artwork_id,
-                asset_role=asset_role,
-            )
         await db.commit()
         return {
             "status": "OK",
             "asset": asset.model_dump(mode="json"),
-            "generated_assets": [item.model_dump(mode="json") for item in generated_assets],
+            "generated_assets": [],
+            "derivatives_scheduled": False,
         }
     except ValueError as exc:
         await db.rollback()

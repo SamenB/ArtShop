@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 
@@ -23,6 +23,9 @@ class ProdigiBusinessPolicyService:
     CATEGORY_MARKUP_MULTIPLIERS: dict[str, float] = {
         "paperPrintRolled": 3.0,
         "paperPrintBoxFramed": 2.7,
+        "paperPrintBoxFramedMounted": 2.7,
+        "paperPrintClassicFramed": 2.7,
+        "paperPrintClassicFramedMounted": 2.7,
         "canvasRolled": 3.5,
         "canvasStretched": 3.2,
         "canvasClassicFrame": 3.1,
@@ -32,6 +35,9 @@ class ProdigiBusinessPolicyService:
     CATEGORY_LABELS: dict[str, str] = {
         "paperPrintRolled": "Paper Print Unframed",
         "paperPrintBoxFramed": "Paper Print Box Framed",
+        "paperPrintBoxFramedMounted": "Paper Print Box Framed with Mount",
+        "paperPrintClassicFramed": "Paper Print Classic Framed",
+        "paperPrintClassicFramedMounted": "Paper Print Classic Framed with Mount",
         "canvasRolled": "Canvas Rolled",
         "canvasStretched": "Canvas Stretched",
         "canvasClassicFrame": "Canvas Classic Frame",
@@ -45,6 +51,9 @@ class ProdigiBusinessPolicyService:
 
     SHIPPING_AT_CHECKOUT_CATEGORIES = {
         "paperPrintBoxFramed",
+        "paperPrintBoxFramedMounted",
+        "paperPrintClassicFramed",
+        "paperPrintClassicFramedMounted",
         "canvasStretched",
         "canvasClassicFrame",
         "canvasFloatingFrame",
@@ -63,6 +72,9 @@ class ProdigiBusinessPolicyService:
 
     PREMIUM_CATEGORIES = {
         "paperPrintBoxFramed",
+        "paperPrintBoxFramedMounted",
+        "paperPrintClassicFramed",
+        "paperPrintClassicFramedMounted",
         "canvasStretched",
         "canvasClassicFrame",
         "canvasFloatingFrame",

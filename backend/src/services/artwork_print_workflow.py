@@ -1,11 +1,11 @@
 """
-Print pipeline workflow built around 2 production master slots.
+Print pipeline workflow built around a single production master slot.
 
-The admin uploads at most 2 files per artwork:
-1. paper_bordered
-2. clean_master
+The admin uploads 1 file per artwork:
+  master — clean edge-to-edge artwork used for all print products.
 
-Smaller baked variants are generated automatically from those masters.
+White borders for paper prints are generated programmatically at order time
+using the artwork's white_border_pct setting (default 5%).
 """
 
 from __future__ import annotations
@@ -51,19 +51,15 @@ CLEAN_MASTER_RATIO_PRESET_TARGETS: dict[str, tuple[int, int]] = {
     "5:7": (17500, 24500),
 }
 MASTER_SLOTS: dict[str, dict[str, Any]] = {
-    "paper_bordered": {
-        "label": "Paper Bordered Master",
-        "asset_role": "paper_border_ready",
-        "description": "Artwork with white borders for rolled paper prints.",
-        "covers_categories": ["paperPrintRolled"],
-        "derives_categories": [],
-        "wrap_margin_pct": 0.0,
-    },
-    "clean_master": {
-        "label": "Clean Production Master",
-        "asset_role": "clean_master",
-        "description": "Clean edge-to-edge artwork for framed paper and all canvas products.",
+    "master": {
+        "label": "Production Master",
+        "asset_role": "master",
+        "description": (
+            "Clean edge-to-edge artwork used for all print products. "
+            "White borders for paper prints are generated programmatically."
+        ),
         "covers_categories": [
+            "paperPrintRolled",
             "paperPrintBoxFramed",
             "canvasRolled",
             "canvasStretched",
@@ -76,12 +72,17 @@ MASTER_SLOTS: dict[str, dict[str, Any]] = {
 }
 
 ASSET_ROLE_RULES: dict[str, dict[str, Any]] = {
+    "master": {
+        "label": "Production master asset",
+        "allowed_extensions": {".jpg", ".jpeg", ".png"},
+    },
+    # Legacy roles still recognized for existing uploads
     "paper_border_ready": {
-        "label": "Bordered print asset",
+        "label": "Bordered print asset (legacy)",
         "allowed_extensions": {".jpg", ".jpeg", ".png"},
     },
     "clean_master": {
-        "label": "Clean production asset",
+        "label": "Clean production asset (legacy)",
         "allowed_extensions": {".jpg", ".jpeg", ".png"},
     },
 }
@@ -309,7 +310,7 @@ class ArtworkPrintWorkflowService:
         bake = await self.storefront_repository.get_active_bake()
         size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
         selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
-        if slot_id == "clean_master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
+        if slot_id == "master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
             raise ValueError("Choose a canvas wrap in Offerings before uploading the clean master.")
         if selected_canvas_wrap:
             size_catalog = await self._apply_canvas_wrap_to_size_catalog(
@@ -354,9 +355,9 @@ class ArtworkPrintWorkflowService:
         if width_px == expected_width and height_px == expected_height:
             return
 
-        slot_label = "clean master" if slot_id == "clean_master" else "paper bordered master"
+        slot_label = "production master"
         target_label = (
-            "exact upload target" if slot_id == "clean_master" else "exact artboard size"
+            "exact upload target"
         )
         message = (
             f"Uploaded {slot_label} is {width_px}x{height_px} px, but this slot expects the "
@@ -417,7 +418,7 @@ class ArtworkPrintWorkflowService:
         ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
         size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
         selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
-        if slot_id == "clean_master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
+        if slot_id == "master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
             raise ValueError("Choose a canvas wrap in Offerings before uploading the clean master.")
         if selected_canvas_wrap:
             size_catalog = await self._apply_canvas_wrap_to_size_catalog(
@@ -517,7 +518,7 @@ class ArtworkPrintWorkflowService:
             issues.append("Choose a print aspect ratio in Basics before uploading masters.")
         elif (
             slot_relevant
-            and slot_id == "clean_master"
+            and slot_id == "master"
             and self._artwork_has_wrapped_canvas(artwork)
             and not selected_canvas_wrap
         ):
@@ -532,7 +533,7 @@ class ArtworkPrintWorkflowService:
             uploaded_h = int(asset_metadata.get("height_px") or 0)
             required_w = largest_size["required_width_px"]
             required_h = largest_size["required_height_px"]
-            if slot_id == "clean_master":
+            if slot_id == "master":
                 strict_ratio_target = self._build_strict_ratio_cover_target(
                     artwork=artwork,
                     orientation=slot_orientation,
@@ -583,21 +584,7 @@ class ArtworkPrintWorkflowService:
                         "minor provider drift, but it will not stretch arbitrary ratios."
                     )
                 elif matches_artwork_ratio and not matches_provider_ratio:
-                    cover_crop = self._estimated_cover_crop_px(
-                        uploaded_w,
-                        uploaded_h,
-                        target_width=required_w,
-                        target_height=required_h,
-                    )
-                    crop_axis = "height" if cover_crop["height_px"] >= cover_crop["width_px"] else "width"
-                    crop_amount = cover_crop[f"{crop_axis}_px"]
-                    if crop_amount > 0:
-                        warnings.append(
-                            "Largest provider target drifts slightly from the artwork ratio. "
-                            "Each clean derivative is cover-fitted to its exact target first, then "
-                            f"only the overflow on the {crop_axis} is center-cropped as needed "
-                            f"(about {crop_amount} px for the largest target after resize) instead of stretching."
-                        )
+                    pass
             else:
                 if uploaded_w < required_w or uploaded_h < required_h:
                     issues.append(
@@ -711,7 +698,7 @@ class ArtworkPrintWorkflowService:
             ratio_warning = ratio_diff_px > 1.0
 
         strict_ratio_target = None
-        if slot_id == "clean_master":
+        if slot_id == "master":
             strict_ratio_target = self._build_strict_ratio_cover_target(
                 artwork=artwork,
                 orientation=orientation,
@@ -719,7 +706,7 @@ class ArtworkPrintWorkflowService:
                 exact_height=target_height,
             )
 
-        if slot_id == "clean_master" and strict_ratio_target is not None:
+        if slot_id == "master" and strict_ratio_target is not None:
             cover_crop = self._estimated_cover_crop_px(
                 strict_ratio_target["width_px"],
                 strict_ratio_target["height_px"],
@@ -764,7 +751,7 @@ class ArtworkPrintWorkflowService:
                 "estimated_cover_crop_height_px": cover_crop["height_px"],
                 "ratio_label": strict_ratio_target["ratio_label"],
             }
-        if slot_id == "clean_master":
+        if slot_id == "master":
             message = (
                 "Create a clean front artwork file exactly at the provider target size. "
                 "Use it for framed paper and canvas. Prodigi receives canvas files with "
@@ -975,7 +962,7 @@ class ArtworkPrintWorkflowService:
                 "contain_pad_resize",
             )
 
-        if slot_id == "clean_master":
+        if slot_id == "master":
             return (
                 self._cover_crop_to_exact_artboard(source_img, target_width, target_height),
                 "cover_crop_resize",
@@ -1171,7 +1158,7 @@ class ArtworkPrintWorkflowService:
                     orientation=orientation,
                     wrap_margin_pct=0.0 if category_id in derives else wrap_margin_pct,
                 )
-                if slot_id == "clean_master" and artwork_ratio:
+                if slot_id == "master" and artwork_ratio:
                     error_px = self._ratio_delta_px_for_ratio(
                         target_width,
                         target_height,
@@ -1189,7 +1176,7 @@ class ArtworkPrintWorkflowService:
                 else:
                     recompose_count += 1
 
-        if slot_id == "clean_master":
+        if slot_id == "master":
             if recompose_count == 0:
                 strategy = "direct_lanczos_resize"
                 note = (
@@ -1418,7 +1405,7 @@ class ArtworkPrintWorkflowService:
         for asset in assets:
             if asset.slot_size_label is not None:
                 continue
-            asset_role = "clean_master" if asset.asset_role in {"paper_clean", "canvas_clean"} else asset.asset_role
+            asset_role = "master" if asset.asset_role in {"paper_clean", "canvas_clean", "clean_master"} else asset.asset_role
             existing = index.get(asset_role)
             if existing is None or int(asset.id) > int(existing.id):
                 index[asset_role] = asset

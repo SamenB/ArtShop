@@ -23,13 +23,12 @@ STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
         "label": "Paper Print Box Framed",
         "fixed_attributes": {
             "glaze": "Acrylic / Perspex",
+            "mount": "No mount / Mat",
         },
         "allowed_attributes": {
             "color": ["black", "white", "natural", "brown"],
         },
-        "recommended_defaults": {
-            "mount": "No mount / Mat",
-        },
+        "recommended_defaults": {},
         "shipping": {
             "visible_methods": ["Express", "Standard"],
             "preferred_order": ["Express", "Standard"],
@@ -37,7 +36,73 @@ STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
         },
         "notes": [
             "Float glass is intentionally removed from storefront policy.",
-            "Mount stays configurable for the later artwork-specific presentation layer.",
+            "No-mount box frames use the listed frame/glaze size as the visible image area.",
+        ],
+    },
+    "paperPrintBoxFramedMounted": {
+        "label": "Paper Print Box Framed with Mount",
+        "fixed_attributes": {
+            "glaze": "Acrylic / Perspex",
+            "mount": "2.4mm",
+        },
+        "allowed_attributes": {
+            "color": ["black", "white", "natural", "brown"],
+            "mount_color": ["Snow white", "Off-white", "Black"],
+        },
+        "recommended_defaults": {
+            "mount_color": "Snow white",
+        },
+        "shipping": {
+            "visible_methods": ["Express", "Standard"],
+            "preferred_order": ["Express", "Standard"],
+            "default_method": "Express",
+        },
+        "notes": [
+            "Mounted box frames use Prodigi Product Details printAreaSizes as the image window.",
+            "The customer-facing size is the frame/glaze size; the uploaded print target is smaller.",
+        ],
+    },
+    "paperPrintClassicFramed": {
+        "label": "Paper Print Classic Framed",
+        "fixed_attributes": {
+            "glaze": "Acrylic / Perspex",
+            "mount": "No mount / Mat",
+        },
+        "allowed_attributes": {
+            "color": ["black", "white", "natural", "brown", "antique gold", "antique silver"],
+        },
+        "recommended_defaults": {},
+        "shipping": {
+            "visible_methods": ["Express", "Standard"],
+            "preferred_order": ["Express", "Standard"],
+            "default_method": "Express",
+        },
+        "notes": [
+            "Classic framed paper is kept separate from box frames.",
+            "No-mount classic frames use the listed frame/glaze size as the visible image area.",
+        ],
+    },
+    "paperPrintClassicFramedMounted": {
+        "label": "Paper Print Classic Framed with Mount",
+        "fixed_attributes": {
+            "glaze": "Acrylic / Perspex",
+            "mount": "2.4mm",
+        },
+        "allowed_attributes": {
+            "color": ["black", "white", "natural", "brown", "antique gold", "antique silver"],
+            "mount_color": ["Snow white", "Off-white", "Black"],
+        },
+        "recommended_defaults": {
+            "mount_color": "Snow white",
+        },
+        "shipping": {
+            "visible_methods": ["Express", "Standard"],
+            "preferred_order": ["Express", "Standard"],
+            "default_method": "Express",
+        },
+        "notes": [
+            "Mounted classic frames use Prodigi Product Details printAreaSizes as the image window.",
+            "The customer-facing size is the frame/glaze size; the uploaded print target is smaller.",
         ],
     },
     "canvasRolled": {
@@ -192,4 +257,4 @@ class ProdigiStorefrontPolicyService:
     def _normalize_value(self, value: Any) -> str:
         if value is None:
             return ""
-        return str(value).strip().lower()
+        return "".join(char for char in str(value).strip().lower() if char.isalnum())

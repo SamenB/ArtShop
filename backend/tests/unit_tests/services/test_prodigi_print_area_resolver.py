@@ -98,6 +98,47 @@ async def test_resolver_selects_mirrorwrap_variant_for_canvas_clean_assets() -> 
 
 
 @pytest.mark.asyncio
+async def test_resolver_uses_mounted_frame_print_area_as_visible_art() -> None:
+    resolver = ProdigiPrintAreaResolver()
+    resolver._client = object()  # Product is pre-cached, so no HTTP call is made.
+    resolver._product_cache["GLOBAL-BOXM-18X24"] = ProductDetails(
+        sku="GLOBAL-BOXM-18X24",
+        description='Box frame mounted 18x24"',
+        width_in=18,
+        height_in=24,
+        attributes={"mount": ["2.4mm"], "mount_color": ["Snow white"]},
+        variants=[
+            ProductVariant(
+                attributes={"mount": "2.4mm", "mount_color": "Snow white"},
+                ships_to=["GB"],
+                print_area_sizes={
+                    "default": {
+                        "horizontalResolution": 4200,
+                        "verticalResolution": 6000,
+                    }
+                },
+            )
+        ],
+    )
+
+    result = await resolver.resolve(
+        sku="GLOBAL-BOXM-18x24",
+        destination_country="GB",
+        category_id="paperPrintBoxFramedMounted",
+        attributes={"mount": "2.4mm", "mount_color": "Snow white"},
+        supplier_size_inches='18x24"',
+        supplier_size_cm="46x61cm",
+        slot_size_label="46x61",
+    )
+
+    assert result["print_area_width_px"] == 4200
+    assert result["print_area_height_px"] == 6000
+    assert result["visible_art_width_px"] == 4200
+    assert result["visible_art_height_px"] == 6000
+    assert result["print_area_source"] == "prodigi_product_details"
+
+
+@pytest.mark.asyncio
 async def test_resolver_does_not_fall_back_to_wrong_variant_when_attributes_do_not_match() -> None:
     resolver = ProdigiPrintAreaResolver()
     resolver._client = object()  # Product is pre-cached, so no HTTP call is made.

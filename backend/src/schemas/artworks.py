@@ -69,6 +69,14 @@ class ArtworkAddRequest(BaseModel):
         None, description="Total number of prints in the paper limited edition series (e.g. 30)"
     )
 
+    # ── White border configuration ────────────────────────────────────────────
+    white_border_pct: float = Field(
+        5.0,
+        ge=0.0,
+        le=15.0,
+        description="White border percentage for paper prints (recommended 5%)",
+    )
+
     # ── Print configuration ────────────────────────────────────────────────────
     print_aspect_ratio_id: int | None = Field(
         None,
@@ -134,6 +142,9 @@ class ArtworkAdd(BaseModel):
     canvas_print_limited_quantity: int | None = Field(None)
     paper_print_limited_quantity: int | None = Field(None)
 
+    # White border configuration
+    white_border_pct: float = Field(5.0)
+
     # Print configuration
     print_aspect_ratio_id: int | None = Field(None)
 
@@ -163,6 +174,8 @@ class ArtworkWithLabels(Artwork):
     images: list[str | dict] | None = Field(
         None, description="Array of image URLs or image objects."
     )
+    # White border configuration
+    white_border_pct: float = 5.0
     # Nested aspect ratio object (serialized from the SQLAlchemy relationship)
     print_aspect_ratio: AspectRatioItem | None = None
     print_source_metadata: dict[str, Any] | None = None
@@ -202,6 +215,9 @@ class ArtworkPatchRequest(BaseModel):
     has_paper_print_limited: bool | None = Field(None)
     canvas_print_limited_quantity: int | None = Field(None)
     paper_print_limited_quantity: int | None = Field(None)
+
+    # White border configuration
+    white_border_pct: float | None = Field(None, ge=0.0, le=15.0)
 
     # Print configuration (optional for partial updates)
     print_aspect_ratio_id: int | None = Field(None)
@@ -260,6 +276,9 @@ class ArtworkPatch(BaseModel):
     has_paper_print_limited: bool | None = Field(None)
     canvas_print_limited_quantity: int | None = Field(None)
     paper_print_limited_quantity: int | None = Field(None)
+
+    # White border configuration
+    white_border_pct: float | None = Field(None)
 
     # Print configuration
     print_aspect_ratio_id: int | None = Field(None)

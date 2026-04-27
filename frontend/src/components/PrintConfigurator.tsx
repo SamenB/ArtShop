@@ -83,6 +83,57 @@ function formatSizeLabel(label: string, units: "cm" | "in"): string {
     return `${widthCm} x ${heightCm} cm`;
 }
 
+function formatInches(widthIn: number, heightIn: number, units: "cm" | "in"): string {
+    if (units === "cm") {
+        const widthCm = (widthIn * 2.54).toFixed(1).replace(/\.0$/, "");
+        const heightCm = (heightIn * 2.54).toFixed(1).replace(/\.0$/, "");
+        return `${widthCm} x ${heightCm} cm`;
+    }
+    return `${widthIn.toFixed(1).replace(/\.0$/, "")} x ${heightIn
+        .toFixed(1)
+        .replace(/\.0$/, "")} in`;
+}
+
+function isMountedFrame(card: StorefrontCard | null): boolean {
+    return Boolean(card?.category_id?.toLowerCase().includes("mounted"));
+}
+
+function isUkShippedBoxFrame(card: StorefrontCard | null, countryCode?: string | null): boolean {
+    if (
+        !card ||
+        (card.category_id !== "paperPrintBoxFramed" &&
+            card.category_id !== "paperPrintBoxFramedMounted")
+    ) {
+        return false;
+    }
+    return Boolean(
+        countryCode?.toUpperCase() !== "GB" &&
+            card.source_countries?.map((item) => item.toUpperCase()).includes("GB")
+    );
+}
+
+function buildImageWindowLabel(
+    card: StorefrontCard | null,
+    size: StorefrontSizeOption | null,
+    units: "cm" | "in"
+): string | null {
+    if (!isMountedFrame(card) || !size?.print_area?.width_px || !size.print_area.height_px) {
+        return null;
+    }
+
+    const dimensions = size.print_area.dimensions || {};
+    const targetDpi = Number(dimensions.target_dpi || dimensions.dpi || 300);
+    if (!targetDpi || Number.isNaN(targetDpi)) {
+        return null;
+    }
+    const widthIn = Number(size.print_area.width_px) / targetDpi;
+    const heightIn = Number(size.print_area.height_px) / targetDpi;
+    if (!Number.isFinite(widthIn) || !Number.isFinite(heightIn)) {
+        return null;
+    }
+    return formatInches(widthIn, heightIn, units);
+}
+
 function buildInitialAttributeSelection(card: StorefrontCard | null): Record<string, string> {
     if (!card) {
         return {};
@@ -345,6 +396,8 @@ export default function PrintConfigurator({
     const formattedSize = selectedSize
         ? formatSizeLabel(selectedSize.size_label || selectedSize.slot_size_label, units)
         : "Select...";
+    const imageWindowLabel = buildImageWindowLabel(selectedCard, selectedSize, units);
+    const ukBoxNotice = isUkShippedBoxFrame(selectedCard, storefront?.country_code);
     const finishLabel = selectedCard
         ? buildFinishLabel(selectedCard, selectedAttributes, editionType)
         : purchaseType === "canvas"
@@ -632,6 +685,37 @@ export default function PrintConfigurator({
                     </div>
                 </div>
             </div>
+
+            {imageWindowLabel && (
+                <div className="info-badge" style={{ marginTop: "0.85rem" }}>
+                    <div className="info-badge-content">
+                        <p className="info-badge-title">Mounted Image Window</p>
+                        <p className="info-badge-desc">
+                            Customer size is the frame/glaze size ({formattedSize}). The production
+                            image target is {imageWindowLabel}.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {ukBoxNotice && (
+                <div
+                    className="info-badge"
+                    style={{
+                        marginTop: "0.85rem",
+                        background: "#F8FAFC",
+                        borderColor: "rgba(15, 23, 42, 0.12)",
+                    }}
+                >
+                    <div className="info-badge-content">
+                        <p className="info-badge-title">UK Fulfillment</p>
+                        <p className="info-badge-desc">
+                            This box frame ships from the UK. Delivery can take longer, and import
+                            duties or local taxes may apply.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="info-badge" style={{ marginTop: "1rem" }}>
                 <div className="info-badge-content">

@@ -74,6 +74,7 @@ class ProdigiPrintAreaResolver:
         api_dimensions = await self._resolve_from_product_details(
             sku=sku,
             destination_country=destination_country,
+            category_id=category_id,
             attributes=attributes or {},
             optional_attribute_keys=optional_attribute_keys or set(),
         )
@@ -106,6 +107,7 @@ class ProdigiPrintAreaResolver:
         *,
         sku: str | None,
         destination_country: str | None,
+        category_id: str,
         attributes: dict[str, Any],
         optional_attribute_keys: set[str],
     ) -> dict[str, Any] | None:
@@ -132,8 +134,16 @@ class ProdigiPrintAreaResolver:
             height = self._positive_int(dimensions.get("verticalResolution"))
             if width is None or height is None:
                 return None
-            visible_width = self._decimal_px(Decimal(str(product.width_in)))
-            visible_height = self._decimal_px(Decimal(str(product.height_in)))
+            if category_id in {
+                "canvasStretched",
+                "canvasClassicFrame",
+                "canvasFloatingFrame",
+            }:
+                visible_width = self._decimal_px(Decimal(str(product.width_in)))
+                visible_height = self._decimal_px(Decimal(str(product.height_in)))
+            else:
+                visible_width = width
+                visible_height = height
 
             return {
                 "print_area_width_px": width,

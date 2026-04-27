@@ -88,11 +88,13 @@ export interface StorefrontCard {
     category_id: string;
     label: string;
     medium: PurchaseType;
+    storefront_action?: string | null;
     material_label?: string | null;
     frame_label?: string | null;
     fulfillment_level?: string | null;
     geography_scope?: string | null;
     tax_risk?: string | null;
+    note?: string | null;
     source_mix?: string | null;
     source_countries?: string[];
     available_shipping_tiers?: string[];
