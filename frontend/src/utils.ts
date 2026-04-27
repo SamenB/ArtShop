@@ -92,6 +92,29 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     return response;
 }
 
+export async function apiJson<T = unknown>(response: Response): Promise<T> {
+    const contentType = response.headers.get("content-type") || "";
+    const isJson = contentType.toLowerCase().includes("application/json");
+
+    if (!response.ok) {
+        const body = isJson ? await response.json().catch(() => null) : await response.text().catch(() => "");
+        const detail =
+            body && typeof body === "object" && "detail" in body
+                ? String((body as { detail?: unknown }).detail)
+                : typeof body === "string" && body.trim()
+                    ? body.trim()
+                    : response.statusText;
+        throw new Error(`API ${response.status}: ${detail}`);
+    }
+
+    if (!isJson) {
+        const body = await response.text().catch(() => "");
+        throw new Error(`Expected JSON but received ${contentType || "unknown content"}: ${body.slice(0, 80)}`);
+    }
+
+    return response.json() as Promise<T>;
+}
+
 /**
  * Generates an absolute or relative image URL based on the image's structure.
  * Supports both static paths and variant-specific objects (thumb, medium, original).

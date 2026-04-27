@@ -439,6 +439,133 @@ async def test_get_workflow_blocks_clean_master_until_canvas_wrap_is_selected():
 
 
 @pytest.mark.asyncio
+async def test_validate_master_upload_dimensions_accepts_exact_clean_master_target():
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
+    service = make_service(
+        groups=[
+            make_group(
+                "canvasStretched",
+                "122x152",
+                ratio_label="4:5",
+                print_area_width_px=14454,
+                print_area_height_px=18054,
+                print_area_source="prodigi_product_details",
+                print_area_dimensions={
+                    "visible_art_width_px": 14400,
+                    "visible_art_height_px": 18000,
+                    "physical_width_in": 48,
+                    "physical_height_in": 60,
+                    "variant_attributes": {"wrap": "MirrorWrap"},
+                },
+            ),
+        ],
+    )
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    await service.validate_master_upload_dimensions(
+        artwork_id=artwork.id,
+        asset_role="clean_master",
+        width_px=16800,
+        height_px=21000,
+    )
+
+
+@pytest.mark.asyncio
+async def test_validate_master_upload_dimensions_accepts_opposite_clean_master_orientation():
+    artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
+    service = make_service(
+        groups=[
+            make_group(
+                "canvasStretched",
+                "122x152",
+                ratio_label="4:5",
+                print_area_width_px=14454,
+                print_area_height_px=18054,
+                print_area_source="prodigi_product_details",
+                print_area_dimensions={
+                    "visible_art_width_px": 14400,
+                    "visible_art_height_px": 18000,
+                    "physical_width_in": 48,
+                    "physical_height_in": 60,
+                    "variant_attributes": {"wrap": "MirrorWrap"},
+                },
+            ),
+        ],
+    )
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    await service.validate_master_upload_dimensions(
+        artwork_id=artwork.id,
+        asset_role="clean_master",
+        width_px=21000,
+        height_px=16800,
+    )
+
+
+@pytest.mark.asyncio
+async def test_validate_master_upload_dimensions_accepts_opposite_paper_orientation():
+    artwork = make_artwork(paper=True, canvas=False, ratio_label="4:5")
+    service = make_service(
+        groups=[
+            make_group(
+                "paperPrintRolled",
+                "100x127",
+                ratio_label="4:5",
+                print_area_width_px=12000,
+                print_area_height_px=15000,
+                print_area_source="prodigi_product_details",
+                print_area_dimensions={
+                    "visible_art_width_px": 12000,
+                    "visible_art_height_px": 15000,
+                    "physical_width_in": 40,
+                    "physical_height_in": 50,
+                },
+            ),
+        ],
+    )
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    await service.validate_master_upload_dimensions(
+        artwork_id=artwork.id,
+        asset_role="paper_border_ready",
+        width_px=15000,
+        height_px=12000,
+    )
+
+
+@pytest.mark.asyncio
+async def test_validate_master_upload_dimensions_rejects_wrong_paper_target():
+    artwork = make_artwork(paper=True, canvas=False, ratio_label="4:5")
+    service = make_service(
+        groups=[
+            make_group(
+                "paperPrintRolled",
+                "100x127",
+                ratio_label="4:5",
+                print_area_width_px=12000,
+                print_area_height_px=15000,
+                print_area_source="prodigi_product_details",
+                print_area_dimensions={
+                    "visible_art_width_px": 12000,
+                    "visible_art_height_px": 15000,
+                    "physical_width_in": 40,
+                    "physical_height_in": 50,
+                },
+            ),
+        ],
+    )
+    service._get_artwork_orm = AsyncMock(return_value=artwork)
+
+    with pytest.raises(ValueError, match="expects the exact artboard size"):
+        await service.validate_master_upload_dimensions(
+            artwork_id=artwork.id,
+            asset_role="paper_border_ready",
+            width_px=14999,
+            height_px=12000,
+        )
+
+
+@pytest.mark.asyncio
 async def test_generate_derivatives_from_paper_master_creates_pngs_for_available_sizes_only(tmp_path):
     artwork = make_artwork(paper=True, canvas=False)
     master_path = tmp_path / "master.png"

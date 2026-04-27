@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useUser } from "@/context/UserContext";
-import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
+import { getApiUrl, getImageUrl, artworkUrl, apiFetch, apiJson } from "@/utils";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 /** Availability states for artworks and prints. */
@@ -944,9 +944,9 @@ function ShopPageContent() {
         setLoading(true);
         setError(null);
         Promise.all([
-            apiFetch(`${apiUrl}/artworks?limit=1000&country=${activeCountryCode}`, { signal: abortController.signal }).then(r => r.json()),
-            apiFetch(`${apiUrl}/labels/categories`, { signal: abortController.signal }).then(r => r.json()),
-            apiFetch(`${apiUrl}/labels`, { signal: abortController.signal }).then(r => r.json()),
+            apiFetch(`${apiUrl}/artworks?limit=1000&country=${activeCountryCode}`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
+            apiFetch(`${apiUrl}/labels/categories`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
+            apiFetch(`${apiUrl}/labels`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
         ]).then(([artData, catData, lblData]) => {
             if (cancelled) {
                 return;
@@ -969,7 +969,7 @@ function ShopPageContent() {
                 return;
             }
             console.error("Shop initialization failed:", err);
-            setError("Network error.");
+            setError(err instanceof Error ? err.message : "Network error.");
         }).finally(() => {
             if (!cancelled) {
                 setLoading(false);

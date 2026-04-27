@@ -354,6 +354,13 @@ async def upload_artwork_print_asset(
 
         public_url = "/" + dest_path.replace("\\", "/")
         metadata = service.extract_prepared_asset_metadata(dest_path, public_url=public_url)
+        if slot_size_label is None:
+            await service.validate_master_upload_dimensions(
+                artwork_id=artwork_id,
+                asset_role=asset_role,
+                width_px=int(metadata.get("width_px") or 0),
+                height_px=int(metadata.get("height_px") or 0),
+            )
         asset = await service.upsert_prepared_asset(
             artwork_id=artwork_id,
             provider_key=get_print_provider().provider_key,

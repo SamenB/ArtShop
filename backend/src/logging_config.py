@@ -4,12 +4,15 @@ Sets up console and rotating file handlers with environment-specific formatting
 and retention policies.
 """
 
+import os
 import sys
 from pathlib import Path
 
 from loguru import logger
 
 from src.config import settings
+
+_configured_pid: int | None = None
 
 
 def setup_logging():
@@ -26,6 +29,11 @@ def setup_logging():
        - Compresses archived log files into ZIP format.
        - Uses JSON serialization for easy parsing by external tools.
     """
+    global _configured_pid
+    current_pid = os.getpid()
+    if _configured_pid == current_pid:
+        return
+
     # Clear any existing global handlers.
     logger.remove()
 
@@ -54,7 +62,6 @@ def setup_logging():
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
 
-    import os
     logger.add(
         log_dir / f"app_{os.getpid()}.log",
         level=settings.LOG_LEVEL,
@@ -62,5 +69,6 @@ def setup_logging():
         retention="7 days",
         compression="zip",
         serialize=True,
-        enqueue=settings.MODE != "TEST",
+        enqueue=settings.MODE == "PROD",
     )
+    _configured_pid = current_pid

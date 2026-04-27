@@ -69,6 +69,7 @@ const DEFAULT_RATES: Record<Currency, number> = {
 type StoredRatesPayload = {
     rates: Record<Currency, number>;
     fetchedAt: string;
+    source?: "live" | "fallback";
 };
 
 function isValidRatePayload(payload: unknown): payload is StoredRatesPayload {

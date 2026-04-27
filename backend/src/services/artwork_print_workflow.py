@@ -292,6 +292,83 @@ class ArtworkPrintWorkflowService:
                 f"Allowed: {', '.join(sorted(rule['allowed_extensions']))}"
             )
 
+    async def validate_master_upload_dimensions(
+        self,
+        *,
+        artwork_id: int,
+        asset_role: str,
+        width_px: int,
+        height_px: int,
+    ) -> None:
+        slot_id, slot_def = self._find_slot_by_asset_role(asset_role)
+        artwork = await self._get_artwork_orm(artwork_id)
+        ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
+        if not ratio_label:
+            return
+
+        bake = await self.storefront_repository.get_active_bake()
+        size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
+        selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
+        if slot_id == "clean_master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
+            raise ValueError("Choose a canvas wrap in Offerings before uploading the clean master.")
+        if selected_canvas_wrap:
+            size_catalog = await self._apply_canvas_wrap_to_size_catalog(
+                size_catalog=size_catalog,
+                selected_wrap=selected_canvas_wrap,
+            )
+
+        artwork_orientation = str(getattr(artwork, "orientation", "") or "").lower()
+        accepted_dimensions = self._accepted_master_upload_dimensions(
+            slot_id=slot_id,
+            artwork=artwork,
+            artwork_orientation=artwork_orientation,
+            slot_def=slot_def,
+            size_catalog=size_catalog,
+            selected_canvas_wrap=selected_canvas_wrap,
+        )
+        if (width_px, height_px) in accepted_dimensions:
+            return
+
+        orientation = self._orientation_from_dimensions(width_px, height_px) or artwork_orientation
+        largest_size = self._find_largest_size(
+            covers=slot_def["covers_categories"],
+            size_catalog=size_catalog,
+            orientation=orientation,
+            wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
+        )
+        if largest_size is None:
+            return
+
+        guidance = self._build_export_guidance(
+            slot_id=slot_id,
+            artwork=artwork,
+            orientation=orientation,
+            largest_size=largest_size,
+            selected_canvas_wrap=selected_canvas_wrap,
+        )
+        if guidance is None:
+            return
+
+        expected_width = int(guidance["target_width_px"])
+        expected_height = int(guidance["target_height_px"])
+        if width_px == expected_width and height_px == expected_height:
+            return
+
+        slot_label = "clean master" if slot_id == "clean_master" else "paper bordered master"
+        target_label = (
+            "exact upload target" if slot_id == "clean_master" else "exact artboard size"
+        )
+        message = (
+            f"Uploaded {slot_label} is {width_px}x{height_px} px, but this slot expects the "
+            f"{target_label} {expected_width}x{expected_height} px."
+        )
+        if width_px == expected_height and height_px == expected_width:
+            message += (
+                " The dimensions match the opposite orientation, but this upload still "
+                "does not cover the selected production target."
+            )
+        raise ValueError(message)
+
     @staticmethod
     def extract_prepared_asset_metadata(file_path: str, public_url: str | None = None) -> dict[str, Any]:
         path = Path(file_path)
@@ -348,6 +425,10 @@ class ArtworkPrintWorkflowService:
                 selected_wrap=selected_canvas_wrap,
             )
         orientation = str(getattr(artwork, "orientation", "") or "").lower()
+        orientation = self._orientation_for_asset(
+            fallback=orientation,
+            asset_metadata=master_asset.file_metadata or {},
+        )
 
         generated_assets: list[Any] = []
         with Image.open(master_path) as source_img:
@@ -415,19 +496,22 @@ class ArtworkPrintWorkflowService:
         slot_categories = covers + derives
         slot_active = print_enabled and self._slot_has_active_categories(artwork, slot_categories)
         slot_relevant = slot_active
+        uploaded_asset = master_assets.get(asset_role)
+        asset_metadata = (uploaded_asset.file_metadata or {}) if uploaded_asset else {}
+        slot_orientation = self._orientation_for_asset(
+            fallback=orientation,
+            asset_metadata=asset_metadata,
+        )
         slot_has_available_sizes = self._slot_has_available_sizes(slot_categories, size_catalog)
         largest_size = self._find_largest_size(
             covers=covers,
             size_catalog=size_catalog,
-            orientation=orientation,
+            orientation=slot_orientation,
             wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
         )
-
-        uploaded_asset = master_assets.get(asset_role)
-        asset_metadata = (uploaded_asset.file_metadata or {}) if uploaded_asset else {}
         issues: list[str] = []
         warnings: list[str] = []
-        artwork_ratio = self._ratio_from_artwork(artwork, orientation=orientation)
+        artwork_ratio = self._ratio_from_artwork(artwork, orientation=slot_orientation)
 
         if slot_relevant and not ratio_assigned:
             issues.append("Choose a print aspect ratio in Basics before uploading masters.")
@@ -451,7 +535,7 @@ class ArtworkPrintWorkflowService:
             if slot_id == "clean_master":
                 strict_ratio_target = self._build_strict_ratio_cover_target(
                     artwork=artwork,
-                    orientation=orientation,
+                    orientation=slot_orientation,
                     exact_width=required_w,
                     exact_height=required_h,
                 )
@@ -571,7 +655,7 @@ class ArtworkPrintWorkflowService:
             "export_guidance": self._build_export_guidance(
                 slot_id=slot_id,
                 artwork=artwork,
-                orientation=orientation,
+                orientation=slot_orientation,
                 largest_size=largest_size,
                 selected_canvas_wrap=selected_canvas_wrap,
             ),
@@ -580,7 +664,7 @@ class ArtworkPrintWorkflowService:
                 covers=covers,
                 derives=derives,
                 size_catalog=size_catalog,
-                orientation=orientation,
+                orientation=slot_orientation,
                 wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
                 largest_size=largest_size,
                 artwork_ratio=artwork_ratio,
@@ -944,6 +1028,58 @@ class ArtworkPrintWorkflowService:
             if slot_def["asset_role"] == asset_role:
                 return slot_id, slot_def
         raise ValueError(f"Unsupported asset role: {asset_role}")
+
+    def _accepted_master_upload_dimensions(
+        self,
+        *,
+        slot_id: str,
+        artwork: Any,
+        artwork_orientation: str,
+        slot_def: dict[str, Any],
+        size_catalog: dict[str, dict[str, Any]],
+        selected_canvas_wrap: str | None,
+    ) -> set[tuple[int, int]]:
+        accepted: set[tuple[int, int]] = set()
+        for orientation in self._candidate_orientations(artwork_orientation):
+            largest_size = self._find_largest_size(
+                covers=slot_def["covers_categories"],
+                size_catalog=size_catalog,
+                orientation=orientation,
+                wrap_margin_pct=float(slot_def.get("wrap_margin_pct", 0.0)),
+            )
+            if largest_size is None:
+                continue
+            guidance = self._build_export_guidance(
+                slot_id=slot_id,
+                artwork=artwork,
+                orientation=orientation,
+                largest_size=largest_size,
+                selected_canvas_wrap=selected_canvas_wrap,
+            )
+            if guidance is None:
+                continue
+            accepted.add((int(guidance["target_width_px"]), int(guidance["target_height_px"])))
+        return accepted
+
+    def _candidate_orientations(self, orientation: str) -> tuple[str, ...]:
+        normalized = "horizontal" if orientation == "horizontal" else "vertical"
+        opposite = "vertical" if normalized == "horizontal" else "horizontal"
+        return normalized, opposite
+
+    def _orientation_for_asset(
+        self,
+        *,
+        fallback: str,
+        asset_metadata: dict[str, Any],
+    ) -> str:
+        width = int(asset_metadata.get("width_px") or 0)
+        height = int(asset_metadata.get("height_px") or 0)
+        return self._orientation_from_dimensions(width, height) or fallback
+
+    def _orientation_from_dimensions(self, width: int, height: int) -> str | None:
+        if width <= 0 or height <= 0 or width == height:
+            return None
+        return "horizontal" if width > height else "vertical"
 
     def _count_generated_derivatives(self, uploaded_asset: Any | None, all_assets: list[Any]) -> int:
         if uploaded_asset is None:
