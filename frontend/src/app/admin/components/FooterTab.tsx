@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getApiUrl, apiFetch } from "@/utils";
+import { getApiUrl, apiFetch, apiJson } from "@/utils";
 
 interface SiteSettings {
     social_instagram?: string | null;
@@ -47,7 +47,7 @@ export default function FooterTab() {
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
+            .then(res => apiJson<SiteSettings>(res))
             .then(data => { setSettings(data); setLoading(false); })
             .catch(err => { console.error(err); setLoading(false); });
     }, []);

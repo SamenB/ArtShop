@@ -2,7 +2,7 @@
 SQLAlchemy database model for global site settings.
 """
 
-from sqlalchemy import Boolean, Integer, String, Text
+from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database import Base
@@ -11,8 +11,7 @@ from src.database import Base
 class SiteSettingsOrm(Base):
     """
     Stores global configuration for the application.
-    Includes technical contacts, about texts, background images for the landing page,
-    and slideshow parameters.
+    Includes technical contacts, about texts, and static images for the landing page.
 
     Note: Print pricing is managed separately via PrintPricingOrm.
     """
@@ -31,21 +30,13 @@ class SiteSettingsOrm(Base):
     footer_text_discover: Mapped[str | None] = mapped_column(Text, nullable=True)
     footer_text_services: Mapped[str | None] = mapped_column(Text, nullable=True)
     footer_text_circle: Mapped[str | None] = mapped_column(Text, nullable=True)
+    shipping_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    faq_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    terms_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    privacy_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Images
     artist_home_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     artist_about_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     main_bg_desktop_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     main_bg_mobile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-    # Hero slideshow covers (up to 3)
-    cover_2_desktop_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    cover_2_mobile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    cover_3_desktop_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    cover_3_mobile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-    # Hero slideshow options
-    hero_ken_burns_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default="true"
-    )
-    hero_slide_duration: Mapped[int] = mapped_column(Integer, default=15, server_default="15")

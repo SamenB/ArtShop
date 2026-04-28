@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { apiFetch, getApiUrl } from "@/utils";
+import { apiFetch, apiJson, getApiUrl } from "@/utils";
 
 import SimpleArtworkCropperModal from "./SimpleArtworkCropperModal";
 import { ArtworkBasicsForm } from "./artworks/ArtworkBasicsForm";
@@ -16,6 +16,7 @@ import {
     ArtworkFormState,
     ArtworkPrintWorkflowPayload,
     DragItem,
+    ImageEntry,
     Label,
     LabelCategory,
 } from "./artworks/types";
@@ -27,11 +28,9 @@ import {
     extractCanvasWrapSelectionFromOverrides,
     hasCanvasOfferings,
     hasMissingPrintRatio,
-    hasOfferingValidationIssues,
     hasPrintOfferings,
     resolveImageUrl,
     uploadFormDataWithProgress,
-    WORKFLOW_STEP_ORDER,
 } from "./artworks/utils";
 
 export default function ArtworksTab() {
@@ -40,6 +39,7 @@ export default function ArtworksTab() {
     const [labels, setLabels] = useState<Label[]>([]);
     const [aspectRatios, setAspectRatios] = useState<AspectRatio[]>([]);
     const [loading, setLoading] = useState(true);
+    const [readinessRefreshing, setReadinessRefreshing] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [savingArtwork, setSavingArtwork] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -56,11 +56,42 @@ export default function ArtworksTab() {
     const [payloadRefreshLoading, setPayloadRefreshLoading] = useState(false);
     const [payloadRefreshMessage, setPayloadRefreshMessage] = useState<string | null>(null);
     const [payloadRefreshError, setPayloadRefreshError] = useState<string | null>(null);
-    const [activeStep, setActiveStep] =
-        useState<(typeof WORKFLOW_STEP_ORDER)[number]["id"]>("basics");
     const [formData, setFormData] = useState<ArtworkFormState>(createDefaultFormState());
 
-    const fetchData = async () => {
+    const refreshReadinessSummaries = useCallback(async () => {
+        setReadinessRefreshing(true);
+        try {
+            const response = await apiFetch(
+                `${getApiUrl()}/artworks/admin/list?limit=200&include_print_readiness=true`
+            );
+            if (!response.ok) {
+                throw new Error(`Readiness request failed with ${response.status}`);
+            }
+
+            const readinessArtworks = await apiJson<Artwork[]>(response);
+            const summariesByArtworkId = new Map(
+                readinessArtworks.map((artwork) => [artwork.id, artwork.print_readiness_summary])
+            );
+
+            setArtworks((previous) =>
+                previous.map((artwork) =>
+                    summariesByArtworkId.has(artwork.id)
+                        ? {
+                              ...artwork,
+                              print_readiness_summary:
+                                  summariesByArtworkId.get(artwork.id) ?? null,
+                          }
+                        : artwork
+                )
+            );
+        } catch (error) {
+            console.warn("Failed to refresh artwork readiness summaries", error);
+        } finally {
+            setReadinessRefreshing(false);
+        }
+    }, []);
+
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const [artworksRes, categoriesRes, labelsRes, ratiosRes] = await Promise.all([
@@ -71,23 +102,24 @@ export default function ArtworksTab() {
             ]);
 
             if (artworksRes.ok) {
-                setArtworks(await artworksRes.json());
+                setArtworks(await apiJson<Artwork[]>(artworksRes));
+                void refreshReadinessSummaries();
             }
             if (categoriesRes.ok) {
-                setCategories(await categoriesRes.json());
+                setCategories(await apiJson<LabelCategory[]>(categoriesRes));
             }
             if (labelsRes.ok) {
-                setLabels(await labelsRes.json());
+                setLabels(await apiJson<Label[]>(labelsRes));
             }
             if (ratiosRes.ok) {
-                setAspectRatios(await ratiosRes.json());
+                setAspectRatios(await apiJson<AspectRatio[]>(ratiosRes));
             }
         } catch (error) {
             console.error("Failed to fetch artwork admin data", error);
         } finally {
             setLoading(false);
         }
-    };
+    }, [refreshReadinessSummaries]);
 
     const fetchWorkflow = async (artworkId: number) => {
         setWorkflowLoading(true);
@@ -151,7 +183,7 @@ export default function ArtworksTab() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [fetchData]);
 
     const resetEditor = () => {
         setFormData(createDefaultFormState());
@@ -160,7 +192,6 @@ export default function ArtworksTab() {
         setWorkflowData(null);
         setWorkflowError(null);
         setNotice(null);
-        setActiveStep("basics");
         setIsFormOpen(false);
     };
 
@@ -171,7 +202,6 @@ export default function ArtworksTab() {
         setWorkflowData(null);
         setWorkflowError(null);
         setNotice(null);
-        setActiveStep("basics");
         setIsFormOpen(true);
         window.requestAnimationFrame(() => {
             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -208,7 +238,7 @@ export default function ArtworksTab() {
             return null;
         }
 
-        if (hasCanvasOfferings(formData) && !formData.canvas_wrap_style) {
+        if (formData.show_in_shop && hasCanvasOfferings(formData) && !formData.canvas_wrap_style) {
             window.alert("Please choose a canvas wrap in Offerings before saving canvas prints.");
             return null;
         }
@@ -266,10 +296,22 @@ export default function ArtworksTab() {
             if (newFiles.length > 0) {
                 const body = new FormData();
                 newFiles.forEach((file) => body.append("files", file));
-                await apiFetch(`${getApiUrl()}/artworks/${targetId}/images`, {
+                const uploadResponse = await apiFetch(`${getApiUrl()}/artworks/${targetId}/images`, {
                     method: "POST",
                     body,
                 });
+                const uploadPayload = await apiJson<{ images?: ImageEntry[] }>(uploadResponse);
+                const uploadedImages = uploadPayload.images || [];
+                if (uploadedImages.length > 0) {
+                    setImageItems([
+                        ...imageItems.filter((item) => item.type === "existing"),
+                        ...uploadedImages.map((image) => ({
+                            type: "existing" as const,
+                            url: resolveImageUrl(image),
+                            existingData: image,
+                        })),
+                    ]);
+                }
             }
 
             setEditingId(targetId);
@@ -284,9 +326,6 @@ export default function ArtworksTab() {
 
             if (hasPrintOfferings(formData)) {
                 await fetchWorkflow(targetId);
-                if (!editingId) {
-                    setActiveStep(formData.print_aspect_ratio_id ? "pipeline" : "basics");
-                }
             } else {
                 setWorkflowData(null);
             }
@@ -332,6 +371,8 @@ export default function ArtworksTab() {
                 original_status: full.original_status || "available",
                 print_quality_url: full.print_quality_url || "",
                 print_profile_overrides: (full.print_profile_overrides as Record<string, unknown> | null) || null,
+                show_in_gallery: full.show_in_gallery ?? true,
+                show_in_shop: full.show_in_shop ?? true,
                 canvas_wrap_style: extractCanvasWrapSelectionFromOverrides(
                     full.print_profile_overrides as Record<string, unknown> | null
                 ),
@@ -345,7 +386,6 @@ export default function ArtworksTab() {
             );
             setEditingId(full.id);
             setIsFormOpen(true);
-            setActiveStep("basics");
             window.requestAnimationFrame(() => {
                 window.scrollTo({ top: 0, behavior: "smooth" });
             });
@@ -457,34 +497,13 @@ export default function ArtworksTab() {
         await fetchData();
     };
 
-    const stepStatusMap: Record<(typeof WORKFLOW_STEP_ORDER)[number]["id"], string> = {
-        basics: !formData.title.trim()
-            ? "blocked"
-            : hasMissingPrintRatio(formData)
-            ? "attention"
-            : "ready",
-        offerings: hasOfferingValidationIssues(formData) ? "attention" : "ready",
-        pipeline: !hasPrintOfferings(formData)
-            ? "ready"
-            : hasMissingPrintRatio(formData)
-            ? "blocked"
-            : editingId
-            ? workflowData
-                ? workflowData.overall_status === "ready"
-                    ? "ready"
-                    : workflowData.overall_status === "blocked"
-                    ? "blocked"
-                    : "attention"
-                : "attention"
-            : "attention",
-        media: imageItems.length > 0 ? "ready" : "attention",
-    };
-
     const headerReadiness = hasPrintOfferings(formData)
         ? hasMissingPrintRatio(formData)
             ? { status: "blocked", message: "Choose a print aspect ratio in Basics." }
             : workflowData?.readiness_summary || null
         : null;
+    const editorPreviewUrl = imageItems[0]?.url || null;
+    const editorTitle = formData.title.trim() || (editingId ? "Untitled artwork" : "New artwork");
 
     if (loading) {
         return (
@@ -553,14 +572,48 @@ export default function ArtworksTab() {
             {isFormOpen ? (
                 <div className="bg-[#FCFBF8] border border-[#31323E]/10 rounded-[28px] shadow-sm overflow-hidden">
                     <div className="px-8 py-6 border-b border-[#31323E]/8 bg-white">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div>
-                                <h3 className="text-xl font-bold text-[#31323E]">
-                                    {editingId ? "Edit Artwork" : "Create Artwork Draft"}
-                                </h3>
-                                <p className="text-sm font-medium text-[#31323E]/45 mt-1">
-                                    Set the artwork, then upload the production masters only where needed.
-                                </p>
+                        <div className="flex flex-wrap items-start justify-between gap-5">
+                            <div className="flex min-w-0 flex-1 items-start gap-5">
+                                <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded-2xl border border-[#31323E]/10 bg-[#31323E]/5">
+                                    {editorPreviewUrl ? (
+                                        <img
+                                            src={editorPreviewUrl}
+                                            alt={editorTitle}
+                                            className="absolute inset-0 h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/35">
+                                            No image
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="min-w-0 pt-1">
+                                    <h3 className="text-xl font-bold text-[#31323E]">
+                                        {editorTitle}
+                                    </h3>
+                                    <p className="text-sm font-medium text-[#31323E]/45 mt-1">
+                                        {editingId
+                                            ? "Editing artwork details, gallery media, storefront settings, and print masters."
+                                            : "Create the artwork draft, then continue through media, storefront settings, and print masters."}
+                                    </p>
+                                    <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                        {formData.show_in_gallery ? (
+                                            <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
+                                                Gallery
+                                            </span>
+                                        ) : null}
+                                        {formData.show_in_shop ? (
+                                            <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
+                                                Shop
+                                            </span>
+                                        ) : null}
+                                        {hasPrintOfferings(formData) ? (
+                                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                                                Print enabled
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </div>
                             </div>
 
                             {headerReadiness ? (
@@ -572,94 +625,47 @@ export default function ArtworksTab() {
                                 </div>
                             ) : null}
                         </div>
-
-                        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mt-6">
-                            {WORKFLOW_STEP_ORDER.map((step) => (
-                                <button
-                                    key={step.id}
-                                    type="button"
-                                    onClick={() => setActiveStep(step.id)}
-                                    className={`relative flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
-                                        activeStep === step.id
-                                            ? "bg-white border-[#31323E] shadow-[0_2px_12px_rgba(49,50,62,0.08)] z-10"
-                                            : "bg-[#31323E]/3 border-[#31323E]/10 hover:bg-[#31323E]/6"
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className={`w-2 h-2 rounded-full ${
-                                                stepStatusMap[step.id] === "ready"
-                                                    ? "bg-emerald-400"
-                                                    : stepStatusMap[step.id] === "attention"
-                                                    ? "bg-amber-400"
-                                                    : "bg-rose-400"
-                                            }`}
-                                        />
-                                        <span
-                                            className={`text-[11px] font-bold uppercase tracking-[0.14em] ${
-                                                activeStep === step.id
-                                                    ? "text-[#31323E]"
-                                                    : "text-[#31323E]/60"
-                                            }`}
-                                        >
-                                            {step.label}
-                                        </span>
-                                    </div>
-                                    {activeStep === step.id ? (
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#31323E]" />
-                                    ) : null}
-                                </button>
-                            ))}
-                        </div>
                     </div>
 
-                    <div className="px-8 py-8 bg-white/50">
+                    <div className="space-y-10 px-8 py-8 bg-white/50">
                         {notice ? (
                             <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                                 {notice}
                             </div>
                         ) : null}
 
-                        {activeStep === "basics" ? (
-                            <ArtworkBasicsForm formData={formData} setFormData={setFormData} aspectRatios={aspectRatios} />
-                        ) : null}
+                        <ArtworkBasicsForm formData={formData} setFormData={setFormData} aspectRatios={aspectRatios} />
 
-                        {activeStep === "offerings" ? (
-                            <ArtworkOfferingsForm 
-                                formData={formData} 
-                                setFormData={setFormData} 
-                                editingWhiteBorder={editingWhiteBorder} 
-                                setEditingWhiteBorder={setEditingWhiteBorder} 
-                                whiteBorderDraft={whiteBorderDraft} 
-                                setWhiteBorderDraft={setWhiteBorderDraft} 
-                            />
-                        ) : null}
+                        <ArtworkMediaForm
+                            formData={formData}
+                            setFormData={setFormData}
+                            categories={categories}
+                            labels={labels}
+                            imageItems={imageItems}
+                            setImageItems={setImageItems}
+                            setCropImageIndex={setCropImageIndex}
+                        />
 
-                        {activeStep === "pipeline" ? (
-                            <ArtworkPipelineForm
-                                formData={formData}
-                                editingId={editingId}
-                                workflowData={workflowData}
-                                workflowLoading={workflowLoading}
-                                workflowError={workflowError}
-                                assetUploadingSlot={assetUploadingSlot}
-                                assetUploadProgress={assetUploadProgress}
-                                uploadMasterAsset={uploadMasterAsset}
-                                deleteMasterAsset={deleteMasterAsset}
-                            />
-                        ) : null}
+                        <ArtworkOfferingsForm
+                            formData={formData}
+                            setFormData={setFormData}
+                            editingWhiteBorder={editingWhiteBorder}
+                            setEditingWhiteBorder={setEditingWhiteBorder}
+                            whiteBorderDraft={whiteBorderDraft}
+                            setWhiteBorderDraft={setWhiteBorderDraft}
+                        />
 
-                        {activeStep === "media" ? (
-                            <ArtworkMediaForm
-                                formData={formData}
-                                setFormData={setFormData}
-                                categories={categories}
-                                labels={labels}
-                                imageItems={imageItems}
-                                setImageItems={setImageItems}
-                                setCropImageIndex={setCropImageIndex}
-                            />
-                        ) : null}
+                        <ArtworkPipelineForm
+                            formData={formData}
+                            editingId={editingId}
+                            workflowData={workflowData}
+                            workflowLoading={workflowLoading}
+                            workflowError={workflowError}
+                            assetUploadingSlot={assetUploadingSlot}
+                            assetUploadProgress={assetUploadProgress}
+                            uploadMasterAsset={uploadMasterAsset}
+                            deleteMasterAsset={deleteMasterAsset}
+                        />
                     </div>
 
                     <div className="px-8 py-5 border-t border-[#31323E]/8 bg-[#FCFBF8] flex items-center justify-end gap-3 sticky bottom-0 z-20">
@@ -685,7 +691,12 @@ export default function ArtworksTab() {
                 </div>
             ) : null}
 
-            <ArtworkGrid artworks={artworks} handleEditClick={handleEditClick} handleDelete={handleDelete} />
+            <ArtworkGrid
+                artworks={artworks}
+                readinessRefreshing={readinessRefreshing}
+                handleEditClick={handleEditClick}
+                handleDelete={handleDelete}
+            />
 
             <SimpleArtworkCropperModal
                 isOpen={cropImageIndex !== null}

@@ -453,7 +453,7 @@ export default function Footer() {
                         </p>
                         {subscribed ? (
                              <p style={{ color: "#FFFFFF", fontStyle: "italic", marginTop: "1rem" }}>
-                                Thank you. You're now on the list.
+                                Thank you. You&apos;re now on the list.
                              </p>
                         ) : (
                             <form onSubmit={submit} className="nl-input-group">
@@ -491,6 +491,7 @@ export default function Footer() {
                         <Link href="/about">About</Link>
                         <Link href="/contact">Contact</Link>
                         <Link href="/shipping">Shipping</Link>
+                        <Link href="/faq">FAQ</Link>
                         <Link href="/terms">Terms</Link>
                         <Link href="/privacy">Privacy</Link>
                         <span className="footer-copyright">© {year}</span>

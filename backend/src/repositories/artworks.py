@@ -11,7 +11,7 @@ from src.models.artworks import ArtworksOrm
 from src.models.labels import LabelsOrm
 from src.repositories.base import BaseRepository
 from src.repositories.mappers.mappers import ArtworkMapper
-from src.repositories.utils import available_artwork_ids
+from src.repositories.utils import gallery_artwork_ids, shop_artwork_ids
 from src.schemas.artworks import ArtworkWithLabels
 
 
@@ -128,13 +128,21 @@ class ArtworksRepository(BaseRepository):
         price_max: int | None = None,
         orientation: str | None = None,
         size_category: str | None = None,
+        surface: str = "shop",
     ):
         """
         Retrieves a list of available artworks based on various filters.
         Filters include title (fuzzy), labels, collection, production year, price range,
         aspect ratio (orientation), and surface area (size category).
         """
-        query = self._base_query().filter(self.model.id.in_(available_artwork_ids()))
+        visibility_query = {
+            "gallery": gallery_artwork_ids(),
+            "all": select(self.model.id).where(
+                self.model.show_in_gallery.is_(True) | self.model.show_in_shop.is_(True)
+            ),
+            "shop": shop_artwork_ids(),
+        }.get(surface, shop_artwork_ids())
+        query = self._base_query().filter(self.model.id.in_(visibility_query))
         query = self._apply_common_filters(
             query,
             title=title,
@@ -166,6 +174,7 @@ class ArtworksRepository(BaseRepository):
         price_max: int | None = None,
         orientation: str | None = None,
         size_category: str | None = None,
+        surface: str = "shop",
     ):
         query = self._base_query()
         query = self._apply_common_filters(

@@ -100,6 +100,8 @@ class ArtworkAddRequest(BaseModel):
         None,
         description="Provider-neutral admin workflow settings and approval flags.",
     )
+    show_in_gallery: bool = Field(True, description="Artwork appears in the public gallery")
+    show_in_shop: bool = Field(True, description="Artwork can appear in the public shop")
 
 
 class ArtworkAdd(BaseModel):
@@ -132,6 +134,8 @@ class ArtworkAdd(BaseModel):
     print_source_metadata: dict[str, Any] | None = Field(None)
     print_profile_overrides: dict[str, Any] | None = Field(None)
     print_workflow_config: dict[str, Any] | None = Field(None)
+    show_in_gallery: bool = Field(True)
+    show_in_shop: bool = Field(True)
 
     # Print availability flags
     has_original: bool = Field(False)
@@ -239,6 +243,8 @@ class ArtworkPatchRequest(BaseModel):
         None,
         description="Provider-neutral admin workflow settings and approval flags.",
     )
+    show_in_gallery: bool | None = Field(None)
+    show_in_shop: bool | None = Field(None)
 
 
 class ArtworkPatch(BaseModel):
@@ -267,6 +273,8 @@ class ArtworkPatch(BaseModel):
     print_source_metadata: dict[str, Any] | None = Field(None)
     print_profile_overrides: dict[str, Any] | None = Field(None)
     print_workflow_config: dict[str, Any] | None = Field(None)
+    show_in_gallery: bool | None = Field(None)
+    show_in_shop: bool | None = Field(None)
 
     # Print availability flags
     has_original: bool | None = Field(None)
@@ -298,6 +306,8 @@ class ArtworkAddBulk(BaseModel):
     orientation: str = Field(..., description="Orientation of the artwork")
     images: list[str | dict] | None = Field(None)
     print_quality_url: str | None = Field(None)
+    show_in_gallery: bool = Field(True)
+    show_in_shop: bool = Field(True)
 
     # Print availability flags
     has_original: bool = Field(False)

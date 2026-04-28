@@ -159,6 +159,8 @@ export interface Artwork {
     print_quality_url?: string | null;
     print_profile_overrides?: Record<string, unknown> | null;
     print_readiness_summary?: PrintReadinessSummary | null;
+    show_in_gallery?: boolean;
+    show_in_shop?: boolean;
     labels?: { id: number; title: string; category_id?: number }[];
 }
 
@@ -201,6 +203,8 @@ export interface ArtworkFormState {
     print_quality_url: string;
     print_profile_overrides: Record<string, unknown> | null;
     canvas_wrap_style: string;
+    show_in_gallery: boolean;
+    show_in_shop: boolean;
 }
 
 export interface DragItem {

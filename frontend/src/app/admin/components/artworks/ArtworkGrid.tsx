@@ -4,11 +4,17 @@ import { resolveImageUrl } from "./utils";
 
 interface ArtworkGridProps {
     artworks: Artwork[];
+    readinessRefreshing?: boolean;
     handleEditClick: (artwork: Artwork) => void;
     handleDelete: (artworkId: number) => void;
 }
 
-export function ArtworkGrid({ artworks, handleEditClick, handleDelete }: ArtworkGridProps) {
+export function ArtworkGrid({
+    artworks,
+    readinessRefreshing = false,
+    handleEditClick,
+    handleDelete,
+}: ArtworkGridProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {artworks.map((artwork) => {
@@ -27,7 +33,7 @@ export function ArtworkGrid({ artworks, handleEditClick, handleDelete }: Artwork
                         <div className="aspect-[4/5] bg-[#31323E]/5 relative overflow-hidden">
                             {artwork.images && artwork.images.length > 0 ? (
                                 <img
-                                    src={resolveImageUrl(artwork.images[0])}
+                                    src={resolveImageUrl(artwork.images[0], "medium")}
                                     alt={artwork.title}
                                     className="absolute inset-0 w-full h-full object-cover"
                                 />
@@ -81,11 +87,23 @@ export function ArtworkGrid({ artworks, handleEditClick, handleDelete }: Artwork
                                 </div>
                             ) : (
                                 <div className="rounded-2xl bg-[#31323E]/4 px-3.5 py-3 text-sm font-medium text-[#31323E]/55">
-                                    No print-prep summary yet.
+                                    {readinessRefreshing
+                                        ? "Print-prep summary is loading."
+                                        : "No print-prep summary yet."}
                                 </div>
                             )}
 
                             <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                {artwork.show_in_gallery ? (
+                                    <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
+                                        Gallery
+                                    </span>
+                                ) : null}
+                                {artwork.show_in_shop ? (
+                                    <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
+                                        Shop
+                                    </span>
+                                ) : null}
                                 {artwork.has_paper_print || artwork.has_paper_print_limited ? (
                                     <span className="rounded-full bg-[#31323E]/6 px-2.5 py-1">
                                         Paper

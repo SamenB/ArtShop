@@ -130,6 +130,7 @@ class ArtworkService(BaseService):
         orientation: str | None = None,
         size_category: str | None = None,
         country_code: str | None = None,
+        surface: str = "shop",
     ):
         """
         Retrieves a list of artworks based on filtered availability and metadata.
@@ -147,6 +148,7 @@ class ArtworkService(BaseService):
                 price_max=price_max,
                 orientation=orientation,
                 size_category=size_category,
+                surface=surface,
             )
         except SQLAlchemyError:
             raise DatabaseException

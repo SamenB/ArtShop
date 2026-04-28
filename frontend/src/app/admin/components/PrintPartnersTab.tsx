@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Print Partners Tab
+ * Print Dispatch Tab
  *
  * Manages print fulfillment partner configurations.
  * Partners are stored in localStorage (browser-only) so no backend changes are needed.
@@ -9,9 +9,7 @@
  * through the /telegram/send-print-order endpoint.
  *
  * Sections:
- *   ● Telegram — Active: full partner management + message template editor
- *   ○ Email    — Coming Soon teaser
- *   ○ API      — Coming Soon teaser
+ *   - Telegram: active partner management + message template editor.
  */
 
 import { useState, useEffect } from "react";
@@ -296,18 +294,21 @@ function ComingSoonSection({ icon, title, description }: { icon: string; title: 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function PrintPartnersTab() {
-    const [partners, setPartners] = useState<TelegramPartner[]>([]);
+    const [partners, setPartners] = useState<TelegramPartner[]>(() => {
+        if (typeof window === "undefined") {
+            return [];
+        }
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
     const [botStatus, setBotStatus] = useState<{ bot_configured: boolean; admin_chat_configured: boolean } | null>(null);
     const [testResult, setTestResult] = useState<string | null>(null);
 
-    // Load from localStorage
     useEffect(() => {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) setPartners(JSON.parse(raw));
-        } catch { /**/ }
-
-        // Check bot configuration
         apiFetch(`${getApiUrl()}/telegram/status`)
             .then(r => r.json())
             .then(setBotStatus)
@@ -349,9 +350,9 @@ export default function PrintPartnersTab() {
         <div className="max-w-3xl mx-auto text-[#31323E]">
             {/* Header */}
             <div className="pb-8 mb-8 border-b border-[#31323E]/8">
-                <h2 className="text-2xl font-bold tracking-tight mb-1">Print Partners</h2>
+                <h2 className="text-2xl font-bold tracking-tight mb-1">Print Dispatch</h2>
                 <p className="text-sm text-[#31323E]/50 font-medium">
-                    Configure print studio contacts for order dispatch automation.
+                    Configure the Telegram dispatch path used from the Orders tab.
                 </p>
             </div>
 
@@ -433,7 +434,7 @@ export default function PrintPartnersTab() {
                 <div className="mt-6 p-4 bg-[#31323E]/3 rounded-xl border border-[#31323E]/8">
                     <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#31323E]/40 mb-2">How it works</p>
                     <ul className="text-[11px] text-[#31323E]/50 font-medium space-y-1 leading-relaxed">
-                        <li>① Add your print studio's Telegram chat ID or @username.</li>
+                        <li>① Add your print studio&apos;s Telegram chat ID or @username.</li>
                         <li>② Customize the message template with available variables.</li>
                         <li>③ In the Orders tab, open a print order → click <strong>Order Print via Telegram</strong>.</li>
                         <li>④ Preview the message, then click <strong>Send via Telegram</strong>.</li>
@@ -446,29 +447,8 @@ export default function PrintPartnersTab() {
             </div>
 
             {/* ── Section 2: Email (teaser) ── */}
-            <div className="mb-5">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#31323E]/20" />
-                    <h3 className="text-base font-bold text-[#31323E]/40">Email</h3>
-                </div>
-                <ComingSoonSection
-                    icon="📧"
-                    title="Email Integration"
-                    description="Send print orders via email to partner studios using customizable templates."
-                />
-            </div>
-
-            {/* ── Section 3: Prodigy API (teaser) ── */}
-            <div>
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#31323E]/20" />
-                    <h3 className="text-base font-bold text-[#31323E]/40">Prodigy API</h3>
-                </div>
-                <ComingSoonSection
-                    icon="⚡"
-                    title="Prodigy Print API"
-                    description="Direct API integration with Prodigy for automated print order placement and status tracking."
-                />
+            <div className="mt-8 rounded-xl border border-[#31323E]/8 bg-[#31323E]/3 px-4 py-3 text-xs font-medium leading-relaxed text-[#31323E]/50">
+                Email templates live under Website - Email Templates. Direct Prodigi order automation should wait until Orders has an explicit provider-ready approval step.
             </div>
         </div>
     );

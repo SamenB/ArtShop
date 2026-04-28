@@ -82,6 +82,11 @@ async def get_artworks(
         max_length=2,
         description="ISO 3166-1 alpha-2. When provided, artworks are enriched with baked storefront summary for this region.",
     ),
+    surface: str = Query(
+        "shop",
+        pattern="^(shop|gallery|all)$",
+        description="Public surface to read: shop, gallery, or all visible artworks.",
+    ),
 ):
     """
     Retrieves a list of artworks with optional filtering and pagination.
@@ -98,6 +103,7 @@ async def get_artworks(
         orientation=orientation,
         size_category=size_category,
         country_code=country.upper() if country else None,
+        surface=surface,
     )
 
 
@@ -225,13 +231,13 @@ async def upload_artwork_images(
             shutil.copyfileobj(file.file, buffer)
         temp_paths.append(temp_path)
 
-    await run_in_threadpool(
+    final_paths = await run_in_threadpool(
         process_and_attach_image,
         model_type="artwork",
         model_id=artwork_id,
         temp_paths=temp_paths
     )
-    return {"status": "success"}
+    return {"status": "success", "images": final_paths or []}
 
 
 @router.post("/{artwork_id}/print-image")

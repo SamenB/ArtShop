@@ -11,13 +11,6 @@ export const STATUS_OPTIONS = [
     { value: "digital", label: "Digital" },
 ];
 
-export const WORKFLOW_STEP_ORDER = [
-    { id: "basics", label: "Basics" },
-    { id: "offerings", label: "Offerings" },
-    { id: "pipeline", label: "Print Pipeline" },
-    { id: "media", label: "Media" },
-] as const;
-
 export const PRINT_CATEGORY_LABELS: Record<string, string> = {
     paperPrintRolled: "Rolled paper prints",
     paperPrintBoxFramed: "Framed paper prints",
@@ -62,17 +55,22 @@ export function createDefaultFormState(): ArtworkFormState {
         print_quality_url: "",
         print_profile_overrides: null,
         canvas_wrap_style: "",
+        show_in_gallery: true,
+        show_in_shop: true,
     };
 }
 
-export function resolveImageUrl(img: ImageEntry): string {
+export function resolveImageUrl(img: ImageEntry, prefer: "thumb" | "medium" | "original" = "thumb"): string {
     if (typeof img === "string") {
         return img.startsWith("http") ? img : `${getApiUrl().replace("/api", "")}${img}`;
     }
-    return getImageUrl(img, "thumb") || "";
+    return getImageUrl(img, prefer) || "";
 }
 
 export function hasPrintOfferings(formData: ArtworkFormState): boolean {
+    if (!formData.show_in_shop) {
+        return false;
+    }
     return Boolean(
         formData.has_canvas_print ||
             formData.has_canvas_print_limited ||

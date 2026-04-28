@@ -131,6 +131,7 @@ def process_and_attach_image(model_type: str, model_id: int, temp_paths: list[st
             model_id,
             final_paths,
         )
+        return final_paths
 
     except Exception as e:
         logger.error("Failed to process images for {} id={}: {}", model_type, model_id, e)

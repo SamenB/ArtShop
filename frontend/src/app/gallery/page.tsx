@@ -96,7 +96,7 @@ export default function GalleryPage() {
     }, []);
 
     useEffect(() => {
-        apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json())
+        apiFetch(`${getApiUrl()}/artworks?limit=1000&surface=gallery`).then(res => res.json())
             .then(artworksData => {
                 const rawData = artworksData.items || artworksData.data || artworksData;
                 if (!Array.isArray(rawData)) {

@@ -133,7 +133,7 @@ function ShopPageContent() {
         setLoading(true);
         setError(null);
         Promise.all([
-            apiFetch(`${apiUrl}/artworks?limit=1000&country=${activeCountryCode}`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
+            apiFetch(`${apiUrl}/artworks?limit=1000&surface=shop&country=${activeCountryCode}`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
             apiFetch(`${apiUrl}/labels/categories`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
             apiFetch(`${apiUrl}/labels`, { signal: abortController.signal }).then(r => apiJson<any>(r)),
         ]).then(([artData, catData, lblData]) => {

@@ -25,6 +25,13 @@ export function ArtworkOfferingsForm({
     whiteBorderDraft,
     setWhiteBorderDraft,
 }: ArtworkOfferingsFormProps) {
+    const hasConfiguredPrintFamilies = Boolean(
+        formData.has_canvas_print ||
+            formData.has_canvas_print_limited ||
+            formData.has_paper_print ||
+            formData.has_paper_print_limited
+    );
+
     return (
         <div className="space-y-6">
             <div>
@@ -32,6 +39,13 @@ export function ArtworkOfferingsForm({
                     title="Offerings"
                     description="Define the provider-neutral selling intent for this artwork: which print families are enabled and whether limited editions exist."
                 />
+
+                {!formData.show_in_shop ? (
+                    <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                        Shop placement is off. These sale settings are preserved, but they will
+                        not appear on the storefront until the artwork is shown in shop again.
+                    </div>
+                ) : null}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[
@@ -224,7 +238,15 @@ export function ArtworkOfferingsForm({
                 ) : null}
             </div>
 
-            {hasPrintOfferings(formData) ? (
+            {!formData.show_in_shop ? (
+                <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/60">
+                    <p className="font-semibold text-[#31323E]">Storefront sales are paused.</p>
+                    <p className="mt-1">
+                        Existing original, print, ratio, and edition settings stay here for later.
+                        Switching back to Gallery and shop will restore the storefront flow.
+                    </p>
+                </div>
+            ) : hasConfiguredPrintFamilies || hasPrintOfferings(formData) ? (
                 <div className="rounded-2xl border border-[#31323E]/10 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/60">
                     <p className="font-semibold text-[#31323E]">Print ratio is chosen in Basics.</p>
                     <p className="mt-1">

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, BigInteger, ForeignKey, Integer, String
+from sqlalchemy import JSON, BigInteger, Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -60,6 +60,8 @@ class ArtworksOrm(Base):
     print_source_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     print_profile_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     print_workflow_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    show_in_gallery: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    show_in_shop: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     # ── Print availability flags ──────────────────────────────────────────────
     # Each flag independently controls whether a given print type is purchasable.

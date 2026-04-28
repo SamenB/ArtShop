@@ -76,13 +76,13 @@ const TEMPLATE_META: Record<string, TemplateMeta> = {
         triggerLabel: "Admin manual cancel OR auto on payment failure/refund",
         infoTags: ["Auto OR manual", "Inventory auto-released"],
     },
-    contact_submitted_customer: {
+    contact_autoreply: {
         triggerDesc: "Fires when a visitor submits the Contact Form on the site. This copy goes to the customer — a confirmation that their message was received.",
         triggeredBy: "customer",
         triggerLabel: "Customer submits Contact Form",
         infoTags: ["Customer copy"],
     },
-    contact_submitted_admin: {
+    contact_admin: {
         triggerDesc: "Fires when a visitor submits the Contact Form on the site. This copy goes to the admin inbox with all message details.",
         triggeredBy: "customer",
         triggerLabel: "Customer submits Contact Form",

@@ -1,6 +1,6 @@
 """
 API endpoints for managing global site settings.
-Provides functionality to retrieve and update configurations like contact info, prices, and slideshow parameters.
+Provides functionality to retrieve and update configurations like contact info and homepage media.
 """
 
 from fastapi import APIRouter

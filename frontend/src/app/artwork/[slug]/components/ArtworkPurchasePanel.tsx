@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import PrintConfigurator from "@/components/PrintConfigurator";
 import { STATUS_BADGE } from "../constants";
 import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
@@ -240,6 +241,35 @@ export function ArtworkPurchasePanel({
                             storefrontError={storefrontError}
                         /> }
                     </div>
+                </div>
+                <div style={{ marginTop: "1rem", padding: "1rem 1.1rem", border: "1px solid rgba(49,50,62,0.1)", borderRadius: "18px", background: "rgba(255,255,255,0.72)" }}>
+                    <h2 style={{ margin: 0, fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)" }}>
+                        Collector FAQ
+                    </h2>
+                    <div style={{ display: "grid", gap: "0.7rem", marginTop: "0.85rem" }}>
+                        <p style={{ margin: 0, fontSize: "0.78rem", lineHeight: 1.55, color: "var(--color-charcoal-mid)" }}>
+                            Prints are made to order. Please allow up to 4 weeks for dispatch, though most print orders ship within a few business days once production starts.
+                        </p>
+                        <p style={{ margin: 0, fontSize: "0.78rem", lineHeight: 1.55, color: "var(--color-charcoal-mid)" }}>
+                            Damaged or defective prints are replaced after review of photos or video of the issue and packaging.
+                        </p>
+                    </div>
+                    <Link
+                        href="/faq"
+                        style={{
+                            display: "inline-flex",
+                            marginTop: "0.85rem",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            color: "var(--color-charcoal)",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "4px",
+                        }}
+                    >
+                        Read full FAQ
+                    </Link>
                 </div>
             </div>
         </div>

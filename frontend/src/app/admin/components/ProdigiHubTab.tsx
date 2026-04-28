@@ -641,9 +641,9 @@ export default function ProdigiHubTab() {
         <div className="max-w-[1600px] mx-auto space-y-6 text-[#31323E]">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#31323E]/10 pb-4">
                 <div>
-                    <h2 className="text-2xl font-bold">Prodigi Hub</h2>
+                    <h2 className="text-2xl font-bold">Prodigi Catalog Planner</h2>
                     <p className="text-sm text-[#31323E]/55 mt-1">
-                        Dense admin preview of the future baked catalog by ratio, country, category, and size.
+                        Operational preview for imported Prodigi CSV routes before they are baked into the storefront snapshot.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

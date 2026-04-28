@@ -9,6 +9,12 @@ interface ArtworkBasicsFormProps {
 }
 
 export function ArtworkBasicsForm({ formData, setFormData, aspectRatios }: ArtworkBasicsFormProps) {
+    const visibilityValue = formData.show_in_gallery && formData.show_in_shop
+        ? "both"
+        : formData.show_in_shop
+        ? "shop"
+        : "gallery";
+
     return (
         <div className="space-y-6">
             <div>
@@ -17,6 +23,55 @@ export function ArtworkBasicsForm({ formData, setFormData, aspectRatios }: Artwo
                     description="Core identity, physical dimensions, original-sales information, and the normalized print ratio family for this artwork."
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="md:col-span-2">
+                        <FieldLabel text="Site placement" valid={formData.show_in_gallery || formData.show_in_shop} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {[
+                                {
+                                    value: "both",
+                                    label: "Gallery and shop",
+                                    helper: "Shown as art and available for configured sales.",
+                                },
+                                {
+                                    value: "gallery",
+                                    label: "Gallery only",
+                                    helper: "For sketches, archives, and works not prepared for sale.",
+                                },
+                                {
+                                    value: "shop",
+                                    label: "Shop only",
+                                    helper: "Listed for purchase without the exhibition grid.",
+                                },
+                            ].map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() =>
+                                        setFormData((previous) => {
+                                            const showInGallery = option.value !== "shop";
+                                            const showInShop = option.value !== "gallery";
+                                            return {
+                                                ...previous,
+                                                show_in_gallery: showInGallery,
+                                                show_in_shop: showInShop,
+                                            };
+                                        })
+                                    }
+                                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                                        visibilityValue === option.value
+                                            ? "border-[#31323E] bg-white shadow-sm"
+                                            : "border-[#31323E]/12 bg-[#31323E]/3 hover:bg-white"
+                                    }`}
+                                >
+                                    <span className="block text-sm font-bold text-[#31323E]">{option.label}</span>
+                                    <span className="mt-1 block text-xs font-medium leading-relaxed text-[#31323E]/45">
+                                        {option.helper}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <div>
                         <FieldLabel text="Title" required valid={Boolean(formData.title.trim())} />
                         <input

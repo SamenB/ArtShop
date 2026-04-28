@@ -41,7 +41,12 @@ export function ArtworkPipelineForm({
                 description="Upload only the production masters. Exact provider files are generated automatically."
             />
 
-            {!hasPrintOfferings(formData) ? (
+            {!formData.show_in_shop ? (
+                <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
+                    Shop placement is off. Print masters and requirements are preserved, but
+                    this pipeline is inactive until the artwork is shown in shop again.
+                </div>
+            ) : !hasPrintOfferings(formData) ? (
                 <div className="rounded-2xl border border-dashed border-[#31323E]/18 bg-white px-4 py-4 text-sm font-medium text-[#31323E]/55">
                     Enable at least one print family in the Offerings step to unlock the
                     print pipeline.
