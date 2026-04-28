@@ -7,7 +7,6 @@ without modifying application code.
 from fastapi import APIRouter, HTTPException
 
 from src.api.dependencies import AdminDep, DBDep
-from src.exeptions import ObjectNotFoundException
 from src.schemas.email_templates import EmailTemplate, EmailTemplateUpdate
 
 router = APIRouter(prefix="/email-templates", tags=["Email Templates"])
@@ -34,8 +33,9 @@ async def update_email_template(
     The key and trigger_event fields are immutable and cannot be changed via this endpoint.
     Requires admin privileges.
     """
-    from src.models.email_templates import EmailTemplateOrm
     from sqlalchemy import select
+
+    from src.models.email_templates import EmailTemplateOrm
 
     result = await db.session.execute(
         select(EmailTemplateOrm).where(EmailTemplateOrm.id == template_id)

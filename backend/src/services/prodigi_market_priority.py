@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # Commercial priority order for storefront review.
 # This is not meant to be exact macroeconomic truth; it is a practical
 # merchandising order for the admin UI so the most commercially relevant

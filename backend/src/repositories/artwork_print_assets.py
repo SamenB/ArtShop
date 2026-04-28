@@ -48,3 +48,18 @@ class ArtworkPrintAssetsRepository(BaseRepository):
 
     async def delete_one(self, asset_id: int) -> None:
         await self.session.execute(delete(self.model).where(self.model.id == asset_id))
+
+    async def get_file_urls_for_artwork(self, artwork_id: int) -> list[str]:
+        """Return all non-null file_url values for a given artwork.
+
+        Called *before* the artwork row is deleted so that cascade doesn't
+        destroy the metadata we need for file cleanup.
+        """
+        query = (
+            select(self.model.file_url)
+            .where(self.model.artwork_id == artwork_id)
+            .where(self.model.file_url.isnot(None))
+        )
+        result = await self.session.execute(query)
+        return [row[0] for row in result.all()]
+

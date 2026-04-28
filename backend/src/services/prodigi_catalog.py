@@ -1,9 +1,8 @@
 import json
 import logging
 from dataclasses import asdict, dataclass
-from typing import Any
 
-from src.connectors.prodigi import ProdigiClient, PAPER_SKU_PREFIXES
+from src.connectors.prodigi import PAPER_SKU_PREFIXES, ProdigiClient
 from src.init import redis_manager
 
 log = logging.getLogger(__name__)
@@ -54,7 +53,7 @@ class ProdigiCatalogService:
             products = await self._get_cached_family(country, prefix)
             if products is None:
                 products = await self.refresh_family_cache(country, prefix)
-            
+
             # Filter by aspect ratio using the tolerance
             matched = [p for p in products if ratios_match(p.aspect_ratio, aspect_ratio)]
             all_products.extend(matched)
@@ -77,7 +76,7 @@ class ProdigiCatalogService:
         """Call Prodigi API → get products, get quotes for wholesale & shipping, write to Redis."""
         key = f"prodigi:catalog:{country}:{prefix}"
         log.info(f"Refreshing catalog cache for {key}...")
-        
+
         async with ProdigiClient() as client:
             # We use the generic discover_paper_prints which can discover canvas too if prefixes override
             details_list = await client.discover_paper_prints(
@@ -89,11 +88,11 @@ class ProdigiCatalogService:
             # Note: For each item we could fetch quote to get `unit_cost_eur` and `shipping_std_eur`.
             # We batch the quote calls to save time.
             cached_products = []
-            
+
             for d in details_list:
                 quote = await client.get_quote(d.sku, country, "EUR")
                 costs = self._parse_quote_for_std(quote)
-                
+
                 # Try to parse cm from description: "Hahnemühle Photo Rag, 40x50 cm / 16x20\""
                 width_cm, height_cm = 0.0, 0.0
                 if " cm" in d.description:
@@ -127,18 +126,18 @@ class ProdigiCatalogService:
     def _parse_quote_for_std(self, quote: dict) -> dict[str, float | None]:
         if "quotes" not in quote:
             return {"product_cost": None, "shipping_cost": None}
-            
+
         std_quote = next((q for q in quote["quotes"] if q.get("shipmentMethod") == "Standard"), None)
         if not std_quote and quote["quotes"]:
             std_quote = quote["quotes"][0]
-            
+
         if std_quote:
             # Use unitCost which is the correct field for /quotes items
             prod_cost = sum(float(i.get("unitCost", {}).get("amount", 0)) for i in std_quote.get("items", []))
             # Use costSummary.shipping as it's the standard for /quotes
             ship_cost = float(std_quote.get("costSummary", {}).get("shipping", {}).get("amount", 0))
             return {"product_cost": round(prod_cost, 2), "shipping_cost": round(ship_cost, 2)}
-        
+
         return {"product_cost": None, "shipping_cost": None}
 
     async def get_quote_cached(self, sku: str, country: str, currency: str = "EUR", attributes: dict | None = None) -> dict | None:
@@ -147,7 +146,7 @@ class ProdigiCatalogService:
              # Sort attributes for consistent cache key
              attr_str = "-".join([f"{k}:{v}" for k, v in sorted(attributes.items())])
              key += f":{attr_str}"
-             
+
         data = await self.redis.get(key)
         if data:
             return json.loads(data)
@@ -165,7 +164,7 @@ class ProdigiCatalogService:
         Bypasses standard grouping for deeper inspection.
         """
         log.info(f"Diagnostic probe: country={country}, ratio={aspect_ratio}, family={family_input}")
-        
+
         # Resolve family group if possible
         prefixes = HUB_FAMILIES.get(family_input.upper(), [family_input])
 
@@ -176,10 +175,10 @@ class ProdigiCatalogService:
                 sku_prefixes=prefixes,
                 max_concurrent=15
             )
-            
+
             # Filter by ratio
             matched = [d for d in discovery if ratios_match(d.aspect_ratio, aspect_ratio)]
-            
+
             # STRICT FILTER: Ensure we only return items matching requested prefixes
             matched = [d for d in matched if any(d.sku.upper().startswith(p.upper()) for p in prefixes)]
 
@@ -211,7 +210,7 @@ class ProdigiCatalogService:
                         prod_cost = sum(float(i.get("unitCost", {}).get("amount", 0)) for i in q.get("items", []))
                         ship_summary = q.get("costSummary", {}).get("shipping", {})
                         ship_cost = float(ship_summary.get("amount", 0))
-                        
+
                         shipping_tiers.append({
                             "method": q.get("shipmentMethod") or "Standard",
                             "wholesale_cost_eur": round(prod_cost, 2),
@@ -220,7 +219,7 @@ class ProdigiCatalogService:
                             "delivery_estimate": q.get("deliveryEstimate", "N/A"),
                             "issues": q.get("issues", [])
                         })
-                    
+
                     if not quote:
                         return {
                             "sku": sku_details.sku,
@@ -250,7 +249,7 @@ class ProdigiCatalogService:
                         "is_ideal_match": (
                             variant.attributes.get("paperType") == "HPR" and (
                                 # Can be a Box frame or a Premium Framed Print variant
-                                variant.attributes.get("frame") == "Box" or 
+                                variant.attributes.get("frame") == "Box" or
                                 "1.4mm" in str(variant.attributes.get("mount", ""))
                             ) and (
                                 # Support multiple glaze naming conventions

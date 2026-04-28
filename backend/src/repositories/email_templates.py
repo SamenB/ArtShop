@@ -6,8 +6,8 @@ from sqlalchemy import select
 
 from src.models.email_templates import EmailTemplateOrm
 from src.repositories.base import BaseRepository
-from src.schemas.email_templates import EmailTemplate
 from src.repositories.mappers.mappers import EmailTemplateMapper
+from src.schemas.email_templates import EmailTemplate
 
 
 class EmailTemplatesRepository(BaseRepository):

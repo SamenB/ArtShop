@@ -1,7 +1,13 @@
 import asyncio
 import logging
+
+from src.services.prodigi_catalog import (
+    CANVAS_SKU_PREFIXES,
+    FRAMED_PAPER_PREFIXES,
+    PAPER_SKU_PREFIXES,
+    ProdigiCatalogService,
+)
 from src.tasks.celery_app import celery_instance
-from src.services.prodigi_catalog import ProdigiCatalogService, PAPER_SKU_PREFIXES, CANVAS_SKU_PREFIXES, FRAMED_PAPER_PREFIXES
 
 log = logging.getLogger(__name__)
 
@@ -12,13 +18,13 @@ def warmup_prodigi_catalog():
     """Pre-populate Redis cache for top countries."""
     priority_countries = ["DE", "GB", "US", "UA", "FR", "PL", "NL", "AT", "CH"]
     log.info("Starting Prodigi catalog warmup task")
-    
+
     # Run async logic in synchronous celery task
     loop = asyncio.get_event_loop()
     if loop.is_closed():
          loop = asyncio.new_event_loop()
          asyncio.set_event_loop(loop)
-         
+
     async def run_warmup():
         for country in priority_countries:
             for prefix in PAPER_SKU_PREFIXES + CANVAS_SKU_PREFIXES + FRAMED_PAPER_PREFIXES:

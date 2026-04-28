@@ -218,7 +218,7 @@ async def discover_catalog(
             ratio = calc_ratio(w, h)
 
             matching_variants = [v for v in variants if country in v.get("shipsTo", [])]
-            
+
             async with lock:
                 found.append({
                     "sku": product.get("sku", sku).upper(),
@@ -325,7 +325,7 @@ def print_report(products: list[dict], country: str) -> None:
                 print(f"         {p['description'][:75]}")
 
     print(f"\n{'='*80}")
-    print(f"\nSUMMARY BY ASPECT RATIO:")
+    print("\nSUMMARY BY ASPECT RATIO:")
     ratio_counts: dict[str, int] = defaultdict(int)
     for p in products:
         ratio_counts[p["aspect_ratio"]] += 1

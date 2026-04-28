@@ -217,7 +217,7 @@ class ProdigiClient:
         raw_w = float(dims.get("width", 0))
         raw_h = float(dims.get("height", 0))
         units = dims.get("units", "in").lower()
-        
+
         if units == "cm":
             w_in = raw_w / 2.54
             h_in = raw_h / 2.54
@@ -272,7 +272,7 @@ class ProdigiClient:
                 # Standard SKUs use imperial sizes and 'X' separator
                 for w, h in CANDIDATE_SIZES_IN:
                     candidates.append(f"{prefix}-{w}X{h}")
-        
+
         log.info("Probing %d candidate SKUs (imperial/metric) for country=%s...", len(candidates), cc)
 
         semaphore = asyncio.Semaphore(max_concurrent)

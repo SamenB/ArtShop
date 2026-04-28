@@ -328,18 +328,86 @@ class ArtworkService(BaseService):
 
     async def delete_artwork(self, artwork_id: int):
         """
-        Removes an artwork record and its associated metadata from the database.
-        """
-        # Verify existence
-        await self.db.artworks.get_one(id=artwork_id)
+        Performs a deep deletion of an artwork and all associated resources.
 
+        Cleanup scope
+        ─────────────
+        DB (handled by CASCADE / SET NULL on FK constraints):
+          • artwork_labels        → CASCADE  (auto-deleted)
+          • artwork_print_assets  → CASCADE  (auto-deleted)
+          • prodigi_artwork_storefront_payloads → CASCADE (auto-deleted)
+          • user_likes            → CASCADE  (auto-deleted)
+          • order_items           → SET NULL (preserves order history)
+
+        Files on disk (cleaned up explicitly after commit):
+          • Gallery images        → static/images/  (original, medium, thumb WebP)
+          • Print source master   → static/print/   (TIFF/PNG/JPEG from print_quality_url)
+          • Print-prep assets     → static/print-prep/{id}/  (masters + derivatives)
+        """
+        import os
+        import shutil
+
+        # ── 1. Fetch artwork data to discover all file paths ─────────────
+        artwork = await self.db.artworks.get_one(id=artwork_id)
+
+        # Collect all file paths that need to be removed from disk.
+        files_to_delete: list[str] = []
+        dirs_to_delete: list[str] = []
+
+        # 1a. Gallery images from the JSON `images` column
+        for img_entry in artwork.images or []:
+            if isinstance(img_entry, dict):
+                for variant_url in img_entry.values():
+                    if isinstance(variant_url, str) and variant_url:
+                        files_to_delete.append(variant_url.lstrip("/"))
+            elif isinstance(img_entry, str) and img_entry:
+                files_to_delete.append(img_entry.lstrip("/"))
+
+        # 1b. Print source master (high-res TIFF/PNG uploaded for Prodigi)
+        if artwork.print_quality_url:
+            files_to_delete.append(artwork.print_quality_url.lstrip("/"))
+
+        # 1c. Print-prep asset files (masters + generated derivatives)
+        asset_file_urls = await self.db.artwork_print_assets.get_file_urls_for_artwork(
+            artwork_id
+        )
+        for url in asset_file_urls:
+            files_to_delete.append(url.lstrip("/"))
+
+        # 1d. The entire print-prep directory tree for this artwork
+        print_prep_dir = f"static/print-prep/{artwork_id}"
+        if os.path.isdir(print_prep_dir):
+            dirs_to_delete.append(print_prep_dir)
+
+        # ── 2. Delete DB row (FKs cascade the rest) ─────────────────────
         try:
             await self.db.artworks.delete(id=artwork_id)
             await self.db.commit()
         except SQLAlchemyError:
             await self.db.rollback()
             raise DatabaseException
-        logger.info("Artwork deleted: id={}", artwork_id)
+
+        # ── 3. Clean up files on disk (best-effort, after commit) ────────
+        for file_path in files_to_delete:
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            except OSError as exc:
+                logger.warning("Failed to remove file {}: {}", file_path, exc)
+
+        for dir_path in dirs_to_delete:
+            try:
+                if os.path.isdir(dir_path):
+                    shutil.rmtree(dir_path)
+            except OSError as exc:
+                logger.warning("Failed to remove directory {}: {}", dir_path, exc)
+
+        logger.info(
+            "Artwork deep-deleted: id={}, files_removed={}, dirs_removed={}",
+            artwork_id,
+            len(files_to_delete),
+            len(dirs_to_delete),
+        )
 
     async def create_artworks_bulk(self, artworks_data: list[ArtworkAddBulk]):
         """

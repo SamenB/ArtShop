@@ -4,6 +4,7 @@ Tests SMTP interactions, template parsing, and missing template scenarios.
 """
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.services.email import (
@@ -11,7 +12,7 @@ from src.services.email import (
     send_contact_emails,
     send_fulfillment_status_email,
 )
-from src.config import settings
+
 
 @pytest.fixture
 def mock_settings():
@@ -63,7 +64,7 @@ class TestSendSingleEmail:
         with patch("src.services.email.smtplib.SMTP") as mock_reg_smtp:
             mock_server = MagicMock()
             mock_reg_smtp.return_value = mock_server
-            
+
             result = _send_single_email(to="user@test.com", subject="Hello", body="Test Body")
             assert result is True
             mock_server.starttls.assert_called_once()

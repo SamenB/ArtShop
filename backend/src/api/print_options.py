@@ -1,5 +1,5 @@
-from typing import Any
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+
 from src.services.prodigi_catalog import ProdigiCatalogService
 
 router = APIRouter(prefix="/v1/print-options", tags=["Print Options"])
@@ -19,7 +19,7 @@ async def get_options(
         grouped = await catalog_service.get_options(country, aspect_ratio)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-        
+
     # Format according to Phase 2 specification
     response = {
         "country": country,
@@ -40,14 +40,14 @@ async def get_options(
             "types": []
         }
     }
-    
+
     products = grouped.get("products", [])
-    
+
     # Process products into categories
     paper_types = {}
     frame_types = {}
     canvas_types = {}
-    
+
     def add_variant(target_list, p):
         target_list.append({
             "sku": p.sku,
@@ -59,7 +59,7 @@ async def get_options(
             "total_wholesale_eur": round((p.unit_cost_eur or 0) + (p.shipping_std_eur or 0), 2) if p.unit_cost_eur is not None else None,
             "retail_eur": round((p.unit_cost_eur or 0) * MARKUP, 2) if p.unit_cost_eur is not None else None,
         })
-    
+
     for p in products:
         prefix = "-".join(p.sku.split("-")[:2])
         if p.sku.startswith("GLOBAL-FRA-CAN"):
@@ -68,7 +68,7 @@ async def get_options(
              prefix = "GLOBAL-CFP"
         elif p.sku.startswith("GLOBAL-BFP"):
              prefix = "GLOBAL-BFP"
-        
+
         if prefix in ["GLOBAL-HPR", "GLOBAL-HGE", "GLOBAL-FAP", "GLOBAL-EMA", "GLOBAL-BAP", "GLOBAL-SAP"]:
             if prefix not in paper_types:
                 paper_types[prefix] = {
@@ -79,7 +79,7 @@ async def get_options(
                     "variants": []
                 }
             add_variant(paper_types[prefix]["variants"], p)
-            
+
         elif prefix in ["GLOBAL-CAN"]:
             if prefix not in canvas_types:
                 canvas_types[prefix] = {
@@ -96,7 +96,7 @@ async def get_options(
                     "variants": []
                 }
             add_variant(canvas_types[prefix]["variants"], p)
-            
+
         elif prefix in ["GLOBAL-FRA-CAN"]:
             if prefix not in canvas_types:
                 canvas_types[prefix] = {
@@ -112,7 +112,7 @@ async def get_options(
                     "variants": []
                 }
             add_variant(canvas_types[prefix]["variants"], p)
-            
+
         elif prefix in ["GLOBAL-CFP", "GLOBAL-BFP"]:
             if prefix not in frame_types:
                 frame_types[prefix] = {
@@ -130,15 +130,15 @@ async def get_options(
                         "natural": []
                     }
                 }
-            # For frames we assume they should be categorised inside variants_per_color. 
-            # In Prodigi APIs, actual attributes dict can contain the color. 
+            # For frames we assume they should be categorised inside variants_per_color.
+            # In Prodigi APIs, actual attributes dict can contain the color.
             # Here we just put it in a generic list under black for simplicity, frontend handles it.
             add_variant(frame_types[prefix]["variants_per_color"]["black"], p)
-            
+
     response["paper_prints"]["papers"] = list(paper_types.values())
     response["paper_prints"]["frame_options"].extend(list(frame_types.values()))
     response["canvas_prints"]["types"] = list(canvas_types.values())
-    
+
     return response
 
 @router.get("/options/quote")
@@ -163,10 +163,10 @@ async def get_quote(
         method = q.get("shippingMethod", "Standard")
         prod_cost = sum(i["itemCost"]["amount"] for i in q.get("items", []))
         ship_cost = q.get("shipmentCost", {}).get("amount", 0)
-        
+
         prod_retail = round(float(prod_cost) * MARKUP, 2)
         total_eur = round(prod_retail + float(ship_cost) * SHIPPING_PASSTHROUGH, 2)
-        
+
         shipping_options.append({
             "method": method,
             "product_wholesale_eur": round(float(prod_cost), 2),
@@ -174,7 +174,7 @@ async def get_quote(
             "shipping_eur": round(float(ship_cost) * SHIPPING_PASSTHROUGH, 2),
             "total_eur": total_eur
         })
-        
+
     return {
         "sku": sku,
         "country": country,

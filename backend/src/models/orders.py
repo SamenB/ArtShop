@@ -98,7 +98,9 @@ class OrderItemOrm(Base):
     __tablename__ = "order_items"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"))
-    artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
+    artwork_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("artworks.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Edition type — one of EditionType enum values (String(30) to accommodate all variants)
     # original | canvas_print | canvas_print_limited | paper_print | paper_print_limited
