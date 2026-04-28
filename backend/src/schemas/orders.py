@@ -132,6 +132,7 @@ class OrderItemBase(BaseModel):
     prodigi_wholesale_eur: Optional[float] = None
     prodigi_shipping_eur: Optional[float] = None
     prodigi_retail_eur: Optional[float] = None
+    prodigi_destination_country_code: Optional[str] = Field(None, min_length=2, max_length=2)
 
     @field_validator("price", mode="before")
     @classmethod
@@ -151,6 +152,17 @@ class OrderItemBase(BaseModel):
             except ValueError as exc:
                 raise ValueError("Price must be a valid number") from exc
         return value
+
+    @field_validator("prodigi_destination_country_code")
+    @classmethod
+    def validate_prodigi_destination_country_code(cls, v: str | None) -> str | None:
+        """Normalize the country code used when the storefront offer was selected."""
+        if v is None:
+            return v
+        v = v.strip().upper()
+        if len(v) != 2 or not v.isalpha():
+            raise ValueError("Prodigi destination country code must be a 2-letter ISO code")
+        return v
 
 
 class OrderItem(OrderItemBase):

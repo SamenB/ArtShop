@@ -9,6 +9,7 @@ from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStor
 from src.integrations.prodigi.services.prodigi_artwork_collection_storefront import (
     ProdigiArtworkCollectionStorefrontService,
 )
+from src.integrations.prodigi.services.prodigi_business_policy import ProdigiBusinessPolicyService
 from src.integrations.prodigi.services.prodigi_storefront_snapshot import (
     ProdigiStorefrontSnapshotService,
 )
@@ -27,6 +28,8 @@ CATEGORY_MEDIUM_MAP = {
     "canvasClassicFrame": "canvas",
     "canvasFloatingFrame": "canvas",
 }
+
+STOREFRONT_POLICY_VERSION = ProdigiBusinessPolicyService.POLICY_VERSION
 
 
 class ProdigiArtworkStorefrontService:
@@ -60,7 +63,9 @@ class ProdigiArtworkStorefrontService:
                 country_code=requested_country,
             )
             if materialized is not None and materialized.payload:
-                return dict(materialized.payload)
+                payload = dict(materialized.payload)
+                if self._materialized_payload_matches_current_policy(payload):
+                    return payload
 
         artwork = await self._get_artwork(artwork_id_or_slug)
         profile_bundle = await self.print_profile_service.get_profile_bundle(artwork.id)
@@ -74,7 +79,8 @@ class ProdigiArtworkStorefrontService:
             medium_availability=medium_availability,
         )
         cache_key = (
-            f"prodigi:artwork-storefront:v1:{artwork.id}:{requested_country}:{payload_signature}"
+            f"prodigi:artwork-storefront:v1:{STOREFRONT_POLICY_VERSION}:"
+            f"{artwork.id}:{requested_country}:{payload_signature}"
         )
         cached_payload = await self._get_cached_payload(cache_key)
         if cached_payload is not None:
@@ -217,6 +223,7 @@ class ProdigiArtworkStorefrontService:
             "title": artwork.title,
             "country_code": requested_country,
             "country_name": None,
+            "storefront_policy_version": STOREFRONT_POLICY_VERSION,
             "print_aspect_ratio": profile_bundle.get("print_aspect_ratio"),
             "active_bake": profile_bundle.get("active_bake"),
             "print_quality_url": profile_bundle.get("print_quality_url"),
@@ -237,6 +244,26 @@ class ProdigiArtworkStorefrontService:
             "country_supported": False,
             "message": None,
         }
+
+    def _materialized_payload_matches_current_policy(self, payload: dict[str, Any]) -> bool:
+        if payload.get("storefront_policy_version") != STOREFRONT_POLICY_VERSION:
+            return False
+
+        mediums = payload.get("mediums") or {}
+        for medium in ("paper", "canvas"):
+            for card in (mediums.get(medium) or {}).get("cards") or []:
+                category_id = card.get("category_id")
+                if category_id not in CATEGORY_MEDIUM_MAP:
+                    continue
+                for size in card.get("size_options") or []:
+                    business_policy = size.get("business_policy") or {}
+                    if business_policy.get("free_delivery_badge") is True:
+                        return False
+                    if business_policy.get("policy_family") == "unframed_free_delivery":
+                        return False
+                    if business_policy.get("shipping_mode") == "included":
+                        return False
+        return True
 
     def _build_category_card(
         self,

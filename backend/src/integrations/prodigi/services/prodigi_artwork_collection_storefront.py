@@ -246,13 +246,10 @@ class ProdigiArtworkCollectionStorefrontService(BaseService):
                     shipping_support=shipping_support,
                     multiplier_override=self._resolve_regional_multiplier(country_code, group.category_id),
                 )
-                final_price = self._build_customer_total_price(
-                    retail_product_price=business_policy.get("retail_product_price"),
-                    customer_shipping_price=business_policy.get("customer_shipping_price"),
-                    shipping_mode=business_policy.get("shipping_mode"),
-                )
-                if final_price is None:
+                retail_product_price = business_policy.get("retail_product_price")
+                if retail_product_price is None:
                     continue
+                final_price = round(float(retail_product_price), 2)
 
                 visible_size_count += 1
                 if cheapest_price is None or final_price < cheapest_price:

@@ -199,13 +199,11 @@ interface SnapshotResponse {
         overnight_absolute_cap: number;
     };
     business_policy?: {
-        unframed_free_delivery_categories: string[];
+        free_delivery_categories: string[];
         entry_badge_category_groups: Record<string, string[]>;
-        shipping_at_checkout_categories: string[];
-        unframed_delivery_subsidy_budget: number;
-        standard_pass_through_cap: number;
-        premium_pass_through_cap: number;
-        hard_hide_shipping_cap: number;
+        print_shipping_at_checkout_categories: string[];
+        print_delivery_subsidy_budget: number;
+        policy_note: string;
     };
     categories: SnapshotCategory[];
     countries: SnapshotCountry[];
@@ -625,23 +623,18 @@ export default function ProdigiSnapshotTab() {
 
             {data?.shipping_support_policy && (
                 <div className="border border-[#31323E]/10 bg-[#F7F7F5] px-4 py-3 text-[11px] leading-relaxed text-[#31323E]/75">
-                    Free shipping policy:
-                    {" "}green if chosen tier is at or below {data.shipping_support_policy.covered_cap},
-                    {" "}red if supplier shipping exists but we should not subsidize it.
-                    {" "}Express upgrade is allowed when its premium stays within about {data.shipping_support_policy.express_premium_cap},
-                    {" "}overnight only within about {data.shipping_support_policy.overnight_premium_cap}
-                    {" "}and hard overnight cap {data.shipping_support_policy.overnight_absolute_cap}.
+                    Shipping support:
+                    {" "}green means the route has a stable chosen supplier tier.
+                    {" "}Prodigi print shipping is no longer subsidized by the gallery.
                 </div>
             )}
 
             {data?.business_policy && (
                 <div className="border border-[#31323E]/10 bg-white px-4 py-3 text-[11px] leading-relaxed text-[#31323E]/75">
                     Shipping model:
-                    {" "}unframed prints ({data.business_policy.unframed_free_delivery_categories.join(", ")})
-                    {" "}use a fixed delivery credit of about {data.business_policy.unframed_delivery_subsidy_budget}.
-                    {" "}framed and stretched formats ({data.business_policy.shipping_at_checkout_categories.join(", ")})
-                    {" "}use shipping at checkout.
-                    {" "}If shipping exceeds about {data.business_policy.hard_hide_shipping_cap}, the route should be hidden rather than exposed automatically.
+                    {" "}{data.business_policy.policy_note}
+                    {" "}Print categories charged at checkout:{" "}
+                    {data.business_policy.print_shipping_at_checkout_categories.join(", ")}.
                 </div>
             )}
 

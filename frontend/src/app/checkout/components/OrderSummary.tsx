@@ -9,6 +9,7 @@ export function OrderSummary({
     promoApplied,
     discountAmount,
     cartTotal,
+    shippingTotal,
     currentTotal,
     convertPrice,
 }: {
@@ -16,6 +17,7 @@ export function OrderSummary({
     promoApplied: boolean;
     discountAmount: number;
     cartTotal: number;
+    shippingTotal: number;
     currentTotal: number;
     convertPrice: (price: number) => string;
 }) {
@@ -96,7 +98,9 @@ export function OrderSummary({
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-sans)", fontSize: "0.85rem" }}>
                         <span style={{ color: "#888" }}>Shipping</span>
-                        <span style={{ fontWeight: 600, color: "#38A169" }}>FREE</span>
+                        <span className="font-price" style={{ fontWeight: 600, color: shippingTotal > 0 ? "#111" : "#38A169" }}>
+                            {shippingTotal > 0 ? convertPrice(shippingTotal) : "FREE"}
+                        </span>
                     </div>
                     <div style={{
                         display: "flex", justifyContent: "space-between", fontFamily: "var(--font-sans)", fontSize: "1.1rem",

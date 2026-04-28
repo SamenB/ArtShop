@@ -1,8 +1,10 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.exeptions import (
+    InvalidDataException,
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
@@ -26,12 +28,73 @@ class MockDBManager:
         self.rollback = AsyncMock()
         self.session = MagicMock()
         self.session.execute = AsyncMock()
+        self.session.get = AsyncMock(return_value=None)
 
 
 @pytest.fixture
-def order_service():
+def order_service(monkeypatch):
+    class FakeProdigiOrderRehydrationService:
+        def __init__(self, db):
+            self.db = db
+
+        async def rehydrate_item(self, **kwargs):
+            return None
+
+        def apply_to_item_add(self, item_add, selection):
+            return None
+
+    monkeypatch.setattr(
+        "src.services.orders.ProdigiOrderRehydrationService",
+        FakeProdigiOrderRehydrationService,
+    )
     service = OrderService(MockDBManager())
     return service
+
+
+def test_print_provider_cost_check_blocks_underpaid_order(order_service):
+    order = SimpleNamespace(
+        total_price=18,
+        items=[
+            SimpleNamespace(prodigi_wholesale_eur=5.0, prodigi_shipping_eur=17.95),
+        ],
+    )
+
+    assert order_service._print_provider_cost_is_covered(order) is False
+    assert order_service._print_provider_cost_summary(order) == {
+        "customer_paid": 18.0,
+        "supplier_total": 22.95,
+    }
+
+
+def test_print_provider_cost_check_allows_covered_order(order_service):
+    order = SimpleNamespace(
+        total_price=30,
+        items=[
+            SimpleNamespace(prodigi_wholesale_eur=9.0, prodigi_shipping_eur=20.95),
+        ],
+    )
+
+    assert order_service._print_provider_cost_is_covered(order) is True
+
+
+def test_prodigi_destination_country_contract_allows_matching_country(order_service):
+    item = SimpleNamespace(prodigi_destination_country_code="de")
+
+    order_service._validate_prodigi_destination_country(item, "DE")
+
+
+def test_prodigi_destination_country_contract_blocks_mismatch(order_service):
+    item = SimpleNamespace(prodigi_destination_country_code="DE")
+
+    with pytest.raises(InvalidDataException, match="priced for DE"):
+        order_service._validate_prodigi_destination_country(item, "US")
+
+
+def test_prodigi_destination_country_contract_requires_country(order_service):
+    item = SimpleNamespace(prodigi_destination_country_code=None)
+
+    with pytest.raises(InvalidDataException, match="missing the Prodigi destination country"):
+        order_service._validate_prodigi_destination_country(item, "US")
 
 
 @pytest.mark.asyncio
@@ -89,6 +152,7 @@ async def test_create_order_print_sold_out_fails(order_service):
                 "price": 1000,
                 "prodigi_category_id": "paperPrintRolled",
                 "prodigi_slot_size_label": "40x50",
+                "prodigi_destination_country_code": "UA",
             }
         ],
     )
@@ -171,6 +235,7 @@ async def test_create_order_print_success(order_service):
                 "price": 1000,
                 "prodigi_category_id": "paperPrintRolled",
                 "prodigi_slot_size_label": "40x50",
+                "prodigi_destination_country_code": "UA",
             }
         ],
     )
@@ -185,6 +250,7 @@ async def test_create_order_print_success(order_service):
     order_item_args, _order_item_kwargs = order_service.db.order_items.add.await_args
     assert order_item_args[0].prodigi_category_id == "paperPrintRolled"
     assert order_item_args[0].prodigi_slot_size_label == "40x50"
+    assert order_item_args[0].prodigi_destination_country_code == "UA"
 
     order_service.db.orders.add.assert_awaited_once()
     order_service.db.commit.assert_awaited_once()

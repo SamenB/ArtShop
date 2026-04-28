@@ -33,7 +33,6 @@ interface PrintConfiguratorProps {
   storefrontLoading: boolean;
   storefrontError: string | null;
 }
-
 function getSizeKey(size: StorefrontSizeOption): string {
   return String(size.sku || size.slot_size_label || size.size_label);
 }
@@ -120,7 +119,6 @@ function isUkShippedBoxFrame(
     card.source_countries?.map((item) => item.toUpperCase()).includes("GB"),
   );
 }
-
 function buildImageWindowLabel(
   card: StorefrontCard | null,
   size: StorefrontSizeOption | null,
@@ -189,7 +187,7 @@ function buildFinishLabel(
     label += ` (${selectedDetails.join(", ")})`;
   }
   if (editionType.endsWith("_limited")) {
-    label += " · Limited Edition";
+    label += " - Limited Edition";
   }
   return label;
 }
@@ -211,7 +209,7 @@ function buildRouteSummary(
   if (size?.source_country) {
     parts.push(`Source ${size.source_country}`);
   }
-  return parts.join(" · ");
+  return parts.join(" - ");
 }
 
 function buildShippingSummary(size: StorefrontSizeOption | null): string {
@@ -219,20 +217,29 @@ function buildShippingSummary(size: StorefrontSizeOption | null): string {
     return "Select a size to see delivery details.";
   }
 
-  const mode = size.business_policy?.shipping_mode;
-  const customerShipping = size.customer_shipping_price;
-  if (mode === "included") {
-    return "Delivery is already included in the displayed total.";
-  }
-  if (
-    mode === "pass_through" &&
-    customerShipping !== null &&
-    customerShipping !== undefined
-  ) {
-    return `Displayed total includes ${customerShipping.toFixed(2)} shipping for this route.`;
+  const customerShipping =
+    size.customer_shipping_price ??
+    size.business_policy?.customer_shipping_price ??
+    size.supplier_shipping_price;
+  if (customerShipping !== null && customerShipping !== undefined) {
+    return customerShipping > 0
+      ? "Calculated for the selected delivery country."
+      : "Delivery cannot be quoted for this selection.";
   }
 
-  return "Delivery has been pre-resolved from the active baked storefront snapshot.";
+  return "Delivery cannot be quoted for this selection.";
+}
+
+function resolveShippingPrice(size: StorefrontSizeOption | null): number | null {
+  if (!size) {
+    return null;
+  }
+  const value = Number(
+    size.customer_shipping_price ??
+      size.business_policy?.customer_shipping_price ??
+      size.supplier_shipping_price,
+  );
+  return Number.isFinite(value) ? value : null;
 }
 
 function buildProfileSummary(card: StorefrontCard | null): string {
@@ -255,7 +262,7 @@ function buildProfileSummary(card: StorefrontCard | null): string {
     parts.push(titleCase(profile.crop_strategy));
   }
   return parts.length
-    ? parts.join(" · ")
+    ? parts.join(" - ")
     : "No per-artwork print-profile overrides are active for this card yet.";
 }
 
@@ -425,11 +432,14 @@ export default function PrintConfigurator({
   }, [selectedAttributes, selectedCard, selectedSize]);
 
   const editionType = resolveEditionType(purchaseType, mediumOffers);
-  const finalPrice =
-    selectedSize?.customer_total_price ??
+  const productPrice =
     selectedSize?.retail_product_price ??
     selectedSize?.business_policy?.retail_product_price ??
     null;
+  const shippingPrice = resolveShippingPrice(selectedSize);
+  const hasShippingQuote = shippingPrice !== null && shippingPrice > 0;
+  const totalPrice =
+    productPrice !== null && hasShippingQuote ? productPrice + shippingPrice : null;
   const formattedSize = selectedSize
     ? formatSizeLabel(
         selectedSize.size_label || selectedSize.slot_size_label,
@@ -735,12 +745,12 @@ export default function PrintConfigurator({
           >
             <span>
               {formattedSize}{" "}
-              {finalPrice !== null ? (
+              {totalPrice !== null ? (
                 <>
                   {" "}
-                  —{" "}
+                  -{" "}
                   <span className="font-price font-medium">
-                    {convertPrice(finalPrice)}
+                    {convertPrice(totalPrice)}
                   </span>
                 </>
               ) : null}
@@ -752,9 +762,13 @@ export default function PrintConfigurator({
           >
             {selectedCard?.size_options.map((size) => {
               const sizePrice =
-                size.customer_total_price ??
                 size.retail_product_price ??
                 size.business_policy?.retail_product_price;
+              const sizeShipping = resolveShippingPrice(size);
+              const sizeTotal =
+                sizePrice !== null && sizePrice !== undefined && sizeShipping !== null
+                  ? sizePrice + sizeShipping
+                  : null;
               return (
                 <button
                   key={getSizeKey(size)}
@@ -778,12 +792,12 @@ export default function PrintConfigurator({
                       size.size_label || size.slot_size_label,
                       units,
                     )}
-                    {sizePrice !== null && sizePrice !== undefined ? (
+                    {sizeTotal !== null ? (
                       <>
                         {" "}
-                        —{" "}
+                        -{" "}
                         <span className="font-price font-medium">
-                          {convertPrice(sizePrice)}
+                          {convertPrice(sizeTotal)}
                         </span>
                       </>
                     ) : null}
@@ -1113,20 +1127,112 @@ export default function PrintConfigurator({
       >
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: "0.9rem 1.2rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+            background: "#fff",
+            border: "1px solid rgba(26,26,24,0.08)",
+            borderRadius: "10px",
+            padding: isSmall ? "0.95rem" : "1rem 1.1rem",
           }}
         >
-          <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
             <p
               style={{
                 fontFamily: "var(--font-sans)",
-                fontSize: "0.6rem",
+                fontSize: "0.62rem",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 color: "var(--color-muted)",
-                margin: "0 0 2px",
+                margin: "0.2rem 0 0",
+              }}
+            >
+              Print price
+            </p>
+            <span
+              className="font-price"
+              style={{
+                fontSize: isSmall ? "1.65rem" : "1.8rem",
+                fontWeight: 600,
+                color: "var(--color-charcoal)",
+                letterSpacing: 0,
+                lineHeight: 1,
+              }}
+            >
+              {productPrice !== null ? convertPrice(productPrice) : "..."}
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.62rem",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--color-muted)",
+                margin: "0.2rem 0 0",
+              }}
+            >
+              Delivery
+            </p>
+            <div style={{ textAlign: "right" }}>
+              <p
+                className="font-price"
+                style={{
+                  margin: 0,
+                  fontSize: "0.95rem",
+                  color: hasShippingQuote ? "var(--color-charcoal)" : "#B42318",
+                  lineHeight: 1.15,
+                  fontWeight: 600,
+              }}
+            >
+                {hasShippingQuote ? `+ ${convertPrice(shippingPrice)}` : "Not available"}
+              </p>
+              <p
+                style={{
+                  margin: "0.2rem 0 0",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.7rem",
+                  color: "var(--color-muted)",
+                  lineHeight: 1.35,
+                }}
+              >
+                {shippingSummary}
+              </p>
+            </div>
+          </div>
+          <div
+            style={{
+              borderTop: "1px solid rgba(26,26,24,0.08)",
+              paddingTop: "0.8rem",
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.62rem",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--color-muted)",
+                margin: "0 0 0.25rem",
               }}
             >
               Total
@@ -1134,47 +1240,41 @@ export default function PrintConfigurator({
             <span
               className="font-price"
               style={{
-                fontSize: "1.75rem",
-                fontWeight: 600,
+                fontSize: isSmall ? "1.8rem" : "2rem",
+                fontWeight: 700,
                 color: "var(--color-charcoal)",
-                letterSpacing: "-0.03em",
+                letterSpacing: 0,
+                lineHeight: 1,
               }}
             >
-              {finalPrice !== null ? convertPrice(finalPrice) : "..."}
+              {totalPrice !== null ? convertPrice(totalPrice) : "Not available"}
             </span>
           </div>
-          <div>
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.6rem",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "var(--color-muted)",
-                margin: "0 0 2px",
-              }}
-            >
-              Delivery
-            </p>
-            <p
-              style={{
-                margin: 0,
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.8rem",
-                color: "var(--color-charcoal-mid)",
-                lineHeight: 1.45,
-              }}
-            >
-              {shippingSummary}
-            </p>
-          </div>
+        </div>
+
+        <div
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "0.72rem",
+            color: "var(--color-muted)",
+            lineHeight: 1.45,
+          }}
+        >
+          Delivery is calculated for {storefront.country_name || storefront.country_code}.
         </div>
 
         <button
           className="premium-cta-btn"
-          disabled={!selectedCard || !selectedSize || finalPrice === null}
+          disabled={
+            !selectedCard || !selectedSize || productPrice === null || !hasShippingQuote
+          }
           onClick={() => {
-            if (!selectedCard || !selectedSize || finalPrice === null) {
+            if (
+              !selectedCard ||
+              !selectedSize ||
+              productPrice === null ||
+              !hasShippingQuote
+            ) {
               return;
             }
 
@@ -1183,6 +1283,7 @@ export default function PrintConfigurator({
               purchaseType,
               selectedCard.category_id,
               getSizeKey(selectedSize),
+              storefront.country_code?.toUpperCase() || "XX",
               ...Object.entries(finalAttributes)
                 .sort(([left], [right]) => left.localeCompare(right))
                 .map(([key, value]) => `${key}:${value}`),
@@ -1196,7 +1297,7 @@ export default function PrintConfigurator({
               imageGradientFrom,
               imageGradientTo,
               imageUrl,
-              price: Math.round(finalPrice),
+              price: Math.round(productPrice),
               finish: finishLabel,
               size: formatSizeLabel(
                 selectedSize.size_label || selectedSize.slot_size_label,
@@ -1217,8 +1318,10 @@ export default function PrintConfigurator({
               prodigi_wholesale_eur:
                 selectedSize.supplier_product_price || undefined,
               prodigi_shipping_eur:
-                selectedSize.supplier_shipping_price || undefined,
-              prodigi_retail_eur: finalPrice,
+                shippingPrice || undefined,
+              prodigi_retail_eur: productPrice,
+              prodigi_destination_country_code:
+                storefront.country_code?.toUpperCase() || undefined,
             });
           }}
         >

@@ -32,7 +32,6 @@ export function AddressInput({
     const inputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const hasApiKey = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     const showCheck = valid && !error && !loading && !focused;
 
     // Load Google Maps script
@@ -144,11 +143,6 @@ export function AddressInput({
             <label style={labelStyle}>
                 {label}
                 {required && <span style={{ color: "#ec4899", marginLeft: "3px" }}>*</span>}
-                {hasApiKey && (
-                    <span style={{ marginLeft: "0.5rem", fontSize: "0.6rem", color: "#999", fontWeight: 400, textTransform: "none", letterSpacing: "normal" }}>
-                        ✨ Powered by Google
-                    </span>
-                )}
             </label>
             <div style={{ position: "relative" }}>
                 <input
@@ -171,7 +165,7 @@ export function AddressInput({
                 />
                 {loading && (
                     <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "#bbb" }}>
-                        ⏳
+                        ...
                     </span>
                 )}
                 {showCheck && !loading && (

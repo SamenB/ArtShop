@@ -126,3 +126,4 @@ class OrderItemOrm(Base):
     prodigi_wholesale_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     prodigi_shipping_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     prodigi_retail_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_destination_country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)

@@ -13,6 +13,7 @@ import { useInView } from "react-intersection-observer";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useUser } from "@/context/UserContext";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch, apiJson } from "@/utils";
+import { detectDeliveryCountry, storeDeliveryCountry } from "@/lib/deliveryCountry";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 import { Product, Label, LabelCategory, SortKey } from "./types";
@@ -44,7 +45,7 @@ function ShopPageContent() {
     const { user } = useUser();
     const urlCountry = (searchParams.get("country") || "").toUpperCase();
     const [userCountryCode, setUserCountryCode] = useState<string>("");
-    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : (userCountryCode || "DE");
+    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : userCountryCode;
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<LabelCategory[]>([]);
     const [labels, setLabels] = useState<Label[]>([]);
@@ -74,16 +75,9 @@ function ShopPageContent() {
     }, [searchParams]);
 
     useEffect(() => {
-        apiFetch(`${getApiUrl()}/geo/country`)
-            .then((res) => apiJson<{ country_code?: string }>(res))
-            .then((data) => {
-                if (data.country_code) {
-                    setUserCountryCode(String(data.country_code).toUpperCase());
-                } else {
-                    setUserCountryCode("DE");
-                }
-            })
-            .catch(() => setUserCountryCode("DE"));
+        detectDeliveryCountry()
+            .then(setUserCountryCode)
+            .catch(() => setUserCountryCode("US"));
     }, []);
 
     useEffect(() => {
@@ -94,6 +88,12 @@ function ShopPageContent() {
         nextParams.set("country", userCountryCode);
         router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
     }, [pathname, router, searchParams, urlCountry, userCountryCode]);
+
+    useEffect(() => {
+        if (/^[A-Z]{2}$/.test(urlCountry)) {
+            storeDeliveryCountry(urlCountry);
+        }
+    }, [urlCountry]);
 
     const [sortIdx, setSortIdx] = useState(0);
     const [drawerOpen, setDrawerOpen] = useState(false);

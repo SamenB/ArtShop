@@ -139,7 +139,8 @@ class ProdigiStorefrontSnapshotService:
 
         normalized_country = (country_code or "").upper()
         cache_key = (
-            f"prodigi:country-storefront:v1:bake:{active_bake.id}:"
+            f"prodigi:country-storefront:v1:{self.business_policy.POLICY_VERSION}:"
+            f"bake:{active_bake.id}:"
             f"ratio:{selected_ratio}:country:{normalized_country}"
         )
         cached_payload = await self._get_cached_payload(cache_key)
@@ -469,7 +470,7 @@ class ProdigiStorefrontSnapshotService:
             shipping_profiles = size.shipping_profiles or []
             shipping_support = self.shipping_support_policy.evaluate_size(shipping_profiles)
             size_entry = {
-                "id": size.id,
+                "id": getattr(size, "id", None),
                 "slot_size_label": slot_size_label,
                 "size_label": size.size_label or slot_size_label,
                 "available": bool(size.available),
@@ -916,20 +917,19 @@ class ProdigiStorefrontSnapshotService:
 
     def _serialize_business_policy_meta(self) -> dict[str, Any]:
         return {
-            "unframed_free_delivery_categories": sorted(
-                self.business_policy.UNFRAMED_FREE_DELIVERY_CATEGORIES
-            ),
+            "free_delivery_categories": [],
             "entry_badge_category_groups": {
                 key: list(value)
                 for key, value in self.business_policy.ENTRY_BADGE_CATEGORY_GROUPS.items()
             },
-            "shipping_at_checkout_categories": sorted(
-                self.business_policy.SHIPPING_AT_CHECKOUT_CATEGORIES
+            "print_shipping_at_checkout_categories": sorted(
+                self.business_policy.PRINT_SHIPPING_AT_CHECKOUT_CATEGORIES
             ),
-            "unframed_delivery_subsidy_budget": self.business_policy.UNFRAMED_DELIVERY_SUBSIDY_BUDGET,
-            "standard_pass_through_cap": self.business_policy.STANDARD_PASS_THROUGH_CAP,
-            "premium_pass_through_cap": self.business_policy.PREMIUM_PASS_THROUGH_CAP,
-            "hard_hide_shipping_cap": self.business_policy.HARD_HIDE_SHIPPING_CAP,
+            "print_delivery_subsidy_budget": self.business_policy.PRINT_DELIVERY_SUBSIDY_BUDGET,
+            "policy_note": (
+                "Prodigi print shipping is charged at checkout. Free delivery applies only "
+                "to original-art orders."
+            ),
         }
 
     def _select_primary_currency_bucket(

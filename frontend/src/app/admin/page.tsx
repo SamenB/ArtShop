@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
-import { Brush, ChevronRight, DollarSign, Globe2, PackageCheck, Printer, Settings, ShoppingBag } from "lucide-react";
+import { Brush, ChevronRight, Globe2, PackageCheck, Printer, Settings, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import ArtworksTab from "@/app/admin/components/ArtworksTab";

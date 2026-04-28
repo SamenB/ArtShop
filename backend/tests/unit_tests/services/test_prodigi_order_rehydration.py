@@ -56,7 +56,7 @@ def test_apply_to_item_add_overwrites_client_prodigi_fields_from_bake():
     assert item_add.prodigi_slot_size_label == "40x50"
     assert item_add.prodigi_attributes == {"color": "black"}
     assert item_add.prodigi_shipping_method == "Standard"
-    assert item_add.prodigi_retail_eur == 33.25
+    assert item_add.prodigi_retail_eur == 30.0
     assert item_add.price == 33
     assert item_add.size == "40 x 50 cm"
 

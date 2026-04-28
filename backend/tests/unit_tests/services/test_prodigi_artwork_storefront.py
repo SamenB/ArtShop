@@ -4,6 +4,7 @@ import pytest
 
 from src.integrations.prodigi.services.prodigi_artwork_storefront import (
     ProdigiArtworkStorefrontService,
+    STOREFRONT_POLICY_VERSION,
 )
 
 
@@ -181,6 +182,7 @@ class FakeMaterializedRepository:
                 "slug": "golden-hour",
                 "country_code": "DE",
                 "country_name": "Germany",
+                "storefront_policy_version": STOREFRONT_POLICY_VERSION,
                 "country_supported": True,
                 "mediums": {
                     "paper": {"cards": []},
@@ -188,6 +190,23 @@ class FakeMaterializedRepository:
                 },
             }
         )
+
+
+class FakeStaleMaterializedRepository(FakeMaterializedRepository):
+    async def get_materialized_payload_for_ref(
+        self,
+        *,
+        bake_id: int,
+        artwork_id_or_slug: str,
+        country_code: str,
+    ):
+        row = await super().get_materialized_payload_for_ref(
+            bake_id=bake_id,
+            artwork_id_or_slug=artwork_id_or_slug,
+            country_code=country_code,
+        )
+        row.payload.pop("storefront_policy_version", None)
+        return row
 
 
 @pytest.mark.asyncio
@@ -245,3 +264,28 @@ async def test_artwork_storefront_prefers_materialized_payload() -> None:
     assert payload["country_code"] == "DE"
     assert payload["country_supported"] is True
     assert payload["mediums"]["canvas"]["cards"][0]["category_id"] == "canvasStretched"
+
+
+@pytest.mark.asyncio
+async def test_artwork_storefront_ignores_stale_materialized_payload() -> None:
+    artwork = SimpleNamespace(
+        id=7,
+        slug="golden-hour",
+        title="Golden Hour",
+        has_paper_print=False,
+        has_paper_print_limited=False,
+        paper_print_limited_quantity=None,
+        has_canvas_print=True,
+        has_canvas_print_limited=True,
+        canvas_print_limited_quantity=15,
+    )
+    service = ProdigiArtworkStorefrontService(SimpleNamespace(session=None))
+    service.artwork_service = FakeArtworkService(artwork)
+    service.print_profile_service = FakePrintProfileService()
+    service.storefront_repository = FakeStaleMaterializedRepository()
+    service.snapshot_service = FakeSnapshotService()
+
+    payload = await service.get_artwork_storefront("golden-hour", "de")
+
+    assert payload["storefront_policy_version"] == STOREFRONT_POLICY_VERSION
+    assert payload["mediums"]["canvas"]["cards"][0]["size_options"][0]["sku"] == "SKU-40x50"

@@ -194,7 +194,7 @@ class ProdigiStorefrontPolicyService:
     def _matches_policy(self, category_id: str, row: dict[str, Any]) -> bool:
         policy = STOREFRONT_POLICY.get(category_id)
         if policy is None:
-            return True
+            return False
 
         for field_name, required_value in policy["fixed_attributes"].items():
             if self._normalize_value(row.get(field_name)) != self._normalize_value(required_value):

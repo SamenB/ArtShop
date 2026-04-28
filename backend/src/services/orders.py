@@ -57,6 +57,30 @@ class OrderService(BaseService):
     Ensures that artwork status is correctly synchronized with sales.
     """
 
+    def _validate_prodigi_destination_country(
+        self,
+        item_data: OrderItemAdd | object,
+        shipping_country_code: str | None,
+    ) -> None:
+        expected = getattr(item_data, "prodigi_destination_country_code", None)
+        if not expected:
+            raise InvalidDataException(
+                detail=(
+                    "Print item is missing the Prodigi destination country used for pricing. "
+                    "Please select the print again for the delivery country."
+                )
+            )
+        actual = (shipping_country_code or "").strip().upper()
+        expected = str(expected).strip().upper()
+        if actual != expected:
+            raise InvalidDataException(
+                detail=(
+                    "Selected print offer was priced for "
+                    f"{expected}, but checkout shipping country is {actual or 'missing'}. "
+                    "Please return to the product page and select prints for the delivery country."
+                )
+            )
+
     async def get_all_orders(self):
         """
         Retrieves all orders from the database for administrative purposes.
@@ -146,6 +170,10 @@ class OrderService(BaseService):
                     flag_name = item_data.edition_type.artwork_availability_flag
                     if not getattr(artwork, flag_name, False):
                         raise PrintsSoldOutException()
+                    self._validate_prodigi_destination_country(
+                        item_data,
+                        order_data.shipping_country_code,
+                    )
 
                 rehydrated_selection = await rehydration_service.rehydrate_item(
                     artwork=artwork,
@@ -170,6 +198,10 @@ class OrderService(BaseService):
                     prodigi_wholesale_eur=item_data.prodigi_wholesale_eur,
                     prodigi_shipping_eur=item_data.prodigi_shipping_eur,
                     prodigi_retail_eur=item_data.prodigi_retail_eur,
+                    prodigi_destination_country_code=(
+                        item_data.prodigi_destination_country_code
+                        or order_data.shipping_country_code
+                    ),
                 )
                 rehydration_service.apply_to_item_add(item_add, rehydrated_selection)
                 recalculated_total_price += int(item_add.price)

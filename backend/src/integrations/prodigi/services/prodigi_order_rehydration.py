@@ -153,7 +153,7 @@ class ProdigiOrderRehydrationService:
         item_add.prodigi_shipping_method = selection.shipping_method
         item_add.prodigi_wholesale_eur = selection.wholesale_eur
         item_add.prodigi_shipping_eur = selection.shipping_eur
-        item_add.prodigi_retail_eur = selection.customer_total_price or selection.retail_eur
+        item_add.prodigi_retail_eur = selection.retail_eur
         if selection.customer_total_price is not None:
             item_add.price = int(round(selection.customer_total_price))
         if selection.size_label:

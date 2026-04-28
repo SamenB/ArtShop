@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { getApiUrl, apiFetch, getImageUrl } from "@/utils";
+import { getApiUrl, apiFetch, apiJson, getImageUrl } from "@/utils";
 
 //  Constants 
 
@@ -170,6 +170,15 @@ const CARRIERS = [
 ];
 
 const PAID_STATUSES = new Set(["paid", "mock_paid"]);
+
+type OrderDetailTab = "overview" | "lifecycle" | "prodigi" | "activity";
+
+const ORDER_DETAIL_TABS: Array<{ id: OrderDetailTab; label: string; desc: string }> = [
+  { id: "overview", label: "Overview", desc: "Customer, items, shipping" },
+  { id: "lifecycle", label: "Lifecycle", desc: "Payment and fulfillment" },
+  { id: "prodigi", label: "Prodigi", desc: "Provider gates and cost" },
+  { id: "activity", label: "Activity", desc: "Timeline and admin actions" },
+];
 
 //  Shared Input Styles 
 
@@ -768,7 +777,7 @@ function FlowStatusPill({ status }: { status: string }) {
     <span
       className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${cls}`}
     >
-      {normalized === "passed" || normalized === "submitted" ? " " : ""}
+      {normalized === "passed" || normalized === "submitted" ? "OK " : ""}
       {normalized}
     </span>
   );
@@ -817,6 +826,14 @@ function ProdigiFlowPanel({
   onSubmit: () => void;
 }) {
   const hasPrints = orderHasPrints(order);
+  const flowItems = flow?.items ?? [];
+  const supplierTotal = flowItems.reduce(
+    (sum: number, item: any) => sum + prodigiItemCost(item),
+    0,
+  );
+  const customerPaid = Number(order.total_price ?? 0);
+  const isUnderpaid = supplierTotal > 0 && supplierTotal > customerPaid;
+  const margin = customerPaid - supplierTotal;
   return (
     <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -880,13 +897,42 @@ function ProdigiFlowPanel({
               </p>
               <p className="mt-1 font-bold text-[#31323E]">
                 {formatEuro(
-                  (flow.items ?? []).reduce(
-                    (sum: number, item: any) => sum + prodigiItemCost(item),
-                    0,
-                  ),
+                  supplierTotal,
                 )}
               </p>
             </div>
+          </div>
+
+          <div
+            className={`rounded-xl border p-4 ${
+              isUnderpaid
+                ? "border-rose-200 bg-rose-50 text-rose-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            }`}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold">
+                  {isUnderpaid ? "Cost check failed" : "Cost check passed"}
+                </p>
+                <p className="mt-1 text-xs font-medium leading-relaxed opacity-80">
+                  Customer paid ${customerPaid.toFixed(2)}. Prodigi supplier
+                  total is {formatEuro(supplierTotal)}.
+                </p>
+              </div>
+              <span className="rounded-md border border-current/20 bg-white/55 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em]">
+                {isUnderpaid
+                  ? `Under by ${formatEuro(Math.abs(margin))}`
+                  : `Margin ${formatEuro(margin)}`}
+              </span>
+            </div>
+            {isUnderpaid ? (
+              <p className="mt-3 rounded-lg bg-white/70 p-3 text-xs font-semibold leading-relaxed">
+                Prodigi submit is blocked. Fix the storefront price, collect an
+                adjustment, or recreate the order with the current baked price
+                before sending it to production.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -917,17 +963,19 @@ function ProdigiFlowPanel({
 
           <button
             onClick={onSubmit}
-            disabled={!flow.can_submit_manually || submitting}
+            disabled={!flow.can_submit_manually || submitting || isUnderpaid}
             className="w-full rounded-xl bg-[#31323E] py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-white transition-all disabled:opacity-35"
           >
             {submitting
               ? "Submitting to Prodigi..."
-              : "Submit This Order To Prodigi"}
+              : isUnderpaid
+                ? "Prodigi Submit Blocked By Cost Check"
+                : "Submit This Order To Prodigi"}
           </button>
 
           <div className="space-y-3">
             <SectionLabel text="Prodigi Items And Cost Check" />
-            {(flow.items ?? []).map((item: any) => (
+            {flowItems.map((item: any) => (
               <div
                 key={item.id}
                 className="rounded-lg border border-[#31323E]/8 bg-[#F7F7F5] p-3 text-xs"
@@ -938,11 +986,11 @@ function ProdigiFlowPanel({
                       {item.title || `Item #${item.id}`}
                     </p>
                     <p className="mt-1 text-[#31323E]/50">
-                      {item.prodigi_sku}  {item.prodigi_category_id} {" "}
+                      {item.prodigi_sku} / {item.prodigi_category_id} /{" "}
                       {item.prodigi_slot_size_label}
                     </p>
                     <p className="text-[#31323E]/50">
-                      {item.prodigi_shipping_method || "Standard"} shipping 
+                      {item.prodigi_shipping_method || "Standard"} shipping /
                       customer paid ${Number(item.price ?? 0).toFixed(0)}
                     </p>
                   </div>
@@ -962,9 +1010,14 @@ function ProdigiFlowPanel({
                   </div>
                 </div>
                 {compactJson(item.prodigi_attributes) && (
-                  <pre className="mt-2 max-h-28 overflow-auto rounded-md bg-white p-2 text-[10px] leading-relaxed text-[#31323E]/60">
-                    {compactJson(item.prodigi_attributes)}
-                  </pre>
+                  <details className="mt-2 rounded-md bg-white p-2 text-[10px] text-[#31323E]/60">
+                    <summary className="cursor-pointer font-bold uppercase tracking-[0.12em] text-[#31323E]/45">
+                      Prodigi attributes
+                    </summary>
+                    <pre className="mt-2 max-h-28 overflow-auto leading-relaxed">
+                      {compactJson(item.prodigi_attributes)}
+                    </pre>
+                  </details>
                 )}
               </div>
             ))}
@@ -1043,6 +1096,9 @@ export default function OrdersTab() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [orderDetailTabs, setOrderDetailTabs] = useState<
+    Record<number, OrderDetailTab>
+  >({});
   const [mainTab, setMainTab] = useState<"active" | "completed" | "advanced">(
     "active",
   );
@@ -1062,6 +1118,9 @@ export default function OrdersTab() {
   const [prodigiMode, setProdigiMode] = useState<"automatic" | "manual">(
     "automatic",
   );
+  const [prodigiModeDraft, setProdigiModeDraft] = useState<
+    "automatic" | "manual"
+  >("automatic");
   const [modeSaving, setModeSaving] = useState(false);
   const [prodigiFlows, setProdigiFlows] = useState<Record<number, any>>({});
   const [flowLoading, setFlowLoading] = useState<number | null>(null);
@@ -1087,14 +1146,16 @@ export default function OrdersTab() {
       );
       if (res.ok) {
         const data = await res.json();
-        setProdigiMode(data.mode === "manual" ? "manual" : "automatic");
+        const mode = data.mode === "manual" ? "manual" : "automatic";
+        setProdigiMode(mode);
+        setProdigiModeDraft(mode);
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  const updateProdigiMode = async (mode: "automatic" | "manual") => {
+  const updateProdigiMode = async () => {
     setModeSaving(true);
     try {
       const res = await apiFetch(
@@ -1102,12 +1163,13 @@ export default function OrdersTab() {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode }),
+          body: JSON.stringify({ mode: prodigiModeDraft }),
         },
       );
-      if (res.ok) setProdigiMode(mode);
+      if (res.ok) setProdigiMode(prodigiModeDraft);
     } catch (e) {
       console.error(e);
+      window.alert(e instanceof Error ? e.message : "Failed to save Prodigi mode.");
     } finally {
       setModeSaving(false);
     }
@@ -1138,13 +1200,12 @@ export default function OrdersTab() {
         `${getApiUrl()}/orders/${orderId}/prodigi-submit`,
         { method: "POST" },
       );
-      if (res.ok) {
-        const data = await res.json();
-        setProdigiFlows((prev) => ({ ...prev, [orderId]: data }));
-        await fetchOrders();
-      }
+      const data = await apiJson<any>(res);
+      setProdigiFlows((prev) => ({ ...prev, [orderId]: data }));
+      await fetchOrders();
     } catch (e) {
       console.error(e);
+      window.alert(e instanceof Error ? e.message : "Prodigi submit failed.");
     } finally {
       setProdigiSubmitting(null);
     }
@@ -1281,7 +1342,7 @@ export default function OrdersTab() {
     );
 
   return (
-    <div className="max-w-6xl mx-auto font-sans text-[#31323E]">
+    <div className="mx-auto max-w-[1500px] font-sans text-[#31323E]">
       {/*  Header  */}
       <div className="pb-8 mb-8 border-b border-[#31323E]/8">
         <div className="flex flex-col md:flex-row justify-between items-start gap-6">
@@ -1297,15 +1358,18 @@ export default function OrdersTab() {
 
           {/* Stats Row */}
           <div className="flex flex-wrap gap-3 flex-shrink-0">
-            <div className="rounded-xl border border-[#31323E]/10 bg-white p-1 shadow-sm">
+            <div className="rounded-xl border border-[#31323E]/10 bg-white p-3 shadow-sm">
+              <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-[#31323E]/35">
+                Prodigi submit mode
+              </p>
               <div className="flex gap-1">
                 {(["automatic", "manual"] as const).map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => updateProdigiMode(mode)}
-                    disabled={modeSaving || prodigiMode === mode}
+                    onClick={() => setProdigiModeDraft(mode)}
+                    disabled={modeSaving}
                     className={`px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] rounded-lg transition-all disabled:opacity-70 ${
-                      prodigiMode === mode
+                      prodigiModeDraft === mode
                         ? "bg-[#31323E] text-white"
                         : "text-[#31323E]/45 hover:bg-[#31323E]/5"
                     }`}
@@ -1314,9 +1378,14 @@ export default function OrdersTab() {
                   </button>
                 ))}
               </div>
-              <p className="px-2 pb-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[#31323E]/35">
-                Prodigi submit mode
-              </p>
+              <button
+                type="button"
+                onClick={updateProdigiMode}
+                disabled={modeSaving || prodigiModeDraft === prodigiMode}
+                className="mt-2 w-full rounded-lg bg-[#31323E] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white transition-all disabled:opacity-35"
+              >
+                {modeSaving ? "Saving" : "Save Mode"}
+              </button>
             </div>
             <div className="bg-[#31323E] text-white rounded-xl px-4 py-3 text-center shadow-sm min-w-[70px]">
               <div className="text-xl font-bold leading-none">
@@ -1465,6 +1534,7 @@ export default function OrdersTab() {
             const isFulfillmentSaving = fulfillmentSaving === order.id;
             const isPaymentSaving = paymentSaving === order.id;
             const thumbnail = order.items?.[0]?.artwork?.images?.[0];
+            const activeOrderTab = orderDetailTabs[order.id] ?? "overview";
 
             return (
               <div
@@ -1480,8 +1550,15 @@ export default function OrdersTab() {
                   onClick={() => {
                     const nextExpanded = isExpanded ? null : order.id;
                     setExpandedId(nextExpanded);
-                    if (nextExpanded && orderHasPrints(order))
+                    if (nextExpanded) {
+                      setOrderDetailTabs((prev) => ({
+                        ...prev,
+                        [order.id]: prev[order.id] ?? "overview",
+                      }));
+                    }
+                    if (nextExpanded && orderHasPrints(order)) {
                       void loadProdigiFlow(order.id);
+                    }
                   }}
                   className="w-full px-5 py-4 flex items-center gap-4 text-left hover:bg-[#31323E]/1 transition-colors"
                 >
@@ -1569,9 +1646,48 @@ export default function OrdersTab() {
                 {/* Expanded Detail */}
                 {isExpanded && (
                   <div className="px-5 py-6 bg-[#EAEAEE] border-t border-[#31323E]/15 shadow-inner">
-                    <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(300px,0.9fr)_minmax(430px,1.1fr)]">
+                    <div className="mb-5 rounded-xl border border-[#31323E]/10 bg-white p-2">
+                      <div className="grid gap-2 md:grid-cols-4">
+                        {ORDER_DETAIL_TABS.map((tab) => (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() =>
+                              setOrderDetailTabs((prev) => ({
+                                ...prev,
+                                [order.id]: tab.id,
+                              }))
+                            }
+                            className={`rounded-lg px-4 py-3 text-left transition-all ${
+                              activeOrderTab === tab.id
+                                ? "bg-[#31323E] text-white shadow-sm"
+                                : "bg-[#F7F7F5] text-[#31323E]/55 hover:bg-[#31323E]/6 hover:text-[#31323E]"
+                            }`}
+                          >
+                            <span className="block text-[11px] font-bold uppercase tracking-[0.14em]">
+                              {tab.label}
+                            </span>
+                            <span
+                              className={`mt-1 block text-[10px] font-semibold leading-snug ${
+                                activeOrderTab === tab.id
+                                  ? "text-white/55"
+                                  : "text-[#31323E]/38"
+                              }`}
+                            >
+                              {tab.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
                       {/*  Col 1: Customer + Items + Address  */}
-                      <div className="space-y-6 xl:col-span-2">
+                      <div
+                        className={
+                          activeOrderTab === "overview" ? "space-y-6" : "hidden"
+                        }
+                      >
                         {/* Customer */}
                         <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                           <SectionLabel text="Customer" />
@@ -1799,7 +1915,13 @@ export default function OrdersTab() {
                       </div>
 
                       {/*  Col 2: Payment + Fulfillment  */}
-                      <div className="space-y-6">
+                      <div
+                        className={
+                          activeOrderTab === "lifecycle"
+                            ? "grid gap-6 xl:grid-cols-2"
+                            : "hidden"
+                        }
+                      >
                         {/* Phase 1 */}
                         <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                           <div className="flex items-center gap-2 mb-4">
@@ -1846,7 +1968,53 @@ export default function OrdersTab() {
                       </div>
 
                       {/*  Col 3: Timeline + Print Order + Actions  */}
-                      <div className="space-y-6">
+                      <div
+                        className={
+                          activeOrderTab === "prodigi" ? "space-y-6" : "hidden"
+                        }
+                      >
+                        <div className="rounded-xl border border-[#31323E]/10 bg-white p-5">
+                          <SectionLabel text="Fulfillment Channel" />
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                                Active
+                              </p>
+                              <p className="mt-1 text-sm font-bold text-emerald-900">
+                                Prodigi API
+                              </p>
+                              <p className="mt-1 text-[11px] font-medium leading-relaxed text-emerald-800/70">
+                                Paid print orders are prepared, checked, and
+                                submitted through Prodigi.
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-[#31323E]/10 bg-[#F7F7F5] p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#31323E]/45">
+                                Removed
+                              </p>
+                              <p className="mt-1 text-sm font-bold text-[#31323E]">
+                                Telegram print dispatch
+                              </p>
+                              <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
+                                Order fulfillment via Telegram is not supported
+                                now, so those controls were removed.
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700">
+                                Notifications
+                              </p>
+                              <p className="mt-1 text-sm font-bold text-blue-900">
+                                Owner Telegram alerts
+                              </p>
+                              <p className="mt-1 text-[11px] font-medium leading-relaxed text-blue-800/70">
+                                Managed in Admin Profile. This only notifies the
+                                owner, it does not fulfill orders.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
                         <ProdigiFlowPanel
                           order={order}
                           flow={prodigiFlows[order.id]}
@@ -1855,7 +2023,13 @@ export default function OrdersTab() {
                           onRefresh={() => loadProdigiFlow(order.id)}
                           onSubmit={() => submitOrderToProdigi(order.id)}
                         />
+                      </div>
 
+                      <div
+                        className={
+                          activeOrderTab === "activity" ? "space-y-6" : "hidden"
+                        }
+                      >
                         <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
                           <OrderTimeline order={order} />
                         </div>

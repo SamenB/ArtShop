@@ -11,6 +11,7 @@ import PrintConfigurator from "@/components/PrintConfigurator";
 import type { ArtworkPrintStorefront } from "@/lib/artworkStorefront";
 import { buildArtworkStorefrontKey, loadArtworkStorefront } from "@/lib/artworkStorefront";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
+import { detectDeliveryCountry, storeDeliveryCountry } from "@/lib/deliveryCountry";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
 import { type Artwork, type OriginalStatus, type ArtworkImage } from "./types";
@@ -41,17 +42,19 @@ export default function ArtworkDetailPage() {
     } | null>(null);
     const urlCountry = (searchParams.get("country") || "").toUpperCase();
     const urlView = searchParams.get("view");
-    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : (userCountryCode || "DE");
+    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : userCountryCode;
 
     useEffect(() => {
-        apiFetch(`${getApiUrl()}/geo/country`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.country_code) setUserCountryCode(String(data.country_code).toUpperCase());
-                else setUserCountryCode("DE");
-            })
-            .catch(() => setUserCountryCode("DE"));
+        detectDeliveryCountry()
+            .then(setUserCountryCode)
+            .catch(() => setUserCountryCode("US"));
     }, []);
+
+    useEffect(() => {
+        if (/^[A-Z]{2}$/.test(urlCountry)) {
+            storeDeliveryCountry(urlCountry);
+        }
+    }, [urlCountry]);
 
     useEffect(() => {
         if (/^[A-Z]{2}$/.test(urlCountry) || !/^[A-Z]{2}$/.test(userCountryCode)) {
@@ -264,7 +267,10 @@ export default function ArtworkDetailPage() {
 
     const updateRouteState = (next: { country?: string; view?: "original" | "canvas" | "paper" }) => {
         const nextParams = new URLSearchParams(searchParams.toString());
-        const nextCountry = (next.country || activeCountryCode || userCountryCode || "US").toUpperCase();
+        const nextCountry = (next.country || activeCountryCode || userCountryCode).toUpperCase();
+        if (!/^[A-Z]{2}$/.test(nextCountry)) {
+            return;
+        }
         nextParams.set("country", nextCountry);
         if (next.view) {
             nextParams.set("view", next.view);

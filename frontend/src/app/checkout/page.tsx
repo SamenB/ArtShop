@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
-import { useCart } from "@/context/CartContext";
+import { useCart, type CartItem } from "@/context/CartContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import { GoogleLogin } from "@react-oauth/google";
 import { useUser } from "@/context/UserContext";
@@ -11,7 +11,6 @@ import {
   countries,
   getStateLabel,
   getPostalLabel,
-  detectUserCountry,
   countryCodeToFlag,
 } from "@/countries";
 
@@ -22,9 +21,58 @@ import { CountrySelect } from "./components/CountrySelect";
 import { AddressInput } from "./components/AddressInput";
 import { StepIndicator } from "./components/StepIndicator";
 import { OrderSummary } from "./components/OrderSummary";
+import { loadArtworkStorefront, type StorefrontSizeOption } from "@/lib/artworkStorefront";
+import { detectDeliveryCountry, storeDeliveryCountry } from "@/lib/deliveryCountry";
+
+type PrintQuoteState = {
+  status: "loading" | "ready" | "unavailable" | "error";
+  message?: string;
+  item?: Partial<CartItem>;
+};
+
+function resolvePrintProductPrice(size: StorefrontSizeOption): number | null {
+  return (
+    size.retail_product_price ??
+    size.business_policy?.retail_product_price ??
+    null
+  );
+}
+
+function resolvePrintShippingPrice(size: StorefrontSizeOption): number | null {
+  return (
+    size.customer_shipping_price ??
+    size.business_policy?.customer_shipping_price ??
+    size.supplier_shipping_price ??
+    null
+  );
+}
+
+function findMatchingPrintSize(
+  item: CartItem,
+  storefront: Awaited<ReturnType<typeof loadArtworkStorefront>>,
+): StorefrontSizeOption | null {
+  const cards = [
+    ...(storefront.mediums.paper?.cards || []),
+    ...(storefront.mediums.canvas?.cards || []),
+  ];
+  const card = cards.find((candidate) => candidate.category_id === item.prodigi_category_id);
+  if (!card) {
+    return null;
+  }
+  return (
+    card.size_options.find((size) => {
+      const slotMatch =
+        Boolean(item.prodigi_slot_size_label) &&
+        (size.slot_size_label === item.prodigi_slot_size_label ||
+          size.size_label === item.prodigi_slot_size_label);
+      const displayMatch = Boolean(item.size) && size.size_label === item.size;
+      return slotMatch || displayMatch;
+    }) || null
+  );
+}
 
 export default function CheckoutPage() {
-  const { items, cartTotal, clearCart } = useCart();
+  const { items, clearCart } = useCart();
   const { convertPrice, rates } = usePreferences();
   const { user, refreshUser } = useUser();
 
@@ -59,13 +107,178 @@ export default function CheckoutPage() {
     text: "",
     isError: false,
   });
+  const [printQuotes, setPrintQuotes] = useState<Record<string, PrintQuoteState>>({});
   const formRef = useRef<HTMLDivElement>(null);
+
+  const hasPrintItems = items.some((item) => item.type === "print");
+  const initialPrintCountryCode = useMemo(() => {
+    const country = items.find(
+      (item) => item.type === "print" && item.prodigi_destination_country_code,
+    )?.prodigi_destination_country_code;
+    return country?.toUpperCase() || "";
+  }, [items]);
+  const effectiveCountryCode = formData.countryCode;
+
+  const checkoutItems = useMemo(
+    () =>
+      items.map((item) => {
+        const quote = printQuotes[item.id];
+        if (item.type !== "print" || quote?.status !== "ready" || !quote.item) {
+          return item;
+        }
+        return { ...item, ...quote.item };
+      }),
+    [items, printQuotes],
+  );
+  const printQuoteIssue = useMemo(() => {
+    const quote = Object.values(printQuotes).find(
+      (entry) => entry.status === "unavailable" || entry.status === "error",
+    );
+    return quote?.message || "";
+  }, [printQuotes]);
+  const printQuotesLoading = Object.values(printQuotes).some(
+    (entry) => entry.status === "loading",
+  );
+  const hasUnresolvedPrintQuotes =
+    hasPrintItems &&
+    checkoutItems.some(
+      (item) =>
+        item.type === "print" &&
+        item.prodigi_destination_country_code?.toUpperCase() !==
+          formData.countryCode.toUpperCase(),
+    );
 
   // Detect country on mount
   useEffect(() => {
-    const code = detectUserCountry();
-    setFormData((prev) => ({ ...prev, countryCode: prev.countryCode || code }));
-  }, []);
+    let cancelled = false;
+    detectDeliveryCountry()
+      .then((code) => {
+        if (cancelled) {
+          return;
+        }
+        setFormData((prev) => ({
+          ...prev,
+          countryCode: prev.countryCode || initialPrintCountryCode || code,
+        }));
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setFormData((prev) => ({
+          ...prev,
+          countryCode: prev.countryCode || initialPrintCountryCode || "US",
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialPrintCountryCode]);
+
+  useEffect(() => {
+    if (formData.countryCode) {
+      storeDeliveryCountry(formData.countryCode);
+    }
+  }, [formData.countryCode]);
+
+  useEffect(() => {
+    if (!formData.countryCode || !hasPrintItems) {
+      setPrintQuotes({});
+      return;
+    }
+
+    let cancelled = false;
+    const printItems = items.filter((item) => item.type === "print");
+    setPrintQuotes((prev) => {
+      const next = { ...prev };
+      for (const item of printItems) {
+        next[item.id] = { status: "loading" };
+      }
+      return next;
+    });
+
+    void Promise.all(
+      printItems.map(async (item): Promise<[string, PrintQuoteState]> => {
+        if (!item.prodigi_category_id || !item.prodigi_slot_size_label) {
+          return [
+            item.id,
+            {
+              status: "unavailable",
+              message:
+                "This print is missing its storefront selection. Please remove it and add it again from the product page.",
+            },
+          ];
+        }
+
+        try {
+          const storefront = await loadArtworkStorefront(item.slug, formData.countryCode);
+          if (!storefront.country_supported) {
+            return [
+              item.id,
+              {
+                status: "unavailable",
+                message: `Sorry, this print is not available for delivery to ${formData.countryCode}.`,
+              },
+            ];
+          }
+
+          const size = findMatchingPrintSize(item, storefront);
+          const productPrice = size ? resolvePrintProductPrice(size) : null;
+          if (!size || productPrice === null) {
+            return [
+              item.id,
+              {
+                status: "unavailable",
+                message:
+                  "This selected print format is not available for the new delivery country.",
+              },
+            ];
+          }
+
+          return [
+            item.id,
+            {
+              status: "ready",
+              item: {
+                price: Math.round(productPrice),
+                prodigi_storefront_offer_size_id: size.id || undefined,
+                prodigi_sku: size.sku || undefined,
+                prodigi_shipping_method:
+                  size.shipping_method ||
+                  size.default_shipping_tier ||
+                  size.shipping_support?.chosen_tier ||
+                  item.prodigi_shipping_method,
+                prodigi_wholesale_eur: size.supplier_product_price || undefined,
+                prodigi_shipping_eur: resolvePrintShippingPrice(size) || undefined,
+                prodigi_retail_eur: productPrice,
+                prodigi_destination_country_code: formData.countryCode,
+              },
+            },
+          ];
+        } catch (error) {
+          return [
+            item.id,
+            {
+              status: "error",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Unable to recalculate print pricing for this delivery country.",
+            },
+          ];
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) {
+        return;
+      }
+      setPrintQuotes(Object.fromEntries(results));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.countryCode, hasPrintItems, items]);
 
   // Pre-fill from Google auth
   useEffect(() => {
@@ -96,11 +309,11 @@ export default function CheckoutPage() {
 
   /* ---- Country-aware labels ---- */
   const selectedCountry = useMemo(
-    () => countries.find((c) => c.code === formData.countryCode),
-    [formData.countryCode],
+    () => countries.find((c) => c.code === effectiveCountryCode),
+    [effectiveCountryCode],
   );
-  const stateLabel = getStateLabel(formData.countryCode);
-  const postalLabel = getPostalLabel(formData.countryCode);
+  const stateLabel = getStateLabel(effectiveCountryCode);
+  const postalLabel = getPostalLabel(effectiveCountryCode);
 
   /* ---- Single-field validation helper ---- */
   const validateField = useCallback(
@@ -247,6 +460,11 @@ export default function CheckoutPage() {
       const err = validateField(f, formData);
       if (err) errs[f] = err;
     });
+    if (printQuotesLoading || hasUnresolvedPrintQuotes) {
+      errs.countryCode = "Print pricing is still being recalculated for this country.";
+    } else if (printQuoteIssue) {
+      errs.countryCode = printQuoteIssue;
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -267,11 +485,18 @@ export default function CheckoutPage() {
   };
 
   /* ---- Promo logic ---- */
-  const printTotal = items
+  const printTotal = checkoutItems
     .filter((i) => i.type === "print")
     .reduce((s, i) => s + i.price * i.quantity, 0);
+  const shippingTotal = checkoutItems
+    .filter((i) => i.type === "print")
+    .reduce((s, i) => s + Number(i.prodigi_shipping_eur || 0) * i.quantity, 0);
   const discountAmount = promoApplied ? Math.round(printTotal * 0.1) : 0;
-  const currentTotal = cartTotal - discountAmount;
+  const checkoutCartTotal = checkoutItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
+  const currentTotal = checkoutCartTotal - discountAmount + shippingTotal;
 
   const applyPromo = () => {
     if (formData.promoCode.toUpperCase() === "ART10") {
@@ -291,26 +516,35 @@ export default function CheckoutPage() {
     setSubmitError("");
 
     try {
+      if (printQuotesLoading || hasUnresolvedPrintQuotes || printQuoteIssue) {
+        setSubmitError(
+          printQuoteIssue || "Print pricing is still being recalculated. Please try again in a moment.",
+        );
+        return;
+      }
+
       const country = countries.find((c) => c.code === formData.countryCode);
+      const checkoutCountryCode = formData.countryCode;
+      const checkoutCountry = countries.find((c) => c.code === checkoutCountryCode);
 
       const orderRequest = {
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
-        shipping_country: country?.name || formData.countryCode,
-        shipping_country_code: formData.countryCode,
+        shipping_country: checkoutCountry?.name || country?.name || checkoutCountryCode,
+        shipping_country_code: checkoutCountryCode,
         shipping_state: formData.state.trim() || null,
         shipping_city: formData.city.trim(),
         shipping_address_line1: formData.addressLine1.trim(),
-        shipping_address_line2: formData.addressLine2.trim() || null,
+        shipping_address_line2: null,
         shipping_postal_code: formData.postalCode.trim(),
         shipping_phone: formData.deliveryPhone.trim() || null,
         shipping_notes: formData.deliveryNotes.trim() || null,
         newsletter_opt_in: formData.newsletter === "yes",
         discovery_source: formData.discovery || null,
         promo_code: promoApplied ? formData.promoCode : null,
-        items: items.map((item) => ({
+        items: checkoutItems.map((item) => ({
           artwork_id: parseInt(item.slug) || 1,
           edition_type:
             item.edition_type ||
@@ -332,6 +566,7 @@ export default function CheckoutPage() {
           prodigi_wholesale_eur: item.prodigi_wholesale_eur,
           prodigi_shipping_eur: item.prodigi_shipping_eur,
           prodigi_retail_eur: item.prodigi_retail_eur,
+          prodigi_destination_country_code: item.prodigi_destination_country_code,
         })),
       };
 
@@ -627,7 +862,7 @@ export default function CheckoutPage() {
                             return next;
                           });
                         }}
-                        countryCode={formData.countryCode}
+                        countryCode={effectiveCountryCode}
                         onChangeCountry={(code) => {
                           setFormData((prev) => ({
                             ...prev,
@@ -662,11 +897,27 @@ export default function CheckoutPage() {
                             countryCode: true,
                           }));
                           setErrors((prev) => ({ ...prev, countryCode: "" }));
+                          setSubmitError("");
                         }}
                         error={
                           touched.countryCode ? errors.countryCode : undefined
                         }
                       />
+                      {hasPrintItems && (printQuotesLoading || printQuoteIssue) && (
+                        <p
+                          style={{
+                            margin: "-0.45rem 0 0",
+                            fontFamily: "var(--font-sans)",
+                            fontSize: "0.76rem",
+                            lineHeight: 1.5,
+                            color: printQuoteIssue ? "#C53030" : "#777",
+                          }}
+                        >
+                          {printQuotesLoading
+                            ? "Recalculating print price and delivery for this country..."
+                            : printQuoteIssue}
+                        </p>
+                      )}
                       <AddressInput
                         label="Address Line 1"
                         value={formData.addressLine1}
@@ -682,7 +933,7 @@ export default function CheckoutPage() {
                             countryCode: true,
                           }));
                         }}
-                        countryCode={formData.countryCode}
+                        countryCode={effectiveCountryCode}
                         required
                         placeholder="Start typing your address..."
                         error={
@@ -692,14 +943,6 @@ export default function CheckoutPage() {
                           formData.addressLine1.length > 5 &&
                           !errors.addressLine1
                         }
-                      />
-                      <SmartInput
-                        label="Address Line 2"
-                        name="addressLine2"
-                        placeholder="Apartment, suite, unit, floor (optional)"
-                        value={formData.addressLine2}
-                        onChange={handleInput}
-                        valid={formData.addressLine2.length > 0}
                       />
                       <div
                         className="checkout-two-col"
@@ -937,7 +1180,6 @@ export default function CheckoutPage() {
                         )}
                       </p>
                       <p>{formData.addressLine1}</p>
-                      {formData.addressLine2 && <p>{formData.addressLine2}</p>}
                       <p>
                         {formData.city}
                         {formData.state ? `, ${formData.state}` : ""}{" "}
@@ -1179,10 +1421,11 @@ export default function CheckoutPage() {
 
             {/* ════════ RIGHT COLUMN: Order Summary ════════ */}
             <OrderSummary
-              items={items}
+              items={checkoutItems}
               promoApplied={promoApplied}
               discountAmount={discountAmount}
-              cartTotal={cartTotal}
+              cartTotal={checkoutCartTotal}
+              shippingTotal={shippingTotal}
               currentTotal={currentTotal}
               convertPrice={convertPrice}
             />

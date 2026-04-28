@@ -397,6 +397,7 @@ def _serialize_prodigi_item(item) -> dict:
         "prodigi_wholesale_eur": item.prodigi_wholesale_eur,
         "prodigi_shipping_eur": item.prodigi_shipping_eur,
         "prodigi_retail_eur": item.prodigi_retail_eur,
+        "prodigi_destination_country_code": item.prodigi_destination_country_code,
     }
 
 

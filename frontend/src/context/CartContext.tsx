@@ -56,8 +56,10 @@ export interface CartItem {
     prodigi_wholesale_eur?: number;
     /** Prodigi shipping cost. */
     prodigi_shipping_eur?: number;
-    /** Prodigi total retail price (wholesale * markup + shipping pass-through). */
+    /** Prodigi retail product price before checkout shipping. */
     prodigi_retail_eur?: number;
+    /** Destination country used to price and select the Prodigi storefront offer. */
+    prodigi_destination_country_code?: string;
 }
 
 /** Definition of the cart context state and available mutators. */

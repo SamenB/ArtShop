@@ -112,12 +112,12 @@ async def test_build_shop_summaries_returns_country_ready_starting_prices():
     assert summaries[89]["default_medium"] == "paper"
     assert summaries[89]["mediums"]["paper"]["available"] is True
     assert summaries[89]["mediums"]["paper"]["starting_price"] == 75.0
-    assert summaries[89]["mediums"]["canvas"]["starting_price"] == 164.0
+    assert summaries[89]["mediums"]["canvas"]["starting_price"] == 135.0
     assert summaries[89]["mediums"]["paper"]["cards"][0]["starting_size_label"] == "40x50"
 
     assert summaries[90]["mediums"]["paper"]["available"] is False
     assert summaries[90]["mediums"]["canvas"]["available"] is True
-    assert summaries[90]["min_print_price"] == 164.0
+    assert summaries[90]["min_print_price"] == 135.0
 
 
 class FakeMaterializedSummaryRepository:
