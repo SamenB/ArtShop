@@ -1,1 +1,0 @@
-from src.print_on_demand.providers.prodigi import ProdigiPrintProvider as ProdigiPrintProvider

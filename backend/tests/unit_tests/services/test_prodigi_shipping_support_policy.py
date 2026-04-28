@@ -1,4 +1,4 @@
-from src.services.prodigi_shipping_support_policy import (
+from src.integrations.prodigi.services.prodigi_shipping_support_policy import (
     ProdigiShippingSupportPolicyService,
 )
 

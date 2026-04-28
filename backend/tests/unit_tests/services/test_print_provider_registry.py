@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.print_on_demand.providers.prodigi import ProdigiPrintProvider
+from src.integrations.prodigi.provider import ProdigiPrintProvider
 from src.print_on_demand.registry import get_print_provider
 from src.services.artworks import ArtworkService
 from src.services.orders import OrderService

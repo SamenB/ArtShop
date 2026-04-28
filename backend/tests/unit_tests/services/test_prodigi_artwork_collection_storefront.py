@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.services.prodigi_artwork_collection_storefront import (
+from src.integrations.prodigi.services.prodigi_artwork_collection_storefront import (
     ProdigiArtworkCollectionStorefrontService,
 )
 

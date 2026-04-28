@@ -16,6 +16,7 @@ from src.exeptions import (
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
+from src.print_on_demand import get_print_provider
 from src.schemas.artworks import ArtworkPatch
 from src.schemas.orders import (
     EditionType,
@@ -550,11 +551,12 @@ class OrderService(BaseService):
 
             await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
 
-            # Submit print-on-demand items in the worker process so webhooks stay fast.
+            # Submit print-on-demand items through the active provider boundary.
             if payment_status == "paid":
-                from src.tasks.tasks import submit_prodigi_order_items
-
-                submit_prodigi_order_items.delay(int(order.id))
+                await get_print_provider().submit_paid_order_items(
+                    order=order,
+                    db_session=self.db.session,
+                )
 
             await self.db.commit()
 

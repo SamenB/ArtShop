@@ -1,4 +1,4 @@
-from src.services.prodigi_shipping_policy import ProdigiShippingPolicyService
+from src.integrations.prodigi.services.prodigi_shipping_policy import ProdigiShippingPolicyService
 
 
 def test_shipping_policy_prefers_express_for_storefront_default() -> None:

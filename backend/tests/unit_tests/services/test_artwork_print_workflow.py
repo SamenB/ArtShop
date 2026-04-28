@@ -177,7 +177,7 @@ async def test_get_workflow_blocks_when_prints_enabled_but_ratio_is_missing():
 
     payload = await service.get_workflow(artwork.id)
 
-    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "paper_bordered")
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "master")
     assert payload["print_enabled"] is True
     assert payload["ratio_assigned"] is False
     assert payload["overall_status"] == "blocked"
@@ -193,8 +193,8 @@ async def test_get_workflow_ignores_unavailable_sizes_for_required_dimensions():
     asset = make_master_asset(
         asset_id=10,
         artwork_id=artwork.id,
-        category_id="paper_bordered",
-        asset_role="paper_border_ready",
+        category_id="master",
+        asset_role="master",
         file_url="/static/print-prep/1/paper/master.png",
         width_px=4500,
         height_px=6000,
@@ -210,8 +210,8 @@ async def test_get_workflow_ignores_unavailable_sizes_for_required_dimensions():
 
     payload = await service.get_workflow(artwork.id)
 
-    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "paper_bordered")
-    assert payload["overall_status"] == "attention"
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "master")
+    assert payload["overall_status"] == "ready"
     assert slot["status"] == "ready"
     assert slot["largest_size_label"] == "30x40 cm"
     assert slot["required_for_sizes"] == ["30x40 cm"]
@@ -226,8 +226,8 @@ async def test_get_workflow_prefers_baked_print_area_pixels_over_rounded_size_la
     asset = make_master_asset(
         asset_id=11,
         artwork_id=artwork.id,
-        category_id="clean_master",
-        asset_role="clean_master",
+        category_id="master",
+        asset_role="master",
         file_url="/static/print-prep/1/canvas/master.png",
         width_px=14454,
         height_px=18054,
@@ -256,7 +256,7 @@ async def test_get_workflow_prefers_baked_print_area_pixels_over_rounded_size_la
 
     payload = await service.get_workflow(artwork.id)
 
-    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "master")
     assert slot["status"] == "ready"
     assert slot["required_min_px"]["width"] == 14454
     assert slot["required_min_px"]["height"] == 18054
@@ -332,8 +332,8 @@ async def test_get_workflow_accepts_strict_ratio_clean_master_without_warning_fo
     asset = make_master_asset(
         asset_id=31,
         artwork_id=artwork.id,
-        category_id="clean_master",
-        asset_role="clean_master",
+        category_id="master",
+        asset_role="master",
         file_url="/static/print-prep/1/canvas/master-strict.png",
         width_px=14456,
         height_px=18070,
@@ -362,7 +362,7 @@ async def test_get_workflow_accepts_strict_ratio_clean_master_without_warning_fo
 
     payload = await service.get_workflow(artwork.id)
 
-    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "master")
     assert slot["status"] == "ready"
     assert slot["issues"] == []
     assert slot["warnings"] == []
@@ -403,7 +403,7 @@ async def test_get_workflow_reports_canvas_mirrorwrap_coverage():
 
     payload = await service.get_workflow(artwork.id)
 
-    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "master")
     coverage = slot["provider_attribute_coverage"]
     assert coverage["preferred_value"] == "MirrorWrap"
     assert coverage["total_options"] == 3
@@ -432,7 +432,7 @@ async def test_get_workflow_blocks_clean_master_until_canvas_wrap_is_selected():
 
     payload = await service.get_workflow(artwork.id)
 
-    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "clean_master")
+    slot = next(item for item in payload["master_slots"] if item["slot_id"] == "master")
     assert payload["overall_status"] == "blocked"
     assert slot["status"] == "blocked"
     assert "Choose a canvas wrap in Offerings before uploading the clean master." in slot["issues"]
@@ -464,7 +464,7 @@ async def test_validate_master_upload_dimensions_accepts_exact_clean_master_targ
 
     await service.validate_master_upload_dimensions(
         artwork_id=artwork.id,
-        asset_role="clean_master",
+        asset_role="master",
         width_px=16800,
         height_px=21000,
     )
@@ -496,7 +496,7 @@ async def test_validate_master_upload_dimensions_accepts_opposite_clean_master_o
 
     await service.validate_master_upload_dimensions(
         artwork_id=artwork.id,
-        asset_role="clean_master",
+        asset_role="master",
         width_px=21000,
         height_px=16800,
     )
@@ -527,9 +527,9 @@ async def test_validate_master_upload_dimensions_accepts_opposite_paper_orientat
 
     await service.validate_master_upload_dimensions(
         artwork_id=artwork.id,
-        asset_role="paper_border_ready",
-        width_px=15000,
-        height_px=12000,
+        asset_role="master",
+        width_px=16800,
+        height_px=21000,
     )
 
 
@@ -556,10 +556,10 @@ async def test_validate_master_upload_dimensions_rejects_wrong_paper_target():
     )
     service._get_artwork_orm = AsyncMock(return_value=artwork)
 
-    with pytest.raises(ValueError, match="expects the exact artboard size"):
+    with pytest.raises(ValueError, match="expects the exact upload target"):
         await service.validate_master_upload_dimensions(
             artwork_id=artwork.id,
-            asset_role="paper_border_ready",
+            asset_role="master",
             width_px=14999,
             height_px=12000,
         )
@@ -574,8 +574,8 @@ async def test_generate_derivatives_from_paper_master_creates_pngs_for_available
     asset = make_master_asset(
         asset_id=12,
         artwork_id=artwork.id,
-        category_id="paper_bordered",
-        asset_role="paper_border_ready",
+        category_id="master",
+        asset_role="master",
         file_url=f"/{master_path.as_posix()}",
         width_px=6000,
         height_px=8000,
@@ -592,7 +592,7 @@ async def test_generate_derivatives_from_paper_master_creates_pngs_for_available
 
     generated = await service.generate_derivatives_for_master(
         artwork_id=artwork.id,
-        asset_role="paper_border_ready",
+        asset_role="master",
     )
 
     assert len(generated) == 1
@@ -614,8 +614,8 @@ async def test_generate_clean_master_derivatives_include_canvas_and_framed_paper
     asset = make_master_asset(
         asset_id=13,
         artwork_id=artwork.id,
-        category_id="clean_master",
-        asset_role="clean_master",
+        category_id="master",
+        asset_role="master",
         file_url=f"/{master_path.as_posix()}",
         width_px=6000,
         height_px=8000,
@@ -637,7 +637,7 @@ async def test_generate_clean_master_derivatives_include_canvas_and_framed_paper
 
     generated = await service.generate_derivatives_for_master(
         artwork_id=artwork.id,
-        asset_role="clean_master",
+        asset_role="master",
     )
 
     generated_pairs = sorted((item.category_id, item.slot_size_label) for item in generated)
@@ -660,8 +660,8 @@ async def test_generate_clean_master_derivative_resizes_to_exact_target_when_rat
     asset = make_master_asset(
         asset_id=14,
         artwork_id=artwork.id,
-        category_id="clean_master",
-        asset_role="clean_master",
+        category_id="master",
+        asset_role="master",
         file_url=f"/{master_path.as_posix()}",
         width_px=6000,
         height_px=8000,
@@ -693,7 +693,7 @@ async def test_generate_clean_master_derivative_resizes_to_exact_target_when_rat
 
     generated = await service.generate_derivatives_for_master(
         artwork_id=artwork.id,
-        asset_role="clean_master",
+        asset_role="master",
     )
 
     assert len(generated) == 1
@@ -712,8 +712,8 @@ async def test_delete_generated_assets_for_master_removes_db_rows_and_files(tmp_
     master_asset = make_master_asset(
         asset_id=21,
         artwork_id=artwork.id,
-        category_id="paper_bordered",
-        asset_role="paper_border_ready",
+        category_id="master",
+        asset_role="master",
         file_url="/static/print-prep/1/paper/master.png",
         width_px=6000,
         height_px=8000,
@@ -723,7 +723,7 @@ async def test_delete_generated_assets_for_master_removes_db_rows_and_files(tmp_
         artwork_id=artwork.id,
         provider_key="prodigi",
         category_id="paperPrintRolled",
-        asset_role="paper_border_ready",
+        asset_role="master",
         slot_size_label="30x40 cm",
         file_url=f"/{generated_path.as_posix()}",
         file_name="generated.png",
@@ -745,7 +745,7 @@ async def test_delete_generated_assets_for_master_removes_db_rows_and_files(tmp_
         artwork_id=artwork.id,
         provider_key="prodigi",
         category_id="paperPrintRolled",
-        asset_role="paper_border_ready",
+        asset_role="master",
         slot_size_label="20x30 cm",
         file_url="/static/print-prep/1/paper/other.png",
         file_name="other.png",

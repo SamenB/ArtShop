@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
-import { Brush, ChevronRight, Globe2, PackageCheck, Printer, ShoppingBag } from "lucide-react";
+import { Brush, ChevronRight, DollarSign, Globe2, PackageCheck, Printer, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import ArtworksTab from "@/app/admin/components/ArtworksTab";
@@ -10,6 +10,7 @@ import EmailTemplatesTab from "@/app/admin/components/EmailTemplatesTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
 import PrintPartnersTab from "@/app/admin/components/PrintPartnersTab";
+import PrintPricingTab from "@/app/admin/components/PrintPricingTab";
 import ProdigiHubTab from "@/app/admin/components/ProdigiHubTab";
 import ProdigiSnapshotTab from "@/app/admin/components/ProdigiSnapshotTab";
 import SiteContentTab, { ContentSubtab } from "@/app/admin/components/SiteContentTab";
@@ -18,6 +19,7 @@ import { useUser } from "@/context/UserContext";
 type AdminRoute =
     | "artworks"
     | "labels"
+    | "print-pricing"
     | "orders"
     | "print-dispatch"
     | "prodigi-snapshot"
@@ -47,6 +49,7 @@ const ADMIN_SECTIONS: AdminSection[] = [
         items: [
             { id: "artworks", label: "Artwork Workbench", description: "Create, edit, place, and prepare works." },
             { id: "labels", label: "Labels", description: "Curated taxonomy for gallery and shop filtering." },
+            { id: "print-pricing", label: "Print Pricing", description: "Regional markup multipliers for print-on-demand." },
         ],
     },
     {
@@ -111,6 +114,9 @@ function renderRoute(route: AdminRoute) {
     }
     if (route === "print-dispatch") {
         return <PrintPartnersTab />;
+    }
+    if (route === "print-pricing") {
+        return <PrintPricingTab />;
     }
     if (route === "prodigi-snapshot") {
         return <ProdigiSnapshotTab />;

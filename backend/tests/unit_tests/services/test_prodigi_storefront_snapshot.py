@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from src.services.prodigi_storefront_snapshot import ProdigiStorefrontSnapshotService
+from src.integrations.prodigi.services.prodigi_storefront_snapshot import (
+    ProdigiStorefrontSnapshotService,
+)
 
 
 def make_size(

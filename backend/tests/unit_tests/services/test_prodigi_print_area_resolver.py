@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.connectors.prodigi import ProductDetails, ProductVariant
-from src.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
+from src.integrations.prodigi.connectors.client import ProductDetails, ProductVariant
+from src.integrations.prodigi.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ from src.models.email_templates import EmailTemplateOrm
 from src.models.label_categories import LabelCategoriesOrm
 from src.models.labels import ArtworkLabelsOrm, LabelsOrm
 from src.models.orders import OrderItemOrm, OrdersOrm
-from src.models.print_pricing import PrintAspectRatioOrm, PrintPricingOrm
+from src.models.print_pricing import PrintAspectRatioOrm
 from src.models.users import UsersOrm
 from src.repositories.mappers.base import DataMapper
 from src.schemas.artwork_print_assets import ArtworkPrintAsset
@@ -17,7 +17,7 @@ from src.schemas.artworks import Artwork
 from src.schemas.email_templates import EmailTemplate
 from src.schemas.labels import ArtworkLabel, Label, LabelCategory
 from src.schemas.orders import Order, OrderItem
-from src.schemas.print_pricing import AspectRatioItem, PrintPricingItem
+from src.schemas.print_pricing import AspectRatioItem
 from src.schemas.users import User
 
 
@@ -83,8 +83,3 @@ class AspectRatioMapper(DataMapper):
     schema = AspectRatioItem
 
 
-class PrintPricingMapper(DataMapper):
-    """Mapper for PrintPricingOrm entities."""
-
-    db_model = PrintPricingOrm
-    schema = PrintPricingItem

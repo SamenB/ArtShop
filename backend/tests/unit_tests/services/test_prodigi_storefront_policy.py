@@ -1,4 +1,6 @@
-from src.services.prodigi_storefront_policy import ProdigiStorefrontPolicyService
+from src.integrations.prodigi.services.prodigi_storefront_policy import (
+    ProdigiStorefrontPolicyService,
+)
 
 
 def make_row(
@@ -48,7 +50,7 @@ def test_policy_removes_float_glass_from_paper_box_frame() -> None:
     assert result["policy_summary"]["paperPrintBoxFramed"]["recommended_defaults"] == {}
 
 
-def test_policy_separates_mounted_box_frame_from_no_mount_box_frame() -> None:
+def test_policy_ignores_removed_mounted_box_frame_category() -> None:
     service = ProdigiStorefrontPolicyService()
     rows = [
         make_row(
@@ -68,8 +70,8 @@ def test_policy_separates_mounted_box_frame_from_no_mount_box_frame() -> None:
 
     result = service.apply(rows)
 
-    assert len(result["rows"]) == 1
-    assert result["rows"][0]["mount"] == "2.4mm"
+    assert result["rows"] == []
+    assert "paperPrintBoxFramedMounted" not in result["policy_summary"]
 
 
 def test_policy_accepts_no_mount_spelling_variants_for_unmounted_frames() -> None:

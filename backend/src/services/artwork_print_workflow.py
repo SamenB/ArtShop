@@ -26,14 +26,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.exeptions import ObjectNotFoundException
+from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStorefrontRepository
+from src.integrations.prodigi.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
 from src.models.artworks import ArtworksOrm
 from src.print_on_demand import get_print_provider
-from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
 from src.services.artwork_print_profiles import (
     WRAPPED_CANVAS_CATEGORIES,
     extract_canvas_wrap_selection,
 )
-from src.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
 
 Image.MAX_IMAGE_PIXELS = None
 

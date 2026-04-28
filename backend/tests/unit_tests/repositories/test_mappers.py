@@ -18,6 +18,9 @@ def test_artwork_mapper():
         has_canvas_print_limited=False,
         has_paper_print=True,
         has_paper_print_limited=False,
+        show_in_gallery=True,
+        show_in_shop=True,
+        white_border_pct=5.0,
         images=["/test.png"],
     )
     schema = ArtworkMapper.map_to_schema(mock_artwork)

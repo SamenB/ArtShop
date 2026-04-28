@@ -10,6 +10,12 @@ from src.models.label_categories import LabelCategoriesOrm as LabelCategoriesOrm
 from src.models.labels import LabelsOrm as LabelsOrm
 from src.models.orders import OrdersOrm as OrdersOrm
 from src.models.print_pricing import PrintPricingOrm as PrintPricingOrm
+from src.models.print_pricing_regions import (
+    PrintPricingRegionMultiplierOrm as PrintPricingRegionMultiplierOrm,
+)
+from src.models.print_pricing_regions import (
+    PrintPricingRegionOrm as PrintPricingRegionOrm,
+)
 from src.models.prodigi_catalog import ProdigiCatalogProductOrm as ProdigiCatalogProductOrm
 from src.models.prodigi_catalog import ProdigiCatalogRouteOrm as ProdigiCatalogRouteOrm
 from src.models.prodigi_catalog import ProdigiCatalogVariantOrm as ProdigiCatalogVariantOrm

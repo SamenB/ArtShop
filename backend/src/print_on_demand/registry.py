@@ -3,8 +3,8 @@ from __future__ import annotations
 from functools import lru_cache
 
 from src.config import settings
+from src.integrations.prodigi.provider import ProdigiPrintProvider
 from src.print_on_demand.base import PrintProvider
-from src.print_on_demand.providers.prodigi import ProdigiPrintProvider
 
 PROVIDER_REGISTRY: dict[str, type[PrintProvider]] = {
     "prodigi": ProdigiPrintProvider,

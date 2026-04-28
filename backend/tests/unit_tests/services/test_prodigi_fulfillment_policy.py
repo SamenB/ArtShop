@@ -1,5 +1,7 @@
-from src.services.prodigi_fulfillment_policy import ProdigiFulfillmentPolicyService
-from src.services.prodigi_sizing.selector import ProdigiSizeSelectorService
+from src.integrations.prodigi.services.prodigi_fulfillment_policy import (
+    ProdigiFulfillmentPolicyService,
+)
+from src.integrations.prodigi.services.sizing.selector import ProdigiSizeSelectorService
 
 
 def make_row(

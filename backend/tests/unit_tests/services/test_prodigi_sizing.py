@@ -1,4 +1,4 @@
-from src.services.prodigi_sizing.selector import ProdigiSizeSelectorService
+from src.integrations.prodigi.services.sizing.selector import ProdigiSizeSelectorService
 
 
 def make_row(

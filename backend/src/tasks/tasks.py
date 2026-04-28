@@ -11,11 +11,9 @@ from pathlib import Path
 from loguru import logger
 from PIL import Image
 from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
 
 from src.database import new_session_null_pool
 from src.models.artworks import ArtworksOrm
-from src.models.orders import OrdersOrm
 from src.tasks.celery_app import celery_instance
 from src.utils.db_manager import DBManager
 
@@ -164,31 +162,3 @@ def release_abandoned_orders():
     logger.info("Task finished: release_abandoned_orders")
 
 
-async def submit_prodigi_order_items_helper(order_id: int):
-    from src.services.prodigi_orders import ProdigiOrderService
-
-    async with new_session_null_pool() as session:
-        result = await session.execute(
-            select(OrdersOrm)
-            .where(OrdersOrm.id == order_id)
-            .options(selectinload(OrdersOrm.items))
-        )
-        order = result.scalar_one_or_none()
-        if order is None:
-            logger.error("Prodigi submit task skipped: order {} not found", order_id)
-            return
-        await ProdigiOrderService.submit_order_items(order, session)
-
-
-@celery_instance.task(name="submit_prodigi_order_items")
-def submit_prodigi_order_items(order_id: int):
-    """
-    Renders exact print assets and submits paid print items to Prodigi in a worker process.
-    """
-    logger.info("Task started: submit_prodigi_order_items order_id={}", order_id)
-    try:
-        run_async(submit_prodigi_order_items_helper(order_id))
-    except Exception as e:
-        logger.error("Task failed: submit_prodigi_order_items order_id={}: {}", order_id, e)
-        raise
-    logger.info("Task finished: submit_prodigi_order_items order_id={}", order_id)

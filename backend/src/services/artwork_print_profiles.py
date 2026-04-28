@@ -8,9 +8,9 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStorefrontRepository
+from src.integrations.prodigi.services.prodigi_storefront_policy import STOREFRONT_POLICY
 from src.models.artworks import ArtworksOrm
-from src.repositories.prodigi_storefront import ProdigiStorefrontRepository
-from src.services.prodigi_storefront_policy import STOREFRONT_POLICY
 
 CANVAS_WRAP_OPTIONS = ("White", "Black", "ImageWrap", "MirrorWrap")
 WRAPPED_CANVAS_CATEGORIES = (
@@ -128,20 +128,6 @@ CATEGORY_PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
             "No-mount framed paper is rendered to the exact visible print target.",
         ],
     },
-    "paperPrintBoxFramedMounted": {
-        "prodigi_sizing": "fillPrintArea",
-        "editor_mode": "front_only_mount",
-        "crop_strategy": "cover",
-        "safe_margin_pct": 3.0,
-        "mount_safe_margin_pct": 6.0,
-        "wrap_margin_pct": 0.0,
-        "edge_extension_mode": "none",
-        "background_fill": "none",
-        "notes": [
-            "Mounted framed paper is rendered to Prodigi's image-window print target, not the outer frame size.",
-            "Keep signatures and fine border detail inside the mount safe margin.",
-        ],
-    },
     "paperPrintClassicFramed": {
         "prodigi_sizing": "fillPrintArea",
         "editor_mode": "front_only",
@@ -153,20 +139,6 @@ CATEGORY_PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
         "background_fill": "none",
         "notes": [
             "Classic framed paper is rendered to the exact visible print target.",
-        ],
-    },
-    "paperPrintClassicFramedMounted": {
-        "prodigi_sizing": "fillPrintArea",
-        "editor_mode": "front_only_mount",
-        "crop_strategy": "cover",
-        "safe_margin_pct": 3.0,
-        "mount_safe_margin_pct": 6.0,
-        "wrap_margin_pct": 0.0,
-        "edge_extension_mode": "none",
-        "background_fill": "none",
-        "notes": [
-            "Mounted classic framed paper is rendered to Prodigi's image-window print target.",
-            "Keep signatures and fine border detail inside the mount safe margin.",
         ],
     },
     "canvasRolled": {

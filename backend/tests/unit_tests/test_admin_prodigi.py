@@ -3,12 +3,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from src.api.admin_prodigi import (
+from src.init import redis_manager
+from src.integrations.prodigi.api.admin_prodigi import (
     ARTWORK_PRINT_CACHE_PREFIXES,
     _clear_artwork_print_storefront_cache,
     refresh_artwork_payloads,
 )
-from src.init import redis_manager
 
 
 class DummyRedis:
@@ -93,12 +93,18 @@ async def test_refresh_artwork_payloads_rematerializes_active_bake(monkeypatch):
     async def fake_clear():
         return {"status": "cleared", "deleted_keys": 2}
 
-    monkeypatch.setattr("src.api.admin_prodigi.ProdigiStorefrontRepository", DummyRepository)
     monkeypatch.setattr(
-        "src.api.admin_prodigi.ProdigiArtworkStorefrontMaterializerService",
+        "src.integrations.prodigi.api.admin_prodigi.ProdigiStorefrontRepository",
+        DummyRepository,
+    )
+    monkeypatch.setattr(
+        "src.integrations.prodigi.api.admin_prodigi.ProdigiArtworkStorefrontMaterializerService",
         DummyMaterializer,
     )
-    monkeypatch.setattr("src.api.admin_prodigi._clear_artwork_print_storefront_cache", fake_clear)
+    monkeypatch.setattr(
+        "src.integrations.prodigi.api.admin_prodigi._clear_artwork_print_storefront_cache",
+        fake_clear,
+    )
 
     result = await refresh_artwork_payloads(
         admin_id=1,
@@ -140,7 +146,10 @@ async def test_refresh_artwork_payloads_requires_active_bake(monkeypatch):
         async def get_active_bake(self):
             return None
 
-    monkeypatch.setattr("src.api.admin_prodigi.ProdigiStorefrontRepository", DummyRepository)
+    monkeypatch.setattr(
+        "src.integrations.prodigi.api.admin_prodigi.ProdigiStorefrontRepository",
+        DummyRepository,
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         await refresh_artwork_payloads(

@@ -101,8 +101,7 @@ function isMountedFrame(card: StorefrontCard | null): boolean {
 function isUkShippedBoxFrame(card: StorefrontCard | null, countryCode?: string | null): boolean {
     if (
         !card ||
-        (card.category_id !== "paperPrintBoxFramed" &&
-            card.category_id !== "paperPrintBoxFramedMounted")
+        card.category_id !== "paperPrintBoxFramed"
     ) {
         return false;
     }

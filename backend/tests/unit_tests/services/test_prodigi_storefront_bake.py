@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.services.prodigi_storefront_bake import (
+from src.integrations.prodigi.services.prodigi_storefront_bake import (
     ProdigiPrintAreaBakeError,
     ProdigiStorefrontBakeService,
 )

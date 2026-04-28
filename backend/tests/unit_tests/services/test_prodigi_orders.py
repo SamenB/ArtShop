@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.services.prodigi_orders import ProdigiOrderService
+from src.integrations.prodigi.services.prodigi_orders import ProdigiOrderService
 
 
 class _ScalarResult:
@@ -27,6 +27,19 @@ class _FakeProdigiClient:
     async def post(self, path, body):
         self.calls.append((path, body))
         return self.response
+
+
+class _FakeOrderAssetService:
+    prepared_asset = {
+        "file_url": "/static/print-prep/7/clean/derived/40x50.png",
+        "print_area_name": "default",
+    }
+
+    def __init__(self, db_session):
+        self.db_session = db_session
+
+    async def prepare_order_asset(self, **kwargs):
+        return self.prepared_asset
 
 
 def _build_order_item(**overrides):
@@ -69,14 +82,17 @@ def _build_order(item):
 @pytest.mark.asyncio
 async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
     _FakeProdigiClient.calls = []
-    monkeypatch.setattr("src.services.prodigi_orders.ProdigiClient", _FakeProdigiClient)
-
-    prepared_asset = SimpleNamespace(
-        id=77,
-        file_url="/static/print-prep/7/clean/derived/40x50.png",
+    monkeypatch.setattr("src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient)
+    _FakeOrderAssetService.prepared_asset = {
+        "file_url": "/static/print-prep/7/clean/derived/40x50.png",
+    }
+    monkeypatch.setattr(
+        "src.integrations.prodigi.services.prodigi_orders.ProdigiOrderAssetService",
+        _FakeOrderAssetService,
     )
+
     db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(prepared_asset)),
+        execute=AsyncMock(return_value=_ScalarResult(None)),
         commit=AsyncMock(),
     )
     item = _build_order_item()
@@ -92,14 +108,23 @@ async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
     assert body["items"][0]["assets"][0]["url"] == (
         "http://localhost:8000/static/print-prep/7/clean/derived/40x50.png"
     )
+    assert body["items"][0]["assets"][0]["printArea"] == "default"
     assert body["items"][0]["attributes"] == {"wrap": "White"}
     db_session.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypatch):
+async def test_submit_order_items_uses_resolved_print_area_name(monkeypatch):
     _FakeProdigiClient.calls = []
-    monkeypatch.setattr("src.services.prodigi_orders.ProdigiClient", _FakeProdigiClient)
+    monkeypatch.setattr("src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient)
+    _FakeOrderAssetService.prepared_asset = {
+        "file_url": "/static/print-prep/7/clean/derived/40x50.png",
+        "print_area_name": "one",
+    }
+    monkeypatch.setattr(
+        "src.integrations.prodigi.services.prodigi_orders.ProdigiOrderAssetService",
+        _FakeOrderAssetService,
+    )
 
     db_session = SimpleNamespace(
         execute=AsyncMock(return_value=_ScalarResult(None)),
@@ -110,7 +135,30 @@ async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypa
 
     await ProdigiOrderService.submit_order_items(order, db_session)
 
-    assert item.prodigi_status == "Failed - Missing Prepared Asset"
+    _path, body = _FakeProdigiClient.calls[0]
+    assert body["items"][0]["assets"][0]["printArea"] == "one"
+
+
+@pytest.mark.asyncio
+async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypatch):
+    _FakeProdigiClient.calls = []
+    monkeypatch.setattr("src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient)
+    _FakeOrderAssetService.prepared_asset = None
+    monkeypatch.setattr(
+        "src.integrations.prodigi.services.prodigi_orders.ProdigiOrderAssetService",
+        _FakeOrderAssetService,
+    )
+
+    db_session = SimpleNamespace(
+        execute=AsyncMock(return_value=_ScalarResult(None)),
+        commit=AsyncMock(),
+    )
+    item = _build_order_item()
+    order = _build_order(item)
+
+    await ProdigiOrderService.submit_order_items(order, db_session)
+
+    assert item.prodigi_status == "Failed - Missing Order Asset"
     assert item.prodigi_order_id is None
     assert _FakeProdigiClient.calls == []
     db_session.commit.assert_awaited_once()

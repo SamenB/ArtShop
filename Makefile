@@ -60,4 +60,4 @@ lint:
 
 # Rebuild baked Prodigi storefront directly from local CSV files
 prodigi-rebuild:
-	cd backend && $(ACTIVATE) && python -m src.tasks.prodigi_rebuild_storefront
+	cd backend && $(ACTIVATE) && python -m src.integrations.prodigi.tasks.prodigi_rebuild_storefront

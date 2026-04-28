@@ -2,7 +2,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.services.prodigi_artwork_storefront import ProdigiArtworkStorefrontService
+from src.integrations.prodigi.services.prodigi_artwork_storefront import (
+    ProdigiArtworkStorefrontService,
+)
 
 
 class FakeArtworkService:

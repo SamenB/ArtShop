@@ -1,23 +1,14 @@
-"""
-Service layer for normalized print aspect ratios and legacy manual pricing rows.
-
-Aspect ratios remain part of the active admin and artwork workflow.
-Manual pricing rows remain only for compatibility and should not be treated as
-the runtime storefront price source.
-"""
+"""Service layer for normalized print aspect ratios."""
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.exeptions import DatabaseException, ObjectNotFoundException
-from src.models.print_pricing import PrintAspectRatioOrm, PrintPricingOrm
+from src.models.print_pricing import PrintAspectRatioOrm
 from src.schemas.print_pricing import (
     AspectRatioCreate,
     AspectRatioItem,
     AspectRatioUpdate,
-    PrintPricingCreate,
-    PrintPricingItem,
-    PrintPricingUpdate,
 )
 from src.services.base import BaseService
 
@@ -51,10 +42,7 @@ DEFAULT_ASPECT_RATIO_PRESETS = (
 
 
 class PrintPricingService(BaseService):
-    """
-    Provides high-level methods for managing normalized print aspect ratios and
-    legacy manual pricing entries.
-    """
+    """Provides high-level methods for managing normalized print aspect ratios."""
 
     async def get_all_aspect_ratios(self) -> list[AspectRatioItem]:
         """Returns all aspect ratio categories sorted by sort_order, then label."""
@@ -138,78 +126,6 @@ class PrintPricingService(BaseService):
         try:
             result = await self.db.session.execute(
                 select(PrintAspectRatioOrm).where(PrintAspectRatioOrm.id == aspect_ratio_id)
-            )
-            row = result.scalars().one_or_none()
-            if not row:
-                raise ObjectNotFoundException
-
-            await self.db.session.delete(row)
-            await self.db.commit()
-        except ObjectNotFoundException:
-            raise
-        except SQLAlchemyError:
-            await self.db.rollback()
-            raise DatabaseException from None
-
-    async def get_all(self) -> list[PrintPricingItem]:
-        """Returns all legacy manual pricing entries ordered by ratio, type, and price."""
-        try:
-            return await self.db.print_pricing.get_all()
-        except SQLAlchemyError:
-            raise DatabaseException from None
-
-    async def create(self, data: PrintPricingCreate) -> PrintPricingItem:
-        """Creates a new legacy manual pricing entry under the specified aspect ratio."""
-        try:
-            parent = await self.db.session.get(PrintAspectRatioOrm, data.aspect_ratio_id)
-            if not parent:
-                raise ObjectNotFoundException(detail="Aspect ratio not found")
-
-            row = PrintPricingOrm(
-                aspect_ratio_id=data.aspect_ratio_id,
-                print_type=data.print_type.value,
-                size_label=data.size_label,
-                price=data.price,
-            )
-            self.db.session.add(row)
-            await self.db.commit()
-            await self.db.session.refresh(row)
-            return PrintPricingItem.model_validate(row, from_attributes=True)
-        except ObjectNotFoundException:
-            raise
-        except SQLAlchemyError:
-            await self.db.rollback()
-            raise DatabaseException from None
-
-    async def update(self, item_id: int, data: PrintPricingUpdate) -> PrintPricingItem:
-        """Applies a partial update to an existing legacy pricing entry."""
-        try:
-            result = await self.db.session.execute(
-                select(PrintPricingOrm).where(PrintPricingOrm.id == item_id)
-            )
-            row = result.scalars().one_or_none()
-            if not row:
-                raise ObjectNotFoundException
-
-            if data.size_label is not None:
-                row.size_label = data.size_label
-            if data.price is not None:
-                row.price = data.price
-
-            await self.db.commit()
-            await self.db.session.refresh(row)
-            return PrintPricingItem.model_validate(row, from_attributes=True)
-        except ObjectNotFoundException:
-            raise
-        except SQLAlchemyError:
-            await self.db.rollback()
-            raise DatabaseException from None
-
-    async def delete(self, item_id: int) -> None:
-        """Deletes a legacy pricing entry by ID."""
-        try:
-            result = await self.db.session.execute(
-                select(PrintPricingOrm).where(PrintPricingOrm.id == item_id)
             )
             row = result.scalars().one_or_none()
             if not row:
