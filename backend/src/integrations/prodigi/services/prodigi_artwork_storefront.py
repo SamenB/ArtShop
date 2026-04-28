@@ -73,7 +73,9 @@ class ProdigiArtworkStorefrontService:
             profile_bundle=profile_bundle,
             medium_availability=medium_availability,
         )
-        cache_key = f"prodigi:artwork-storefront:v1:{artwork.id}:{requested_country}:{payload_signature}"
+        cache_key = (
+            f"prodigi:artwork-storefront:v1:{artwork.id}:{requested_country}:{payload_signature}"
+        )
         cached_payload = await self._get_cached_payload(cache_key)
         if cached_payload is not None:
             return cached_payload
@@ -142,9 +144,7 @@ class ProdigiArtworkStorefrontService:
             return base_payload
 
         base_payload["country_name"] = snapshot.get("country_name")
-        categories_by_id = {
-            item["category_id"]: item for item in snapshot.get("categories", [])
-        }
+        categories_by_id = {item["category_id"]: item for item in snapshot.get("categories", [])}
         effective_profiles = profile_bundle.get("effective_profiles") or {}
 
         for cell in snapshot.get("category_cells", []):
@@ -275,6 +275,7 @@ class ProdigiArtworkStorefrontService:
 
             size_options.append(
                 {
+                    "id": size_entry.get("id"),
                     "slot_size_label": size_entry["slot_size_label"],
                     "size_label": size_entry["size_label"],
                     "sku": size_entry.get("sku"),
@@ -325,8 +326,7 @@ class ProdigiArtworkStorefrontService:
             "storefront_action": cell.get("storefront_action"),
             "fulfillment_level": cell.get("effective_fulfillment_level")
             or cell.get("fulfillment_level"),
-            "geography_scope": cell.get("effective_geography_scope")
-            or cell.get("geography_scope"),
+            "geography_scope": cell.get("effective_geography_scope") or cell.get("geography_scope"),
             "tax_risk": cell.get("effective_tax_risk") or cell.get("tax_risk"),
             "source_mix": cell.get("source_mix"),
             "source_countries": cell.get("source_countries") or [],

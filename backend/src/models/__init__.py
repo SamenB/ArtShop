@@ -19,6 +19,15 @@ from src.models.print_pricing_regions import (
 from src.models.prodigi_catalog import ProdigiCatalogProductOrm as ProdigiCatalogProductOrm
 from src.models.prodigi_catalog import ProdigiCatalogRouteOrm as ProdigiCatalogRouteOrm
 from src.models.prodigi_catalog import ProdigiCatalogVariantOrm as ProdigiCatalogVariantOrm
+from src.models.prodigi_fulfillment import (
+    ProdigiFulfillmentEventOrm as ProdigiFulfillmentEventOrm,
+)
+from src.models.prodigi_fulfillment import (
+    ProdigiFulfillmentGateResultOrm as ProdigiFulfillmentGateResultOrm,
+)
+from src.models.prodigi_fulfillment import (
+    ProdigiFulfillmentJobOrm as ProdigiFulfillmentJobOrm,
+)
 from src.models.prodigi_storefront import (
     ProdigiArtworkStorefrontPayloadOrm as ProdigiArtworkStorefrontPayloadOrm,
 )

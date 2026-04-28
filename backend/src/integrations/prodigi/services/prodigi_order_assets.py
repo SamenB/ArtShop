@@ -194,10 +194,16 @@ class ProdigiOrderAssetService:
                 ProdigiStorefrontOfferGroupOrm.destination_country == normalized_country
             )
         if sku:
-            query = query.where(ProdigiStorefrontOfferSizeOrm.sku == sku)
-
-        result = await self.db_session.execute(query.limit(1))
-        size = result.scalar_one_or_none()
+            result = await self.db_session.execute(
+                query.where(ProdigiStorefrontOfferSizeOrm.sku == sku).limit(1)
+            )
+            size = result.scalar_one_or_none()
+            if size is None:
+                result = await self.db_session.execute(query.limit(1))
+                size = result.scalar_one_or_none()
+        else:
+            result = await self.db_session.execute(query.limit(1))
+            size = result.scalar_one_or_none()
         if size is None or not size.print_area_width_px or not size.print_area_height_px:
             return None
 
@@ -211,6 +217,8 @@ class ProdigiOrderAssetService:
             "supplier_size_cm": size.supplier_size_cm,
             "sku": size.sku,
             "slot_size_label": size.slot_size_label,
+            "product_price": float(size.product_price) if size.product_price is not None else None,
+            "shipping_price": float(size.shipping_price) if size.shipping_price is not None else None,
         }
 
     async def verify_target_size_with_prodigi_api(

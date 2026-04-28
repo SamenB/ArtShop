@@ -121,6 +121,7 @@ class OrderItemBase(BaseModel):
     price: int
 
     # Prodigi Print-on-Demand Fields
+    prodigi_storefront_offer_size_id: Optional[int] = None
     prodigi_sku: Optional[str] = None
     prodigi_category_id: Optional[str] = None
     prodigi_slot_size_label: Optional[str] = None
@@ -131,6 +132,25 @@ class OrderItemBase(BaseModel):
     prodigi_wholesale_eur: Optional[float] = None
     prodigi_shipping_eur: Optional[float] = None
     prodigi_retail_eur: Optional[float] = None
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def normalize_price_to_integer(cls, value):
+        if isinstance(value, bool):
+            raise ValueError("Price must be a valid number")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return round(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                raise ValueError("Price must be a valid number")
+            try:
+                return round(float(stripped))
+            except ValueError as exc:
+                raise ValueError("Price must be a valid number") from exc
+        return value
 
 
 class OrderItem(OrderItemBase):

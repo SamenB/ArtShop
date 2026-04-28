@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
-import { Brush, ChevronRight, DollarSign, Globe2, PackageCheck, Printer, ShoppingBag } from "lucide-react";
+import { Brush, ChevronRight, DollarSign, Globe2, PackageCheck, Printer, Settings, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import ArtworksTab from "@/app/admin/components/ArtworksTab";
+import AdminProfileTab from "@/app/admin/components/AdminProfileTab";
 import EmailTemplatesTab from "@/app/admin/components/EmailTemplatesTab";
 import LabelsTab from "@/app/admin/components/LabelsTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
-import PrintPartnersTab from "@/app/admin/components/PrintPartnersTab";
 import PrintPricingTab from "@/app/admin/components/PrintPricingTab";
 import ProdigiHubTab from "@/app/admin/components/ProdigiHubTab";
 import ProdigiSnapshotTab from "@/app/admin/components/ProdigiSnapshotTab";
@@ -21,7 +21,7 @@ type AdminRoute =
     | "labels"
     | "print-pricing"
     | "orders"
-    | "print-dispatch"
+    | "admin-profile"
     | "prodigi-snapshot"
     | "prodigi-catalog"
     | "website-global"
@@ -33,7 +33,7 @@ type AdminRoute =
     | "email-templates";
 
 type AdminSection = {
-    id: "artwork" | "orders" | "prodigi" | "website";
+    id: "artwork" | "orders" | "prodigi" | "website" | "profile";
     label: string;
     description: string;
     icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
@@ -55,11 +55,10 @@ const ADMIN_SECTIONS: AdminSection[] = [
     {
         id: "orders",
         label: "Orders",
-        description: "Customer orders and manual print dispatch controls.",
+        description: "Customer orders, payment checks, and Prodigi fulfillment.",
         icon: ShoppingBag,
         items: [
             { id: "orders", label: "Orders", description: "Fulfillment states, payment, shipping, and history." },
-            { id: "print-dispatch", label: "Print Dispatch", description: "Telegram print-studio dispatch setup." },
         ],
     },
     {
@@ -87,6 +86,15 @@ const ADMIN_SECTIONS: AdminSection[] = [
             { id: "email-templates", label: "Email Templates", description: "Transactional email copy and triggers." },
         ],
     },
+    {
+        id: "profile",
+        label: "Admin Profile",
+        description: "Owner contacts and internal notification settings.",
+        icon: Settings,
+        items: [
+            { id: "admin-profile", label: "Owner Profile", description: "Owner contact data and Telegram alert setup." },
+        ],
+    },
 ];
 
 const ROUTE_TO_CONTENT_PAGE: Partial<Record<AdminRoute, ContentSubtab>> = {
@@ -112,8 +120,8 @@ function renderRoute(route: AdminRoute) {
     if (route === "orders") {
         return <OrdersTab />;
     }
-    if (route === "print-dispatch") {
-        return <PrintPartnersTab />;
+    if (route === "admin-profile") {
+        return <AdminProfileTab />;
     }
     if (route === "print-pricing") {
         return <PrintPricingTab />;

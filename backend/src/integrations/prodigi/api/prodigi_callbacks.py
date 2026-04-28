@@ -6,14 +6,25 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import DBDep
+from src.config import settings
 from src.models.orders import OrderItemOrm, OrdersOrm
+from src.models.prodigi_fulfillment import ProdigiFulfillmentEventOrm
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 
+
 @router.post("/prodigi")
 async def prodigi_callback(request: Request, db: DBDep, background_tasks: BackgroundTasks):
+    if settings.PRODIGI_WEBHOOK_SECRET:
+        supplied = request.query_params.get("token") or request.headers.get(
+            "X-Prodigi-Webhook-Secret"
+        )
+        if supplied != settings.PRODIGI_WEBHOOK_SECRET:
+            log.warning("Rejected Prodigi webhook with invalid or missing shared secret.")
+            return {"status": "error", "message": "invalid webhook secret"}
+
     try:
         event = await request.json()
     except Exception as e:
@@ -21,8 +32,19 @@ async def prodigi_callback(request: Request, db: DBDep, background_tasks: Backgr
         return {"status": "error", "message": "invalid payload"}
 
     log.info(f"Received Prodigi webhook event: {event}")
+    db.session.add(
+        ProdigiFulfillmentEventOrm(
+            order_id=None,
+            event_type="webhook",
+            stage="received",
+            status="received",
+            response_payload=event,
+            metadata_json={"source": "prodigi"},
+        )
+    )
 
     if not _is_order_event(event):
+        await db.commit()
         return {"status": "ok"}
 
     order_data = _extract_order_data(event)
@@ -31,8 +53,9 @@ async def prodigi_callback(request: Request, db: DBDep, background_tasks: Backgr
     stage = status_data.get("stage") or _stage_from_event_type(event.get("type"))
 
     if not ord_id or not stage:
-         log.error("Missing order id or stage in Prodigi webhook payload")
-         return {"status": "error"}
+        log.error("Missing order id or stage in Prodigi webhook payload")
+        await db.commit()
+        return {"status": "error"}
 
     # Find matching OrderItem
     stmt = (
@@ -45,11 +68,40 @@ async def prodigi_callback(request: Request, db: DBDep, background_tasks: Backgr
 
     if not item:
         log.warning(f"Received Prodigi update for unknown order_id: {ord_id}")
+        db.session.add(
+            ProdigiFulfillmentEventOrm(
+                event_type="webhook",
+                stage=stage,
+                status="unknown_external_order",
+                external_id=ord_id,
+                response_payload=event,
+            )
+        )
+        await db.commit()
         return {"status": "ok"}
 
     issues = status_data.get("issues") or []
     item.prodigi_status = _format_item_status(stage, issues)
     _apply_shipment_tracking(item.order, order_data)
+    db.session.add(
+        ProdigiFulfillmentEventOrm(
+            order_id=item.order_id,
+            order_item_id=item.id,
+            user_id=getattr(item.order, "user_id", None),
+            event_type="webhook",
+            stage=stage,
+            status="passed" if not issues else "issue",
+            external_id=ord_id,
+            response_payload=event,
+            metadata_json={
+                "prodigi_status": item.prodigi_status,
+                "issues": issues,
+                "tracking_number": getattr(item.order, "tracking_number", None),
+                "carrier": getattr(item.order, "carrier", None),
+                "tracking_url": getattr(item.order, "tracking_url", None),
+            },
+        )
+    )
     await db.commit()
 
     log.info(f"Updated OrderItem {item.id} prodigi_status to {item.prodigi_status}")
@@ -64,7 +116,12 @@ def _is_order_event(event: dict[str, Any]) -> bool:
 
 def _extract_order_data(event: dict[str, Any]) -> dict[str, Any]:
     data = event.get("data") if isinstance(event.get("data"), dict) else {}
-    for value in (data.get("order"), event.get("order"), data.get("resource"), event.get("resource")):
+    for value in (
+        data.get("order"),
+        event.get("order"),
+        data.get("resource"),
+        event.get("resource"),
+    ):
         if isinstance(value, dict):
             return value
     return {}

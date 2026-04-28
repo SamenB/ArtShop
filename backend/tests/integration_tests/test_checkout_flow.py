@@ -316,6 +316,24 @@ class TestPaymentCreate:
             )
         assert resp.status_code == 404
 
+    async def test_create_payment_configuration_error_returns_json(self, ac, delete_all_orders):
+        """Monobank config errors should be JSON 502 responses, not plain text 500s."""
+        resp = await ac.post("/orders", json=_order_payload())
+        order_id = resp.json()["data"]["id"]
+
+        with patch(
+            "src.api.payments.MonobankService.__init__",
+            side_effect=ValueError("MONOBANK_TOKEN is not configured"),
+        ):
+            pay_resp = await ac.post(
+                "/payments/create",
+                json={"order_id": order_id, "currency": "UAH"},
+            )
+
+        assert pay_resp.status_code == 502
+        assert pay_resp.headers["content-type"].startswith("application/json")
+        assert "MONOBANK_TOKEN is not configured" in pay_resp.json()["detail"]
+
 
 # ---------------------------------------------------------------------------
 # Webhook Processing

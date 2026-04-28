@@ -42,6 +42,7 @@ export interface CartItem {
         | "paper_print"
         | "paper_print_limited";
     /** Prodigi SKU for the selected variant. */
+    prodigi_storefront_offer_size_id?: number;
     prodigi_sku?: string;
     /** Normalized storefront category id for exact prepared asset resolution. */
     prodigi_category_id?: string;

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from src.config import settings
 from src.database import new_session_null_pool
 from src.integrations.prodigi.connectors.client import ProdigiClient
+from src.integrations.prodigi.services.prodigi_attributes import normalize_prodigi_attributes
 from src.integrations.prodigi.services.prodigi_order_assets import ProdigiOrderAssetService
 from src.integrations.prodigi.services.prodigi_orders import ProdigiOrderService
 from src.integrations.prodigi.services.prodigi_print_area_resolver import ProdigiPrintAreaResolver
@@ -58,9 +59,10 @@ async def run_playground(
         product_checks = []
         quote_checks = []
         if settings.PRODIGI_API_KEY:
-            async with ProdigiPrintAreaResolver() as resolver, ProdigiClient(
-                sandbox=settings.PRODIGI_SANDBOX
-            ) as client:
+            async with (
+                ProdigiPrintAreaResolver() as resolver,
+                ProdigiClient(sandbox=settings.PRODIGI_SANDBOX) as client,
+            ):
                 for sample in samples:
                     product_checks.append(await _check_product_details(resolver, sample))
                     quote_checks.append(await _check_quote(client, sample))
@@ -262,7 +264,7 @@ def _build_attributes(group: ProdigiStorefrontOfferGroupOrm) -> dict[str, Any]:
                 continue
             if isinstance(values, list) and values:
                 attributes[key] = values[0]
-    return {key: value for key, value in attributes.items() if value not in (None, "")}
+    return normalize_prodigi_attributes(attributes)
 
 
 async def _check_product_details(
@@ -433,7 +435,7 @@ async def _run_sandbox_order_smoke(
         print_area_name=rendered.get("print_area_name") or "default",
         merchant_reference=f"artshop-sandbox-artwork-{artwork.id}-{sample['sku']}",
         idempotency_key=f"artshop-sandbox-artwork-{artwork.id}-{sample['sku']}",
-        callback_url=f"{settings.PUBLIC_BASE_URL}/api/v1/webhooks/prodigi",
+        callback_url=ProdigiOrderService._callback_url(),
     )
 
     async with ProdigiClient(sandbox=True) as client:
@@ -524,7 +526,11 @@ def _is_public_http_url(value: str | None) -> bool:
     if not value:
         return False
     normalized = value.lower()
-    return normalized.startswith("https://") and "localhost" not in normalized and "127.0.0.1" not in normalized
+    return (
+        normalized.startswith("https://")
+        and "localhost" not in normalized
+        and "127.0.0.1" not in normalized
+    )
 
 
 def _redact_payload(payload: dict[str, Any]) -> dict[str, Any]:

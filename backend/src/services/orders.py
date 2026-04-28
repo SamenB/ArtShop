@@ -1,4 +1,4 @@
-"""
+﻿"""
 Service layer for order processing and management.
 Handles complex checkout logic including inventory checks for original artworks,
 print availability verification, and multi-entity transaction management.
@@ -11,11 +11,18 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.exeptions import (
     DatabaseException,
+    InvalidDataException,
     ObjectAlreadyExistsException,
     ObjectNotFoundException,
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
+from src.integrations.prodigi.services.prodigi_order_rehydration import (
+    ProdigiOrderRehydrationError,
+    ProdigiOrderRehydrationService,
+)
+from src.models.orders import OrdersOrm
+from src.models.site_settings import SiteSettingsOrm
 from src.print_on_demand import get_print_provider
 from src.schemas.artworks import ArtworkPatch
 from src.schemas.orders import (
@@ -31,7 +38,7 @@ from src.schemas.orders import (
 )
 from src.services.base import BaseService
 
-# Maps fulfillment_status → which timestamp column to set
+# Maps fulfillment_status â†’ which timestamp column to set
 FULFILLMENT_TIMESTAMP_MAP: dict[str, str] = {
     FulfillmentStatus.CONFIRMED: "confirmed_at",
     FulfillmentStatus.PRINT_ORDERED: "print_ordered_at",
@@ -71,7 +78,7 @@ class OrderService(BaseService):
     async def get_orders_by_email(self, email: str):
         """
         Retrieves all orders associated with a given email address.
-        Used for guest order tracking — no authentication required.
+        Used for guest order tracking â€” no authentication required.
         """
         try:
             return await self.db.orders.get_filtered(email=email)
@@ -116,6 +123,8 @@ class OrderService(BaseService):
             )
 
             order = await self.db.orders.add(order_add)
+            rehydration_service = ProdigiOrderRehydrationService(self.db)
+            recalculated_total_price = 0
 
             # 2. Process and validate each item in the order
             for item_data in order_data.items:
@@ -132,11 +141,17 @@ class OrderService(BaseService):
                     )
 
                 else:
-                    # Prints — verify the specific print type is enabled for this artwork.
-                    # EditionType.artwork_availability_flag maps type → model flag name.
+                    # Prints â€” verify the specific print type is enabled for this artwork.
+                    # EditionType.artwork_availability_flag maps type â†’ model flag name.
                     flag_name = item_data.edition_type.artwork_availability_flag
                     if not getattr(artwork, flag_name, False):
                         raise PrintsSoldOutException()
+
+                rehydrated_selection = await rehydration_service.rehydrate_item(
+                    artwork=artwork,
+                    item_data=item_data,
+                    destination_country=order_data.shipping_country_code,
+                )
 
                 # 3. Create the linked order item entry
                 item_add = OrderItemAdd(
@@ -146,6 +161,7 @@ class OrderService(BaseService):
                     finish=item_data.finish,
                     size=item_data.size,
                     price=item_data.price,
+                    prodigi_storefront_offer_size_id=item_data.prodigi_storefront_offer_size_id,
                     prodigi_sku=item_data.prodigi_sku,
                     prodigi_category_id=item_data.prodigi_category_id,
                     prodigi_slot_size_label=item_data.prodigi_slot_size_label,
@@ -155,7 +171,18 @@ class OrderService(BaseService):
                     prodigi_shipping_eur=item_data.prodigi_shipping_eur,
                     prodigi_retail_eur=item_data.prodigi_retail_eur,
                 )
+                rehydration_service.apply_to_item_add(item_add, rehydrated_selection)
+                recalculated_total_price += int(item_add.price)
                 await self.db.order_items.add(item_add)
+
+            if recalculated_total_price != order.total_price:
+                from sqlalchemy import update as sa_update
+
+                await self.db.session.execute(
+                    sa_update(OrdersOrm)
+                    .where(OrdersOrm.id == order.id)
+                    .values(total_price=recalculated_total_price)
+                )
 
             # Atomically commit the order and status changes
             await self.db.commit()
@@ -170,16 +197,16 @@ class OrderService(BaseService):
 
             from src.connectors.telegram import notify_admin_new_order
 
-            items_summary = "\n".join(
-                f"  • {it.edition_type} — ${it.price}"
-                for it in order.items
-            )
+            settings_obj = await self.db.session.get(SiteSettingsOrm, 1)
+            owner_chat_id = settings_obj.owner_telegram_chat_id if settings_obj else None
+            items_summary = "\n".join(f"  - {it.edition_type} - ${it.price}" for it in order.items)
             asyncio.create_task(
                 notify_admin_new_order(
                     order_id=order.id,
                     customer_name=f"{order.first_name} {order.last_name}",
                     total=order.total_price,
                     items_summary=items_summary,
+                    chat_id=owner_chat_id,
                 )
             )
 
@@ -189,9 +216,13 @@ class OrderService(BaseService):
             ObjectNotFoundException,
             OriginalSoldOutException,
             PrintsSoldOutException,
+            InvalidDataException,
         ):
             await self.db.rollback()
             raise
+        except ProdigiOrderRehydrationError as e:
+            await self.db.rollback()
+            raise InvalidDataException(detail=str(e))
         except SQLAlchemyError as e:
             logger.error("Database error during order creation: {}", e)
             await self.db.rollback()
@@ -357,7 +388,7 @@ class OrderService(BaseService):
             await self.db.commit()
 
             logger.info(
-                "Order {} fulfillment status updated: {} → {}",
+                "Order {} fulfillment status updated: {} â†’ {}",
                 order_id,
                 order.fulfillment_status,
                 new_status,
@@ -396,15 +427,13 @@ class OrderService(BaseService):
         Returns (None, None) for silent/internal statuses or inactive templates.
         """
         if fulfillment_status in _SILENT_FULFILLMENT_STATUSES:
-            logger.debug(
-                "Suppressing customer email for internal status '{}'", fulfillment_status
-            )
+            logger.debug("Suppressing customer email for internal status '{}'", fulfillment_status)
             return None, None
 
         template = await self.db.email_templates.get_by_key(f"fulfillment_{fulfillment_status}")
         if not template or not template.is_active:
             logger.debug(
-                "Email template 'fulfillment_{}' not found or inactive — skipping.",
+                "Email template 'fulfillment_{}' not found or inactive â€” skipping.",
                 fulfillment_status,
             )
             return None, None
@@ -488,7 +517,7 @@ class OrderService(BaseService):
         Terminal statuses ('paid', 'refunded') are protected from downgrade.
 
         When payment transitions to 'paid', automatically advances the
-        fulfillment_status from 'pending' → 'confirmed'.
+        fulfillment_status from 'pending' â†’ 'confirmed'.
 
         Args:
             invoice_id: The Monobank invoice identifier.
@@ -519,7 +548,7 @@ class OrderService(BaseService):
                 values["fulfillment_status"] = FulfillmentStatus.CONFIRMED.value
                 values["confirmed_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
                 logger.info(
-                    "Auto-advancing fulfillment for order {} pending → confirmed on payment",
+                    "Auto-advancing fulfillment for order {} pending â†’ confirmed on payment",
                     order.id,
                 )
 
@@ -552,16 +581,27 @@ class OrderService(BaseService):
             await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
 
             # Submit print-on-demand items through the active provider boundary.
-            if payment_status == "paid":
-                await get_print_provider().submit_paid_order_items(
-                    order=order,
-                    db_session=self.db.session,
+            if payment_status == "paid" and await self._prodigi_auto_fulfillment_enabled():
+                if self._print_provider_cost_is_covered(order):
+                    await get_print_provider().submit_paid_order_items(
+                        order=order,
+                        db_session=self.db.session,
+                    )
+                else:
+                    logger.warning(
+                        "Prodigi auto fulfillment blocked for order {}: supplier cost exceeds paid total.",
+                        order.id,
+                    )
+            elif payment_status == "paid":
+                logger.info(
+                    "Prodigi auto fulfillment is disabled; order {} is awaiting manual submit.",
+                    order.id,
                 )
 
             await self.db.commit()
 
             logger.info(
-                "Order {} payment status updated by webhook: {} → {}",
+                "Order {} payment status updated by webhook: {} â†’ {}",
                 order.id,
                 order.payment_status,
                 payment_status,
@@ -586,6 +626,59 @@ class OrderService(BaseService):
             logger.error("Failed to update payment status for invoice {}: {}", invoice_id, e)
             await self.db.rollback()
             raise DatabaseException
+
+    async def submit_order_to_print_provider(self, order_id: int) -> None:
+        """
+        Manually submits paid print items to the active print provider.
+
+        This is the admin-controlled path used when Prodigi fulfillment mode is manual.
+        The provider service remains idempotent through its stable fulfillment job key.
+        """
+        try:
+            order = await self.db.orders.get_one(id=order_id)
+            if order.payment_status not in {"paid", "mock_paid"}:
+                raise InvalidDataException(
+                    detail="Order must be paid before it can be submitted to Prodigi."
+                )
+            if not self._print_provider_cost_is_covered(order):
+                summary = self._print_provider_cost_summary(order)
+                raise InvalidDataException(
+                    detail=(
+                        "Prodigi submission blocked: supplier total "
+                        f"EUR {summary['supplier_total']:.2f} exceeds customer paid "
+                        f"${summary['customer_paid']:.2f}."
+                    )
+                )
+            await get_print_provider().submit_paid_order_items(
+                order=order,
+                db_session=self.db.session,
+            )
+            await self.db.commit()
+        except SQLAlchemyError:
+            await self.db.rollback()
+            raise DatabaseException
+
+    async def _prodigi_auto_fulfillment_enabled(self) -> bool:
+        settings_obj = await self.db.session.get(SiteSettingsOrm, 1)
+        if settings_obj is None:
+            return True
+        return (settings_obj.prodigi_fulfillment_mode or "automatic") == "automatic"
+
+    def _print_provider_cost_summary(self, order) -> dict[str, float]:
+        supplier_total = 0.0
+        for item in getattr(order, "items", []) or []:
+            supplier_total += float(item.prodigi_wholesale_eur or 0)
+            supplier_total += float(item.prodigi_shipping_eur or 0)
+        return {
+            "customer_paid": float(order.total_price or 0),
+            "supplier_total": supplier_total,
+        }
+
+    def _print_provider_cost_is_covered(self, order) -> bool:
+        summary = self._print_provider_cost_summary(order)
+        if summary["supplier_total"] <= 0:
+            return True
+        return summary["supplier_total"] <= summary["customer_paid"]
 
     async def delete_order(self, order_id: int):
         """
@@ -629,7 +722,7 @@ class OrderService(BaseService):
             if data.payment_status is not None:
                 payment_status = data.payment_status
                 # Create a copy where payment_status is UNSET (not just None)
-                # to avoid accidental затирание in the next .edit() call.
+                # to avoid accidental Ð·Ð°Ñ‚Ð¸Ñ€Ð°Ð½Ð¸Ðµ in the next .edit() call.
                 update_dict = data.model_dump(exclude={"payment_status"}, exclude_unset=True)
                 if update_dict:
                     patch_without_payment = OrderPatch(**update_dict)
@@ -685,3 +778,4 @@ class OrderService(BaseService):
         except Exception as e:
             logger.error("Error running abandoned orders cleanup: {}", e)
             return 0
+

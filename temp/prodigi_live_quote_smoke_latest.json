@@ -1,0 +1,67 @@
+{
+  "status": "approved",
+  "approved": true,
+  "generated_at": "2026-04-28T17:24:01.667542+00:00",
+  "mode": "live",
+  "bake": {
+    "id": 8,
+    "bake_key": "hahnemuhle_german_etching-csv-notice-20260427203823",
+    "paper_material": "hahnemuhle_german_etching",
+    "status": "ready",
+    "offer_group_count": 5089,
+    "offer_size_count": 24238
+  },
+  "selection": {
+    "countries": [
+      "DE"
+    ],
+    "ratios": null,
+    "categories": null,
+    "max_sizes_per_group": 1
+  },
+  "thresholds": {
+    "min_samples": 1,
+    "min_simulated_orders": 5,
+    "max_failures": 0,
+    "min_pass_rate": 1.0,
+    "require_api_checks": true
+  },
+  "summary": {
+    "sample_count": 35,
+    "simulated_orders_requested": 5,
+    "simulated_orders_created": 5,
+    "check_count": 250,
+    "passed": 250,
+    "failed": 0,
+    "skipped": 0,
+    "pass_rate": 1.0,
+    "by_gate": {
+      "baked_aspect_matches_ratio": {
+        "passed": 35
+      },
+      "baked_pixels_present": {
+        "passed": 35
+      },
+      "cost_basis_present": {
+        "passed": 35
+      },
+      "live_prodigi_pixels_match": {
+        "passed": 35
+      },
+      "prodigi_quote_created": {
+        "passed": 35
+      },
+      "shipping_method_present": {
+        "passed": 35
+      },
+      "simulated_order_payload_shape": {
+        "passed": 5
+      },
+      "sku_present": {
+        "passed": 35
+      }
+    }
+  },
+  "threshold_failures": [],
+  "failed_checks": []
+}

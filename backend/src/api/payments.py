@@ -172,6 +172,9 @@ async def create_payment(
                 else None
             ),
         )
+    except ValueError as e:
+        logger.error("Monobank configuration error for order {}: {}", order.id, e)
+        raise PaymentGatewayException(detail=f"Payment configuration error: {e}") from e
     except MonobankServiceError as e:
         logger.error("Monobank invoice creation failed for order {}: {}", order.id, e)
         raise PaymentGatewayException(detail=f"Payment gateway error: {e.detail}")

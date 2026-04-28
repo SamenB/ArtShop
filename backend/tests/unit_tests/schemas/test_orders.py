@@ -11,6 +11,12 @@ def test_order_item_valid():
     assert item.edition_type == EditionType.ORIGINAL
 
 
+def test_order_item_fractional_price_is_rounded():
+    data = {"artwork_id": 1, "edition_type": "paper_print", "finish": "Rolled", "price": 33.25}
+    item = OrderItemBase(**data)
+    assert item.price == 33
+
+
 def test_order_item_invalid_edition_type():
     data = {"artwork_id": 1, "edition_type": "fake_edition", "finish": "none", "price": 1000}
     with pytest.raises(ValidationError) as exc:

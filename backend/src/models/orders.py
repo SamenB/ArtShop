@@ -115,6 +115,7 @@ class OrderItemOrm(Base):
     artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm", lazy="selectin")
 
     # Prodigi Print-on-Demand Fields
+    prodigi_storefront_offer_size_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     prodigi_sku: Mapped[str | None] = mapped_column(String(100), nullable=True)
     prodigi_category_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     prodigi_slot_size_label: Mapped[str | None] = mapped_column(String(80), nullable=True)

@@ -44,6 +44,7 @@ export interface PrintSourceMetadata {
 }
 
 export interface StorefrontSizeOption {
+    id?: number | null;
     slot_size_label: string;
     size_label: string;
     sku?: string | null;

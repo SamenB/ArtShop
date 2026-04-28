@@ -178,12 +178,13 @@ class Settings(BaseSettings):
     # Your personal or group chat_id where new order alerts are delivered.
     # Obtain your chat_id by messaging @userinfobot in Telegram.
     TELEGRAM_ADMIN_CHAT_ID: str | None = None
-
     # --- Prodigi Print-on-Demand ---
     # API key from https://dashboard.prodigi.com/settings/api
     PRODIGI_API_KEY: str | None = None
     # Set to True to use sandbox (https://api.sandbox.prodigi.com) instead of live.
     PRODIGI_SANDBOX: bool = False
+    # Optional shared secret added to Prodigi callback URLs and checked on webhook receipt.
+    PRODIGI_WEBHOOK_SECRET: str | None = None
 
     # CORS Policy Configuration
     # Whitelist of allowed origins for browser-based requests.

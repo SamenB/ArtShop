@@ -237,12 +237,16 @@ class ProdigiStorefrontSnapshotService:
         self._regional_defaults = {}
         try:
             regions = (
-                await self.db.session.execute(
-                    select(PrintPricingRegionOrm)
-                    .options(selectinload(PrintPricingRegionOrm.multipliers))
-                    .order_by(PrintPricingRegionOrm.sort_order)
+                (
+                    await self.db.session.execute(
+                        select(PrintPricingRegionOrm)
+                        .options(selectinload(PrintPricingRegionOrm.multipliers))
+                        .order_by(PrintPricingRegionOrm.sort_order)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         except Exception:
             return
 
@@ -255,7 +259,7 @@ class ProdigiStorefrontSnapshotService:
                 fallback_default = region.default_multiplier
                 fallback_overrides = overrides
                 continue
-            for cc in (region.country_codes or []):
+            for cc in region.country_codes or []:
                 self._regional_multipliers[cc.upper()] = overrides
                 self._regional_defaults[cc.upper()] = region.default_multiplier
 
@@ -342,7 +346,9 @@ class ProdigiStorefrontSnapshotService:
                     "fixed_attributes": sample_group.fixed_attributes or {},
                     "recommended_defaults": sample_group.recommended_defaults or {},
                     "allowed_attributes": sample_group.allowed_attributes or {},
-                    "sort_order": category_sort.get(category_id, fallback["sort_order"] if fallback else 999),
+                    "sort_order": category_sort.get(
+                        category_id, fallback["sort_order"] if fallback else 999
+                    ),
                 }
             )
 
@@ -463,6 +469,7 @@ class ProdigiStorefrontSnapshotService:
             shipping_profiles = size.shipping_profiles or []
             shipping_support = self.shipping_support_policy.evaluate_size(shipping_profiles)
             size_entry = {
+                "id": size.id,
                 "slot_size_label": slot_size_label,
                 "size_label": size.size_label or slot_size_label,
                 "available": bool(size.available),
@@ -673,7 +680,8 @@ class ProdigiStorefrontSnapshotService:
             [
                 item
                 for item in category_summaries
-                if item["currency"] == primary_currency and item["avg_covered_shipping_price"] is not None
+                if item["currency"] == primary_currency
+                and item["avg_covered_shipping_price"] is not None
             ]
         )
 
@@ -719,7 +727,9 @@ class ProdigiStorefrontSnapshotService:
                     "currency": shipping_summary["currency"],
                     "mixed_currency": shipping_summary["mixed_currency"],
                     "avg_covered_shipping_price": avg_shipping_price,
-                    "median_covered_shipping_price": shipping_summary["median_covered_shipping_price"],
+                    "median_covered_shipping_price": shipping_summary[
+                        "median_covered_shipping_price"
+                    ],
                     "suggested_badge_cap": suggested_badge_cap,
                     "entry_badge_eligible": entry_promo["eligible"],
                     "entry_badge_note": entry_promo["note"],
@@ -731,7 +741,9 @@ class ProdigiStorefrontSnapshotService:
                     "category_summaries": [
                         {
                             **item,
-                            "category_label": category_labels.get(item["category_id"], item["category_id"]),
+                            "category_label": category_labels.get(
+                                item["category_id"], item["category_id"]
+                            ),
                         }
                         for item in shipping_summary["category_summaries"]
                     ],
@@ -766,7 +778,11 @@ class ProdigiStorefrontSnapshotService:
                 mode_counts[mode] += 1
 
         default_mode = "hide"
-        if mode_counts["included"] > 0 and mode_counts["pass_through"] == 0 and mode_counts["hide"] == 0:
+        if (
+            mode_counts["included"] > 0
+            and mode_counts["pass_through"] == 0
+            and mode_counts["hide"] == 0
+        ):
             default_mode = "included"
         elif mode_counts["included"] > 0 or mode_counts["pass_through"] > 0:
             default_mode = "pass_through"
@@ -789,8 +805,7 @@ class ProdigiStorefrontSnapshotService:
         category_cells: list[dict[str, Any]],
     ) -> dict[str, Any]:
         category_summaries = {
-            item["category_id"]: item.get("business_summary") or {}
-            for item in category_cells
+            item["category_id"]: item.get("business_summary") or {} for item in category_cells
         }
         return self.business_policy.evaluate_country_entry_promos(category_summaries)
 
@@ -798,10 +813,18 @@ class ProdigiStorefrontSnapshotService:
         self,
         countries: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        overall_eligible = [country for country in countries if country["entry_promo"]["overall"]["eligible"]]
-        overall_ineligible = [country for country in countries if not country["entry_promo"]["overall"]["eligible"]]
-        paper_eligible = [country for country in countries if country["entry_promo"]["paper_print"]["eligible"]]
-        canvas_eligible = [country for country in countries if country["entry_promo"]["canvas"]["eligible"]]
+        overall_eligible = [
+            country for country in countries if country["entry_promo"]["overall"]["eligible"]
+        ]
+        overall_ineligible = [
+            country for country in countries if not country["entry_promo"]["overall"]["eligible"]
+        ]
+        paper_eligible = [
+            country for country in countries if country["entry_promo"]["paper_print"]["eligible"]
+        ]
+        canvas_eligible = [
+            country for country in countries if country["entry_promo"]["canvas"]["eligible"]
+        ]
         return {
             "eligible_country_count": len(overall_eligible),
             "ineligible_country_count": len(overall_ineligible),
@@ -809,17 +832,16 @@ class ProdigiStorefrontSnapshotService:
             "paper_eligible_country_count": len(paper_eligible),
             "canvas_eligible_country_count": len(canvas_eligible),
             "paper_eligible_country_codes": [country["country_code"] for country in paper_eligible],
-            "canvas_eligible_country_codes": [country["country_code"] for country in canvas_eligible],
+            "canvas_eligible_country_codes": [
+                country["country_code"] for country in canvas_eligible
+            ],
         }
 
     def _sort_ratio_rows(
         self,
         ratio_rows: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        preview_defaults = {
-            item["label"]: item["sort_order"]
-            for item in DEFAULT_RATIO_PRESETS
-        }
+        preview_defaults = {item["label"]: item["sort_order"] for item in DEFAULT_RATIO_PRESETS}
         return sorted(
             ratio_rows,
             key=lambda item: (
@@ -940,9 +962,7 @@ class ProdigiStorefrontSnapshotService:
         }
         if not available_sources:
             available_sources = {
-                str(source or "").upper()
-                for source in group_source_countries
-                if source
+                str(source or "").upper() for source in group_source_countries if source
             }
         if not available_sources:
             return {
@@ -964,9 +984,7 @@ class ProdigiStorefrontSnapshotService:
         cross_border_sources = available_sources - local_sources - regional_sources
 
         active_modes = sum(
-            1
-            for bucket in (local_sources, regional_sources, cross_border_sources)
-            if bucket
+            1 for bucket in (local_sources, regional_sources, cross_border_sources) if bucket
         )
 
         if active_modes > 1:

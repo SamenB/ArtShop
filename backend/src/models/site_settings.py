@@ -22,6 +22,10 @@ class SiteSettingsOrm(Base):
     # Texts
     about_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    owner_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    owner_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    owner_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    owner_telegram_chat_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     social_instagram: Mapped[str | None] = mapped_column(String(200), nullable=True)
     social_telegram: Mapped[str | None] = mapped_column(String(200), nullable=True)
     social_threads: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -34,6 +38,12 @@ class SiteSettingsOrm(Base):
     faq_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     terms_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     privacy_page_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prodigi_fulfillment_mode: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="automatic",
+        server_default="automatic",
+    )
 
     # Images
     artist_home_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

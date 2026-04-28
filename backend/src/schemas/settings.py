@@ -17,6 +17,10 @@ class SiteSettingsBase(BaseModel):
 
     about_text: Optional[str] = None
     contact_email: Optional[str] = None
+    owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_telegram_chat_id: Optional[str] = None
     social_instagram: Optional[str] = None
     social_telegram: Optional[str] = None
     social_threads: Optional[str] = None
@@ -29,6 +33,7 @@ class SiteSettingsBase(BaseModel):
     faq_page_text: Optional[str] = None
     terms_page_text: Optional[str] = None
     privacy_page_text: Optional[str] = None
+    prodigi_fulfillment_mode: Optional[str] = None
     artist_home_photo_url: Optional[str] = None
     artist_about_photo_url: Optional[str] = None
     main_bg_desktop_url: Optional[str] = None
