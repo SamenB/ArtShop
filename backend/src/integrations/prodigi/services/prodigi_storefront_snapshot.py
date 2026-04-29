@@ -21,6 +21,9 @@ from src.integrations.prodigi.services.prodigi_market_priority import get_market
 from src.integrations.prodigi.services.prodigi_shipping_support_policy import (
     ProdigiShippingSupportPolicyService,
 )
+from src.integrations.prodigi.services.prodigi_storefront_settings import (
+    ProdigiStorefrontSettingsService,
+)
 from src.models.print_pricing_regions import PrintPricingRegionOrm
 from src.utils.db_manager import DBManager
 
@@ -40,14 +43,26 @@ class ProdigiStorefrontSnapshotService:
         self.repository = ProdigiStorefrontRepository(db.session)
         self.shipping_support_policy = ProdigiShippingSupportPolicyService()
         self.business_policy = ProdigiBusinessPolicyService()
+        self.storefront_settings = ProdigiStorefrontSettingsService(db)
+        self.storefront_policy_version = self.business_policy.POLICY_VERSION
         self.cache_ttl_seconds = 3600
         self._regional_multipliers: dict[str, dict[str, float]] | None = None
         self._regional_defaults: dict[str, float] | None = None
+
+    async def load_storefront_settings(self) -> dict[str, Any]:
+        config = await self.storefront_settings.get_effective_config()
+        self.apply_storefront_config(config)
+        return config
+
+    def apply_storefront_config(self, config: dict[str, Any]) -> None:
+        self.shipping_support_policy.set_config(config["shipping_policy"])
+        self.storefront_policy_version = str(config["payload_policy_version"])
 
     async def get_snapshot_visualization(
         self,
         selected_ratio: str | None = None,
     ) -> dict[str, Any]:
+        await self.load_storefront_settings()
         active_bake = await self.repository.get_active_bake()
         await self._load_regional_multipliers()
         if active_bake is None:
@@ -94,6 +109,7 @@ class ProdigiStorefrontSnapshotService:
         selected_ratio: str,
         country_code: str,
     ) -> dict[str, Any]:
+        await self.load_storefront_settings()
         active_bake = await self.repository.get_active_bake()
         await self._load_regional_multipliers()
         if active_bake is None:
@@ -139,7 +155,7 @@ class ProdigiStorefrontSnapshotService:
 
         normalized_country = (country_code or "").upper()
         cache_key = (
-            f"prodigi:country-storefront:v1:{self.business_policy.POLICY_VERSION}:"
+            f"prodigi:country-storefront:v1:{self.storefront_policy_version}:"
             f"bake:{active_bake.id}:"
             f"ratio:{selected_ratio}:country:{normalized_country}"
         )
@@ -469,6 +485,22 @@ class ProdigiStorefrontSnapshotService:
 
             shipping_profiles = size.shipping_profiles or []
             shipping_support = self.shipping_support_policy.evaluate_size(shipping_profiles)
+            selected_product_price = (
+                shipping_support.get("chosen_product_price")
+                if shipping_support.get("chosen_product_price") is not None
+                else self._to_float(getattr(size, "product_price", None))
+            )
+            selected_shipping_price = (
+                shipping_support.get("chosen_shipping_price")
+                if shipping_support.get("chosen_shipping_price") is not None
+                else self._to_float(getattr(size, "shipping_price", None))
+            )
+            selected_currency = shipping_support.get("chosen_currency") or size.currency
+            selected_shipping_method = (
+                shipping_support.get("chosen_shipping_method")
+                or size.shipping_method
+                or size.default_shipping_tier
+            )
             size_entry = {
                 "id": getattr(size, "id", None),
                 "slot_size_label": slot_size_label,
@@ -480,13 +512,18 @@ class ProdigiStorefrontSnapshotService:
                 "print_area": self._serialize_print_area(size),
                 "provider_attributes": self._serialize_provider_attributes(size),
                 "source_country": size.source_country,
-                "currency": size.currency,
-                "product_price": self._to_float(getattr(size, "product_price", None)),
-                "shipping_price": self._to_float(getattr(size, "shipping_price", None)),
-                "total_cost": self._to_float(size.total_cost),
-                "delivery_days": size.delivery_days,
+                "currency": selected_currency,
+                "product_price": selected_product_price,
+                "shipping_price": selected_shipping_price,
+                "total_cost": (
+                    round(selected_product_price + selected_shipping_price, 2)
+                    if selected_product_price is not None
+                    and selected_shipping_price is not None
+                    else self._to_float(size.total_cost)
+                ),
+                "delivery_days": shipping_support.get("chosen_delivery_days") or size.delivery_days,
                 "default_shipping_tier": size.default_shipping_tier,
-                "shipping_method": size.shipping_method,
+                "shipping_method": selected_shipping_method,
                 "service_name": size.service_name,
                 "service_level": size.service_level,
                 "shipping_profiles": shipping_profiles,
@@ -495,7 +532,7 @@ class ProdigiStorefrontSnapshotService:
                     self.business_policy.evaluate_print_business_rules(
                         category_id=category["category_id"],
                         market_segment=market_segment,
-                        product_price=self._to_float(getattr(size, "product_price", None)),
+                        product_price=selected_product_price,
                         shipping_support=shipping_support,
                         multiplier_override=regional_multiplier,
                     )
@@ -754,8 +791,7 @@ class ProdigiStorefrontSnapshotService:
         return {
             "strategy_note": (
                 "Countries are ordered by storefront commercial priority. "
-                "Entry badge eligibility now follows the simple model: "
-                "free delivery on unframed prints only."
+                "Prodigi print delivery promos are disabled; shipping is charged at checkout."
             ),
             "focus_countries": focus_rows,
         }
@@ -789,11 +825,7 @@ class ProdigiStorefrontSnapshotService:
             default_mode = "pass_through"
 
         return {
-            "policy_family": (
-                "unframed_free_delivery"
-                if self.business_policy.is_unframed_free_delivery_category(category_id)
-                else "shipping_at_checkout"
-            ),
+            "policy_family": "print_shipping_at_checkout",
             "default_shipping_mode": default_mode,
             "included_size_count": mode_counts["included"],
             "pass_through_size_count": mode_counts["pass_through"],
@@ -917,7 +949,6 @@ class ProdigiStorefrontSnapshotService:
 
     def _serialize_business_policy_meta(self) -> dict[str, Any]:
         return {
-            "free_delivery_categories": [],
             "entry_badge_category_groups": {
                 key: list(value)
                 for key, value in self.business_policy.ENTRY_BADGE_CATEGORY_GROUPS.items()
@@ -927,8 +958,8 @@ class ProdigiStorefrontSnapshotService:
             ),
             "print_delivery_subsidy_budget": self.business_policy.PRINT_DELIVERY_SUBSIDY_BUDGET,
             "policy_note": (
-                "Prodigi print shipping is charged at checkout. Free delivery applies only "
-                "to original-art orders."
+                "Prodigi print shipping is charged at checkout. Included delivery applies only "
+                "to original-art orders when configured."
             ),
         }
 
@@ -1035,5 +1066,5 @@ class ProdigiStorefrontSnapshotService:
         ordered = sorted(values)
         index = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * 0.75)))
         candidate = ordered[index]
-        capped = min(candidate, self.shipping_support_policy.FREE_SHIPPING_COVERED_CAP)
+        capped = min(candidate, self.shipping_support_policy.checkout_shipping_cap)
         return round(capped, 2)

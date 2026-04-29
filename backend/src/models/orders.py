@@ -46,6 +46,9 @@ class OrdersOrm(Base):
 
     # Order Specifics
     promo_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subtotal_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shipping_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    discount_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_price: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -109,6 +112,10 @@ class OrderItemOrm(Base):
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     price: Mapped[int] = mapped_column(Integer)
+    customer_product_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    customer_shipping_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    customer_line_total: Mapped[float | None] = mapped_column(Float, nullable=True)
+    customer_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     # Relationships
     order: Mapped["OrdersOrm"] = relationship("OrdersOrm", back_populates="items")
@@ -120,10 +127,18 @@ class OrderItemOrm(Base):
     prodigi_category_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     prodigi_slot_size_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     prodigi_attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    prodigi_storefront_bake_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prodigi_storefront_policy_version: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    prodigi_shipping_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
     prodigi_shipping_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prodigi_delivery_days: Mapped[str | None] = mapped_column(String(40), nullable=True)
     prodigi_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     prodigi_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     prodigi_wholesale_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     prodigi_shipping_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_supplier_total_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     prodigi_retail_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_supplier_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     prodigi_destination_country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)

@@ -377,7 +377,63 @@ def _aggregate_status(statuses) -> str:
     return "pending"
 
 
+def _float_or_none(value) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_prodigi_item_economics(item) -> dict:
+    customer_line = _float_or_none(item.customer_line_total)
+    if customer_line is None:
+        customer_line = _float_or_none(item.price) or 0.0
+
+    customer_product = _float_or_none(item.customer_product_price)
+    if customer_product is None:
+        customer_product = _float_or_none(item.prodigi_retail_eur)
+    if customer_product is None:
+        customer_product = customer_line
+
+    customer_shipping = _float_or_none(item.customer_shipping_price)
+    if customer_shipping is None:
+        customer_shipping = max(customer_line - customer_product, 0.0)
+
+    # Keep legacy rows mathematically readable even if only the integer line
+    # total was stored before explicit customer delivery existed.
+    if abs((customer_product + customer_shipping) - customer_line) > 0.01:
+        customer_shipping = max(customer_line - customer_product, 0.0)
+
+    supplier_product = _float_or_none(item.prodigi_wholesale_eur) or 0.0
+    supplier_shipping = _float_or_none(item.prodigi_shipping_eur) or 0.0
+    supplier_total = _float_or_none(item.prodigi_supplier_total_eur)
+    if supplier_total is None:
+        supplier_total = supplier_product + supplier_shipping
+
+    return {
+        "customer_product_price": customer_product,
+        "customer_shipping_price": customer_shipping,
+        "customer_line_total": customer_line,
+        "customer_currency": item.customer_currency or "USD",
+        "supplier_product_cost": supplier_product,
+        "supplier_shipping_cost": supplier_shipping,
+        "supplier_total_cost": supplier_total,
+        "supplier_currency": item.prodigi_supplier_currency or "EUR",
+        "storefront_bake_id": item.prodigi_storefront_bake_id,
+        "storefront_policy_version": item.prodigi_storefront_policy_version,
+        "selected_shipping_tier": item.prodigi_shipping_tier,
+        "selected_shipping_method": item.prodigi_shipping_method,
+        "selected_delivery_days": item.prodigi_delivery_days,
+        "product_margin": customer_product - supplier_product,
+        "shipping_margin": customer_shipping - supplier_shipping,
+        "total_margin": customer_line - supplier_total,
+    }
+
+
 def _serialize_prodigi_item(item) -> dict:
+    economics = _resolve_prodigi_item_economics(item)
     return {
         "id": item.id,
         "artwork_id": item.artwork_id,
@@ -386,18 +442,29 @@ def _serialize_prodigi_item(item) -> dict:
         "finish": item.finish,
         "size": item.size,
         "price": item.price,
+        "customer_product_price": economics["customer_product_price"],
+        "customer_shipping_price": economics["customer_shipping_price"],
+        "customer_line_total": economics["customer_line_total"],
+        "customer_currency": economics["customer_currency"],
         "prodigi_storefront_offer_size_id": item.prodigi_storefront_offer_size_id,
         "prodigi_sku": item.prodigi_sku,
         "prodigi_category_id": item.prodigi_category_id,
         "prodigi_slot_size_label": item.prodigi_slot_size_label,
         "prodigi_attributes": item.prodigi_attributes,
+        "prodigi_storefront_bake_id": item.prodigi_storefront_bake_id,
+        "prodigi_storefront_policy_version": item.prodigi_storefront_policy_version,
+        "prodigi_shipping_tier": item.prodigi_shipping_tier,
         "prodigi_shipping_method": item.prodigi_shipping_method,
+        "prodigi_delivery_days": item.prodigi_delivery_days,
         "prodigi_order_id": item.prodigi_order_id,
         "prodigi_status": item.prodigi_status,
         "prodigi_wholesale_eur": item.prodigi_wholesale_eur,
         "prodigi_shipping_eur": item.prodigi_shipping_eur,
+        "prodigi_supplier_total_eur": item.prodigi_supplier_total_eur,
         "prodigi_retail_eur": item.prodigi_retail_eur,
+        "prodigi_supplier_currency": item.prodigi_supplier_currency,
         "prodigi_destination_country_code": item.prodigi_destination_country_code,
+        "economics": economics,
     }
 
 

@@ -111,6 +111,7 @@ def send_fulfillment_status_email(
     # Pre-rendered template content from DB (loaded in async context before threading)
     subject_template: str | None = None,
     body_template: str | None = None,
+    order_reference: str | None = None,
 ) -> bool:
     """
     Sends a transactional email to the customer when their order's
@@ -150,10 +151,11 @@ def send_fulfillment_status_email(
                     tracking_block += f"Track your parcel: {tracking_url}\n"
             tracking_block += "\n"
 
-        subject = subject_template.format(order_id=order_id, first_name=first_name)
+        display_order_id = order_reference or str(order_id)
+        subject = subject_template.format(order_id=display_order_id, first_name=first_name)
         body = body_template.format(
             first_name=first_name,
-            order_id=order_id,
+            order_id=display_order_id,
             tracking_block=tracking_block,
         )
 

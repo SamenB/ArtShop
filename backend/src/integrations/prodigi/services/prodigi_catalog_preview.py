@@ -13,6 +13,9 @@ from src.integrations.prodigi.services.prodigi_shipping_policy import ProdigiShi
 from src.integrations.prodigi.services.prodigi_storefront_policy import (
     ProdigiStorefrontPolicyService,
 )
+from src.integrations.prodigi.services.prodigi_storefront_settings import (
+    ProdigiStorefrontSettingsService,
+)
 from src.integrations.prodigi.services.sizing.selector import ProdigiSizeSelectorService
 from src.utils.db_manager import DBManager
 
@@ -193,13 +196,20 @@ class ProdigiCatalogPreviewService:
         self.db = db
         self.catalog_repository = ProdigiCatalogRepository(db.session)
         self.storefront_policy = ProdigiStorefrontPolicyService()
+        self.storefront_settings = ProdigiStorefrontSettingsService(db)
         self.fulfillment_policy = ProdigiFulfillmentPolicyService()
         self.shipping_policy = ProdigiShippingPolicyService()
+
+    async def load_storefront_settings(self) -> dict[str, Any]:
+        config = await self.storefront_settings.get_effective_config()
+        self.storefront_policy.configure(config["category_policy"])
+        return config
 
     async def get_catalog_dataset(
         self,
         selected_paper_material: str | None = None,
     ) -> dict[str, Any]:
+        await self.load_storefront_settings()
         selected_paper_material = self._normalize_paper_material(selected_paper_material)
         category_defs = self.get_category_defs(selected_paper_material)
         ratio_presets = await self._get_ratio_presets()

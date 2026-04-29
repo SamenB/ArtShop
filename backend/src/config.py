@@ -163,6 +163,10 @@ class Settings(BaseSettings):
     MONOBANK_WEBHOOK_URL: str | None = None
     # URL to redirect the buyer after payment completion (success or failure).
     MONOBANK_REDIRECT_URL: str | None = None
+    # Backend-owned checkout conversion rates for payment invoices. Storefront
+    # prices are USD; Monobank checkout is usually created in UAH.
+    MONOBANK_USD_TO_UAH_RATE: float = 39.5
+    MONOBANK_USD_TO_EUR_RATE: float = 0.92
 
     # URL used for generating absolute links for external services (Prodigi, etc.)
     # In production, this should be https://your-domain.com

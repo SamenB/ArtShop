@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 from src.integrations.prodigi.services.prodigi_artwork_storefront import (
-    ProdigiArtworkStorefrontService,
     STOREFRONT_POLICY_VERSION,
+    ProdigiArtworkStorefrontService,
 )
 
 
@@ -74,7 +74,7 @@ class FakeSnapshotService:
                     "source_mix": "regional_only",
                     "source_countries": ["DE", "NL"],
                     "available_shipping_tiers": ["express", "standard"],
-                    "default_shipping_tier": "express",
+                    "default_shipping_tier": "standard",
                     "shipping_support": {"status": "covered"},
                     "business_summary": {"default_shipping_mode": "included"},
                     "fixed_attributes": {},
@@ -89,21 +89,20 @@ class FakeSnapshotService:
                             "source_country": "DE",
                             "currency": "EUR",
                             "delivery_days": "2-4 days",
-                            "shipping_method": "Express",
-                            "service_name": "Express",
-                            "service_level": "EXPRESS",
-                            "default_shipping_tier": "express",
-                            "shipping_profiles": [{"tier": "express", "shipping_price": 12.0}],
+                            "shipping_method": "Standard",
+                            "service_name": "Standard",
+                            "service_level": "STANDARD",
+                            "default_shipping_tier": "standard",
+                            "shipping_profiles": [{"tier": "standard", "shipping_price": 12.0}],
                             "shipping_support": {
                                 "status": "covered",
-                                "chosen_tier": "express",
+                                "chosen_tier": "standard",
                                 "chosen_shipping_price": 12.0,
                             },
                             "business_policy": {
-                                "shipping_mode": "included",
+                                "shipping_mode": "pass_through",
                                 "retail_product_price": 149.0,
-                                "customer_shipping_price": 0.0,
-                                "free_delivery_badge": True,
+                                "customer_shipping_price": 12.0,
                             },
                             "product_price": 49.0,
                             "shipping_price": 12.0,
@@ -131,7 +130,6 @@ class FakeSnapshotService:
                                 "shipping_mode": "hide",
                                 "retail_product_price": 199.0,
                                 "customer_shipping_price": None,
-                                "free_delivery_badge": False,
                             },
                             "product_price": 39.0,
                             "shipping_price": 60.0,
@@ -223,12 +221,19 @@ async def test_artwork_storefront_filters_hidden_sizes_and_disabled_mediums() ->
         canvas_print_limited_quantity=15,
     )
     service = ProdigiArtworkStorefrontService(SimpleNamespace(session=None))
-    service.artwork_service = FakeArtworkService(artwork)
-    service.print_profile_service = FakePrintProfileService()
-    service.storefront_repository = FakeStorefrontRepository()
     service.snapshot_service = FakeSnapshotService()
 
-    payload = await service.get_artwork_storefront("golden-hour", "de")
+    profile_bundle = await FakePrintProfileService().get_profile_bundle(artwork.id)
+    snapshot = await FakeSnapshotService().get_country_storefront(
+        selected_ratio="4:5",
+        country_code="DE",
+    )
+    payload = service.build_payload_from_snapshot(
+        artwork=artwork,
+        requested_country="DE",
+        profile_bundle=profile_bundle,
+        snapshot=snapshot,
+    )
 
     assert payload["country_supported"] is True
     assert payload["country_code"] == "DE"
@@ -249,7 +254,7 @@ async def test_artwork_storefront_filters_hidden_sizes_and_disabled_mediums() ->
     assert canvas_card["size_options"][0]["sku"] == "SKU-40x50"
     assert canvas_card["size_options"][0]["supplier_product_price"] == 49.0
     assert canvas_card["size_options"][0]["supplier_shipping_price"] == 12.0
-    assert canvas_card["size_options"][0]["customer_total_price"] == 149.0
+    assert canvas_card["size_options"][0]["customer_total_price"] == 168.8
 
 
 @pytest.mark.asyncio
@@ -257,7 +262,7 @@ async def test_artwork_storefront_prefers_materialized_payload() -> None:
     artwork = SimpleNamespace(id=7, slug="golden-hour", title="Golden Hour")
     service = ProdigiArtworkStorefrontService(SimpleNamespace(session=None))
     service.artwork_service = FakeArtworkService(artwork)
-    service.storefront_repository = FakeMaterializedRepository()
+    service.read_model.repository = FakeMaterializedRepository()
 
     payload = await service.get_artwork_storefront("golden-hour", "de")
 
@@ -267,7 +272,7 @@ async def test_artwork_storefront_prefers_materialized_payload() -> None:
 
 
 @pytest.mark.asyncio
-async def test_artwork_storefront_ignores_stale_materialized_payload() -> None:
+async def test_artwork_storefront_does_not_rebuild_stale_materialized_payload() -> None:
     artwork = SimpleNamespace(
         id=7,
         slug="golden-hour",
@@ -282,10 +287,11 @@ async def test_artwork_storefront_ignores_stale_materialized_payload() -> None:
     service = ProdigiArtworkStorefrontService(SimpleNamespace(session=None))
     service.artwork_service = FakeArtworkService(artwork)
     service.print_profile_service = FakePrintProfileService()
-    service.storefront_repository = FakeStaleMaterializedRepository()
+    service.read_model.repository = FakeStaleMaterializedRepository()
     service.snapshot_service = FakeSnapshotService()
 
     payload = await service.get_artwork_storefront("golden-hour", "de")
 
     assert payload["storefront_policy_version"] == STOREFRONT_POLICY_VERSION
-    assert payload["mediums"]["canvas"]["cards"][0]["size_options"][0]["sku"] == "SKU-40x50"
+    assert payload["mediums"]["canvas"]["cards"] == []
+    assert "No current materialized storefront payload exists" in payload["message"]

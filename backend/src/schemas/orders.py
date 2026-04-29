@@ -119,6 +119,10 @@ class OrderItemBase(BaseModel):
     finish: str
     size: Optional[str] = None
     price: int
+    customer_product_price: Optional[float] = None
+    customer_shipping_price: Optional[float] = None
+    customer_line_total: Optional[float] = None
+    customer_currency: Optional[str] = Field(default="USD", min_length=3, max_length=3)
 
     # Prodigi Print-on-Demand Fields
     prodigi_storefront_offer_size_id: Optional[int] = None
@@ -126,12 +130,18 @@ class OrderItemBase(BaseModel):
     prodigi_category_id: Optional[str] = None
     prodigi_slot_size_label: Optional[str] = None
     prodigi_attributes: Optional[dict] = None
+    prodigi_storefront_bake_id: Optional[int] = None
+    prodigi_storefront_policy_version: Optional[str] = None
+    prodigi_shipping_tier: Optional[str] = None
     prodigi_shipping_method: Optional[str] = None
+    prodigi_delivery_days: Optional[str] = None
     prodigi_order_id: Optional[str] = None
     prodigi_status: Optional[str] = None
     prodigi_wholesale_eur: Optional[float] = None
     prodigi_shipping_eur: Optional[float] = None
+    prodigi_supplier_total_eur: Optional[float] = None
     prodigi_retail_eur: Optional[float] = None
+    prodigi_supplier_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     prodigi_destination_country_code: Optional[str] = Field(None, min_length=2, max_length=2)
 
     @field_validator("price", mode="before")
@@ -241,6 +251,9 @@ class OrderAdd(OrderAddRequest):
     """
 
     user_id: Optional[int] = None
+    subtotal_price: Optional[int] = None
+    shipping_price: Optional[int] = None
+    discount_price: Optional[int] = None
     total_price: int
 
 
@@ -347,6 +360,10 @@ class OrderPatch(BaseModel):
     newsletter_opt_in: Optional[bool] = None
     discovery_source: Optional[str] = None
     promo_code: Optional[str] = None
+    subtotal_price: Optional[int] = None
+    shipping_price: Optional[int] = None
+    discount_price: Optional[int] = None
+    total_price: Optional[int] = None
     invoice_id: Optional[str] = None
     payment_url: Optional[str] = None
 

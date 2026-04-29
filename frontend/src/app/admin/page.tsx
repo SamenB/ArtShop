@@ -12,6 +12,7 @@ import LabelsTab from "@/app/admin/components/LabelsTab";
 import OrdersTab from "@/app/admin/components/OrdersTab";
 import PrintPricingTab from "@/app/admin/components/PrintPricingTab";
 import ProdigiHubTab from "@/app/admin/components/ProdigiHubTab";
+import ProdigiStorefrontSettingsTab from "@/app/admin/components/ProdigiStorefrontSettingsTab";
 import ProdigiSnapshotTab from "@/app/admin/components/ProdigiSnapshotTab";
 import SiteContentTab, { ContentSubtab } from "@/app/admin/components/SiteContentTab";
 import { useUser } from "@/context/UserContext";
@@ -23,6 +24,7 @@ type AdminRoute =
     | "orders"
     | "admin-profile"
     | "prodigi-snapshot"
+    | "prodigi-settings"
     | "prodigi-catalog"
     | "website-global"
     | "website-footer"
@@ -67,6 +69,7 @@ const ADMIN_SECTIONS: AdminSection[] = [
         description: "Baked storefront snapshots and catalog planning.",
         icon: Printer,
         items: [
+            { id: "prodigi-settings", label: "Storefront Settings", description: "Shipping, category, snapshot, and payload bake policy." },
             { id: "prodigi-snapshot", label: "Snapshot Visualization", description: "Active storefront matrix by country and category." },
             { id: "prodigi-catalog", label: "Catalog Planner", description: "Pre-bake preview and route coverage diagnostics." },
         ],
@@ -88,11 +91,11 @@ const ADMIN_SECTIONS: AdminSection[] = [
     },
     {
         id: "profile",
-        label: "Admin Profile",
+        label: "Admin Settings",
         description: "Owner contacts and internal notification settings.",
         icon: Settings,
         items: [
-            { id: "admin-profile", label: "Owner Profile", description: "Owner contact data and Telegram alert setup." },
+            { id: "admin-profile", label: "Owner & Alerts", description: "Owner contact data and Telegram alert setup." },
         ],
     },
 ];
@@ -128,6 +131,9 @@ function renderRoute(route: AdminRoute) {
     }
     if (route === "prodigi-snapshot") {
         return <ProdigiSnapshotTab />;
+    }
+    if (route === "prodigi-settings") {
+        return <ProdigiStorefrontSettingsTab />;
     }
     if (route === "prodigi-catalog") {
         return <ProdigiHubTab />;

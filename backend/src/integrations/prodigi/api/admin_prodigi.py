@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from sqlalchemy import func, select
 
 from src.api.dependencies import AdminDep, DBDep
@@ -22,6 +22,9 @@ from src.integrations.prodigi.services.prodigi_fulfillment_validation import (
     ValidationThresholds,
 )
 from src.integrations.prodigi.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
+from src.integrations.prodigi.services.prodigi_storefront_settings import (
+    ProdigiStorefrontSettingsService,
+)
 from src.integrations.prodigi.services.prodigi_storefront_snapshot import (
     ProdigiStorefrontSnapshotService,
 )
@@ -36,6 +39,7 @@ catalog_service = ProdigiCatalogService()
 ARTWORK_PRINT_CACHE_PREFIXES = (
     "api:artwork-prints:v1:",
     "prodigi:artwork-storefront:v1:",
+    "prodigi:country-storefront:v1:",
 )
 
 
@@ -73,6 +77,83 @@ async def _clear_artwork_print_storefront_cache() -> dict[str, object]:
         "status": "cleared",
         "deleted_keys": deleted,
     }
+
+
+@router.get("/storefront-settings")
+async def get_storefront_settings(admin_id: AdminDep, db: DBDep):
+    return await ProdigiStorefrontSettingsService(db).build_admin_payload()
+
+
+@router.put("/storefront-settings")
+async def update_storefront_settings(
+    admin_id: AdminDep,
+    db: DBDep,
+    payload: dict = Body(...),
+):
+    try:
+        await ProdigiStorefrontSettingsService(db).save_config(payload)
+        cache_clear = await _clear_artwork_print_storefront_cache()
+        response = await ProdigiStorefrontSettingsService(db).build_admin_payload()
+        response["cache_clear"] = cache_clear
+        return response
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/storefront-settings/rebuild-payload")
+async def rebuild_storefront_payload(admin_id: AdminDep, db: DBDep):
+    try:
+        repository = ProdigiStorefrontRepository(db.session)
+        active_bake = await repository.get_active_bake()
+        if active_bake is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No active storefront bake exists yet. Rebuild snapshot first.",
+            )
+        materialization = await ProdigiArtworkStorefrontMaterializerService(
+            db
+        ).materialize_active_bake()
+        cache_clear = await _clear_artwork_print_storefront_cache()
+        settings_payload = await ProdigiStorefrontSettingsService(db).build_admin_payload()
+        return {
+            "status": "rebuilt_payload",
+            "bake": {
+                "id": active_bake.id,
+                "bake_key": active_bake.bake_key,
+                "paper_material": active_bake.paper_material,
+                "include_notice_level": active_bake.include_notice_level,
+            },
+            "artwork_storefront_materialization": materialization,
+            "cache_clear": cache_clear,
+            "settings": settings_payload,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/storefront-settings/rebuild-snapshot")
+async def rebuild_storefront_snapshot(admin_id: AdminDep, db: DBDep):
+    try:
+        config = await ProdigiStorefrontSettingsService(db).get_effective_config()
+        snapshot_defaults = config["snapshot_defaults"]
+        bake_result = await ProdigiStorefrontBakeService(db).bake_storefront(
+            selected_paper_material=snapshot_defaults["paper_material"],
+            include_notice_level=snapshot_defaults["include_notice_level"],
+        )
+        cache_clear = await _clear_artwork_print_storefront_cache()
+        settings_payload = await ProdigiStorefrontSettingsService(db).build_admin_payload()
+        return {
+            "status": "rebuilt_snapshot_and_payload",
+            "bake": bake_result,
+            "cache_clear": cache_clear,
+            "settings": settings_payload,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/fulfillment/jobs")
@@ -332,8 +413,8 @@ async def get_catalog_preview(
     paper_material: str | None = Query(
         None, description="Normalized paper material, e.g. hahnemuhle_german_etching"
     ),
-    include_notice_level: bool = Query(
-        True,
+    include_notice_level: bool | None = Query(
+        None,
         description="Whether notice-level cross-border categories remain visible in storefront preview.",
     ),
 ):
@@ -349,12 +430,18 @@ async def get_catalog_preview(
             selected_country=country,
             selected_paper_material=paper_material,
         )
-        storefront_preview = ProdigiStorefrontBakeService(db).build_storefront_country_preview(
+        bake_service = ProdigiStorefrontBakeService(db)
+        await bake_service.load_storefront_settings()
+        effective_include_notice = include_notice_level
+        if effective_include_notice is None:
+            settings_config = await ProdigiStorefrontSettingsService(db).get_effective_config()
+            effective_include_notice = settings_config["snapshot_defaults"]["include_notice_level"]
+        storefront_preview = bake_service.build_storefront_country_preview(
             preview_payload=preview,
-            include_notice_level=include_notice_level,
+            include_notice_level=effective_include_notice,
         )
         preview["storefront_mode"] = (
-            "include_notice_level" if include_notice_level else "primary_only"
+            "include_notice_level" if effective_include_notice else "primary_only"
         )
         preview["selected_country_storefront_preview"] = storefront_preview
         return preview
@@ -369,8 +456,8 @@ async def create_catalog_database_preview(
     aspect_ratio: str | None = Query(None, description="Preview ratio checkpoint"),
     country: str | None = Query(None, description="Destination country checkpoint"),
     paper_material: str | None = Query(None, description="Normalized paper material checkpoint"),
-    include_notice_level: bool = Query(
-        True,
+    include_notice_level: bool | None = Query(
+        None,
         description="Whether notice-level cross-border categories should be baked into storefront tables.",
     ),
 ):

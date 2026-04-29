@@ -14,6 +14,9 @@ from src.integrations.prodigi.services.prodigi_shipping_policy import ProdigiShi
 from src.integrations.prodigi.services.prodigi_shipping_support_policy import (
     ProdigiShippingSupportPolicyService,
 )
+from src.integrations.prodigi.services.prodigi_storefront_settings import (
+    ProdigiStorefrontSettingsService,
+)
 from src.models.prodigi_storefront import (
     ProdigiStorefrontBakeOrm,
     ProdigiStorefrontOfferGroupOrm,
@@ -53,6 +56,13 @@ class ProdigiStorefrontBakeService:
         self.preview_service = ProdigiCatalogPreviewService(db)
         self.shipping_policy = ProdigiShippingPolicyService()
         self.shipping_support_policy = ProdigiShippingSupportPolicyService()
+        self.storefront_settings = ProdigiStorefrontSettingsService(db)
+
+    async def load_storefront_settings(self) -> dict[str, Any]:
+        config = await self.storefront_settings.get_effective_config()
+        self.shipping_support_policy.set_config(config["shipping_policy"])
+        self.preview_service.storefront_policy.configure(config["category_policy"])
+        return config
 
     async def bake_storefront(
         self,
@@ -60,8 +70,14 @@ class ProdigiStorefrontBakeService:
         selected_ratio: str | None = None,
         selected_country: str | None = None,
         selected_paper_material: str | None = None,
-        include_notice_level: bool = True,
+        include_notice_level: bool | None = None,
     ) -> dict[str, Any]:
+        config = await self.load_storefront_settings()
+        snapshot_defaults = config["snapshot_defaults"]
+        if selected_paper_material is None:
+            selected_paper_material = snapshot_defaults["paper_material"]
+        if include_notice_level is None:
+            include_notice_level = snapshot_defaults["include_notice_level"]
         dataset = await self.preview_service.get_catalog_dataset(selected_paper_material)
         selection = self.preview_service.resolve_selection(
             preview=dataset["preview"],
@@ -312,7 +328,6 @@ class ProdigiStorefrontBakeService:
                 include_notice_level=include_notice_level,
             )
             if is_visible and size_options:
-                totals = [item["total_cost"] for item in size_options if item["total_cost"] is not None]
                 currency = next(
                     (item["currency"] for item in size_options if item.get("currency")),
                     None,
@@ -321,14 +336,43 @@ class ProdigiStorefrontBakeService:
                 shipping_summary = self.shipping_policy.summarize_group_shipping(size_options)
                 size_options_with_support = []
                 for item in size_options:
+                    shipping_support = self.shipping_support_policy.evaluate_size(
+                        item.get("shipping_profiles")
+                    )
+                    selected_product_price = (
+                        shipping_support.get("chosen_product_price")
+                        if shipping_support.get("chosen_product_price") is not None
+                        else item.get("product_price")
+                    )
+                    selected_shipping_price = (
+                        shipping_support.get("chosen_shipping_price")
+                        if shipping_support.get("chosen_shipping_price") is not None
+                        else item.get("shipping_price")
+                    )
                     size_options_with_support.append(
                         {
                             **item,
-                            "shipping_support": self.shipping_support_policy.evaluate_size(
-                                item.get("shipping_profiles")
+                            "currency": shipping_support.get("chosen_currency") or item.get("currency"),
+                            "product_price": selected_product_price,
+                            "shipping_price": selected_shipping_price,
+                            "total_cost": (
+                                round(selected_product_price + selected_shipping_price, 2)
+                                if selected_product_price is not None
+                                and selected_shipping_price is not None
+                                else item.get("total_cost")
                             ),
+                            "delivery_days": shipping_support.get("chosen_delivery_days")
+                            or item.get("delivery_days"),
+                            "shipping_method": shipping_support.get("chosen_shipping_method")
+                            or item.get("shipping_method"),
+                            "shipping_support": shipping_support,
                         }
                     )
+                totals = [
+                    item["total_cost"]
+                    for item in size_options_with_support
+                    if item["total_cost"] is not None
+                ]
                 shipping_support = self.shipping_support_policy.summarize_group(
                     size_options_with_support
                 )

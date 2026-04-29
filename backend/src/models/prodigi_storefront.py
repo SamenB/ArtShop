@@ -215,3 +215,18 @@ class ProdigiArtworkStorefrontPayloadOrm(Base):
     summary: Mapped[dict] = mapped_column(JSON, nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ProdigiStorefrontSettingsOrm(Base):
+    __tablename__ = "prodigi_storefront_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    shipping_policy: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    category_policy: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    snapshot_defaults: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    payload_policy_version: Mapped[str] = mapped_column(String(120), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

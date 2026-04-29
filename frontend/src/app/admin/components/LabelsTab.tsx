@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getApiUrl, apiFetch } from "@/utils";
+import { useCallback, useEffect, useState } from "react";
+import { getApiUrl, apiFetch, apiJson } from "@/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,20 +116,20 @@ export default function LabelsTab() {
 
     const api = getApiUrl();
 
-    const reload = async () => {
+    const reload = useCallback(async () => {
         setLoading(true);
         try {
             const [catR, tagR] = await Promise.all([
                 apiFetch(`${api}/labels/categories`),
                 apiFetch(`${api}/labels`),
             ]);
-            if (catR.ok) setCategories(await catR.json());
-            if (tagR.ok) setTags(await tagR.json());
+            if (catR.ok) setCategories(await apiJson(catR));
+            if (tagR.ok) setTags(await apiJson(tagR));
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
-    };
+    }, [api]);
 
-    useEffect(() => { reload(); }, []);
+    useEffect(() => { reload(); }, [reload]);
 
     const createCategory = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -143,7 +143,12 @@ export default function LabelsTab() {
         });
         setCreatingCat(false);
         if (res.ok) { setNewCatName(""); reload(); }
-        else { const e = await res.json(); alert(e.detail || "Failed to create category"); }
+        else {
+            const e = await apiJson<{ detail?: string }>(res).catch(
+                (): { detail?: string } => ({}),
+            );
+            alert(e.detail || "Failed to create category");
+        }
     };
 
     const deleteCategory = async (id: number) => {
@@ -159,7 +164,12 @@ export default function LabelsTab() {
             body: JSON.stringify({ title, category_id }),
         });
         if (res.ok) reload();
-        else { const e = await res.json(); alert(e.detail || "Failed to add tag"); }
+        else {
+            const e = await apiJson<{ detail?: string }>(res).catch(
+                (): { detail?: string } => ({}),
+            );
+            alert(e.detail || "Failed to add tag");
+        }
     };
 
     const deleteTag = async (id: number, title: string) => {
@@ -167,7 +177,7 @@ export default function LabelsTab() {
         try {
             const r = await apiFetch(`${api}/labels/${id}/usage`);
             if (r.ok) {
-                const { artwork_count: n } = await r.json();
+                const { artwork_count: n } = await apiJson<{ artwork_count: number }>(r);
                 usageNote = n > 0
                     ? `\n\n⚠️ This tag is used by ${n} artwork${n > 1 ? "s" : ""}. All links will be removed.`
                     : "\n\nThis tag is not used by any artwork.";
@@ -212,7 +222,7 @@ export default function LabelsTab() {
             {/* ── New Category ─────────────────────────────────────────────── */}
             <div className="bg-[#FAFAF9] border border-[#31323E]/10 rounded-xl p-6">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-[#31323E] mb-1">Create New Category</h3>
-                <p className="text-xs text-[#31323E]/40 font-medium mb-4">A category groups related tags (e.g. "Medium", "Style", "Mood")</p>
+                <p className="text-xs text-[#31323E]/40 font-medium mb-4">A category groups related tags (e.g. &quot;Medium&quot;, &quot;Style&quot;, &quot;Mood&quot;)</p>
                 <form onSubmit={createCategory} className="flex flex-col sm:flex-row gap-3">
                     <input
                         type="text"

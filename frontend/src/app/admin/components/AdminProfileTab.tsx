@@ -95,7 +95,7 @@ export default function AdminProfileTab() {
     <div className="max-w-4xl space-y-7 text-[#31323E]">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#31323E]/8 pb-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Admin Profile</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Owner & Alerts</h2>
           <p className="mt-1 max-w-2xl text-sm font-medium leading-relaxed text-[#31323E]/50">
             Owner contact data and the Telegram alert channel used for internal
             new-order notifications. Print fulfillment remains Prodigi-only.

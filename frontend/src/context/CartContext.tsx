@@ -28,6 +28,13 @@ export interface CartItem {
     imageUrl?: string;
     /** Current unit price of the item. */
     price: number;
+    /** Customer-facing product component before delivery. */
+    customer_product_price?: number;
+    /** Customer-facing delivery component. */
+    customer_shipping_price?: number;
+    /** Customer-facing line total before discounts. */
+    customer_line_total?: number;
+    customer_currency?: string;
     /** Number of units in the cart. */
     quantity: number;
     /** Optional finish selection for prints (e.g., 'Framed'). */
@@ -56,8 +63,11 @@ export interface CartItem {
     prodigi_wholesale_eur?: number;
     /** Prodigi shipping cost. */
     prodigi_shipping_eur?: number;
+    /** Prodigi supplier product + shipping cost. */
+    prodigi_supplier_total_eur?: number;
     /** Prodigi retail product price before checkout shipping. */
     prodigi_retail_eur?: number;
+    prodigi_supplier_currency?: string;
     /** Destination country used to price and select the Prodigi storefront offer. */
     prodigi_destination_country_code?: string;
 }

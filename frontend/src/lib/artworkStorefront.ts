@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch, getApiUrl } from "@/utils";
+import { apiFetch, apiJson, getApiUrl } from "@/utils";
 
 export type PurchaseType = "canvas" | "paper";
 
@@ -69,13 +69,23 @@ export interface StorefrontSizeOption {
     shipping_support?: {
         status?: string;
         chosen_tier?: string | null;
+        chosen_shipping_method?: string | null;
         chosen_shipping_price?: number | null;
+        chosen_product_price?: number | null;
+        chosen_currency?: string | null;
+        chosen_delivery_days?: string | null;
+        eligible_tiers?: string[];
+        available_tiers?: string[];
+        available_profiles?: Array<Record<string, unknown>>;
+        reason?: string | null;
+        note?: string | null;
+        cheapest_tier?: string | null;
+        cheapest_shipping_price?: number | null;
     };
     business_policy?: {
         shipping_mode?: string | null;
         retail_product_price?: number | null;
         customer_shipping_price?: number | null;
-        free_delivery_badge?: boolean;
     };
     supplier_product_price?: number | null;
     supplier_shipping_price?: number | null;
@@ -83,6 +93,57 @@ export interface StorefrontSizeOption {
     retail_product_price?: number | null;
     customer_shipping_price?: number | null;
     customer_total_price?: number | null;
+}
+
+export function resolveStorefrontProductPrice(size: StorefrontSizeOption | null): number | null {
+    if (!size) {
+        return null;
+    }
+    const value = Number(size.retail_product_price ?? size.business_policy?.retail_product_price);
+    return Number.isFinite(value) ? value : null;
+}
+
+export function resolveStorefrontShippingPrice(size: StorefrontSizeOption | null): number | null {
+    if (!size) {
+        return null;
+    }
+    const value = Number(size.customer_shipping_price ?? size.business_policy?.customer_shipping_price);
+    return Number.isFinite(value) ? value : null;
+}
+
+export function resolveStorefrontCustomerTotal(size: StorefrontSizeOption | null): number | null {
+    if (!size) {
+        return null;
+    }
+    const direct = Number(size.customer_total_price);
+    if (Number.isFinite(direct)) {
+        return direct;
+    }
+    const product = resolveStorefrontProductPrice(size);
+    const shipping = resolveStorefrontShippingPrice(size);
+    if (product === null || shipping === null) {
+        return null;
+    }
+    return product + shipping;
+}
+
+export function resolveRoundedCustomerPriceParts(size: StorefrontSizeOption | null): {
+    product: number;
+    shipping: number;
+    total: number;
+} | null {
+    const product = resolveStorefrontProductPrice(size);
+    const shipping = resolveStorefrontShippingPrice(size);
+    if (product === null || shipping === null) {
+        return null;
+    }
+    const roundedProduct = Math.round(product);
+    const roundedShipping = Math.round(shipping);
+    return {
+        product: roundedProduct,
+        shipping: roundedShipping,
+        total: roundedProduct + roundedShipping,
+    };
 }
 
 export interface StorefrontCard {
@@ -182,12 +243,7 @@ export async function loadArtworkStorefront(
         const response = await apiFetch(
             `${getApiUrl()}/artworks/${artworkRef}/prints?country=${countryCode.toUpperCase()}`
         );
-        if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            throw new Error(payload.detail || "Unable to load print offers.");
-        }
-
-        const data = (await response.json()) as ArtworkPrintStorefront;
+        const data = await apiJson<ArtworkPrintStorefront>(response);
         storefrontCache.set(requestKey, data);
         return data;
     })();

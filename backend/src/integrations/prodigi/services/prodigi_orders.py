@@ -157,7 +157,9 @@ class ProdigiOrderService:
         callback_url: str | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
-            "shippingMethod": item.prodigi_shipping_method or "Standard",
+            "shippingMethod": ProdigiOrderService._canonical_shipping_method(
+                item.prodigi_shipping_method
+            ),
             "merchantReference": merchant_reference or f"artshop-{order.id}-{item.id}",
             "idempotencyKey": idempotency_key or f"artshop-order-{order.id}-item-{item.id}-v1",
             "recipient": {
@@ -281,6 +283,19 @@ class ProdigiOrderService:
         if not settings.PRODIGI_WEBHOOK_SECRET:
             return base
         return f"{base}?{urlencode({'token': settings.PRODIGI_WEBHOOK_SECRET})}"
+
+    @staticmethod
+    def _canonical_shipping_method(value: str | None) -> str:
+        normalized = (value or "Standard").strip().lower()
+        return {
+            "budget": "Budget",
+            "express": "Express",
+            "overnight": "Overnight",
+            "standard": "Standard",
+            "standardplus": "StandardPlus",
+            "standard plus": "StandardPlus",
+            "standard_plus": "StandardPlus",
+        }.get(normalized, "Standard")
 
     @staticmethod
     def _resolve_category_id(item: Any) -> str | None:

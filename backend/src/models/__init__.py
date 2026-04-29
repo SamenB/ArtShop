@@ -38,6 +38,9 @@ from src.models.prodigi_storefront import (
 from src.models.prodigi_storefront import (
     ProdigiStorefrontOfferSizeOrm as ProdigiStorefrontOfferSizeOrm,
 )
+from src.models.prodigi_storefront import (
+    ProdigiStorefrontSettingsOrm as ProdigiStorefrontSettingsOrm,
+)
 from src.models.site_settings import SiteSettingsOrm as SiteSettingsOrm
 from src.models.user_likes import UserLikesOrm as UserLikesOrm
 from src.models.users import UsersOrm as UsersOrm

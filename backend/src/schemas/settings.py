@@ -4,7 +4,7 @@ Pydantic schemas for site settings data validation and serialization.
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SiteSettingsBase(BaseModel):
@@ -14,6 +14,7 @@ class SiteSettingsBase(BaseModel):
 
     Note: Print pricing is managed separately via the /print-pricing API.
     """
+    model_config = ConfigDict(from_attributes=True)
 
     about_text: Optional[str] = None
     contact_email: Optional[str] = None

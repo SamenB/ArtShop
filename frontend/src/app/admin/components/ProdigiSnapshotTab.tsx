@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { apiFetch, getApiUrl } from "@/utils";
+import { apiFetch, apiJson, getApiUrl } from "@/utils";
 
 const inputCls =
     "w-full border border-[#31323E]/15 rounded-md px-3 py-2 text-sm text-[#31323E] font-medium bg-white focus:outline-none focus:border-[#31323E]/50 focus:ring-2 focus:ring-[#31323E]/10";
@@ -64,16 +64,33 @@ interface SnapshotSizeEntry {
     shipping_support: {
         status: "covered" | "blocked" | "unavailable";
         chosen_tier?: string | null;
+        chosen_shipping_method?: string | null;
         chosen_shipping_price?: number | null;
+        chosen_product_price?: number | null;
+        chosen_currency?: string | null;
         chosen_delivery_days?: string | null;
+        eligible_tiers?: string[];
+        available_tiers?: string[];
+        available_profiles?: Array<{
+            tier: string;
+            shipping_method?: string | null;
+            service_name?: string | null;
+            service_level?: string | null;
+            source_country?: string | null;
+            currency?: string | null;
+            product_price?: number | null;
+            shipping_price?: number | null;
+            total_cost?: number | null;
+            delivery_days?: string | null;
+        }>;
         cheapest_tier?: string | null;
         cheapest_shipping_price?: number | null;
         note: string;
+        reason?: string | null;
     };
     business_policy: {
         shipping_mode: "included" | "pass_through" | "hide";
-        free_delivery_badge: boolean;
-        policy_family: "unframed_free_delivery" | "shipping_at_checkout" | "unknown";
+        policy_family: "print_shipping_at_checkout" | "shipping_at_checkout" | "unknown";
         markup_multiplier?: number | null;
         retail_product_price?: number | null;
         customer_shipping_price?: number | null;
@@ -106,11 +123,12 @@ interface SnapshotCell {
         blocked_size_count: number;
         unavailable_size_count: number;
         dominant_tier?: string | null;
+        chosen_tier_counts?: Record<string, number>;
         min_supported_shipping_price?: number | null;
         max_supported_shipping_price?: number | null;
     };
     business_summary: {
-        policy_family: "unframed_free_delivery" | "shipping_at_checkout";
+        policy_family: "print_shipping_at_checkout" | "shipping_at_checkout";
         default_shipping_mode: "included" | "pass_through" | "hide";
         included_size_count: number;
         pass_through_size_count: number;
@@ -193,13 +211,10 @@ interface SnapshotResponse {
     ratios: SnapshotRatio[];
     selected_ratio?: string | null;
     shipping_support_policy?: {
-        covered_cap: number;
-        express_premium_cap: number;
-        overnight_premium_cap: number;
-        overnight_absolute_cap: number;
+        checkout_shipping_cap: number;
+        preferred_tier_order: string[];
     };
     business_policy?: {
-        free_delivery_categories: string[];
         entry_badge_category_groups: Record<string, string[]>;
         print_shipping_at_checkout_categories: string[];
         print_delivery_subsidy_budget: number;
@@ -440,7 +455,7 @@ function businessModeBadge(mode: "included" | "pass_through" | "hide") {
 
 function businessModeLabel(mode: "included" | "pass_through" | "hide") {
     if (mode === "included") {
-        return "free";
+        return "included legacy";
     }
     if (mode === "pass_through") {
         return "checkout";
@@ -490,12 +505,23 @@ function customerDeliveryLabel(size: SnapshotSizeEntry) {
         return "-";
     }
     if (size.business_policy.shipping_mode === "included") {
-        return "Free";
+        return "Included legacy";
     }
     if (size.business_policy.shipping_mode === "pass_through") {
         return formatMoney(size.currency, size.business_policy.customer_shipping_price);
     }
     return "Hidden";
+}
+
+function formatTierCounts(counts: Record<string, number> | null | undefined) {
+    const entries = Object.entries(counts ?? {});
+    if (!entries.length) {
+        return "-";
+    }
+    return entries
+        .sort(([leftTier], [rightTier]) => leftTier.localeCompare(rightTier))
+        .map(([tier, count]) => `${shippingTierLabel(tier)} ${count}`)
+        .join(" / ");
 }
 
 export default function ProdigiSnapshotTab() {
@@ -511,10 +537,7 @@ export default function ProdigiSnapshotTab() {
             const res = await apiFetch(
                 `${getApiUrl()}/v1/admin/prodigi/storefront-snapshot?aspect_ratio=${encodeURIComponent(ratio)}`,
             );
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const nextData: SnapshotResponse = await res.json();
+            const nextData = await apiJson<SnapshotResponse>(res);
             setData(nextData);
             if (nextData.selected_ratio) {
                 setSelectedRatio(nextData.selected_ratio);
@@ -534,6 +557,21 @@ export default function ProdigiSnapshotTab() {
         if (!data?.bake) {
             return [];
         }
+        const shippingCounts = (data.countries ?? []).reduce(
+            (acc, country) => {
+                country.category_cells.forEach((cell) => {
+                    acc.covered += cell.shipping_support.covered_size_count;
+                    acc.blocked += cell.shipping_support.blocked_size_count;
+                    Object.entries(cell.shipping_support.chosen_tier_counts ?? {}).forEach(
+                        ([tier, count]) => {
+                            acc.tiers[tier] = (acc.tiers[tier] ?? 0) + count;
+                        },
+                    );
+                });
+                return acc;
+            },
+            { covered: 0, blocked: 0, tiers: {} as Record<string, number> },
+        );
         return [
             ["Bake key", data.bake.bake_key],
             ["Paper", data.bake.paper_material],
@@ -541,8 +579,9 @@ export default function ProdigiSnapshotTab() {
             ["Countries", String(data.bake.country_count)],
             ["Groups", data.bake.offer_group_count.toLocaleString()],
             ["Sizes", data.bake.offer_size_count.toLocaleString()],
-            ["Paper Badge", data.entry_promo_summary ? String(data.entry_promo_summary.paper_eligible_country_count) : "-"],
-            ["Canvas Badge", data.entry_promo_summary ? String(data.entry_promo_summary.canvas_eligible_country_count) : "-"],
+            ["Covered Routes", shippingCounts.covered.toLocaleString()],
+            ["Hidden Routes", shippingCounts.blocked.toLocaleString()],
+            ["Chosen Tiers", formatTierCounts(shippingCounts.tiers)],
         ];
     }, [data]);
 
@@ -623,9 +662,10 @@ export default function ProdigiSnapshotTab() {
 
             {data?.shipping_support_policy && (
                 <div className="border border-[#31323E]/10 bg-[#F7F7F5] px-4 py-3 text-[11px] leading-relaxed text-[#31323E]/75">
-                    Shipping support:
-                    {" "}green means the route has a stable chosen supplier tier.
-                    {" "}Prodigi print shipping is no longer subsidized by the gallery.
+                    Shipping support: speed-under-cap public checkout.
+                    {" "}Preferred order: {data.shipping_support_policy.preferred_tier_order.join(" -> ")}.
+                    {" "}Auto-checkout cap: {data.shipping_support_policy.checkout_shipping_cap.toFixed(2)}.
+                    {" "}Express, overnight, StandardPlus and other tiers stay visible for analysis only.
                 </div>
             )}
 
@@ -648,7 +688,7 @@ export default function ProdigiSnapshotTab() {
                             {data.entry_promo_summary.paper_eligible_country_count}
                         </div>
                         <div className="text-[10px] text-[#31323E]/60 mt-1">
-                            Can show `Free delivery, Paper Print`
+                            Print delivery promo disabled
                         </div>
                     </div>
                     <div className="border border-[#31323E]/10 bg-white px-4 py-3">
@@ -659,7 +699,7 @@ export default function ProdigiSnapshotTab() {
                             {data.entry_promo_summary.canvas_eligible_country_count}
                         </div>
                         <div className="text-[10px] text-[#31323E]/60 mt-1">
-                            Can show `Free delivery, Canvas`
+                            Print delivery promo disabled
                         </div>
                     </div>
                     <div className="border border-[#31323E]/10 bg-white px-4 py-3">
@@ -751,7 +791,7 @@ export default function ProdigiSnapshotTab() {
                                                 {country.category_summaries.map((category) => (
                                                     <div key={`${country.country_code}-${category.category_id}`} className="break-words">
                                                         {category.category_label}: {formatMoney(category.currency, category.avg_covered_shipping_price)}
-                                                        {" "}({category.included_size_count} free / {category.pass_through_size_count} checkout / {category.hidden_size_count} hidden)
+                                                        {" "}({category.pass_through_size_count} checkout / {category.hidden_size_count} hidden)
                                                     </div>
                                                 ))}
                                             </div>
@@ -871,7 +911,10 @@ export default function ProdigiSnapshotTab() {
                                                     covered {cell.shipping_support.covered_size_count} / blocked {cell.shipping_support.blocked_size_count}
                                                 </div>
                                                 <div>
-                                                    free {cell.business_summary.included_size_count} / checkout {cell.business_summary.pass_through_size_count} / hidden {cell.business_summary.hidden_size_count}
+                                                    checkout {cell.business_summary.pass_through_size_count} / hidden {cell.business_summary.hidden_size_count}
+                                                </div>
+                                                <div>
+                                                    chosen: {formatTierCounts(cell.shipping_support.chosen_tier_counts)}
                                                 </div>
                                                 <div>
                                                     price:{" "}
@@ -922,6 +965,19 @@ export default function ProdigiSnapshotTab() {
                                                                     customer delivery: {customerDeliveryLabel(size)}
                                                                 </div>
                                                             )}
+                                                            {size.available && (
+                                                                <div className="text-[9px] text-[#31323E]/70 leading-tight break-words">
+                                                                    selected tier:{" "}
+                                                                    {size.shipping_support.chosen_tier
+                                                                        ? `${shippingTierLabel(size.shipping_support.chosen_tier)} / ${size.shipping_support.chosen_shipping_method || "-"}`
+                                                                        : "hidden"}
+                                                                </div>
+                                                            )}
+                                                            {size.available && size.shipping_support.status !== "covered" && (
+                                                                <div className="text-[8px] text-rose-700 leading-tight break-words">
+                                                                    hidden: {size.shipping_support.reason || size.shipping_support.note}
+                                                                </div>
+                                                            )}
                                                             <div className="text-[9px] text-[#31323E]/70 leading-tight break-words">
                                                                 from: {size.source_country || "-"}
                                                             </div>
@@ -939,9 +995,16 @@ export default function ProdigiSnapshotTab() {
                                                             {size.available && visibleShippingProfiles(size).length > 0 && (
                                                                 <div className="mt-1 space-y-0.5 text-[8px] text-[#31323E]/65 leading-tight">
                                                                     {visibleShippingProfiles(size).map((profile) => (
-                                                                        <div key={`${size.slot_size_label}-${profile.tier}`}>
+                                                                        <div
+                                                                            key={`${size.slot_size_label}-${profile.tier}`}
+                                                                            className={
+                                                                                size.shipping_support.chosen_tier === profile.tier
+                                                                                    ? "font-bold text-emerald-700"
+                                                                                    : undefined
+                                                                            }
+                                                                        >
                                                                             {shippingTierLabel(profile.tier)}
-                                                                            {size.default_shipping_tier === profile.tier ? "*" : ""}:{" "}
+                                                                            {size.shipping_support.chosen_tier === profile.tier ? "*" : ""}:{" "}
                                                                             {formatMoney(profile.currency, profile.shipping_price)}
                                                                             {profile.delivery_days ? ` / ${profile.delivery_days}` : ""}
                                                                         </div>

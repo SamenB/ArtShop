@@ -42,7 +42,11 @@ export function OrderSummary({
                     {items.map((item) => {
                         const isPrint = item.type === "print";
                         const isDiscounted = promoApplied && isPrint;
-                        const discountedPrice = isDiscounted ? Math.round(item.price * 0.9) : item.price;
+                        const productPrice = Number(
+                            item.customer_product_price ?? item.prodigi_retail_eur ?? item.price,
+                        );
+                        const deliveryPrice = Number(item.customer_shipping_price ?? 0);
+                        const discountedPrice = isDiscounted ? Math.round(productPrice * 0.9) : productPrice;
 
                         return (
                             <div key={item.id} style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
@@ -66,13 +70,18 @@ export function OrderSummary({
                                         {isDiscounted ? (
                                             <>
                                                 <span className="font-price" style={{ fontSize: "0.9rem", fontWeight: 700, color: "#ec4899" }}>{convertPrice(discountedPrice)}</span>
-                                                <span className="font-price" style={{ fontSize: "0.8rem", color: "#999", textDecoration: "line-through" }}>{convertPrice(item.price)}</span>
+                                                <span className="font-price" style={{ fontSize: "0.8rem", color: "#999", textDecoration: "line-through" }}>{convertPrice(productPrice)}</span>
                                             </>
                                         ) : (
-                                            <span className="font-price" style={{ fontSize: "0.9rem", fontWeight: 600 }}>{convertPrice(item.price)}</span>
+                                            <span className="font-price" style={{ fontSize: "0.9rem", fontWeight: 600 }}>{convertPrice(productPrice)}</span>
                                         )}
                                         {item.quantity > 1 && <span style={{ fontSize: "0.75rem", color: "#999" }}>× {item.quantity}</span>}
                                     </div>
+                                    {isPrint && (
+                                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.68rem", color: "#999", margin: "0.15rem 0 0" }}>
+                                            Delivery {convertPrice(deliveryPrice)}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -98,8 +107,8 @@ export function OrderSummary({
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-sans)", fontSize: "0.85rem" }}>
                         <span style={{ color: "#888" }}>Shipping</span>
-                        <span className="font-price" style={{ fontWeight: 600, color: shippingTotal > 0 ? "#111" : "#38A169" }}>
-                            {shippingTotal > 0 ? convertPrice(shippingTotal) : "FREE"}
+                        <span className="font-price" style={{ fontWeight: 600, color: "#111" }}>
+                            {shippingTotal > 0 ? convertPrice(shippingTotal) : "No print delivery"}
                         </span>
                     </div>
                     <div style={{

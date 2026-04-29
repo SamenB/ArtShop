@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, RefreshCcw, Save, X } from "lucide-react";
 
 import { countries } from "@/countries";
-import { apiFetch, getApiUrl } from "@/utils";
+import { apiFetch, apiJson, getApiUrl } from "@/utils";
 
 interface PricingRegion {
     id: number;
@@ -147,11 +147,7 @@ export default function PrintPricingTab() {
         setError(null);
         try {
             const response = await apiFetch(`${api}/print-pricing/regions`);
-            if (!response.ok) {
-                setError("Could not load print pricing regions.");
-                return;
-            }
-            setData(await response.json());
+            setData(await apiJson(response));
         } catch {
             setError("Network error while loading print pricing regions.");
         } finally {
@@ -198,11 +194,13 @@ export default function PrintPricingTab() {
                 }
             );
             if (!response.ok) {
-                const body = await response.json().catch(() => ({}));
+                const body = await apiJson<{ detail?: string }>(response).catch(
+                    (): { detail?: string } => ({})
+                );
                 setError(body.detail || "Could not update multiplier.");
                 return;
             }
-            const updated: PricingRegion = await response.json();
+            const updated = await apiJson<PricingRegion>(response);
             setData((previous) => {
                 if (!previous) {
                     return previous;
@@ -239,11 +237,13 @@ export default function PrintPricingTab() {
                 }),
             });
             if (!response.ok) {
-                const body = await response.json().catch(() => ({}));
+                const body = await apiJson<{ detail?: string }>(response).catch(
+                    (): { detail?: string } => ({})
+                );
                 setError(body.detail || "Could not move country.");
                 return;
             }
-            setData(await response.json());
+            setData(await apiJson(response));
             setCountryDraft(null);
         } catch {
             setError("Network error while moving country.");

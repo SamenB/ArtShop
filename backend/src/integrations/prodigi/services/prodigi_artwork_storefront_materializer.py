@@ -12,6 +12,9 @@ from src.integrations.prodigi.services.prodigi_artwork_storefront import (
     ProdigiArtworkStorefrontService,
 )
 from src.integrations.prodigi.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
+from src.integrations.prodigi.services.prodigi_storefront_settings import (
+    ProdigiStorefrontSettingsService,
+)
 from src.integrations.prodigi.services.prodigi_storefront_snapshot import (
     ProdigiStorefrontSnapshotService,
 )
@@ -35,6 +38,7 @@ class ProdigiArtworkStorefrontMaterializerService:
         self.snapshot_service = ProdigiStorefrontSnapshotService(db)
         self.print_profile_service = ArtworkPrintProfileService(db)
         self.artwork_storefront_service = ProdigiArtworkStorefrontService(db)
+        self.storefront_settings = ProdigiStorefrontSettingsService(db)
 
     async def materialize_active_bake(
         self,
@@ -50,6 +54,10 @@ class ProdigiArtworkStorefrontMaterializerService:
                 "artwork_count": 0,
                 "payload_count": 0,
             }
+
+        config = await self.storefront_settings.get_effective_config()
+        self.snapshot_service.apply_storefront_config(config)
+        self.artwork_storefront_service.apply_storefront_config(config)
 
         artworks = await self._get_candidate_artworks(artwork_ids=artwork_ids)
         if artwork_ids:

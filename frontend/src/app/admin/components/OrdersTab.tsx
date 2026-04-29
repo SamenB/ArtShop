@@ -803,11 +803,14 @@ function formatEuro(value: unknown) {
   return `EUR ${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"}`;
 }
 
+function formatUsd(value: unknown) {
+  const amount = Number(value ?? 0);
+  return `$${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"}`;
+}
+
 function prodigiItemCost(item: any) {
-  return (
-    Number(item.prodigi_wholesale_eur ?? 0) +
-    Number(item.prodigi_shipping_eur ?? 0)
-  );
+  return Number(item.economics?.supplier_total_cost ?? item.prodigi_supplier_total_eur ?? 0) ||
+    Number(item.prodigi_wholesale_eur ?? 0) + Number(item.prodigi_shipping_eur ?? 0);
 }
 
 function ProdigiFlowPanel({
@@ -976,6 +979,36 @@ function ProdigiFlowPanel({
           <div className="space-y-3">
             <SectionLabel text="Prodigi Items And Cost Check" />
             {flowItems.map((item: any) => (
+              (() => {
+                const economics = item.economics ?? {};
+                const customerProduct = Number(
+                  economics.customer_product_price ?? item.customer_product_price ?? 0,
+                );
+                const customerDelivery = Number(
+                  economics.customer_shipping_price ?? item.customer_shipping_price ?? 0,
+                );
+                const customerLine = Number(
+                  economics.customer_line_total ?? item.customer_line_total ?? item.price ?? 0,
+                );
+                const supplierProduct = Number(
+                  economics.supplier_product_cost ?? item.prodigi_wholesale_eur ?? 0,
+                );
+                const supplierDelivery = Number(
+                  economics.supplier_shipping_cost ?? item.prodigi_shipping_eur ?? 0,
+                );
+                const supplierLine = Number(
+                  economics.supplier_total_cost ?? prodigiItemCost(item),
+                );
+                const productMargin = Number(
+                  economics.product_margin ?? customerProduct - supplierProduct,
+                );
+                const deliveryMargin = Number(
+                  economics.shipping_margin ?? customerDelivery - supplierDelivery,
+                );
+                const totalMargin = Number(
+                  economics.total_margin ?? customerLine - supplierLine,
+                );
+                return (
               <div
                 key={item.id}
                 className="rounded-lg border border-[#31323E]/8 bg-[#F7F7F5] p-3 text-xs"
@@ -991,21 +1024,47 @@ function ProdigiFlowPanel({
                     </p>
                     <p className="text-[#31323E]/50">
                       {item.prodigi_shipping_method || "Standard"} shipping /
-                      customer paid ${Number(item.price ?? 0).toFixed(0)}
+                      customer paid {formatUsd(customerLine)}
                     </p>
                   </div>
-                  <div className="min-w-[170px] rounded-md border border-[#31323E]/10 bg-white p-2 text-right font-bold text-[#31323E]">
-                    <p>{formatEuro(item.prodigi_wholesale_eur)}</p>
-                    <p className="text-[10px] text-[#31323E]/45">product</p>
-                    <p className="mt-1">
-                      {formatEuro(item.prodigi_shipping_eur)}
-                    </p>
-                    <p className="text-[10px] text-[#31323E]/45">shipping</p>
-                    <p className="mt-2 border-t border-[#31323E]/10 pt-2">
-                      {formatEuro(prodigiItemCost(item))}
-                    </p>
-                    <p className="text-[10px] text-[#31323E]/45">
-                      supplier total
+                  <div className="min-w-[320px] rounded-md border border-[#31323E]/10 bg-white p-3 text-[#31323E]">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-right">
+                      <span className="text-left text-[10px] font-bold uppercase tracking-[0.12em] text-[#31323E]/40">
+                        Line
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#31323E]/40">
+                        Customer
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#31323E]/40">
+                        Prodigi
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#31323E]/40">
+                        Margin
+                      </span>
+
+                      <span className="text-left font-semibold text-[#31323E]/60">Product</span>
+                      <span className="font-bold">{formatUsd(customerProduct)}</span>
+                      <span className="font-bold">{formatEuro(supplierProduct)}</span>
+                      <span className={productMargin >= 0 ? "font-bold text-emerald-700" : "font-bold text-rose-700"}>
+                        {formatUsd(productMargin)}
+                      </span>
+
+                      <span className="text-left font-semibold text-[#31323E]/60">Delivery</span>
+                      <span className="font-bold">{formatUsd(customerDelivery)}</span>
+                      <span className="font-bold">{formatEuro(supplierDelivery)}</span>
+                      <span className={deliveryMargin >= 0 ? "font-bold text-emerald-700" : "font-bold text-rose-700"}>
+                        {formatUsd(deliveryMargin)}
+                      </span>
+
+                      <span className="border-t border-[#31323E]/10 pt-2 text-left font-bold">Total</span>
+                      <span className="border-t border-[#31323E]/10 pt-2 font-bold">{formatUsd(customerLine)}</span>
+                      <span className="border-t border-[#31323E]/10 pt-2 font-bold">{formatEuro(supplierLine)}</span>
+                      <span className={`border-t border-[#31323E]/10 pt-2 font-bold ${totalMargin >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        {formatUsd(totalMargin)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[10px] font-medium leading-relaxed text-[#31323E]/45">
+                      Prodigi costs are supplier charges in EUR. Margin is an estimate before FX conversion and payment fees.
                     </p>
                   </div>
                 </div>
@@ -1020,6 +1079,8 @@ function ProdigiFlowPanel({
                   </details>
                 )}
               </div>
+                );
+              })()
             ))}
           </div>
 
@@ -1131,7 +1192,7 @@ export default function OrdersTab() {
   const fetchOrders = async () => {
     try {
       const res = await apiFetch(`${getApiUrl()}/orders`);
-      if (res.ok) setOrders(await res.json());
+      setOrders(await apiJson(res));
     } catch (e) {
       console.error(e);
     } finally {
@@ -1144,12 +1205,10 @@ export default function OrdersTab() {
       const res = await apiFetch(
         `${getApiUrl()}/orders/prodigi/fulfillment-mode`,
       );
-      if (res.ok) {
-        const data = await res.json();
-        const mode = data.mode === "manual" ? "manual" : "automatic";
-        setProdigiMode(mode);
-        setProdigiModeDraft(mode);
-      }
+      const data = await apiJson<{ mode?: string }>(res);
+      const mode = data.mode === "manual" ? "manual" : "automatic";
+      setProdigiMode(mode);
+      setProdigiModeDraft(mode);
     } catch (e) {
       console.error(e);
     }
@@ -1181,10 +1240,8 @@ export default function OrdersTab() {
       const res = await apiFetch(
         `${getApiUrl()}/orders/${orderId}/prodigi-flow`,
       );
-      if (res.ok) {
-        const data = await res.json();
-        setProdigiFlows((prev) => ({ ...prev, [orderId]: data }));
-      }
+      const data = await apiJson(res);
+      setProdigiFlows((prev) => ({ ...prev, [orderId]: data }));
     } catch (e) {
       console.error(e);
     } finally {
@@ -2008,7 +2065,7 @@ export default function OrdersTab() {
                                 Owner Telegram alerts
                               </p>
                               <p className="mt-1 text-[11px] font-medium leading-relaxed text-blue-800/70">
-                                Managed in Admin Profile. This only notifies the
+                                Managed in Admin Settings. This only notifies the
                                 owner, it does not fulfill orders.
                               </p>
                             </div>

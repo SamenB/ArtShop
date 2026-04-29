@@ -250,3 +250,34 @@ def test_resolve_category_id_falls_back_for_legacy_finish_labels():
     )
 
     assert ProdigiOrderService._resolve_category_id(item) == "canvasFloatingFrame"
+
+
+def test_build_order_payload_uses_selected_public_checkout_shipping_method():
+    item = _build_order_item(prodigi_shipping_method="Budget")
+    order = _build_order(item)
+
+    body = ProdigiOrderService.build_order_payload(
+        order=order,
+        item=item,
+        asset_url="https://example.test/asset.png",
+    )
+
+    assert body["shippingMethod"] == "Budget"
+
+    item.prodigi_shipping_method = "Express"
+    body = ProdigiOrderService.build_order_payload(
+        order=order,
+        item=item,
+        asset_url="https://example.test/asset.png",
+    )
+
+    assert body["shippingMethod"] == "Express"
+
+    item.prodigi_shipping_method = "Overnight"
+    body = ProdigiOrderService.build_order_payload(
+        order=order,
+        item=item,
+        asset_url="https://example.test/asset.png",
+    )
+
+    assert body["shippingMethod"] == "Overnight"

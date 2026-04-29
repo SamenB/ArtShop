@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from copy import deepcopy
 from typing import Any
 
 STOREFRONT_POLICY: dict[str, dict[str, Any]] = {
@@ -142,8 +143,14 @@ class ProdigiStorefrontPolicyService:
     - preview service: visualizes the result.
     """
 
+    def __init__(self, policy_map: dict[str, dict[str, Any]] | None = None):
+        self.policy_map = deepcopy(policy_map or STOREFRONT_POLICY)
+
+    def configure(self, policy_map: dict[str, dict[str, Any]]) -> None:
+        self.policy_map = deepcopy(policy_map)
+
     def get_policy_map(self) -> dict[str, dict[str, Any]]:
-        return STOREFRONT_POLICY
+        return deepcopy(self.policy_map)
 
     def apply(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         kept_rows: list[dict[str, Any]] = []
@@ -176,7 +183,7 @@ class ProdigiStorefrontPolicyService:
         removed_by_category: dict[str, int],
     ) -> dict[str, dict[str, Any]]:
         summary: dict[str, dict[str, Any]] = {}
-        for category_id, policy in STOREFRONT_POLICY.items():
+        for category_id, policy in self.policy_map.items():
             summary[category_id] = {
                 "label": policy["label"],
                 "fixed_attributes": dict(policy["fixed_attributes"]),
@@ -192,7 +199,7 @@ class ProdigiStorefrontPolicyService:
         return summary
 
     def _matches_policy(self, category_id: str, row: dict[str, Any]) -> bool:
-        policy = STOREFRONT_POLICY.get(category_id)
+        policy = self.policy_map.get(category_id)
         if policy is None:
             return False
 

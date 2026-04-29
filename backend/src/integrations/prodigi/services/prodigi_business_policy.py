@@ -101,33 +101,29 @@ class ProdigiBusinessPolicyService:
 
         status = str(shipping_support.get("status") or "unavailable")
         chosen_shipping_price = self._to_decimal(shipping_support.get("chosen_shipping_price"))
-        cheapest_shipping_price = self._to_decimal(shipping_support.get("cheapest_shipping_price"))
 
         if category_id in self.PRINT_SHIPPING_AT_CHECKOUT_CATEGORIES:
-            candidate_shipping = (
-                chosen_shipping_price
-                if status == "covered" and chosen_shipping_price is not None
-                else cheapest_shipping_price
-            )
+            candidate_shipping = chosen_shipping_price if status == "covered" else None
             if candidate_shipping is None:
                 return {
                     "markup_multiplier": multiplier,
                     "retail_product_price": retail_product_price,
                     "shipping_mode": "hide",
-                    "free_delivery_badge": False,
                     "policy_family": "print_shipping_at_checkout",
                     "customer_shipping_price": None,
                     "shipping_price_for_margin": Decimal("0.00"),
                     "shipping_reference_price": None,
                     "shipping_credit_applied": Decimal("0.00"),
-                    "reason": "No stable automatic shipping candidate is available.",
+                    "reason": (
+                        shipping_support.get("reason")
+                        or "No public shipping tier is available for automatic checkout."
+                    ),
                 }
 
             return {
                 "markup_multiplier": multiplier,
                 "retail_product_price": retail_product_price,
                 "shipping_mode": "pass_through",
-                "free_delivery_badge": False,
                 "policy_family": "print_shipping_at_checkout",
                 "customer_shipping_price": candidate_shipping,
                 "shipping_price_for_margin": Decimal("0.00"),
@@ -142,7 +138,6 @@ class ProdigiBusinessPolicyService:
             "markup_multiplier": multiplier,
             "retail_product_price": retail_product_price,
             "shipping_mode": "hide",
-            "free_delivery_badge": False,
             "policy_family": "unknown",
             "customer_shipping_price": None,
             "shipping_price_for_margin": Decimal("0.00"),
@@ -161,10 +156,9 @@ class ProdigiBusinessPolicyService:
             "policy_family": "print_shipping_at_checkout",
             "markup_multiplier": self.get_markup_multiplier(category_id),
             "shipping_subsidy_budget": self.PRINT_DELIVERY_SUBSIDY_BUDGET,
-            "free_delivery_badge": False,
         }
 
-    def is_unframed_free_delivery_category(self, category_id: str) -> bool:
+    def is_print_shipping_at_checkout_category(self, category_id: str) -> bool:
         return False
 
     def evaluate_country_entry_promos(
@@ -193,11 +187,11 @@ class ProdigiBusinessPolicyService:
             eligible = not missing_categories and not blocked_categories
             label = "Paper Print" if promo_id == "paper_print" else "Canvas"
             if eligible:
-                note = f"Free delivery, {label} is disabled for Prodigi prints."
+                note = f"{label} delivery promo is disabled for Prodigi prints."
             elif missing_categories:
-                note = f"Do not show Free delivery, {label}: required category is missing."
+                note = f"Do not show {label} delivery promo: required category is missing."
             else:
-                note = f"Do not show Free delivery, {label}: print shipping is charged at checkout."
+                note = f"Do not show {label} delivery promo: print shipping is charged at checkout."
 
             promos[promo_id] = {
                 "eligible": eligible,
@@ -211,7 +205,7 @@ class ProdigiBusinessPolicyService:
         promos["overall"] = {
             "eligible": all(item["eligible"] for item in promos.values()),
             "note": (
-                "Free-delivery entry badges are disabled for Prodigi prints."
+                "Delivery entry promos are disabled for Prodigi prints."
                 if all(item["eligible"] for item in promos.values())
                 else "Prodigi print shipping is charged at checkout."
             ),

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiFetch, getApiUrl } from "@/utils";
+import { apiFetch, apiJson, getApiUrl } from "@/utils";
 
 const inputCls =
   "w-full border border-[#31323E]/15 rounded-md px-3 py-2 text-sm text-[#31323E] font-medium bg-white focus:outline-none focus:border-[#31323E]/50 focus:ring-2 focus:ring-[#31323E]/10";
@@ -582,10 +582,7 @@ export default function ProdigiHubTab() {
       const res = await apiFetch(
         `${getApiUrl()}/v1/admin/prodigi/catalog-preview?aspect_ratio=${encodeURIComponent(ratio)}&country=${encodeURIComponent(country)}&paper_material=${encodeURIComponent(paperMaterial)}&include_notice_level=${includeNotice ? "true" : "false"}`,
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      const data: CatalogPreviewResponse = await res.json();
+      const data = await apiJson<CatalogPreviewResponse>(res);
       setPreviewData(data);
       setSelectedRatio(data.selected_ratio);
       setSelectedCountry(data.selected_country);
@@ -700,10 +697,7 @@ export default function ProdigiHubTab() {
         `${getApiUrl()}/v1/admin/prodigi/catalog-preview/create-database?aspect_ratio=${encodeURIComponent(selectedRatio)}&country=${encodeURIComponent(selectedCountry)}&paper_material=${encodeURIComponent(selectedPaperMaterial)}&include_notice_level=${includeNoticeLevel ? "true" : "false"}`,
         { method: "POST" },
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      const data = await res.json();
+      const data = await apiJson<any>(res);
       const summary = data?.bake
         ? ` Bake ${data.bake.bake_key}: ${data.bake.offer_group_count} groups / ${data.bake.offer_size_count} sizes.`
         : "";
@@ -725,10 +719,7 @@ export default function ProdigiHubTab() {
       const res = await apiFetch(
         `${getApiUrl()}/v1/admin/prodigi/probe?country=${probeCountry}&aspect_ratio=${probeRatio}&family=${family}`,
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      const data = await res.json();
+      const data = await apiJson<{ results: ProbeResult[] }>(res);
       setResults(data.results);
     } catch (err) {
       setProbeError(err instanceof Error ? err.message : "Probe failed");
@@ -744,10 +735,7 @@ export default function ProdigiHubTab() {
       const res = await apiFetch(
         `${getApiUrl()}/v1/admin/prodigi/fulfillment/jobs?limit=50`,
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      const data: FulfillmentJobsResponse = await res.json();
+      const data = await apiJson<FulfillmentJobsResponse>(res);
       setFulfillmentData(data);
     } catch (err) {
       setFulfillmentMessage(
@@ -764,10 +752,7 @@ export default function ProdigiHubTab() {
       const res = await apiFetch(
         `${getApiUrl()}/v1/admin/prodigi/fulfillment/jobs/${jobId}`,
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      setFulfillmentDetail(await res.json());
+      setFulfillmentDetail(await apiJson(res));
     } catch (err) {
       setFulfillmentMessage(
         err instanceof Error ? err.message : "Failed to load job detail",
@@ -786,10 +771,7 @@ export default function ProdigiHubTab() {
           method: "POST",
         },
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      setFulfillmentMessage(JSON.stringify(await res.json()));
+      setFulfillmentMessage(JSON.stringify(await apiJson(res)));
       await loadFulfillmentJobs();
       await loadFulfillmentDetail(jobId);
     } catch (err) {
@@ -809,10 +791,7 @@ export default function ProdigiHubTab() {
         `${getApiUrl()}/v1/admin/prodigi/fulfillment/validation-report?country=DE&country=GB&country=US&country=CA&country=AU&max_sizes_per_group=1&simulate_orders=100&batch_size=3&max_failures=0&min_pass_rate=1`,
         { method: "POST" },
       );
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      setValidationReport(await res.json());
+      setValidationReport(await apiJson(res));
     } catch (err) {
       setFulfillmentMessage(
         err instanceof Error ? err.message : "Validation failed",
@@ -1459,7 +1438,7 @@ export default function ProdigiHubTab() {
                                   <span
                                     className={`inline-block px-2 py-1 ${shippingSupportClass(card.shipping_support.status)}`}
                                   >
-                                    free {card.shipping_support.status}
+                                    selected {card.shipping_support.status}
                                   </span>
                                 </div>
                                 <div className="text-xs text-[#31323E]/55 mt-2">
@@ -1500,7 +1479,7 @@ export default function ProdigiHubTab() {
                                         {size.delivery_days || "-"})
                                       </span>
                                       <div className="text-[11px] text-[#31323E]/55">
-                                        free:{" "}
+                                        selected shipping:{" "}
                                         {size.shipping_support.chosen_tier
                                           ? shippingTierLabel(
                                               size.shipping_support.chosen_tier,

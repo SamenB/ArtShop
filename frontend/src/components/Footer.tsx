@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { FormEvent, useState, useId, useEffect } from "react";
 import { Globe, CreditCard, MapPin } from "lucide-react";
-import { getApiUrl, apiFetch } from "@/utils";
+import { getApiUrl, apiFetch, apiJson } from "@/utils";
 
 const InstagramLogo = ({ size = 24, color = "currentColor" }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} xmlns="http://www.w3.org/2000/svg">
@@ -40,7 +40,7 @@ export default function Footer() {
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
+            .then(res => apiJson(res))
             .then(data => setSettings(data))
             .catch(err => console.error("Error fetching footer settings:", err));
     }, []);

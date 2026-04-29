@@ -6,24 +6,44 @@ from typing import Any
 
 class ProdigiShippingSupportPolicyService:
     """
-    Decides which shipping tier ArtShop is willing to subsidize as
-    customer-facing free shipping.
+    Decides which shipping tier ArtShop should expose as the stable
+    customer-facing checkout shipping quote.
 
     Policy goals:
-    - prefer the fastest reasonable tier,
-    - avoid obviously anomalous shipping spend,
+    - prefer the fastest public tier that stays under the checkout cap,
     - produce a strict production-safe decision with no manual review state,
-    - block routes that would make "free shipping" economically irresponsible.
+    - fall back to Standard above cap when every preferred tier is over cap,
+    - fall back to the cheapest available tier only when Standard is absent.
     """
 
-    FREE_SHIPPING_COVERED_CAP = 35.0
+    CHECKOUT_SHIPPING_CAP = 35.0
+    PREFERRED_TIERS = ("overnight", "express", "standardplus", "standard", "budget")
+    CANONICAL_SHIPPING_METHODS = {
+        "budget": "Budget",
+        "express": "Express",
+        "overnight": "Overnight",
+        "standard": "Standard",
+        "standardplus": "StandardPlus",
+    }
 
-    EXPRESS_PREMIUM_CAP = 12.0
-    EXPRESS_PREMIUM_MULTIPLIER = 1.4
+    def __init__(self, config: dict[str, Any] | None = None):
+        self.checkout_shipping_cap = float(
+            (config or {}).get("checkout_shipping_cap", self.CHECKOUT_SHIPPING_CAP)
+        )
+        self.preferred_tiers = tuple(
+            str(item).strip().lower()
+            for item in (config or {}).get("preferred_tier_order", self.PREFERRED_TIERS)
+        )
+        self.fallback_when_none_under_cap = str(
+            (config or {}).get("fallback_when_none_under_cap", "standard_then_cheapest")
+        )
+        self.fallback_tier = str((config or {}).get("fallback_tier", "standard")).lower()
 
-    OVERNIGHT_PREMIUM_CAP = 8.0
-    OVERNIGHT_PREMIUM_MULTIPLIER = 1.18
-    OVERNIGHT_ABSOLUTE_CAP = 35.0
+    def configure(self, config: dict[str, Any]) -> None:
+        self.__init__(config)
+
+    def set_config(self, config: dict[str, Any]) -> None:
+        self.configure(config)
 
     def evaluate_size(
         self,
@@ -39,54 +59,49 @@ class ProdigiShippingSupportPolicyService:
             )
 
         by_tier = {item["tier"]: item for item in profiles}
-        eligible_tiers: list[str] = []
-
-        baseline = self._pick_baseline(by_tier)
-        chosen_profile = None
-
-        if baseline is not None and self._is_within_covered_cap(baseline):
-            chosen_profile = baseline
-            eligible_tiers.append(baseline["tier"])
-
-        express = by_tier.get("express")
-        if express is not None and self._is_reasonable_express(express, baseline):
-            chosen_profile = express
-            eligible_tiers.append("express")
-
-        reference_for_overnight = express or chosen_profile or baseline
-        overnight = by_tier.get("overnight")
-        if overnight is not None and self._is_reasonable_overnight(
-            overnight,
-            reference_for_overnight,
-        ):
-            chosen_profile = overnight
-            eligible_tiers.append("overnight")
+        eligible_tiers = [
+            tier
+            for tier in self.preferred_tiers
+            if tier in by_tier and self._is_within_checkout_cap(by_tier[tier])
+        ]
+        chosen_profile = next(
+            (by_tier[tier] for tier in self.preferred_tiers if tier in eligible_tiers),
+            None,
+        )
+        selection_reason = "under_cap_preferred"
 
         if chosen_profile is None:
-            cheapest = min(
-                profiles,
-                key=lambda item: item["shipping_price"]
-                if item["shipping_price"] is not None
-                else 999999,
-            )
-            return self._build_result(
-                status="blocked",
-                chosen_profile=None,
-                eligible_tiers=[],
-                note=(
-                    "Shipping exists, but every available tier is above the current "
-                    "free-shipping support cap."
-                ),
-                cheapest_shipping_price=cheapest["shipping_price"],
-                cheapest_tier=cheapest["tier"],
-            )
+            chosen_profile = self._fallback_profile(by_tier=by_tier, profiles=profiles)
+            if chosen_profile is not None:
+                selection_reason = (
+                    "fallback_standard_over_cap"
+                    if chosen_profile["tier"] == self.fallback_tier
+                    else "fallback_cheapest_missing_standard"
+                )
+            else:
+                cheapest = self._cheapest_profile(profiles)
+                return self._build_result(
+                    status="blocked",
+                    chosen_profile=None,
+                    eligible_tiers=[],
+                    note=(
+                        "No public shipping tier is available under the "
+                        "current automatic checkout cap."
+                    ),
+                    cheapest_shipping_price=cheapest["shipping_price"] if cheapest else None,
+                    cheapest_tier=cheapest["tier"] if cheapest else None,
+                    available_profiles=profiles,
+                    selection_reason="blocked_no_fallback",
+                )
 
-        note = self._build_note(chosen_profile)
+        note = self._build_note(chosen_profile, selection_reason)
         return self._build_result(
             status="covered",
             chosen_profile=chosen_profile,
             eligible_tiers=eligible_tiers,
             note=note,
+            available_profiles=profiles,
+            selection_reason=selection_reason,
         )
 
     def summarize_group(self, size_entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -141,14 +156,12 @@ class ProdigiShippingSupportPolicyService:
             "policy_meta": self.serialize_policy_meta(),
         }
 
-    def serialize_policy_meta(self) -> dict[str, float]:
+    def serialize_policy_meta(self) -> dict[str, Any]:
         return {
-            "covered_cap": self.FREE_SHIPPING_COVERED_CAP,
-            "express_premium_cap": self.EXPRESS_PREMIUM_CAP,
-            "express_premium_multiplier": self.EXPRESS_PREMIUM_MULTIPLIER,
-            "overnight_premium_cap": self.OVERNIGHT_PREMIUM_CAP,
-            "overnight_premium_multiplier": self.OVERNIGHT_PREMIUM_MULTIPLIER,
-            "overnight_absolute_cap": self.OVERNIGHT_ABSOLUTE_CAP,
+            "checkout_shipping_cap": self.checkout_shipping_cap,
+            "preferred_tier_order": list(self.preferred_tiers),
+            "fallback_when_none_under_cap": self.fallback_when_none_under_cap,
+            "fallback_tier": self.fallback_tier,
         }
 
     def _normalize_profiles(
@@ -165,62 +178,61 @@ class ProdigiShippingSupportPolicyService:
             normalized.append(
                 {
                     **item,
-                    "tier": str(tier),
+                    "tier": str(tier).strip().lower(),
+                    "shipping_method": self._canonical_shipping_method(str(tier), item),
                     "shipping_price": round(float(shipping_price), 2),
+                    "product_price": self._float_or_none(item.get("product_price")),
+                    "currency": item.get("currency"),
                 }
             )
         return normalized
 
-    def _pick_baseline(self, by_tier: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
-        return by_tier.get("standard") or by_tier.get("budget")
-
-    def _is_within_covered_cap(self, profile: dict[str, Any]) -> bool:
+    def _is_within_checkout_cap(self, profile: dict[str, Any]) -> bool:
         shipping_price = profile.get("shipping_price")
-        return shipping_price is not None and shipping_price <= self.FREE_SHIPPING_COVERED_CAP
+        return shipping_price is not None and shipping_price <= self.checkout_shipping_cap
 
-    def _is_reasonable_express(
+    def _fallback_profile(
         self,
-        express: dict[str, Any],
-        baseline: dict[str, Any] | None,
-    ) -> bool:
-        if not self._is_within_covered_cap(express):
-            return False
-        if baseline is None:
-            return True
+        *,
+        by_tier: dict[str, dict[str, Any]],
+        profiles: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if self.fallback_when_none_under_cap == "block":
+            return None
+        if self.fallback_when_none_under_cap == "standard_then_cheapest":
+            if self.fallback_tier in by_tier:
+                return by_tier[self.fallback_tier]
+            return self._cheapest_profile(profiles)
+        if self.fallback_when_none_under_cap == "cheapest":
+            return self._cheapest_profile(profiles)
+        return None
 
-        baseline_price = baseline["shipping_price"]
-        express_price = express["shipping_price"]
-        return express_price <= min(
-            baseline_price + self.EXPRESS_PREMIUM_CAP,
-            baseline_price * self.EXPRESS_PREMIUM_MULTIPLIER,
+    def _cheapest_profile(self, profiles: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if not profiles:
+            return None
+        return min(
+            profiles,
+            key=lambda item: item["shipping_price"]
+            if item["shipping_price"] is not None
+            else 999999,
         )
 
-    def _is_reasonable_overnight(
-        self,
-        overnight: dict[str, Any],
-        reference: dict[str, Any] | None,
-    ) -> bool:
-        overnight_price = overnight["shipping_price"]
-        if overnight_price > min(
-            self.FREE_SHIPPING_COVERED_CAP,
-            self.OVERNIGHT_ABSOLUTE_CAP,
-        ):
-            return False
-        if reference is None:
-            return True
-
-        reference_price = reference["shipping_price"]
-        return overnight_price <= min(
-            reference_price + self.OVERNIGHT_PREMIUM_CAP,
-            reference_price * self.OVERNIGHT_PREMIUM_MULTIPLIER,
-        )
-
-    def _build_note(self, chosen_profile: dict[str, Any]) -> str:
+    def _build_note(self, chosen_profile: dict[str, Any], selection_reason: str) -> str:
         tier = chosen_profile["tier"]
         shipping_price = chosen_profile["shipping_price"]
+        if selection_reason == "fallback_standard_over_cap":
+            return (
+                f"Checkout shipping uses {tier} at {shipping_price:.2f}; no preferred tier "
+                "was available under the automatic checkout cap, so Standard is used."
+            )
+        if selection_reason == "fallback_cheapest_missing_standard":
+            return (
+                f"Checkout shipping uses {tier} at {shipping_price:.2f}; no preferred tier "
+                "was available under the automatic checkout cap and Standard is missing."
+            )
         return (
-            f"Free shipping can safely use {tier} at {shipping_price:.2f} "
-            "under the current strict subsidy cap."
+            f"Checkout shipping uses {tier} at {shipping_price:.2f} under the "
+            "speed-under-cap support policy."
         )
 
     def _build_result(
@@ -232,18 +244,46 @@ class ProdigiShippingSupportPolicyService:
         note: str,
         cheapest_shipping_price: float | None = None,
         cheapest_tier: str | None = None,
+        available_profiles: list[dict[str, Any]] | None = None,
+        selection_reason: str | None = None,
     ) -> dict[str, Any]:
         return {
             "status": status,
             "chosen_tier": chosen_profile["tier"] if chosen_profile else None,
+            "chosen_shipping_method": (
+                chosen_profile["shipping_method"] if chosen_profile else None
+            ),
             "chosen_shipping_price": (
                 chosen_profile["shipping_price"] if chosen_profile else None
             ),
+            "chosen_product_price": (
+                chosen_profile.get("product_price") if chosen_profile else None
+            ),
+            "chosen_currency": chosen_profile.get("currency") if chosen_profile else None,
             "chosen_delivery_days": (
                 chosen_profile.get("delivery_days") if chosen_profile else None
             ),
             "eligible_tiers": eligible_tiers,
+            "available_tiers": [item["tier"] for item in available_profiles or []],
+            "available_profiles": available_profiles or [],
             "note": note,
+            "reason": note,
+            "selection_reason": selection_reason,
             "cheapest_shipping_price": cheapest_shipping_price,
             "cheapest_tier": cheapest_tier,
         }
+
+    def _canonical_shipping_method(self, tier: str, item: dict[str, Any]) -> str:
+        normalized = tier.strip().lower()
+        return self.CANONICAL_SHIPPING_METHODS.get(
+            normalized,
+            str(item.get("shipping_method") or tier).strip(),
+        )
+
+    def _float_or_none(self, value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return round(float(value), 2)
+        except (TypeError, ValueError):
+            return None

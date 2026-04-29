@@ -11,6 +11,12 @@ import type {
   StorefrontCard,
   StorefrontSizeOption,
 } from "@/lib/artworkStorefront";
+import {
+  resolveRoundedCustomerPriceParts,
+  resolveStorefrontCustomerTotal,
+  resolveStorefrontProductPrice,
+  resolveStorefrontShippingPrice,
+} from "@/lib/artworkStorefront";
 
 type CartEditionType =
   | "canvas_print"
@@ -217,10 +223,7 @@ function buildShippingSummary(size: StorefrontSizeOption | null): string {
     return "Select a size to see delivery details.";
   }
 
-  const customerShipping =
-    size.customer_shipping_price ??
-    size.business_policy?.customer_shipping_price ??
-    size.supplier_shipping_price;
+  const customerShipping = resolveStorefrontShippingPrice(size);
   if (customerShipping !== null && customerShipping !== undefined) {
     return customerShipping > 0
       ? "Calculated for the selected delivery country."
@@ -231,15 +234,7 @@ function buildShippingSummary(size: StorefrontSizeOption | null): string {
 }
 
 function resolveShippingPrice(size: StorefrontSizeOption | null): number | null {
-  if (!size) {
-    return null;
-  }
-  const value = Number(
-    size.customer_shipping_price ??
-      size.business_policy?.customer_shipping_price ??
-      size.supplier_shipping_price,
-  );
-  return Number.isFinite(value) ? value : null;
+  return resolveStorefrontShippingPrice(size);
 }
 
 function buildProfileSummary(card: StorefrontCard | null): string {
@@ -432,14 +427,13 @@ export default function PrintConfigurator({
   }, [selectedAttributes, selectedCard, selectedSize]);
 
   const editionType = resolveEditionType(purchaseType, mediumOffers);
-  const productPrice =
-    selectedSize?.retail_product_price ??
-    selectedSize?.business_policy?.retail_product_price ??
-    null;
+  const productPrice = resolveStorefrontProductPrice(selectedSize);
   const shippingPrice = resolveShippingPrice(selectedSize);
-  const hasShippingQuote = shippingPrice !== null && shippingPrice > 0;
-  const totalPrice =
-    productPrice !== null && hasShippingQuote ? productPrice + shippingPrice : null;
+  const roundedPriceParts = resolveRoundedCustomerPriceParts(selectedSize);
+  const totalPrice = roundedPriceParts?.total ?? resolveStorefrontCustomerTotal(selectedSize);
+  const displayProductPrice = roundedPriceParts?.product ?? productPrice;
+  const displayShippingPrice = roundedPriceParts?.shipping ?? shippingPrice;
+  const hasShippingQuote = shippingPrice !== null && totalPrice !== null;
   const formattedSize = selectedSize
     ? formatSizeLabel(
         selectedSize.size_label || selectedSize.slot_size_label,
@@ -745,12 +739,12 @@ export default function PrintConfigurator({
           >
             <span>
               {formattedSize}{" "}
-              {totalPrice !== null ? (
+              {roundedPriceParts !== null ? (
                 <>
                   {" "}
                   -{" "}
                   <span className="font-price font-medium">
-                    {convertPrice(totalPrice)}
+                    {convertPrice(roundedPriceParts.total)}
                   </span>
                 </>
               ) : null}
@@ -761,14 +755,7 @@ export default function PrintConfigurator({
             className={`step-options ${openDropdown === "size" ? "open" : ""}`}
           >
             {selectedCard?.size_options.map((size) => {
-              const sizePrice =
-                size.retail_product_price ??
-                size.business_policy?.retail_product_price;
-              const sizeShipping = resolveShippingPrice(size);
-              const sizeTotal =
-                sizePrice !== null && sizePrice !== undefined && sizeShipping !== null
-                  ? sizePrice + sizeShipping
-                  : null;
+              const sizeTotal = resolveRoundedCustomerPriceParts(size)?.total ?? null;
               return (
                 <button
                   key={getSizeKey(size)}
@@ -841,438 +828,113 @@ export default function PrintConfigurator({
         </div>
       )}
 
-      <div className="info-badge" style={{ marginTop: "1rem" }}>
-        <div className="info-badge-content">
-          <p className="info-badge-title">Fulfillment Route</p>
-          <p className="info-badge-desc">
-            {routeSummary ||
-              "Active baked storefront route is ready for this country."}
-          </p>
-        </div>
-      </div>
 
-      <div className="info-badge" style={{ marginTop: "0.85rem" }}>
-        <div className="info-badge-content">
-          <p className="info-badge-title">Production Profile</p>
-          <p className="info-badge-desc">{profileSummary}</p>
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginTop: "0.85rem",
-          background: preflightTone.bg,
-          border: `1px solid ${preflightTone.border}`,
-          borderRadius: "16px",
-          padding: isSmall ? "1rem" : "1.15rem",
-          display: "grid",
-          gridTemplateColumns: isSmall
-            ? "1fr"
-            : "minmax(0, 1.05fr) minmax(0, 1fr)",
-          gap: "1rem",
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "14px",
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            padding: "1rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "240px",
-          }}
-        >
-          {preflight ? (
-            <div
-              style={{
-                position: "relative",
-                width: "min(100%, 280px)",
-                aspectRatio: "4 / 5",
-                background: preflight.hasWrap ? "#E8DDD0" : "#F5F1EA",
-                borderRadius: "18px",
-                border: "1px solid rgba(26, 26, 24, 0.08)",
-                boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.35)",
-                overflow: "hidden",
-              }}
-            >
-              {preflight.hasWrap && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: "0.65rem",
-                    border: "1px dashed rgba(120, 53, 15, 0.28)",
-                    borderRadius: "12px",
-                    pointerEvents: "none",
-                  }}
-                />
-              )}
-              <div
-                style={{
-                  position: "absolute",
-                  inset: preflight.hasWrap
-                    ? `${Math.max(preflight.wrapMarginPct, 4)}%`
-                    : "0.8rem",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  background: imageUrl
-                    ? `url(${imageUrl}) center / cover no-repeat`
-                    : `linear-gradient(135deg, ${imageGradientFrom} 0%, ${imageGradientTo} 100%)`,
-                  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.14)",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: `${Math.max(preflight.safeMarginPct, 1.5)}%`,
-                    border: "2px solid rgba(255,255,255,0.78)",
-                    borderRadius: "10px",
-                    boxShadow: "0 0 0 1px rgba(15, 23, 42, 0.12)",
-                  }}
-                />
-                {preflight.mountSafeMarginPct > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: `${Math.max(preflight.mountSafeMarginPct, 2.5)}%`,
-                      border: "1px dashed rgba(15, 23, 42, 0.42)",
-                      borderRadius: "10px",
-                    }}
-                  />
-                )}
-              </div>
-
-              <div
-                style={{
-                  position: "absolute",
-                  top: "10px",
-                  left: "12px",
-                  padding: "4px 8px",
-                  borderRadius: "999px",
-                  background: "rgba(255,255,255,0.92)",
-                  color: "#6B4F35",
-                  fontSize: "0.62rem",
-                  fontWeight: 600,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {preflight.hasWrap ? "Wrap Zone" : "Front Only"}
-              </div>
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "10px",
-                  right: "12px",
-                  padding: "4px 8px",
-                  borderRadius: "999px",
-                  background: "rgba(255,255,255,0.92)",
-                  color: "#1F2937",
-                  fontSize: "0.62rem",
-                  fontWeight: 600,
-                }}
-              >
-                Safe Margin {preflight.safeMarginPct.toFixed(1)}%
-              </div>
-            </div>
-          ) : (
-            <p
-              style={{
-                margin: 0,
-                fontSize: "0.8rem",
-                color: "var(--color-muted)",
-              }}
-            >
-              Preflight preview will appear after a valid size is selected.
-            </p>
-          )}
-        </div>
-
-        <div
-          style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}
-        >
-          <div>
-            <p
-              style={{
-                margin: 0,
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.68rem",
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: preflightTone.accent,
-              }}
-            >
-              Print Preflight
-            </p>
-            <p
-              style={{
-                margin: "0.3rem 0 0",
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.82rem",
-                lineHeight: 1.55,
-                color: "var(--color-charcoal-mid)",
-              }}
-            >
-              {preflight
-                ? "Safe margins, wrap consumption, and effective DPI are validated against the active artwork profile."
-                : "Select a size and keep a hi-res source attached to unlock full print preflight validation."}
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "0.75rem",
-            }}
-          >
-            <div>
-              <p
-                className="info-badge-title"
-                style={{ marginBottom: "0.15rem" }}
-              >
-                Effective DPI
-              </p>
-              <p
-                className="info-badge-desc"
-                style={{ color: preflightTone.accent }}
-              >
-                {formatDpiValue(preflight?.effectiveDpi ?? null)}
-              </p>
-            </div>
-            <div>
-              <p
-                className="info-badge-title"
-                style={{ marginBottom: "0.15rem" }}
-              >
-                Target
-              </p>
-              <p className="info-badge-desc">
-                {preflight
-                  ? `${preflight.targetDpi} / ${preflight.minimumDpi} DPI`
-                  : "300 / 150 DPI"}
-              </p>
-            </div>
-            <div>
-              <p
-                className="info-badge-title"
-                style={{ marginBottom: "0.15rem" }}
-              >
-                Front Size
-              </p>
-              <p className="info-badge-desc">
-                {preflight?.frontSizeLabel || "N/A"}
-              </p>
-            </div>
-            <div>
-              <p
-                className="info-badge-title"
-                style={{ marginBottom: "0.15rem" }}
-              >
-                Total Print Area
-              </p>
-              <p className="info-badge-desc">
-                {preflight?.targetPrintAreaPxLabel ||
-                  preflight?.totalSizeLabel ||
-                  "N/A"}
-              </p>
-            </div>
-          </div>
-
-          <div
-            className="info-badge"
-            style={{ marginTop: 0, background: "rgba(255,255,255,0.62)" }}
-          >
-            <div className="info-badge-content">
-              <p className="info-badge-title">Preflight Summary</p>
-              <p className="info-badge-desc">
-                {preflight
-                  ? `${formatDpiValue(preflight.frontDpi)} on the visible front${
-                      preflight.hasWrap
-                        ? `, ${formatDpiValue(preflight.totalDpi)} after wrap allowance`
-                        : ""
-                    }.${
-                      preflight.targetPrintAreaPxLabel
-                        ? ` Exact provider target: ${preflight.targetPrintAreaPxLabel}.`
-                        : ""
-                    }`
-                  : "A hi-res source and selected print size are both required for exact DPI validation."}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="info-badge" style={{ marginTop: "0.85rem" }}>
-        <div className="info-badge-content">
-          <p className="info-badge-title">Source Validation</p>
-          <p className="info-badge-desc">{sourceQualityMessage}</p>
-        </div>
-      </div>
 
       <div
         style={{
           backgroundColor: "#F8F7F5",
           margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem",
-          padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem",
+          padding: isSmall ? "1.25rem 1.25rem" : "1.25rem 2rem",
           borderRadius: isSmall ? "0" : "0 0 24px 24px",
           borderTop: "1px solid var(--color-border)",
           display: "flex",
           flexDirection: "column",
-          gap: "1rem",
+          gap: "0.85rem",
         }}
       >
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
             gap: "0.75rem",
-            background: "#fff",
-            border: "1px solid rgba(26,26,24,0.08)",
-            borderRadius: "10px",
-            padding: isSmall ? "0.95rem" : "1rem 1.1rem",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: "1rem",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.62rem",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "var(--color-muted)",
-                margin: "0.2rem 0 0",
-              }}
-            >
-              Print price
-            </p>
+          <div>
             <span
               className="font-price"
               style={{
-                fontSize: isSmall ? "1.65rem" : "1.8rem",
-                fontWeight: 600,
-                color: "var(--color-charcoal)",
-                letterSpacing: 0,
-                lineHeight: 1,
-              }}
-            >
-              {productPrice !== null ? convertPrice(productPrice) : "..."}
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: "1rem",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.62rem",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "var(--color-muted)",
-                margin: "0.2rem 0 0",
-              }}
-            >
-              Delivery
-            </p>
-            <div style={{ textAlign: "right" }}>
-              <p
-                className="font-price"
-                style={{
-                  margin: 0,
-                  fontSize: "0.95rem",
-                  color: hasShippingQuote ? "var(--color-charcoal)" : "#B42318",
-                  lineHeight: 1.15,
-                  fontWeight: 600,
-              }}
-            >
-                {hasShippingQuote ? `+ ${convertPrice(shippingPrice)}` : "Not available"}
-              </p>
-              <p
-                style={{
-                  margin: "0.2rem 0 0",
-                  fontFamily: "var(--font-sans)",
-                  fontSize: "0.7rem",
-                  color: "var(--color-muted)",
-                  lineHeight: 1.35,
-                }}
-              >
-                {shippingSummary}
-              </p>
-            </div>
-          </div>
-          <div
-            style={{
-              borderTop: "1px solid rgba(26,26,24,0.08)",
-              paddingTop: "0.8rem",
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              gap: "1rem",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: "0.62rem",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "var(--color-muted)",
-                margin: "0 0 0.25rem",
-              }}
-            >
-              Total
-            </p>
-            <span
-              className="font-price"
-              style={{
-                fontSize: isSmall ? "1.8rem" : "2rem",
+                fontSize: isSmall ? "2rem" : "2.2rem",
                 fontWeight: 700,
                 color: "var(--color-charcoal)",
-                letterSpacing: 0,
+                letterSpacing: "-0.02em",
                 lineHeight: 1,
               }}
             >
-              {totalPrice !== null ? convertPrice(totalPrice) : "Not available"}
+              {totalPrice !== null ? convertPrice(totalPrice) : "—"}
             </span>
+          </div>
+          <div style={{ textAlign: "right", paddingBottom: "0.15rem" }}>
+            {displayProductPrice !== null && (
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.68rem",
+                  color: "var(--color-muted)",
+                  lineHeight: 1.4,
+                }}
+              >
+                Print{" "}
+                <span className="font-price" style={{ fontWeight: 500 }}>
+                  {convertPrice(displayProductPrice)}
+                </span>
+                {hasShippingQuote ? (
+                  <>
+                    {" + Delivery "}
+                    <span className="font-price" style={{ fontWeight: 500 }}>
+                      {convertPrice(displayShippingPrice!)}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+            )}
+            {!hasShippingQuote && productPrice !== null && (
+              <p
+                style={{
+                  margin: "0.15rem 0 0",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "0.62rem",
+                  color: "#B42318",
+                  lineHeight: 1.3,
+                }}
+              >
+                Delivery not available
+              </p>
+            )}
           </div>
         </div>
 
-        <div
+        <p
           style={{
+            margin: 0,
             fontFamily: "var(--font-sans)",
-            fontSize: "0.72rem",
+            fontSize: "0.65rem",
             color: "var(--color-muted)",
-            lineHeight: 1.45,
+            lineHeight: 1.4,
           }}
         >
-          Delivery is calculated for {storefront.country_name || storefront.country_code}.
-        </div>
+          {hasShippingQuote
+              ? `Delivery to ${storefront.country_name || storefront.country_code}`
+              : `Delivery to ${storefront.country_name || storefront.country_code}`}
+        </p>
 
         <button
           className="premium-cta-btn"
           disabled={
-            !selectedCard || !selectedSize || productPrice === null || !hasShippingQuote
+            !selectedCard ||
+            !selectedSize ||
+            productPrice === null ||
+            totalPrice === null ||
+            !hasShippingQuote
           }
           onClick={() => {
             if (
               !selectedCard ||
               !selectedSize ||
               productPrice === null ||
+              totalPrice === null ||
+              roundedPriceParts === null ||
               !hasShippingQuote
             ) {
               return;
@@ -1297,7 +959,11 @@ export default function PrintConfigurator({
               imageGradientFrom,
               imageGradientTo,
               imageUrl,
-              price: Math.round(productPrice),
+              price: roundedPriceParts.total,
+              customer_product_price: roundedPriceParts.product,
+              customer_shipping_price: roundedPriceParts.shipping,
+              customer_line_total: roundedPriceParts.total,
+              customer_currency: "USD",
               finish: finishLabel,
               size: formatSizeLabel(
                 selectedSize.size_label || selectedSize.slot_size_label,
@@ -1311,15 +977,19 @@ export default function PrintConfigurator({
                 selectedSize.slot_size_label || selectedSize.size_label,
               prodigi_attributes: finalAttributes,
               prodigi_shipping_method:
+                selectedSize.shipping_support?.chosen_shipping_method ||
+                selectedSize.shipping_support?.chosen_tier ||
                 selectedSize.shipping_method ||
                 selectedSize.default_shipping_tier ||
-                selectedSize.shipping_support?.chosen_tier ||
                 "Standard",
               prodigi_wholesale_eur:
                 selectedSize.supplier_product_price || undefined,
               prodigi_shipping_eur:
-                shippingPrice || undefined,
+                selectedSize.supplier_shipping_price || undefined,
+              prodigi_supplier_total_eur:
+                selectedSize.supplier_total_cost || undefined,
               prodigi_retail_eur: productPrice,
+              prodigi_supplier_currency: selectedSize.currency || "EUR",
               prodigi_destination_country_code:
                 storefront.country_code?.toUpperCase() || undefined,
             });

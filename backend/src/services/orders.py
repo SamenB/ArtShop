@@ -37,6 +37,7 @@ from src.schemas.orders import (
     build_tracking_url,
 )
 from src.services.base import BaseService
+from src.utils.order_public_code import public_order_code
 
 # Maps fulfillment_status â†’ which timestamp column to set
 FULFILLMENT_TIMESTAMP_MAP: dict[str, str] = {
@@ -142,13 +143,18 @@ class OrderService(BaseService):
                 newsletter_opt_in=order_data.newsletter_opt_in,
                 discovery_source=order_data.discovery_source,
                 promo_code=order_data.promo_code,
-                total_price=sum(item.price for item in order_data.items),
+                subtotal_price=0,
+                shipping_price=0,
+                discount_price=0,
+                total_price=0,
                 items=[],
             )
 
             order = await self.db.orders.add(order_add)
             rehydration_service = ProdigiOrderRehydrationService(self.db)
-            recalculated_total_price = 0
+            customer_product_subtotal = 0
+            customer_shipping_total = 0
+            print_product_subtotal = 0
 
             # 2. Process and validate each item in the order
             for item_data in order_data.items:
@@ -158,6 +164,7 @@ class OrderService(BaseService):
                     # Original artworks must be 'available' to be sold
                     if artwork.original_status != "available":
                         raise OriginalSoldOutException()
+                    original_price = int(artwork.original_price or item_data.price or 0)
 
                     # Mark original as sold immediately to prevent double-booking
                     await self.db.artworks.edit(
@@ -174,47 +181,95 @@ class OrderService(BaseService):
                         item_data,
                         order_data.shipping_country_code,
                     )
-
-                rehydrated_selection = await rehydration_service.rehydrate_item(
-                    artwork=artwork,
-                    item_data=item_data,
-                    destination_country=order_data.shipping_country_code,
-                )
+                    rehydrated_selection = await rehydration_service.rehydrate_item(
+                        artwork=artwork,
+                        item_data=item_data,
+                        destination_country=order_data.shipping_country_code,
+                    )
 
                 # 3. Create the linked order item entry
+                is_original = item_data.edition_type == EditionType.ORIGINAL
                 item_add = OrderItemAdd(
                     order_id=order.id,
                     artwork_id=artwork.id,
                     edition_type=item_data.edition_type,
                     finish=item_data.finish,
                     size=item_data.size,
-                    price=item_data.price,
+                    price=item_data.price if is_original else 0,
+                    customer_product_price=item_data.customer_product_price if is_original else None,
+                    customer_shipping_price=item_data.customer_shipping_price if is_original else None,
+                    customer_line_total=item_data.customer_line_total if is_original else None,
+                    customer_currency=(item_data.customer_currency if is_original else "USD") or "USD",
                     prodigi_storefront_offer_size_id=item_data.prodigi_storefront_offer_size_id,
                     prodigi_sku=item_data.prodigi_sku,
                     prodigi_category_id=item_data.prodigi_category_id,
                     prodigi_slot_size_label=item_data.prodigi_slot_size_label,
                     prodigi_attributes=item_data.prodigi_attributes,
-                    prodigi_shipping_method=item_data.prodigi_shipping_method,
-                    prodigi_wholesale_eur=item_data.prodigi_wholesale_eur,
-                    prodigi_shipping_eur=item_data.prodigi_shipping_eur,
-                    prodigi_retail_eur=item_data.prodigi_retail_eur,
+                    prodigi_shipping_method=None if not is_original else item_data.prodigi_shipping_method,
+                    prodigi_wholesale_eur=None,
+                    prodigi_shipping_eur=None,
+                    prodigi_supplier_total_eur=None,
+                    prodigi_retail_eur=None,
+                    prodigi_supplier_currency=None,
                     prodigi_destination_country_code=(
                         item_data.prodigi_destination_country_code
                         or order_data.shipping_country_code
                     ),
                 )
-                rehydration_service.apply_to_item_add(item_add, rehydrated_selection)
-                recalculated_total_price += int(item_add.price)
+                if not is_original:
+                    rehydration_service.apply_to_item_add(item_add, rehydrated_selection)
+                else:
+                    item_add.price = original_price
+                    item_add.customer_product_price = float(original_price)
+                    item_add.customer_shipping_price = 0.0
+                    item_add.customer_line_total = float(original_price)
+                    item_add.customer_currency = "USD"
+
+                customer_product = self._round_customer_amount(
+                    item_add.customer_product_price
+                    if item_add.customer_product_price is not None
+                    else item_add.price
+                )
+                customer_shipping = self._round_customer_amount(item_add.customer_shipping_price)
+                line_total = customer_product + customer_shipping
+                item_add.price = line_total
+                item_add.customer_product_price = float(customer_product)
+                item_add.customer_shipping_price = float(customer_shipping)
+                item_add.customer_line_total = float(line_total)
+                item_add.customer_currency = item_add.customer_currency or "USD"
+
+                customer_product_subtotal += customer_product
+                customer_shipping_total += customer_shipping
+                if item_data.edition_type != EditionType.ORIGINAL:
+                    print_product_subtotal += customer_product
                 await self.db.order_items.add(item_add)
 
-            if recalculated_total_price != order.total_price:
-                from sqlalchemy import update as sa_update
+            discount_price = self._calculate_discount_price(
+                promo_code=order_data.promo_code,
+                print_product_subtotal=print_product_subtotal,
+            )
+            recalculated_total_price = max(
+                0,
+                customer_product_subtotal + customer_shipping_total - discount_price,
+            )
+            self._assert_customer_total_consistency(
+                subtotal=customer_product_subtotal,
+                shipping=customer_shipping_total,
+                discount=discount_price,
+                total=recalculated_total_price,
+            )
+            from sqlalchemy import update as sa_update
 
-                await self.db.session.execute(
-                    sa_update(OrdersOrm)
-                    .where(OrdersOrm.id == order.id)
-                    .values(total_price=recalculated_total_price)
+            await self.db.session.execute(
+                sa_update(OrdersOrm)
+                .where(OrdersOrm.id == order.id)
+                .values(
+                    subtotal_price=customer_product_subtotal,
+                    shipping_price=customer_shipping_total,
+                    discount_price=discount_price,
+                    total_price=recalculated_total_price,
                 )
+            )
 
             # Atomically commit the order and status changes
             await self.db.commit()
@@ -259,6 +314,33 @@ class OrderService(BaseService):
             logger.error("Database error during order creation: {}", e)
             await self.db.rollback()
             raise DatabaseException
+
+    def _round_customer_amount(self, value: float | int | None) -> int:
+        if value is None:
+            return 0
+        return int(float(value) + 0.5)
+
+    def _calculate_discount_price(self, *, promo_code: str | None, print_product_subtotal: int) -> int:
+        if (promo_code or "").strip().upper() != "ART10":
+            return 0
+        return self._round_customer_amount(print_product_subtotal * 0.1)
+
+    def _assert_customer_total_consistency(
+        self,
+        *,
+        subtotal: int,
+        shipping: int,
+        discount: int,
+        total: int,
+    ) -> None:
+        expected = max(0, subtotal + shipping - discount)
+        if expected != total:
+            raise InvalidDataException(
+                detail=(
+                    "Order customer totals are inconsistent: "
+                    f"subtotal={subtotal}, shipping={shipping}, discount={discount}, total={total}."
+                )
+            )
 
     async def create_orders_bulk(self, orders_data: list[OrderBulkRequest]):
         """
@@ -434,6 +516,7 @@ class OrderService(BaseService):
             # (synchronous SMTP wrapped to avoid blocking the event loop)
             self._fire_fulfillment_email(
                 order_id=order_id,
+                order_reference=public_order_code(order_id),
                 first_name=order.first_name,
                 customer_email=order.email,
                 fulfillment_status=new_status,
@@ -475,6 +558,7 @@ class OrderService(BaseService):
     def _fire_fulfillment_email(
         self,
         order_id: int,
+        order_reference: str,
         first_name: str,
         customer_email: str,
         fulfillment_status: str,
@@ -497,6 +581,7 @@ class OrderService(BaseService):
             target=send_fulfillment_status_email,
             kwargs={
                 "order_id": order_id,
+                "order_reference": order_reference,
                 "first_name": first_name,
                 "customer_email": customer_email,
                 "fulfillment_status": fulfillment_status,
@@ -644,6 +729,7 @@ class OrderService(BaseService):
                 subject_tpl, body_tpl = await self._load_fulfillment_template("confirmed")
                 self._fire_fulfillment_email(
                     order_id=order.id,
+                    order_reference=public_order_code(order.id),
                     first_name=order.first_name,
                     customer_email=order.email,
                     fulfillment_status="confirmed",
@@ -699,8 +785,12 @@ class OrderService(BaseService):
     def _print_provider_cost_summary(self, order) -> dict[str, float]:
         supplier_total = 0.0
         for item in getattr(order, "items", []) or []:
-            supplier_total += float(item.prodigi_wholesale_eur or 0)
-            supplier_total += float(item.prodigi_shipping_eur or 0)
+            item_supplier_total = getattr(item, "prodigi_supplier_total_eur", None)
+            if item_supplier_total is not None:
+                supplier_total += float(item_supplier_total)
+            else:
+                supplier_total += float(getattr(item, "prodigi_wholesale_eur", None) or 0)
+                supplier_total += float(getattr(item, "prodigi_shipping_eur", None) or 0)
         return {
             "customer_paid": float(order.total_price or 0),
             "supplier_total": supplier_total,

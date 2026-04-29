@@ -129,7 +129,7 @@ export default function ArtworksTab() {
             if (!response.ok) {
                 throw new Error(`Workflow request failed with ${response.status}`);
             }
-            setWorkflowData((await response.json()) as ArtworkPrintWorkflowPayload);
+            setWorkflowData(await apiJson<ArtworkPrintWorkflowPayload>(response));
         } catch (error) {
             console.error(error);
             setWorkflowData(null);
@@ -147,7 +147,7 @@ export default function ArtworksTab() {
             const response = await apiFetch(`${getApiUrl()}/v1/admin/prodigi/refresh-artwork-payloads`, {
                 method: "POST",
             });
-            const payload = await response.json().catch(() => ({}));
+            const payload = await apiJson<any>(response).catch(() => ({}));
             if (!response.ok) {
                 throw new Error(
                     payload.detail || payload.message || "Could not refresh artwork payloads."
@@ -268,12 +268,12 @@ export default function ArtworksTab() {
             });
 
             if (!response.ok) {
-                const errorPayload = await response.json().catch(() => ({}));
+                const errorPayload = await apiJson(response).catch(() => ({}));
                 window.alert(`Save failed: ${response.status} ${JSON.stringify(errorPayload)}`);
                 return null;
             }
 
-            const data = await response.json();
+            const data = await apiJson<{ data?: { id?: number } }>(response);
             const targetId = editingId || data.data?.id;
             if (!targetId) {
                 throw new Error("Artwork ID was not returned after save.");
@@ -349,7 +349,7 @@ export default function ArtworksTab() {
             if (!response.ok) {
                 throw new Error(`Artwork request failed with ${response.status}`);
             }
-            const full = (await response.json()) as Artwork;
+            const full = await apiJson<Artwork>(response);
             setFormData({
                 title: full.title || "",
                 description: full.description || "",

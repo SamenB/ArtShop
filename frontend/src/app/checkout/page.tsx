@@ -21,7 +21,14 @@ import { CountrySelect } from "./components/CountrySelect";
 import { AddressInput } from "./components/AddressInput";
 import { StepIndicator } from "./components/StepIndicator";
 import { OrderSummary } from "./components/OrderSummary";
-import { loadArtworkStorefront, type StorefrontSizeOption } from "@/lib/artworkStorefront";
+import {
+  loadArtworkStorefront,
+  resolveRoundedCustomerPriceParts,
+  resolveStorefrontCustomerTotal,
+  resolveStorefrontProductPrice,
+  resolveStorefrontShippingPrice,
+  type StorefrontSizeOption,
+} from "@/lib/artworkStorefront";
 import { detectDeliveryCountry, storeDeliveryCountry } from "@/lib/deliveryCountry";
 
 type PrintQuoteState = {
@@ -31,20 +38,11 @@ type PrintQuoteState = {
 };
 
 function resolvePrintProductPrice(size: StorefrontSizeOption): number | null {
-  return (
-    size.retail_product_price ??
-    size.business_policy?.retail_product_price ??
-    null
-  );
+  return resolveStorefrontProductPrice(size);
 }
 
 function resolvePrintShippingPrice(size: StorefrontSizeOption): number | null {
-  return (
-    size.customer_shipping_price ??
-    size.business_policy?.customer_shipping_price ??
-    size.supplier_shipping_price ??
-    null
-  );
+  return resolveStorefrontShippingPrice(size);
 }
 
 function findMatchingPrintSize(
@@ -73,7 +71,7 @@ function findMatchingPrintSize(
 
 export default function CheckoutPage() {
   const { items, clearCart } = useCart();
-  const { convertPrice, rates } = usePreferences();
+  const { convertPrice } = usePreferences();
   const { user, refreshUser } = useUser();
 
   // --- Form state ---
@@ -224,7 +222,10 @@ export default function CheckoutPage() {
 
           const size = findMatchingPrintSize(item, storefront);
           const productPrice = size ? resolvePrintProductPrice(size) : null;
-          if (!size || productPrice === null) {
+          const shippingPrice = size ? resolvePrintShippingPrice(size) : null;
+          const totalPrice = size ? resolveStorefrontCustomerTotal(size) : null;
+          const roundedPriceParts = size ? resolveRoundedCustomerPriceParts(size) : null;
+          if (!size || productPrice === null || shippingPrice === null || totalPrice === null || roundedPriceParts === null) {
             return [
               item.id,
               {
@@ -240,17 +241,24 @@ export default function CheckoutPage() {
             {
               status: "ready",
               item: {
-                price: Math.round(productPrice),
+                price: roundedPriceParts.total,
+                customer_product_price: roundedPriceParts.product,
+                customer_shipping_price: roundedPriceParts.shipping,
+                customer_line_total: roundedPriceParts.total,
+                customer_currency: "USD",
                 prodigi_storefront_offer_size_id: size.id || undefined,
                 prodigi_sku: size.sku || undefined,
                 prodigi_shipping_method:
+                  size.shipping_support?.chosen_shipping_method ||
+                  size.shipping_support?.chosen_tier ||
                   size.shipping_method ||
                   size.default_shipping_tier ||
-                  size.shipping_support?.chosen_tier ||
                   item.prodigi_shipping_method,
                 prodigi_wholesale_eur: size.supplier_product_price || undefined,
-                prodigi_shipping_eur: resolvePrintShippingPrice(size) || undefined,
+                prodigi_shipping_eur: size.supplier_shipping_price || undefined,
+                prodigi_supplier_total_eur: size.supplier_total_cost || undefined,
                 prodigi_retail_eur: productPrice,
+                prodigi_supplier_currency: size.currency || "EUR",
                 prodigi_destination_country_code: formData.countryCode,
               },
             },
@@ -487,13 +495,23 @@ export default function CheckoutPage() {
   /* ---- Promo logic ---- */
   const printTotal = checkoutItems
     .filter((i) => i.type === "print")
-    .reduce((s, i) => s + i.price * i.quantity, 0);
+    .reduce(
+      (s, i) => s + Number(i.customer_product_price ?? i.prodigi_retail_eur ?? i.price) * i.quantity,
+      0,
+    );
   const shippingTotal = checkoutItems
     .filter((i) => i.type === "print")
-    .reduce((s, i) => s + Number(i.prodigi_shipping_eur || 0) * i.quantity, 0);
+    .reduce((s, i) => s + Number(i.customer_shipping_price || 0) * i.quantity, 0);
   const discountAmount = promoApplied ? Math.round(printTotal * 0.1) : 0;
   const checkoutCartTotal = checkoutItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+    (sum, item) =>
+      sum +
+      Number(
+        item.type === "print"
+          ? item.customer_product_price ?? item.prodigi_retail_eur ?? item.price
+          : item.price,
+      ) *
+        item.quantity,
     0,
   );
   const currentTotal = checkoutCartTotal - discountAmount + shippingTotal;
@@ -544,30 +562,29 @@ export default function CheckoutPage() {
         newsletter_opt_in: formData.newsletter === "yes",
         discovery_source: formData.discovery || null,
         promo_code: promoApplied ? formData.promoCode : null,
-        items: checkoutItems.map((item) => ({
-          artwork_id: parseInt(item.slug) || 1,
-          edition_type:
-            item.edition_type ||
-            (item.type === "original"
-              ? "original"
-              : item.finish?.toLowerCase().includes("canvas")
-                ? "canvas_print"
-                : "paper_print"),
-          finish: item.finish || "Original",
-          size: item.size,
-          price: Math.round(item.price),
-          prodigi_sku: item.prodigi_sku,
-          prodigi_storefront_offer_size_id:
-            item.prodigi_storefront_offer_size_id,
-          prodigi_category_id: item.prodigi_category_id,
-          prodigi_slot_size_label: item.prodigi_slot_size_label,
-          prodigi_attributes: item.prodigi_attributes,
-          prodigi_shipping_method: item.prodigi_shipping_method,
-          prodigi_wholesale_eur: item.prodigi_wholesale_eur,
-          prodigi_shipping_eur: item.prodigi_shipping_eur,
-          prodigi_retail_eur: item.prodigi_retail_eur,
-          prodigi_destination_country_code: item.prodigi_destination_country_code,
-        })),
+        items: checkoutItems.flatMap((item) =>
+          Array.from({ length: item.quantity }, () => ({
+            artwork_id: parseInt(item.slug) || 1,
+            edition_type:
+              item.edition_type ||
+              (item.type === "original"
+                ? "original"
+                : item.finish?.toLowerCase().includes("canvas")
+                  ? "canvas_print"
+                  : "paper_print"),
+            finish: item.finish || "Original",
+            size: item.size,
+            price: Math.round(item.price),
+            prodigi_sku: item.prodigi_sku,
+            prodigi_storefront_offer_size_id:
+              item.prodigi_storefront_offer_size_id,
+            prodigi_category_id: item.prodigi_category_id,
+            prodigi_slot_size_label: item.prodigi_slot_size_label,
+            prodigi_attributes: item.prodigi_attributes,
+            prodigi_shipping_method: item.prodigi_shipping_method,
+            prodigi_destination_country_code: item.prodigi_destination_country_code,
+          })),
+        ),
       };
 
       const orderRes = await apiFetch(`${getApiUrl()}/orders`, {
@@ -588,20 +605,12 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Convert USD total to UAH kopiykas for Monobank
-      const uahRate = rates?.UAH || 39.5;
-      const confirmedTotal = Number(
-        orderData.data?.total_price ?? currentTotal,
-      );
-      const totalUahCoins = Math.round(confirmedTotal * uahRate * 100);
-
       const paymentRes = await apiFetch(`${getApiUrl()}/payments/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order_id: orderId,
           currency: "UAH",
-          amount_coins: totalUahCoins,
         }),
       });
 

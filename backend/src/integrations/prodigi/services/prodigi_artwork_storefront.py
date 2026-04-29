@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any
 
-from src.init import redis_manager
 from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStorefrontRepository
 from src.integrations.prodigi.services.prodigi_artwork_collection_storefront import (
     ProdigiArtworkCollectionStorefrontService,
 )
 from src.integrations.prodigi.services.prodigi_business_policy import ProdigiBusinessPolicyService
+from src.integrations.prodigi.services.prodigi_market_priority import get_market_priority
+from src.integrations.prodigi.services.prodigi_shipping_support_policy import (
+    ProdigiShippingSupportPolicyService,
+)
+from src.integrations.prodigi.services.prodigi_storefront_read_model import (
+    STOREFRONT_POLICY_VERSION,
+    ProdigiStorefrontReadModelService,
+)
+from src.integrations.prodigi.services.prodigi_storefront_settings import (
+    ProdigiStorefrontSettingsService,
+)
 from src.integrations.prodigi.services.prodigi_storefront_snapshot import (
     ProdigiStorefrontSnapshotService,
 )
@@ -29,9 +37,6 @@ CATEGORY_MEDIUM_MAP = {
     "canvasFloatingFrame": "canvas",
 }
 
-STOREFRONT_POLICY_VERSION = ProdigiBusinessPolicyService.POLICY_VERSION
-
-
 class ProdigiArtworkStorefrontService:
     """
     Public-facing storefront read model for one artwork in one destination country.
@@ -46,8 +51,22 @@ class ProdigiArtworkStorefrontService:
         self.artwork_service = ArtworkService(db)
         self.print_profile_service = ArtworkPrintProfileService(db)
         self.storefront_repository = ProdigiStorefrontRepository(db.session)
+        self.read_model = ProdigiStorefrontReadModelService(db)
         self.snapshot_service = ProdigiStorefrontSnapshotService(db)
-        self.cache_ttl_seconds = 900
+        self.business_policy = ProdigiBusinessPolicyService()
+        self.shipping_support_policy = ProdigiShippingSupportPolicyService()
+        self.storefront_settings = ProdigiStorefrontSettingsService(db)
+        self.storefront_policy_version = STOREFRONT_POLICY_VERSION
+
+    async def load_storefront_settings(self) -> dict[str, Any]:
+        config = await self.storefront_settings.get_effective_config()
+        self.apply_storefront_config(config)
+        return config
+
+    def apply_storefront_config(self, config: dict[str, Any]) -> None:
+        self.shipping_support_policy.set_config(config["shipping_policy"])
+        self.snapshot_service.apply_storefront_config(config)
+        self.storefront_policy_version = str(config["payload_policy_version"])
 
     async def get_artwork_storefront(
         self,
@@ -55,71 +74,33 @@ class ProdigiArtworkStorefrontService:
         country_code: str,
     ) -> dict[str, Any]:
         requested_country = (country_code or "").upper()
-        active_bake = await self.storefront_repository.get_active_bake()
-        if active_bake is not None:
-            materialized = await self.storefront_repository.get_materialized_payload_for_ref(
-                bake_id=active_bake.id,
-                artwork_id_or_slug=artwork_id_or_slug,
-                country_code=requested_country,
-            )
-            if materialized is not None and materialized.payload:
-                payload = dict(materialized.payload)
-                if self._materialized_payload_matches_current_policy(payload):
-                    return payload
+        materialized_payload = await self.read_model.get_artwork_payload(
+            artwork_id_or_slug=artwork_id_or_slug,
+            country_code=requested_country,
+        )
+        if materialized_payload is not None:
+            return materialized_payload
 
+        await self.load_storefront_settings()
         artwork = await self._get_artwork(artwork_id_or_slug)
         profile_bundle = await self.print_profile_service.get_profile_bundle(artwork.id)
-
-        ratio_label = (profile_bundle.get("print_aspect_ratio") or {}).get("label")
         medium_availability = self._build_medium_availability(artwork)
-        payload_signature = self._build_payload_signature(
-            artwork=artwork,
-            requested_country=requested_country,
-            profile_bundle=profile_bundle,
-            medium_availability=medium_availability,
-        )
-        cache_key = (
-            f"prodigi:artwork-storefront:v1:{STOREFRONT_POLICY_VERSION}:"
-            f"{artwork.id}:{requested_country}:{payload_signature}"
-        )
-        cached_payload = await self._get_cached_payload(cache_key)
-        if cached_payload is not None:
-            return cached_payload
-
         base_payload = self._build_base_payload(
             artwork=artwork,
             requested_country=requested_country,
             profile_bundle=profile_bundle,
             medium_availability=medium_availability,
         )
-
-        if ratio_label is None:
+        if not (profile_bundle.get("print_aspect_ratio") or {}).get("label"):
             base_payload["message"] = (
                 "Artwork has no assigned print aspect ratio, so storefront print offers "
                 "cannot be resolved yet."
             )
-            await self._set_cached_payload(cache_key, base_payload)
             return base_payload
-
-        snapshot = await self.snapshot_service.get_country_storefront(
-            selected_ratio=ratio_label,
-            country_code=requested_country,
+        base_payload["message"] = (
+            "No current materialized storefront payload exists for this artwork and country. "
+            "Rebuild the active Prodigi storefront payload before selling prints here."
         )
-        if not snapshot.get("has_active_bake"):
-            base_payload["message"] = (
-                snapshot.get("message") or "No active storefront snapshot exists."
-            )
-            await self._set_cached_payload(cache_key, base_payload)
-            return base_payload
-
-        base_payload = self.build_payload_from_snapshot(
-            artwork=artwork,
-            requested_country=requested_country,
-            profile_bundle=profile_bundle,
-            snapshot=snapshot,
-            medium_availability=medium_availability,
-        )
-        await self._set_cached_payload(cache_key, base_payload)
         return base_payload
 
     def build_payload_from_snapshot(
@@ -223,7 +204,7 @@ class ProdigiArtworkStorefrontService:
             "title": artwork.title,
             "country_code": requested_country,
             "country_name": None,
-            "storefront_policy_version": STOREFRONT_POLICY_VERSION,
+            "storefront_policy_version": self.storefront_policy_version,
             "print_aspect_ratio": profile_bundle.get("print_aspect_ratio"),
             "active_bake": profile_bundle.get("active_bake"),
             "print_quality_url": profile_bundle.get("print_quality_url"),
@@ -246,24 +227,7 @@ class ProdigiArtworkStorefrontService:
         }
 
     def _materialized_payload_matches_current_policy(self, payload: dict[str, Any]) -> bool:
-        if payload.get("storefront_policy_version") != STOREFRONT_POLICY_VERSION:
-            return False
-
-        mediums = payload.get("mediums") or {}
-        for medium in ("paper", "canvas"):
-            for card in (mediums.get(medium) or {}).get("cards") or []:
-                category_id = card.get("category_id")
-                if category_id not in CATEGORY_MEDIUM_MAP:
-                    continue
-                for size in card.get("size_options") or []:
-                    business_policy = size.get("business_policy") or {}
-                    if business_policy.get("free_delivery_badge") is True:
-                        return False
-                    if business_policy.get("policy_family") == "unframed_free_delivery":
-                        return False
-                    if business_policy.get("shipping_mode") == "included":
-                        return False
-        return True
+        return ProdigiStorefrontReadModelService.payload_matches_current_policy(payload)
 
     def _build_category_card(
         self,
@@ -283,11 +247,29 @@ class ProdigiArtworkStorefrontService:
             return None
 
         size_options = []
+        destination_country = (cell.get("destination_country") or "").upper()
+        market_segment = get_market_priority(destination_country).get("segment", "rest")
+        regional_multiplier = self.snapshot_service._resolve_multiplier(
+            destination_country, category_id
+        ) if hasattr(self.snapshot_service, "_resolve_multiplier") else None
+
         for size_entry in cell.get("size_entries", []):
             if not size_entry.get("available"):
                 continue
 
-            business_policy = size_entry.get("business_policy") or {}
+            # Re-evaluate business policy from raw baked data to prevent stale
+            # policies (e.g. old "included" free-delivery mode) from leaking through.
+            shipping_profiles = size_entry.get("shipping_profiles") or []
+            shipping_support = self.shipping_support_policy.evaluate_size(shipping_profiles)
+            business_policy = self._serialize_business_decision(
+                self.business_policy.evaluate_print_business_rules(
+                    category_id=category_id,
+                    market_segment=market_segment,
+                    product_price=size_entry.get("product_price"),
+                    shipping_support=shipping_support,
+                    multiplier_override=regional_multiplier,
+                )
+            )
             shipping_mode = business_policy.get("shipping_mode")
             if shipping_mode == "hide":
                 continue
@@ -318,11 +300,20 @@ class ProdigiArtworkStorefrontService:
                     "service_level": size_entry.get("service_level"),
                     "default_shipping_tier": size_entry.get("default_shipping_tier"),
                     "shipping_profiles": size_entry.get("shipping_profiles") or [],
-                    "shipping_support": size_entry.get("shipping_support"),
+                    "shipping_support": shipping_support,
                     "business_policy": business_policy,
                     "supplier_product_price": size_entry.get("product_price"),
                     "supplier_shipping_price": size_entry.get("shipping_price"),
-                    "supplier_total_cost": size_entry.get("total_cost"),
+                    "supplier_total_cost": (
+                        round(
+                            float(size_entry.get("product_price") or 0)
+                            + float(size_entry.get("shipping_price") or 0),
+                            2,
+                        )
+                        if size_entry.get("product_price") is not None
+                        and size_entry.get("shipping_price") is not None
+                        else size_entry.get("total_cost")
+                    ),
                     "retail_product_price": retail_product_price,
                     "customer_shipping_price": customer_shipping_price,
                     "customer_total_price": customer_total_price,
@@ -405,43 +396,22 @@ class ProdigiArtworkStorefrontService:
                 defaults[key] = values[0]
         return defaults
 
-    def _build_payload_signature(
-        self,
-        *,
-        artwork: Any,
-        requested_country: str,
-        profile_bundle: dict[str, Any],
-        medium_availability: dict[str, dict[str, Any]],
-    ) -> str:
-        source = {
-            "artwork_id": artwork.id,
-            "slug": getattr(artwork, "slug", None),
-            "country_code": requested_country,
-            "active_bake": profile_bundle.get("active_bake"),
-            "print_aspect_ratio": profile_bundle.get("print_aspect_ratio"),
-            "print_quality_url": profile_bundle.get("print_quality_url"),
-            "print_source_metadata": profile_bundle.get("print_source_metadata"),
-            "source_quality_summary": profile_bundle.get("source_quality_summary"),
-            "effective_profiles": profile_bundle.get("effective_profiles"),
-            "medium_availability": medium_availability,
+    def _serialize_business_decision(self, decision: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **decision,
+            "retail_product_price": self._to_float(decision.get("retail_product_price")),
+            "customer_shipping_price": self._to_float(decision.get("customer_shipping_price")),
+            "shipping_price_for_margin": self._to_float(decision.get("shipping_price_for_margin")),
+            "shipping_reference_price": self._to_float(decision.get("shipping_reference_price")),
+            "shipping_credit_applied": self._to_float(decision.get("shipping_credit_applied")),
         }
-        digest = hashlib.sha256(
-            json.dumps(source, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()
-        return digest[:16]
 
-    async def _get_cached_payload(self, key: str) -> dict[str, Any] | None:
-        if redis_manager.redis is None:
-            return None
-        cached = await redis_manager.get(key)
-        if not cached:
+    @staticmethod
+    def _to_float(value: Any) -> float | None:
+        if value is None:
             return None
         try:
-            return json.loads(cached)
-        except json.JSONDecodeError:
+            return float(value)
+        except (TypeError, ValueError):
             return None
 
-    async def _set_cached_payload(self, key: str, payload: dict[str, Any]) -> None:
-        if redis_manager.redis is None:
-            return
-        await redis_manager.set(key, json.dumps(payload), expire=self.cache_ttl_seconds)

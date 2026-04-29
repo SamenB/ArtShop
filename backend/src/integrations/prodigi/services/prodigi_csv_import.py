@@ -215,7 +215,7 @@ class ProdigiCsvImportService:
     """Imports local Prodigi CSV files into normalized catalog tables."""
 
     def __init__(self, csv_root: Path | None = None):
-        self.csv_root = csv_root or Path(__file__).resolve().parents[3] / "prodigy"
+        self.csv_root = csv_root or Path(__file__).resolve().parents[5] / "prodigy"
 
     def discover_csv_files(self) -> list[Path]:
         return sorted(self.csv_root.rglob("*.csv"))

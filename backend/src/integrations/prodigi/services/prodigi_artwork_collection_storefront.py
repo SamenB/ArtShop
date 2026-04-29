@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
-from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStorefrontRepository
-from src.integrations.prodigi.services.prodigi_business_policy import ProdigiBusinessPolicyService
-from src.integrations.prodigi.services.prodigi_market_priority import get_market_priority
-from src.integrations.prodigi.services.prodigi_shipping_support_policy import (
-    ProdigiShippingSupportPolicyService,
+from src.integrations.prodigi.services.prodigi_storefront_read_model import (
+    ProdigiStorefrontReadModelService,
 )
-from src.models.print_pricing_regions import PrintPricingRegionOrm
 from src.services.base import BaseService
 
 CATEGORY_MEDIUM_MAP = {
     "paperPrintRolled": "paper",
     "paperPrintBoxFramed": "paper",
+    "paperPrintClassicFramed": "paper",
     "canvasRolled": "canvas",
     "canvasStretched": "canvas",
     "canvasClassicFrame": "canvas",
@@ -37,13 +33,7 @@ class ProdigiArtworkCollectionStorefrontService(BaseService):
 
     def __init__(self, db):
         super().__init__(db)
-        self.repository = ProdigiStorefrontRepository(db.session)
-        self.shipping_support_policy = ProdigiShippingSupportPolicyService()
-        self.business_policy = ProdigiBusinessPolicyService()
-        self._regional_cache: dict[str, dict[str, float]] | None = None
-        self._regional_defaults_cache: dict[str, float] | None = None
-        self._fallback_default: float = 3.0
-        self._fallback_overrides: dict[str, float] = {}
+        self.read_model = ProdigiStorefrontReadModelService(db)
 
     async def build_shop_summaries(
         self,
@@ -55,64 +45,11 @@ class ProdigiArtworkCollectionStorefrontService(BaseService):
         if not artworks or len(normalized_country) != 2:
             return {}
 
-        active_bake = await self.repository.get_active_bake()
-        if active_bake is None:
-            return {}
-
-        await self._load_regional_cache()
-
         artwork_ids = [artwork.id for artwork in artworks]
-        materialized_rows = await self.repository.get_materialized_summaries(
-            bake_id=active_bake.id,
+        return await self.read_model.get_artwork_summaries(
             artwork_ids=artwork_ids,
             country_code=normalized_country,
         )
-        summaries: dict[int, dict[str, Any]] = {
-            row.artwork_id: dict(row.summary or {})
-            for row in materialized_rows
-        }
-        missing_artworks = [artwork for artwork in artworks if artwork.id not in summaries]
-        if not missing_artworks:
-            return summaries
-
-        ratio_labels = sorted(
-            {
-                artwork.print_aspect_ratio.label
-                for artwork in missing_artworks
-                if getattr(artwork, "print_aspect_ratio", None)
-                and getattr(artwork.print_aspect_ratio, "label", None)
-            }
-        )
-        if not ratio_labels:
-            return summaries
-
-        groups = await self.repository.get_country_groups_for_ratios(
-            active_bake.id,
-            normalized_country,
-            ratio_labels,
-        )
-        groups_by_ratio: dict[str, list[Any]] = defaultdict(list)
-        for group in groups:
-            groups_by_ratio[group.ratio_label].append(group)
-
-        for artwork in missing_artworks:
-            ratio = getattr(artwork, "print_aspect_ratio", None)
-            ratio_label = getattr(ratio, "label", None)
-            summary = self._build_empty_summary(country_code=normalized_country)
-            if ratio_label:
-                summary["print_aspect_ratio"] = {
-                    "id": getattr(ratio, "id", None),
-                    "label": ratio_label,
-                    "description": getattr(ratio, "description", None),
-                }
-                summary = self._build_artwork_summary(
-                    artwork=artwork,
-                    country_code=normalized_country,
-                    groups=groups_by_ratio.get(ratio_label, []),
-                    base_summary=summary,
-                )
-            summaries[artwork.id] = summary
-        return summaries
 
     @staticmethod
     def build_summary_from_storefront_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -200,196 +137,4 @@ class ProdigiArtworkCollectionStorefrontService(BaseService):
 
         return summary
 
-    def _build_artwork_summary(
-        self,
-        *,
-        artwork: Any,
-        country_code: str,
-        groups: list[Any],
-        base_summary: dict[str, Any],
-    ) -> dict[str, Any]:
-        market_segment = get_market_priority(country_code)["segment"]
-        medium_availability = {
-            "paper": bool(
-                getattr(artwork, "has_paper_print", False)
-                or getattr(artwork, "has_paper_print_limited", False)
-            ),
-            "canvas": bool(
-                getattr(artwork, "has_canvas_print", False)
-                or getattr(artwork, "has_canvas_print_limited", False)
-            ),
-        }
-        medium_cards: dict[str, list[dict[str, Any]]] = {"paper": [], "canvas": []}
-
-        country_name = None
-        for group in groups:
-            medium = CATEGORY_MEDIUM_MAP.get(group.category_id)
-            if medium is None or not medium_availability[medium]:
-                continue
-            country_name = country_name or group.destination_country_name or country_code
-
-            cheapest_price = None
-            cheapest_size_label = None
-            visible_size_count = 0
-
-            for size in group.sizes:
-                if not size.available:
-                    continue
-
-                shipping_support = self.shipping_support_policy.evaluate_size(
-                    size.shipping_profiles or []
-                )
-                business_policy = self.business_policy.evaluate_print_business_rules(
-                    category_id=group.category_id,
-                    market_segment=market_segment,
-                    product_price=float(size.product_price) if size.product_price is not None else None,
-                    shipping_support=shipping_support,
-                    multiplier_override=self._resolve_regional_multiplier(country_code, group.category_id),
-                )
-                retail_product_price = business_policy.get("retail_product_price")
-                if retail_product_price is None:
-                    continue
-                final_price = round(float(retail_product_price), 2)
-
-                visible_size_count += 1
-                if cheapest_price is None or final_price < cheapest_price:
-                    cheapest_price = final_price
-                    cheapest_size_label = size.size_label or size.slot_size_label
-
-            if cheapest_price is None:
-                continue
-
-            medium_cards[medium].append(
-                {
-                    "category_id": group.category_id,
-                    "label": group.category_label,
-                    "material_label": group.material_label,
-                    "frame_label": group.frame_label,
-                    "starting_price": cheapest_price,
-                    "starting_size_label": cheapest_size_label,
-                    "available_size_count": visible_size_count,
-                }
-            )
-
-        for medium, cards in medium_cards.items():
-            cards.sort(
-                key=lambda item: (
-                    item["starting_price"],
-                    item["label"],
-                    item["category_id"],
-                )
-            )
-            if not cards:
-                continue
-            base_summary["mediums"][medium] = {
-                "available": True,
-                "starting_price": cards[0]["starting_price"],
-                "starting_size_label": cards[0]["starting_size_label"],
-                "card_count": len(cards),
-                "cards": cards,
-            }
-
-        all_starting_prices = [
-            medium["starting_price"]
-            for medium in base_summary["mediums"].values()
-            if medium["starting_price"] is not None
-        ]
-        base_summary["country_name"] = country_name
-        base_summary["print_country_supported"] = bool(all_starting_prices)
-        base_summary["min_print_price"] = min(all_starting_prices) if all_starting_prices else None
-        base_summary["default_medium"] = (
-            "paper"
-            if base_summary["mediums"]["paper"]["available"]
-            else "canvas"
-            if base_summary["mediums"]["canvas"]["available"]
-            else None
-        )
-        return base_summary
-
-    def _build_empty_summary(self, *, country_code: str) -> dict[str, Any]:
-        return {
-            "country_code": country_code,
-            "country_name": None,
-            "print_country_supported": False,
-            "print_aspect_ratio": None,
-            "min_print_price": None,
-            "default_medium": None,
-            "mediums": {
-                "paper": {
-                    "available": False,
-                    "starting_price": None,
-                    "starting_size_label": None,
-                    "card_count": 0,
-                    "cards": [],
-                },
-                "canvas": {
-                    "available": False,
-                    "starting_price": None,
-                    "starting_size_label": None,
-                    "card_count": 0,
-                    "cards": [],
-                },
-            },
-        }
-
-    def _build_customer_total_price(
-        self,
-        *,
-        retail_product_price: Any,
-        customer_shipping_price: Any,
-        shipping_mode: str | None,
-    ) -> float | None:
-        if retail_product_price is None:
-            return None
-
-        retail_value = round(float(retail_product_price), 2)
-        if shipping_mode == "included":
-            return retail_value
-        if shipping_mode == "pass_through":
-            return round(retail_value + float(customer_shipping_price or 0), 2)
-        return None
-
-    async def _load_regional_cache(self) -> None:
-        """Pre-load all pricing regions for multiplier resolution."""
-        if self._regional_cache is not None:
-            return
-        self._regional_cache = {}
-        self._regional_defaults_cache = {}
-        try:
-            from sqlalchemy import select
-            from sqlalchemy.orm import selectinload
-
-            regions = (
-                await self.db.session.execute(
-                    select(PrintPricingRegionOrm)
-                    .options(selectinload(PrintPricingRegionOrm.multipliers))
-                    .order_by(PrintPricingRegionOrm.sort_order)
-                )
-            ).scalars().all()
-        except Exception:
-            return
-
-        for region in regions:
-            overrides = {m.category_id: m.multiplier for m in region.multipliers}
-            if region.is_fallback:
-                self._fallback_default = region.default_multiplier
-                self._fallback_overrides = overrides
-                continue
-            for cc in (region.country_codes or []):
-                self._regional_cache[cc.upper()] = overrides
-                self._regional_defaults_cache[cc.upper()] = region.default_multiplier
-
-    def _resolve_regional_multiplier(self, country_code: str, category_id: str) -> float | None:
-        """Return the DB-backed multiplier or None for hardcoded fallback."""
-        if self._regional_cache is None:
-            return None
-        normalized = (country_code or "").upper()
-        overrides = self._regional_cache.get(normalized)
-        if overrides is not None:
-            if category_id in overrides:
-                return overrides[category_id]
-            return (self._regional_defaults_cache or {}).get(normalized, 3.0)
-        if category_id in self._fallback_overrides:
-            return self._fallback_overrides[category_id]
-        return self._fallback_default
 
