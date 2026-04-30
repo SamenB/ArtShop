@@ -198,6 +198,12 @@ class Settings(BaseSettings):
     PRODIGI_SANDBOX: bool = False
     # Optional shared secret added to Prodigi callback URLs and checked on webhook receipt.
     PRODIGI_WEBHOOK_SECRET: str | None = None
+    # Dev-only raw supplier CSV dump. This can be very large and must stay gitignored.
+    PRODIGI_RAW_CSV_ROOT: str = "Prodigy"
+    # Committed, curated CSV source used by production snapshot/payload rebuilds.
+    PRODIGI_CURATED_CSV_PATH: str = (
+        "src/integrations/prodigi/data/prodigi_storefront_source.csv"
+    )
 
     # CORS Policy Configuration
     # Whitelist of allowed origins for browser-based requests.

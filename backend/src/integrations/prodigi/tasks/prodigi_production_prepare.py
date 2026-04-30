@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from src.database import new_session_null_pool
+from src.integrations.prodigi.services.prodigi_business_policy import (
+    ProdigiBusinessPolicyService,
+)
 from src.integrations.prodigi.services.prodigi_csv_storefront_rebuild import (
     ProdigiCsvStorefrontRebuildService,
 )
@@ -28,7 +31,10 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     async with DBManager(session_factory=new_session_null_pool) as db:
         rebuild_result = None
         if not args.skip_csv_rebuild:
-            rebuild_result = await ProdigiCsvStorefrontRebuildService(db).rebuild(
+            rebuild_result = await ProdigiCsvStorefrontRebuildService(
+                db,
+                curated_csv_path=args.curated_csv,
+            ).rebuild(
                 selected_ratio=args.selected_ratio,
                 selected_country=args.selected_country,
                 selected_paper_material=args.selected_paper_material,
@@ -59,16 +65,17 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
         cache_clear = await clear_artwork_print_storefront_cache()
 
     report = {
-        "status": "ready" if validation.get("passed") else "failed",
+        "status": "ready" if validation.get("approved") else "failed",
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
+        "policy_version": ProdigiBusinessPolicyService.POLICY_VERSION,
         "csv_rebuild": rebuild_result,
         "validation": validation,
         "cache_clear": cache_clear,
         "operational_note": (
             "Run this on the production server against the production database after "
             "code deploy and migrations. It rebuilds catalog/storefront data from "
-            "server-side CSV/source files; it does not copy local database snapshots."
+            "the committed curated Prodigi CSV; it does not copy local database snapshots."
         ),
     }
     _write_report(args.output, report)
@@ -84,6 +91,15 @@ def main() -> None:
         )
     )
     parser.add_argument("--skip-csv-rebuild", action="store_true")
+    parser.add_argument(
+        "--curated-csv",
+        help="Committed curated Prodigi CSV path. Defaults to PRODIGI_CURATED_CSV_PATH.",
+    )
+    parser.add_argument(
+        "--csv-root",
+        dest="curated_csv",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--selected-ratio")
     parser.add_argument("--selected-country")
     parser.add_argument("--selected-paper-material")

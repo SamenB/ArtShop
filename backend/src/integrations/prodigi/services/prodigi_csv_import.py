@@ -9,9 +9,7 @@ This importer is intentionally split into two conceptual layers:
 from __future__ import annotations
 
 import csv
-import json
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -20,182 +18,13 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.database import new_session_null_pool
+from src.integrations.prodigi.catalog_pipeline.parser import parse_prodigi_csv_row
+from src.integrations.prodigi.catalog_pipeline.source import resolve_prodigi_csv_root
 from src.models.prodigi_catalog import (
     ProdigiCatalogProductOrm,
     ProdigiCatalogRouteOrm,
     ProdigiCatalogVariantOrm,
 )
-
-
-def _clean(value: str | None) -> str | None:
-    """Trim strings and collapse empty values to None."""
-    if value is None:
-        return None
-    cleaned = str(value).strip().strip('"')
-    return cleaned or None
-
-
-def _to_decimal(value: str | None) -> Decimal | None:
-    if value is None:
-        return None
-    cleaned = value.strip().replace(",", "")
-    if not cleaned:
-        return None
-    try:
-        return Decimal(cleaned)
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _to_int(value: str | None) -> int | None:
-    if value is None:
-        return None
-    cleaned = value.strip()
-    if not cleaned:
-        return None
-    try:
-        return int(float(cleaned))
-    except ValueError:
-        return None
-
-
-def _pick(row: dict[str, Any], *names: str) -> str | None:
-    for name in names:
-        value = _clean(row.get(name))
-        if value is not None:
-            return value
-    return None
-
-
-def _paper_material_slug(paper_type: str | None, description: str | None) -> str | None:
-    joined = " ".join(filter(None, [paper_type, description])).lower()
-    if not joined:
-        return None
-    if "photo rag" in joined or "hpr" in joined:
-        return "hahnemuhle_photo_rag"
-    if "german etching" in joined or "hge" in joined:
-        return "hahnemuhle_german_etching"
-    if "baryta" in joined or "bap" in joined:
-        return "baryta_art_paper"
-    if "smooth art paper" in joined or "sap" in joined:
-        return "smooth_art_paper"
-    if "enhanced matte" in joined or "ema" in joined:
-        return "enhanced_matte_art_paper"
-    if "cold press watercolour" in joined or "cpwp" in joined:
-        return "cold_press_watercolour_paper"
-    return None
-
-
-def _canvas_material_slug(paper_type: str | None, description: str | None) -> str | None:
-    joined = " ".join(filter(None, [paper_type, description])).lower()
-    if not joined:
-        return None
-    if "pro canvas" in joined or "(pc)" in joined:
-        return "pro_canvas"
-    if "standard canvas" in joined or "(sc)" in joined:
-        return "standard_canvas"
-    if "metallic canvas" in joined or "(mc)" in joined:
-        return "metallic_canvas"
-    if "cotton canvas" in joined or "(cc)" in joined:
-        return "cotton_canvas"
-    return None
-
-
-def _normalize_medium(product_type: str | None) -> str | None:
-    value = (product_type or "").lower()
-    if "print" in value:
-        return "paper"
-    if "canvas" in value:
-        return "canvas"
-    return None
-
-
-def _normalize_presentation(product_type: str | None) -> str | None:
-    value = (product_type or "").lower()
-    if "art prints" in value:
-        return "rolled"
-    if "rolled canvas" in value:
-        return "rolled"
-    if "stretched canvas" in value:
-        return "stretched"
-    if "framed" in value:
-        return "framed"
-    return None
-
-
-def _normalize_frame_type(
-    product_type: str | None,
-    frame: str | None,
-    description: str | None,
-) -> str | None:
-    haystack = " ".join(filter(None, [product_type, frame, description])).lower()
-    if "float frame" in haystack or "float framed" in haystack:
-        return "floating_frame"
-    if "box frame" in haystack or frame == "Box":
-        return "box_frame"
-    if "classic frame" in haystack or "classic framed" in haystack or frame == "Classic":
-        return "classic_frame"
-    if "stretched canvas" in haystack:
-        return "stretched_canvas"
-    if "rolled" in haystack or "no frame" in haystack:
-        return "no_frame"
-    return None
-
-
-def _is_relevant_for_artshop(
-    medium: str | None,
-    presentation: str | None,
-    frame_type: str | None,
-    material: str | None = None,
-    description: str | None = None,
-    sku: str | None = None,
-) -> bool:
-    description_lower = (description or "").lower()
-    sku_upper = (sku or "").upper()
-
-    if medium == "paper" and presentation == "rolled":
-        return True
-    if medium == "paper" and frame_type == "box_frame":
-        return True
-    if medium == "paper" and frame_type == "classic_frame":
-        return True
-    if medium == "canvas" and material == "metallic_canvas":
-        return False
-    if medium == "canvas" and presentation == "rolled":
-        return True
-    if medium == "canvas" and frame_type == "classic_frame":
-        return True
-    if medium == "canvas" and presentation == "stretched":
-        return "19mm" not in description_lower and "SLIMCAN" not in sku_upper
-    if medium == "canvas" and frame_type == "floating_frame":
-        return True
-    return False
-
-
-def _build_variant_key(attributes: dict[str, str | None]) -> str:
-    payload = {k: v for k, v in attributes.items() if v is not None}
-    return json.dumps(payload, sort_keys=True, ensure_ascii=True) if payload else "base"
-
-
-def _build_route_key(
-    sku: str,
-    variant_key: str,
-    source_country: str | None,
-    destination_country: str | None,
-    shipping_method: str | None,
-    service_name: str | None,
-    service_level: str | None,
-) -> str:
-    parts = [
-        sku,
-        variant_key,
-        source_country or "",
-        destination_country or "",
-        shipping_method or "",
-        service_name or "",
-        service_level or "",
-    ]
-    return "|".join(parts)
 
 
 @dataclass(slots=True)
@@ -215,7 +44,7 @@ class ProdigiCsvImportService:
     """Imports local Prodigi CSV files into normalized catalog tables."""
 
     def __init__(self, csv_root: Path | None = None):
-        self.csv_root = csv_root or Path(__file__).resolve().parents[5] / "prodigy"
+        self.csv_root = resolve_prodigi_csv_root(csv_root, require_exists=False)
 
     def discover_csv_files(self) -> list[Path]:
         return sorted(self.csv_root.rglob("*.csv"))
@@ -470,108 +299,7 @@ class ProdigiCsvImportService:
         return stats
 
     def _parse_row(self, file_path: Path, row: dict[str, Any]) -> dict[str, Any] | None:
-        sku = _pick(row, "SKU")
-        if sku is None:
-            return None
-
-        category = _pick(row, "Category")
-        product_type = _pick(row, "Product type")
-        description = _pick(row, "Product description")
-
-        attributes = {
-            "finish": _pick(row, "Finish"),
-            "color": _pick(row, "Color"),
-            "frame": _pick(row, "Frame"),
-            "style": _pick(row, "Style"),
-            "glaze": _pick(row, "Glaze"),
-            "mount": _pick(row, "Mount"),
-            "mount_color": _pick(row, "Mount color"),
-            "paper_type": _pick(row, "Paper type"),
-            "substrate_weight": _pick(row, "Substrate weight"),
-            "wrap": _pick(row, "Wrap"),
-            "edge": _pick(row, "Edge"),
-        }
-        variant_key = _build_variant_key(attributes)
-
-        normalized_medium = _normalize_medium(product_type)
-        normalized_presentation = _normalize_presentation(product_type)
-        normalized_frame_type = _normalize_frame_type(
-            product_type=product_type,
-            frame=attributes["frame"],
-            description=description,
-        )
-
-        normalized_material = None
-        if normalized_medium == "paper":
-            normalized_material = _paper_material_slug(attributes["paper_type"], description)
-        elif normalized_medium == "canvas":
-            normalized_material = _canvas_material_slug(attributes["paper_type"], description)
-
-        source_country = _pick(row, "Source country")
-        destination_country = _pick(row, "Destination country")
-        shipping_method = _pick(row, "Shipping method")
-        service_name = _pick(row, "ServiceName")
-        service_level = _pick(row, "ServiceLevel")
-        route_key = _build_route_key(
-            sku=sku,
-            variant_key=variant_key,
-            source_country=source_country,
-            destination_country=destination_country,
-            shipping_method=shipping_method,
-            service_name=service_name,
-            service_level=service_level,
-        )
-
-        return {
-            "sku": sku,
-            "category": category,
-            "product_type": product_type,
-            "product_description": description,
-            "size_cm": _pick(row, "Size (cm)"),
-            "size_inches": _pick(row, "Size (inches)"),
-            "finish": attributes["finish"],
-            "color": attributes["color"],
-            "frame": attributes["frame"],
-            "style": attributes["style"],
-            "glaze": attributes["glaze"],
-            "mount": attributes["mount"],
-            "mount_color": attributes["mount_color"],
-            "paper_type": attributes["paper_type"],
-            "substrate_weight": attributes["substrate_weight"],
-            "wrap": attributes["wrap"],
-            "edge": attributes["edge"],
-            "raw_attributes": {k: v for k, v in attributes.items() if v is not None},
-            "variant_key": variant_key,
-            "normalized_medium": normalized_medium,
-            "normalized_presentation": normalized_presentation,
-            "normalized_frame_type": normalized_frame_type,
-            "normalized_material": normalized_material,
-            "is_relevant_for_artshop": _is_relevant_for_artshop(
-                medium=normalized_medium,
-                presentation=normalized_presentation,
-                frame_type=normalized_frame_type,
-                material=normalized_material,
-                description=description,
-                sku=sku,
-            ),
-            "source_country": source_country,
-            "destination_country": destination_country,
-            "destination_country_name": _pick(row, "Destination Country Name"),
-            "region_id": _pick(row, "RegionId"),
-            "shipping_method": shipping_method,
-            "service_name": service_name,
-            "service_level": service_level,
-            "tracked_shipping": _pick(row, "Tracked shipping"),
-            "product_price": _to_decimal(_pick(row, "Product price")),
-            "product_currency": _pick(row, "Product currency"),
-            "shipping_price": _to_decimal(_pick(row, "Shipping price", "ShippingRate")),
-            "plus_one_shipping_price": _to_decimal(_pick(row, "Plus one shipping price")),
-            "shipping_currency": _pick(row, "Shipping currency", "Currency"),
-            "min_shipping_days": _to_int(_pick(row, "Minimum shipping (days)", "MinTransitDays")),
-            "max_shipping_days": _to_int(_pick(row, "Maximum shipping (days)", "MaxTransitDays")),
-            "route_key": route_key,
-            "raw_row": row,
-        }
+        return parse_prodigi_csv_row(file_path, row)
 
     async def summarize_import(self) -> dict[str, int]:
         async with new_session_null_pool() as session:

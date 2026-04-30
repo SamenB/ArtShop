@@ -34,8 +34,19 @@ jobs:
 
             # ── 2. Pull latest code ──
             echo "📥 Pulling latest code..."
+            OLD_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
             git fetch origin main
             git reset --hard origin/main
+            NEW_SHA=$(git rev-parse HEAD)
+
+            PRODIGI_PREPARE_NEEDED=false
+            if [ -z "$OLD_SHA" ]; then
+              PRODIGI_PREPARE_NEEDED=true
+            else
+              if git diff --name-only "$OLD_SHA" "$NEW_SHA" | grep -E '^(backend/src/integrations/prodigi/data/prodigi_storefront_source\.csv|backend/src/integrations/prodigi/catalog_pipeline/|backend/src/integrations/prodigi/services/prodigi_(storefront_policy|shipping_policy|shipping_support_policy|fulfillment_policy|catalog_preview|print_area_resolver|business_policy|storefront_settings)\.py|backend/src/integrations/prodigi/tasks/prodigi_(production_prepare|prepare_storefront_source)\.py)' >/dev/null; then
+                PRODIGI_PREPARE_NEEDED=true
+              fi
+            fi
 
             # ── 3. Generate htpasswd for Dozzle (Basic Auth) ──
             echo "🔑 Generating htpasswd for Nginx Basic Auth..."
@@ -52,6 +63,22 @@ jobs:
             echo "🩺 Checking service health..."
             sleep 10
             docker compose -f docker-compose.prod.yml ps
+
+            if [ "$PRODIGI_PREPARE_NEEDED" = "true" ]; then
+              CURATED_CSV="backend/src/integrations/prodigi/data/prodigi_storefront_source.csv"
+              if [ -s "$CURATED_CSV" ]; then
+                echo "Prodigi curated source or pipeline changed; rebuilding production snapshot..."
+                docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+                  python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
+                  --include-api-checks \
+                  --include-quotes \
+                  --output /tmp/prodigi_production_prepare_report.json
+              else
+                echo "Prodigi pipeline changed, but curated CSV is missing or empty; skipping automatic prepare."
+              fi
+            else
+              echo "Prodigi curated source unchanged; skipping snapshot prepare."
+            fi
 
             # ── 5. Cleanup ──
             echo "🧹 Cleaning up old images..."
