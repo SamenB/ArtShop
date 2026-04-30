@@ -3,6 +3,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.config import settings
+from src.integrations.prodigi.fulfillment.workflow import ProdigiFulfillmentWorkflow
 from src.integrations.prodigi.services.prodigi_fulfillment_quality import (
     FulfillmentGateResult,
     PreparedProdigiItem,
@@ -35,6 +37,9 @@ class _FakeProdigiClient:
         self.calls.append((path, body))
         return self.response
 
+    async def get_order(self, order_id):
+        return None
+
 
 class _FakeOrderAssetService:
     prepared_asset = {
@@ -54,6 +59,7 @@ class _FakeQualityService:
         "file_url": "/static/print-prep/7/clean/derived/40x50.png",
         "print_area_name": "default",
     }
+    persisted_order_gates = []
 
     def __init__(self, db_session):
         self.db_session = db_session
@@ -77,6 +83,10 @@ class _FakeQualityService:
     def build_gate_summary(self, prepared_items):
         return {"item_count": len(prepared_items)}
 
+    async def persist_order_gate(self, **kwargs):
+        self.persisted_order_gates.append(kwargs.get("gate"))
+        return None
+
 
 def _build_order_item(**overrides):
     defaults = {
@@ -92,6 +102,11 @@ def _build_order_item(**overrides):
         "prodigi_shipping_method": "Standard",
         "prodigi_status": None,
         "prodigi_order_id": None,
+        "prodigi_supplier_total_eur": 12.0,
+        "prodigi_wholesale_eur": 8.0,
+        "prodigi_shipping_eur": 4.0,
+        "customer_line_total": 40.0,
+        "customer_currency": "USD",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -100,6 +115,8 @@ def _build_order_item(**overrides):
 def _build_order(item):
     return SimpleNamespace(
         id=101,
+        payment_status="paid",
+        total_price=40.0,
         first_name="Test",
         last_name="Buyer",
         shipping_address_line1="Street 1",
@@ -116,17 +133,47 @@ def _build_order(item):
 
 
 @pytest.mark.asyncio
+async def test_preflight_builds_payload_preview_without_submitting(monkeypatch):
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "https://example.test")
+    _FakeProdigiClient.calls = []
+    _FakeQualityService.prepared_asset = {
+        "file_url": "/static/print-prep/7/clean/derived/40x50.png",
+        "print_area_name": "default",
+    }
+    monkeypatch.setattr(
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
+        _FakeQualityService,
+    )
+
+    item = _build_order_item()
+    order = _build_order(item)
+    result = await ProdigiFulfillmentWorkflow(SimpleNamespace()).run_preflight(
+        order,
+        commit=False,
+    )
+
+    assert result.passed is True
+    assert result.request_payload["merchantReference"] == "artshop-order-101"
+    assert result.request_payload["items"][0]["merchantReference"] == "artshop-order-101-item-11"
+    assert result.request_payload["items"][0]["assets"][0]["url"].startswith(
+        "https://example.test/"
+    )
+    assert _FakeProdigiClient.calls == []
+
+
+@pytest.mark.asyncio
 async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "https://example.test")
     _FakeProdigiClient.calls = []
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
     _FakeQualityService.prepared_asset = {
         "file_url": "/static/print-prep/7/clean/derived/40x50.png",
         "print_area_name": "default",
     }
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiFulfillmentQualityService",
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
         _FakeQualityService,
     )
 
@@ -145,7 +192,7 @@ async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
     path, body = _FakeProdigiClient.calls[0]
     assert path == "/orders"
     assert body["items"][0]["assets"][0]["url"] == (
-        "http://localhost:8000/static/print-prep/7/clean/derived/40x50.png"
+        "https://example.test/static/print-prep/7/clean/derived/40x50.png"
     )
     assert body["items"][0]["assets"][0]["printArea"] == "default"
     assert body["items"][0]["attributes"] == {"wrap": "White"}
@@ -156,14 +203,14 @@ async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
 async def test_submit_order_items_uses_resolved_print_area_name(monkeypatch):
     _FakeProdigiClient.calls = []
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
     _FakeQualityService.prepared_asset = {
         "file_url": "/static/print-prep/7/clean/derived/40x50.png",
         "print_area_name": "one",
     }
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiFulfillmentQualityService",
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
         _FakeQualityService,
     )
 
@@ -184,11 +231,11 @@ async def test_submit_order_items_uses_resolved_print_area_name(monkeypatch):
 async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypatch):
     _FakeProdigiClient.calls = []
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
     _FakeQualityService.prepared_asset = None
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiFulfillmentQualityService",
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
         _FakeQualityService,
     )
 
@@ -208,17 +255,44 @@ async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_preflight_marks_payload_blocked_when_upstream_gates_fail(monkeypatch):
+    _FakeQualityService.prepared_asset = None
+    _FakeQualityService.persisted_order_gates = []
+    monkeypatch.setattr(
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
+        _FakeQualityService,
+    )
+
+    db_session = SimpleNamespace(
+        execute=AsyncMock(return_value=_ScalarResult(None)),
+        commit=AsyncMock(),
+    )
+    item = _build_order_item()
+    order = _build_order(item)
+
+    result = await ProdigiFulfillmentWorkflow(db_session).run_preflight(order)
+
+    payload_gates = [
+        gate for gate in _FakeQualityService.persisted_order_gates if gate.gate == "payload_valid"
+    ]
+    assert result.passed is False
+    assert payload_gates
+    assert payload_gates[-1].status == "blocked"
+    assert "upstream" in payload_gates[-1].error
+
+
+@pytest.mark.asyncio
 async def test_submit_order_items_batches_multiple_prints_in_one_prodigi_request(monkeypatch):
     _FakeProdigiClient.calls = []
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiClient", _FakeProdigiClient
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
     _FakeQualityService.prepared_asset = {
         "file_url": "/static/print-prep/7/clean/derived/40x50.png",
         "print_area_name": "default",
     }
     monkeypatch.setattr(
-        "src.integrations.prodigi.services.prodigi_orders.ProdigiFulfillmentQualityService",
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
         _FakeQualityService,
     )
 
@@ -281,3 +355,50 @@ def test_build_order_payload_uses_selected_public_checkout_shipping_method():
     )
 
     assert body["shippingMethod"] == "Overnight"
+
+
+@pytest.mark.parametrize(
+    "category_id",
+    [
+        "paperPrintRolled",
+        "paperPrintClassicFramed",
+        "paperPrintBoxFramed",
+        "canvasRolled",
+        "canvasStretched",
+        "canvasClassicFrame",
+        "canvasFloatingFrame",
+    ],
+)
+def test_batch_payload_contract_supports_active_print_families(category_id):
+    item = _build_order_item(
+        prodigi_category_id=category_id,
+        prodigi_attributes={"wrap": "MirrorWrap"} if category_id.startswith("canvas") else {},
+    )
+    item.customer_line_total = 44.25
+    item.customer_currency = "USD"
+    item.prodigi_storefront_bake_id = 9
+    item.prodigi_storefront_policy_version = "print_shipping_passthrough_v1"
+    order = _build_order(item)
+    order.checkout_group_id = "checkout-test"
+    prepared = SimpleNamespace(
+        item=item,
+        asset_url="https://assets.example.test/print.png",
+        rendered={"print_area_name": "default", "md5_hash": "a" * 32},
+    )
+
+    body = ProdigiOrderService.build_batch_order_payload(
+        order=order,
+        prepared_items=[prepared],
+        merchant_reference="artshop-order-101",
+        idempotency_key="artshop-order-101-fulfillment-v1",
+        callback_url="https://shop.example.test/api/v1/webhooks/prodigi",
+    )
+
+    assert body["items"][0]["merchantReference"] == "artshop-order-101-item-11"
+    assert body["items"][0]["sku"] == item.prodigi_sku
+    assert body["items"][0]["sizing"] == "fillPrintArea"
+    assert body["items"][0]["recipientCost"] == {"amount": "44.25", "currency": "USD"}
+    assert body["items"][0]["assets"][0]["md5Hash"] == "a" * 32
+    assert body["metadata"]["storefrontBakeId"] == 9
+    assert body["metadata"]["storefrontPolicyVersion"] == "print_shipping_passthrough_v1"
+    assert body["metadata"]["payloadHash"]

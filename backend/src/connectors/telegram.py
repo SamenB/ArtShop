@@ -73,8 +73,7 @@ async def notify_admin_new_order(
     """
     Sends a new-order notification to the configured owner chat.
     """
-    target_chat_id = chat_id or settings.TELEGRAM_ADMIN_CHAT_ID
-    if not target_chat_id:
+    if not chat_id:
         logger.debug("Owner Telegram chat is not set; skipping new-order alert.")
         return False
 
@@ -84,7 +83,7 @@ async def notify_admin_new_order(
         f"<b>Items:</b>\n{_escape_html(items_summary)}\n\n"
         f"<b>Total:</b> <code>${total}</code>"
     )
-    return await send_telegram_message(target_chat_id, text)
+    return await send_telegram_message(chat_id, text)
 
 
 def _escape_html(text: str) -> str:

@@ -50,6 +50,9 @@ class FakePrintProfileService:
 
 
 class FakeSnapshotService:
+    def apply_storefront_config(self, config):
+        self.config = config
+
     async def get_country_storefront(self, *, selected_ratio: str, country_code: str):
         assert selected_ratio == "4:5"
         assert country_code == "DE"
@@ -250,7 +253,7 @@ async def test_artwork_storefront_filters_hidden_sizes_and_disabled_mediums() ->
     assert canvas_card["edition_context"]["limited_quantity"] == 15
     assert canvas_card["print_profile"]["edge_extension_mode"] == "prodigi_mirror"
     assert canvas_card["print_profile"]["wrap_margin_pct"] == 0.0
-    assert len(canvas_card["size_options"]) == 1
+    assert len(canvas_card["size_options"]) == 2
     assert canvas_card["size_options"][0]["sku"] == "SKU-40x50"
     assert canvas_card["size_options"][0]["supplier_product_price"] == 49.0
     assert canvas_card["size_options"][0]["supplier_shipping_price"] == 12.0

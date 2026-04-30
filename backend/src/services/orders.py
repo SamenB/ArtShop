@@ -1,10 +1,11 @@
-﻿"""
+"""
 Service layer for order processing and management.
 Handles complex checkout logic including inventory checks for original artworks,
 print availability verification, and multi-entity transaction management.
 """
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
@@ -122,180 +123,34 @@ class OrderService(BaseService):
         5. Commits the transaction if all steps succeed; rolls back otherwise.
         """
         try:
-            # 1. Initialize the main order entry with calculated totals
-            order_add = OrderAdd(
-                user_id=user_id,
-                first_name=order_data.first_name,
-                last_name=order_data.last_name,
-                email=order_data.email,
-                phone=order_data.phone,
-                # Shipping address
-                shipping_country=order_data.shipping_country,
-                shipping_country_code=order_data.shipping_country_code,
-                shipping_state=order_data.shipping_state,
-                shipping_city=order_data.shipping_city,
-                shipping_address_line1=order_data.shipping_address_line1,
-                shipping_address_line2=order_data.shipping_address_line2,
-                shipping_postal_code=order_data.shipping_postal_code,
-                shipping_phone=order_data.shipping_phone,
-                shipping_notes=order_data.shipping_notes,
-                # Meta
-                newsletter_opt_in=order_data.newsletter_opt_in,
-                discovery_source=order_data.discovery_source,
-                promo_code=order_data.promo_code,
-                subtotal_price=0,
-                shipping_price=0,
-                discount_price=0,
-                total_price=0,
-                items=[],
-            )
+            item_groups = self._build_checkout_item_groups(order_data.items)
+            checkout_group_id = str(uuid4()) if len(item_groups) > 1 else None
+            created_order_ids: list[int] = []
 
-            order = await self.db.orders.add(order_add)
-            rehydration_service = ProdigiOrderRehydrationService(self.db)
-            customer_product_subtotal = 0
-            customer_shipping_total = 0
-            print_product_subtotal = 0
-
-            # 2. Process and validate each item in the order
-            for item_data in order_data.items:
-                artwork = await self.db.artworks.get_one(id=item_data.artwork_id)
-
-                if item_data.edition_type == EditionType.ORIGINAL:
-                    # Original artworks must be 'available' to be sold
-                    if artwork.original_status != "available":
-                        raise OriginalSoldOutException()
-                    original_price = int(artwork.original_price or item_data.price or 0)
-
-                    # Mark original as sold immediately to prevent double-booking
-                    await self.db.artworks.edit(
-                        ArtworkPatch(original_status="sold"), exclude_unset=True, id=artwork.id
-                    )
-
-                else:
-                    # Prints â€” verify the specific print type is enabled for this artwork.
-                    # EditionType.artwork_availability_flag maps type â†’ model flag name.
-                    flag_name = item_data.edition_type.artwork_availability_flag
-                    if not getattr(artwork, flag_name, False):
-                        raise PrintsSoldOutException()
-                    self._validate_prodigi_destination_country(
-                        item_data,
-                        order_data.shipping_country_code,
-                    )
-                    rehydrated_selection = await rehydration_service.rehydrate_item(
-                        artwork=artwork,
-                        item_data=item_data,
-                        destination_country=order_data.shipping_country_code,
-                    )
-
-                # 3. Create the linked order item entry
-                is_original = item_data.edition_type == EditionType.ORIGINAL
-                item_add = OrderItemAdd(
-                    order_id=order.id,
-                    artwork_id=artwork.id,
-                    edition_type=item_data.edition_type,
-                    finish=item_data.finish,
-                    size=item_data.size,
-                    price=item_data.price if is_original else 0,
-                    customer_product_price=item_data.customer_product_price if is_original else None,
-                    customer_shipping_price=item_data.customer_shipping_price if is_original else None,
-                    customer_line_total=item_data.customer_line_total if is_original else None,
-                    customer_currency=(item_data.customer_currency if is_original else "USD") or "USD",
-                    prodigi_storefront_offer_size_id=item_data.prodigi_storefront_offer_size_id,
-                    prodigi_sku=item_data.prodigi_sku,
-                    prodigi_category_id=item_data.prodigi_category_id,
-                    prodigi_slot_size_label=item_data.prodigi_slot_size_label,
-                    prodigi_attributes=item_data.prodigi_attributes,
-                    prodigi_shipping_method=None if not is_original else item_data.prodigi_shipping_method,
-                    prodigi_wholesale_eur=None,
-                    prodigi_shipping_eur=None,
-                    prodigi_supplier_total_eur=None,
-                    prodigi_retail_eur=None,
-                    prodigi_supplier_currency=None,
-                    prodigi_destination_country_code=(
-                        item_data.prodigi_destination_country_code
-                        or order_data.shipping_country_code
-                    ),
+            for checkout_segment, items in item_groups:
+                order = await self._create_order_record(
+                    order_data=order_data,
+                    user_id=user_id,
+                    items=items,
+                    checkout_group_id=checkout_group_id,
+                    checkout_segment=checkout_segment if checkout_group_id else None,
                 )
-                if not is_original:
-                    rehydration_service.apply_to_item_add(item_add, rehydrated_selection)
-                else:
-                    item_add.price = original_price
-                    item_add.customer_product_price = float(original_price)
-                    item_add.customer_shipping_price = 0.0
-                    item_add.customer_line_total = float(original_price)
-                    item_add.customer_currency = "USD"
+                created_order_ids.append(order.id)
 
-                customer_product = self._round_customer_amount(
-                    item_add.customer_product_price
-                    if item_add.customer_product_price is not None
-                    else item_add.price
-                )
-                customer_shipping = self._round_customer_amount(item_add.customer_shipping_price)
-                line_total = customer_product + customer_shipping
-                item_add.price = line_total
-                item_add.customer_product_price = float(customer_product)
-                item_add.customer_shipping_price = float(customer_shipping)
-                item_add.customer_line_total = float(line_total)
-                item_add.customer_currency = item_add.customer_currency or "USD"
-
-                customer_product_subtotal += customer_product
-                customer_shipping_total += customer_shipping
-                if item_data.edition_type != EditionType.ORIGINAL:
-                    print_product_subtotal += customer_product
-                await self.db.order_items.add(item_add)
-
-            discount_price = self._calculate_discount_price(
-                promo_code=order_data.promo_code,
-                print_product_subtotal=print_product_subtotal,
-            )
-            recalculated_total_price = max(
-                0,
-                customer_product_subtotal + customer_shipping_total - discount_price,
-            )
-            self._assert_customer_total_consistency(
-                subtotal=customer_product_subtotal,
-                shipping=customer_shipping_total,
-                discount=discount_price,
-                total=recalculated_total_price,
-            )
-            from sqlalchemy import update as sa_update
-
-            await self.db.session.execute(
-                sa_update(OrdersOrm)
-                .where(OrdersOrm.id == order.id)
-                .values(
-                    subtotal_price=customer_product_subtotal,
-                    shipping_price=customer_shipping_total,
-                    discount_price=discount_price,
-                    total_price=recalculated_total_price,
-                )
-            )
-
-            # Atomically commit the order and status changes
             await self.db.commit()
 
-            # Re-fetch the order to include fully populated nested relationships (e.g., items)
-            order = await self.db.orders.get_one(id=order.id)
+            created_orders = [
+                await self.db.orders.get_one(id=order_id) for order_id in created_order_ids
+            ]
+            order = created_orders[0]
 
-            logger.info("Order created successfully: {}", order)
-
-            # Fire admin Telegram notification in background (non-blocking)
-            import asyncio
-
-            from src.connectors.telegram import notify_admin_new_order
-
-            settings_obj = await self.db.session.get(SiteSettingsOrm, 1)
-            owner_chat_id = settings_obj.owner_telegram_chat_id if settings_obj else None
-            items_summary = "\n".join(f"  - {it.edition_type} - ${it.price}" for it in order.items)
-            asyncio.create_task(
-                notify_admin_new_order(
-                    order_id=order.id,
-                    customer_name=f"{order.first_name} {order.last_name}",
-                    total=order.total_price,
-                    items_summary=items_summary,
-                    chat_id=owner_chat_id,
-                )
+            logger.info(
+                "Order checkout created successfully: order_ids={} checkout_group_id={}",
+                created_order_ids,
+                checkout_group_id,
             )
+
+            await self._notify_admin_created_orders(created_orders)
 
             return order
 
@@ -315,12 +170,214 @@ class OrderService(BaseService):
             await self.db.rollback()
             raise DatabaseException
 
+    def _build_checkout_item_groups(
+        self, items: list[OrderItemAdd] | list[object]
+    ) -> list[tuple[str, list[object]]]:
+        if not items:
+            raise InvalidDataException(detail="Order must contain at least one item.")
+        originals = [item for item in items if item.edition_type == EditionType.ORIGINAL]
+        prints = [item for item in items if item.edition_type != EditionType.ORIGINAL]
+        if originals and prints:
+            return [("originals", originals), ("prints", prints)]
+        if originals:
+            return [("originals", originals)]
+        return [("prints", prints)]
+
+    def _build_order_add(
+        self,
+        *,
+        order_data: OrderAddRequest,
+        user_id: int | None,
+        checkout_group_id: str | None,
+        checkout_segment: str | None,
+    ) -> OrderAdd:
+        return OrderAdd(
+            user_id=user_id,
+            first_name=order_data.first_name,
+            last_name=order_data.last_name,
+            email=order_data.email,
+            phone=order_data.phone,
+            shipping_country=order_data.shipping_country,
+            shipping_country_code=order_data.shipping_country_code,
+            shipping_state=order_data.shipping_state,
+            shipping_city=order_data.shipping_city,
+            shipping_address_line1=order_data.shipping_address_line1,
+            shipping_address_line2=order_data.shipping_address_line2,
+            shipping_postal_code=order_data.shipping_postal_code,
+            shipping_phone=order_data.shipping_phone,
+            shipping_notes=order_data.shipping_notes,
+            newsletter_opt_in=order_data.newsletter_opt_in,
+            discovery_source=order_data.discovery_source,
+            promo_code=order_data.promo_code,
+            checkout_group_id=checkout_group_id,
+            checkout_segment=checkout_segment,
+            subtotal_price=0,
+            shipping_price=0,
+            discount_price=0,
+            total_price=0,
+            items=[],
+        )
+
+    async def _create_order_record(
+        self,
+        *,
+        order_data: OrderAddRequest,
+        user_id: int | None,
+        items: list[object],
+        checkout_group_id: str | None,
+        checkout_segment: str | None,
+    ):
+        order = await self.db.orders.add(
+            self._build_order_add(
+                order_data=order_data,
+                user_id=user_id,
+                checkout_group_id=checkout_group_id,
+                checkout_segment=checkout_segment,
+            )
+        )
+        rehydration_service = ProdigiOrderRehydrationService(self.db)
+        customer_product_subtotal = 0
+        customer_shipping_total = 0
+        print_product_subtotal = 0
+
+        for item_data in items:
+            artwork = await self.db.artworks.get_one(id=item_data.artwork_id)
+            is_original = item_data.edition_type == EditionType.ORIGINAL
+
+            if is_original:
+                if artwork.original_status != "available":
+                    raise OriginalSoldOutException()
+                original_price = int(artwork.original_price or item_data.price or 0)
+                await self.db.artworks.edit(
+                    ArtworkPatch(original_status="sold"), exclude_unset=True, id=artwork.id
+                )
+                rehydrated_selection = None
+            else:
+                flag_name = item_data.edition_type.artwork_availability_flag
+                if not getattr(artwork, flag_name, False):
+                    raise PrintsSoldOutException()
+                self._validate_prodigi_destination_country(
+                    item_data,
+                    order_data.shipping_country_code,
+                )
+                rehydrated_selection = await rehydration_service.rehydrate_item(
+                    artwork=artwork,
+                    item_data=item_data,
+                    destination_country=order_data.shipping_country_code,
+                )
+
+            item_add = OrderItemAdd(
+                order_id=order.id,
+                artwork_id=artwork.id,
+                edition_type=item_data.edition_type,
+                finish=item_data.finish,
+                size=item_data.size,
+                price=item_data.price if is_original else 0,
+                customer_product_price=item_data.customer_product_price if is_original else None,
+                customer_shipping_price=item_data.customer_shipping_price if is_original else None,
+                customer_line_total=item_data.customer_line_total if is_original else None,
+                customer_currency=(item_data.customer_currency if is_original else "USD") or "USD",
+                prodigi_storefront_offer_size_id=item_data.prodigi_storefront_offer_size_id,
+                prodigi_sku=item_data.prodigi_sku,
+                prodigi_category_id=item_data.prodigi_category_id,
+                prodigi_slot_size_label=item_data.prodigi_slot_size_label,
+                prodigi_attributes=item_data.prodigi_attributes,
+                prodigi_shipping_method=None
+                if not is_original
+                else item_data.prodigi_shipping_method,
+                prodigi_wholesale_eur=None,
+                prodigi_shipping_eur=None,
+                prodigi_supplier_total_eur=None,
+                prodigi_retail_eur=None,
+                prodigi_supplier_currency=None,
+                prodigi_destination_country_code=(
+                    item_data.prodigi_destination_country_code or order_data.shipping_country_code
+                ),
+            )
+            if is_original:
+                item_add.price = original_price
+                item_add.customer_product_price = float(original_price)
+                item_add.customer_shipping_price = 0.0
+                item_add.customer_line_total = float(original_price)
+                item_add.customer_currency = "USD"
+            else:
+                rehydration_service.apply_to_item_add(item_add, rehydrated_selection)
+
+            customer_product = self._round_customer_amount(
+                item_add.customer_product_price
+                if item_add.customer_product_price is not None
+                else item_add.price
+            )
+            customer_shipping = self._round_customer_amount(item_add.customer_shipping_price)
+            line_total = customer_product + customer_shipping
+            item_add.price = line_total
+            item_add.customer_product_price = float(customer_product)
+            item_add.customer_shipping_price = float(customer_shipping)
+            item_add.customer_line_total = float(line_total)
+            item_add.customer_currency = item_add.customer_currency or "USD"
+
+            customer_product_subtotal += customer_product
+            customer_shipping_total += customer_shipping
+            if not is_original:
+                print_product_subtotal += customer_product
+            await self.db.order_items.add(item_add)
+
+        discount_price = self._calculate_discount_price(
+            promo_code=order_data.promo_code,
+            print_product_subtotal=print_product_subtotal,
+        )
+        recalculated_total_price = max(
+            0,
+            customer_product_subtotal + customer_shipping_total - discount_price,
+        )
+        self._assert_customer_total_consistency(
+            subtotal=customer_product_subtotal,
+            shipping=customer_shipping_total,
+            discount=discount_price,
+            total=recalculated_total_price,
+        )
+        from sqlalchemy import update as sa_update
+
+        await self.db.session.execute(
+            sa_update(OrdersOrm)
+            .where(OrdersOrm.id == order.id)
+            .values(
+                subtotal_price=customer_product_subtotal,
+                shipping_price=customer_shipping_total,
+                discount_price=discount_price,
+                total_price=recalculated_total_price,
+            )
+        )
+        return order
+
+    async def _notify_admin_created_orders(self, orders) -> None:
+        import asyncio
+
+        from src.connectors.telegram import notify_admin_new_order
+
+        settings_obj = await self.db.session.get(SiteSettingsOrm, 1)
+        owner_chat_id = settings_obj.owner_telegram_chat_id if settings_obj else None
+        for order in orders:
+            items_summary = "\n".join(f"  - {it.edition_type} - ${it.price}" for it in order.items)
+            segment = f" ({order.checkout_segment})" if order.checkout_segment else ""
+            asyncio.create_task(
+                notify_admin_new_order(
+                    order_id=order.id,
+                    customer_name=f"{order.first_name} {order.last_name}{segment}",
+                    total=order.total_price,
+                    items_summary=items_summary,
+                    chat_id=owner_chat_id,
+                )
+            )
+
     def _round_customer_amount(self, value: float | int | None) -> int:
         if value is None:
             return 0
         return int(float(value) + 0.5)
 
-    def _calculate_discount_price(self, *, promo_code: str | None, print_product_subtotal: int) -> int:
+    def _calculate_discount_price(
+        self, *, promo_code: str | None, print_product_subtotal: int
+    ) -> int:
         if (promo_code or "").strip().upper() != "ART10":
             return 0
         return self._round_customer_amount(print_product_subtotal * 0.1)
@@ -610,9 +667,19 @@ class OrderService(BaseService):
         try:
             from sqlalchemy import update as sa_update
 
+            order = await self.db.orders.get_one(id=order_id)
+            order_ids = [order.id]
+            if order.checkout_group_id:
+                order_ids = [
+                    group_order.id
+                    for group_order in await self.db.orders.get_filtered(
+                        checkout_group_id=order.checkout_group_id
+                    )
+                ]
+
             update_stmt = (
                 sa_update(self.db.orders.model)
-                .filter_by(id=order_id)
+                .where(self.db.orders.model.id.in_(order_ids))
                 .values(
                     invoice_id=invoice_id,
                     payment_url=payment_url,
@@ -646,92 +713,109 @@ class OrderService(BaseService):
                 logger.warning("No order found for invoice_id: {}", invoice_id)
                 return
 
-            order = orders[0]
+            orders = sorted(orders, key=lambda candidate: candidate.id)
+            anchor_order = orders[0]
 
             # Idempotency guard: don't downgrade terminal statuses.
             terminal_statuses = {"paid", "refunded"}
-            if order.payment_status in terminal_statuses and payment_status != "refunded":
-                logger.info(
-                    "Skipping status update for order {}: already in terminal state '{}'",
-                    order.id,
-                    order.payment_status,
-                )
-                return
+            notify_payment_confirmed = False
+            auto_fulfillment_enabled = (
+                await self._prodigi_auto_fulfillment_enabled()
+                if payment_status == "paid"
+                else False
+            )
 
-            values: dict = {"payment_status": payment_status}
-
-            # If payment is confirmed, auto-advance fulfillment to 'confirmed'
-            if payment_status == "paid" and order.fulfillment_status == "pending":
-                values["fulfillment_status"] = FulfillmentStatus.CONFIRMED.value
-                values["confirmed_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
-                logger.info(
-                    "Auto-advancing fulfillment for order {} pending â†’ confirmed on payment",
-                    order.id,
-                )
-
-            # Guard: re-lock original artworks as 'sold' when payment is confirmed.
-            # This protects against race conditions where the abandoned-orders cleanup
-            # may have briefly released originals before payment arrived.
-            if payment_status == "paid":
-                for item in getattr(order, "items", []):
-                    if item.edition_type == EditionType.ORIGINAL.value:
-                        await self.db.artworks.edit(
-                            ArtworkPatch(original_status="sold"),
-                            exclude_unset=True,
-                            id=item.artwork_id,
-                        )
-                        logger.info(
-                            "Re-locked original artwork {} as 'sold' on payment confirmation for order {}",
-                            item.artwork_id,
-                            order.id,
-                        )
-
-            # If payment failed/refunded, cancel fulfillment and release original artworks
-            if payment_status in ["failed", "refunded"] and order.fulfillment_status != "cancelled":
-                values["fulfillment_status"] = FulfillmentStatus.CANCELLED.value
-                await self._release_original_artworks(order)
-                logger.info(
-                    "Auto-cancelled fulfillment and released originals for order {} due to payment failure",
-                    order.id,
-                )
-
-            await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
-
-            # Submit print-on-demand items through the active provider boundary.
-            if payment_status == "paid" and await self._prodigi_auto_fulfillment_enabled():
-                if self._print_provider_cost_is_covered(order):
-                    await get_print_provider().submit_paid_order_items(
-                        order=order,
-                        db_session=self.db.session,
+            for order in orders:
+                if order.payment_status in terminal_statuses and payment_status != "refunded":
+                    logger.info(
+                        "Skipping status update for order {}: already in terminal state '{}'",
+                        order.id,
+                        order.payment_status,
                     )
-                else:
-                    logger.warning(
-                        "Prodigi auto fulfillment blocked for order {}: supplier cost exceeds paid total.",
+                    continue
+
+                if payment_status == "paid" and order.payment_status not in terminal_statuses:
+                    notify_payment_confirmed = True
+
+                values: dict = {"payment_status": payment_status}
+
+                # If payment is confirmed, auto-advance fulfillment to 'confirmed'
+                if payment_status == "paid" and order.fulfillment_status == "pending":
+                    values["fulfillment_status"] = FulfillmentStatus.CONFIRMED.value
+                    values["confirmed_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+                    logger.info(
+                        "Auto-advancing fulfillment for order {} pending â†’ confirmed on payment",
                         order.id,
                     )
-            elif payment_status == "paid":
-                logger.info(
-                    "Prodigi auto fulfillment is disabled; order {} is awaiting manual submit.",
-                    order.id,
-                )
+
+                # Guard: re-lock original artworks as 'sold' when payment is confirmed.
+                # This protects against race conditions where the abandoned-orders cleanup
+                # may have briefly released originals before payment arrived.
+                if payment_status == "paid":
+                    for item in getattr(order, "items", []):
+                        if item.edition_type == EditionType.ORIGINAL.value:
+                            await self.db.artworks.edit(
+                                ArtworkPatch(original_status="sold"),
+                                exclude_unset=True,
+                                id=item.artwork_id,
+                            )
+                            logger.info(
+                                "Re-locked original artwork {} as 'sold' on payment confirmation for order {}",
+                                item.artwork_id,
+                                order.id,
+                            )
+
+                # If payment failed/refunded, cancel fulfillment and release original artworks
+                if (
+                    payment_status in ["failed", "refunded"]
+                    and order.fulfillment_status != "cancelled"
+                ):
+                    values["fulfillment_status"] = FulfillmentStatus.CANCELLED.value
+                    await self._release_original_artworks(order)
+                    logger.info(
+                        "Auto-cancelled fulfillment and released originals for order {} due to payment failure",
+                        order.id,
+                    )
+
+                await self.db.orders.edit(OrderPatch(**values), exclude_unset=True, id=order.id)
+
+                # Submit print-on-demand items through the active provider boundary.
+                if payment_status == "paid" and auto_fulfillment_enabled:
+                    if self._order_has_print_items(order) and self._print_provider_cost_is_covered(
+                        order
+                    ):
+                        await get_print_provider().submit_paid_order_items(
+                            order=order,
+                            db_session=self.db.session,
+                        )
+                    elif self._order_has_print_items(order):
+                        logger.warning(
+                            "Prodigi auto fulfillment blocked for order {}: supplier cost exceeds paid total.",
+                            order.id,
+                        )
+                elif payment_status == "paid" and self._order_has_print_items(order):
+                    logger.info(
+                        "Prodigi auto fulfillment is disabled; order {} is awaiting manual submit.",
+                        order.id,
+                    )
 
             await self.db.commit()
 
             logger.info(
-                "Order {} payment status updated by webhook: {} â†’ {}",
-                order.id,
-                order.payment_status,
+                "Invoice {} payment status applied to order_ids={}: {}",
+                invoice_id,
+                [order.id for order in orders],
                 payment_status,
             )
 
             # Notify customer when payment is confirmed
-            if payment_status == "paid" and order.payment_status not in terminal_statuses:
+            if payment_status == "paid" and notify_payment_confirmed:
                 subject_tpl, body_tpl = await self._load_fulfillment_template("confirmed")
                 self._fire_fulfillment_email(
-                    order_id=order.id,
-                    order_reference=public_order_code(order.id),
-                    first_name=order.first_name,
-                    customer_email=order.email,
+                    order_id=anchor_order.id,
+                    order_reference=public_order_code(anchor_order.id),
+                    first_name=anchor_order.first_name,
+                    customer_email=anchor_order.email,
                     fulfillment_status="confirmed",
                     tracking_number=None,
                     carrier=None,
@@ -777,10 +861,19 @@ class OrderService(BaseService):
             raise DatabaseException
 
     async def _prodigi_auto_fulfillment_enabled(self) -> bool:
-        settings_obj = await self.db.session.get(SiteSettingsOrm, 1)
+        session_get = getattr(getattr(self.db, "session", None), "get", None)
+        if session_get is None:
+            return True
+        settings_obj = await session_get(SiteSettingsOrm, 1)
         if settings_obj is None:
             return True
         return (settings_obj.prodigi_fulfillment_mode or "automatic") == "automatic"
+
+    def _order_has_print_items(self, order) -> bool:
+        return any(
+            getattr(item, "edition_type", None) != EditionType.ORIGINAL.value
+            for item in (getattr(order, "items", []) or [])
+        )
 
     def _print_provider_cost_summary(self, order) -> dict[str, float]:
         supplier_total = 0.0
@@ -900,4 +993,3 @@ class OrderService(BaseService):
         except Exception as e:
             logger.error("Error running abandoned orders cleanup: {}", e)
             return 0
-

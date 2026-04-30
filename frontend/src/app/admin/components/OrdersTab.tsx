@@ -96,6 +96,16 @@ function orderHasPrints(order: any): boolean {
   );
 }
 
+function orderSegmentLabel(order: any): string | null {
+  if (order.checkout_segment === "originals") {
+    return "Original shipment";
+  }
+  if (order.checkout_segment === "prints") {
+    return "Print fulfillment";
+  }
+  return null;
+}
+
 // Base fulfillment steps (always present)
 const BASE_STEPS = [
   {
@@ -837,6 +847,12 @@ function ProdigiFlowPanel({
   const customerPaid = Number(order.total_price ?? 0);
   const isUnderpaid = supplierTotal > 0 && supplierTotal > customerPaid;
   const margin = customerPaid - supplierTotal;
+  const latestJob = (flow?.jobs ?? [])[0];
+  const payloadPreview = latestJob?.request_payload;
+  const preflightPassed = flow?.preflight_status === "passed";
+  const submitBlocker = isUnderpaid
+    ? "Prodigi submit is blocked by the cost check."
+    : flow?.manual_submit_blocker;
   return (
     <div className="bg-white border border-[#31323E]/10 rounded-xl p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -942,16 +958,64 @@ function ProdigiFlowPanel({
             {(flow.summary ?? []).map((step: any) => (
               <div
                 key={step.key}
-                className="rounded-lg border border-[#31323E]/8 bg-white p-3"
+                className={`rounded-lg border bg-white p-3 ${
+                  step.status === "failed" || step.status === "blocked"
+                    ? "border-rose-200"
+                    : step.status === "passed"
+                      ? "border-emerald-100"
+                      : "border-[#31323E]/8"
+                }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-[#31323E]">
                       {step.label}
                     </p>
+                    {step.purpose && (
+                      <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#31323E]/70">
+                        {step.purpose}
+                      </p>
+                    )}
                     <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#31323E]/50">
                       {step.detail}
                     </p>
+                    {step.error && (
+                      <p className="mt-2 rounded-md bg-rose-50 p-2 text-[11px] font-semibold leading-relaxed text-rose-700">
+                        {step.error}
+                      </p>
+                    )}
+                    {step.next_action && step.status !== "passed" && (
+                      <p className="mt-2 rounded-md bg-amber-50 p-2 text-[11px] font-semibold leading-relaxed text-amber-800">
+                        Next: {step.next_action}
+                      </p>
+                    )}
+                    {(compactJson(step.expected) || compactJson(step.measured)) && (
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        {compactJson(step.expected) && (
+                          <details className="rounded-md bg-[#F7F7F5] p-2 text-[10px] text-[#31323E]/65">
+                            <summary className="cursor-pointer font-bold uppercase tracking-[0.12em] text-[#31323E]/45">
+                              Expected
+                            </summary>
+                            <pre className="mt-2 max-h-36 overflow-auto leading-relaxed">
+                              {compactJson(step.expected)}
+                            </pre>
+                          </details>
+                        )}
+                        {compactJson(step.measured) && (
+                          <details
+                            open={step.status === "failed" || step.status === "blocked"}
+                            className="rounded-md bg-[#F7F7F5] p-2 text-[10px] text-[#31323E]/65"
+                          >
+                            <summary className="cursor-pointer font-bold uppercase tracking-[0.12em] text-[#31323E]/45">
+                              Measured
+                            </summary>
+                            <pre className="mt-2 max-h-36 overflow-auto leading-relaxed">
+                              {compactJson(step.measured)}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    )}
                     {step.timestamp && (
                       <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#31323E]/35">
                         {formatFlowTime(step.timestamp)}
@@ -966,13 +1030,15 @@ function ProdigiFlowPanel({
 
           <button
             onClick={onSubmit}
-            disabled={!flow.can_submit_manually || submitting || isUnderpaid}
+            disabled={!flow.can_submit_manually || submitting || isUnderpaid || !preflightPassed}
             className="w-full rounded-xl bg-[#31323E] py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-white transition-all disabled:opacity-35"
           >
             {submitting
               ? "Submitting to Prodigi..."
               : isUnderpaid
                 ? "Prodigi Submit Blocked By Cost Check"
+                : submitBlocker
+                  ? submitBlocker
                 : "Submit This Order To Prodigi"}
           </button>
 
@@ -1086,17 +1152,30 @@ function ProdigiFlowPanel({
 
           <div className="space-y-2">
             <SectionLabel text="Gate Details And API Events" />
-            {(flow.gates ?? []).slice(-10).map((gate: any) => (
+            {payloadPreview && (
+              <details className="rounded-lg border border-[#31323E]/8 bg-white p-3 text-xs">
+                <summary className="cursor-pointer font-bold text-[#31323E]">
+                  Exact Prodigi payload preview{" "}
+                  <span className="text-[#31323E]/45">
+                    {payloadPreview.merchantReference}
+                  </span>
+                </summary>
+                <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-[#121212] p-3 text-[10px] leading-relaxed text-emerald-300">
+                  {compactJson(payloadPreview)}
+                </pre>
+              </details>
+            )}
+            {(flow.gates ?? []).map((gate: any) => (
               <details
                 key={gate.id}
-                open={gate.status === "failed"}
+                open={gate.status === "failed" || gate.status === "blocked"}
                 className="rounded-lg border border-[#31323E]/8 bg-white p-3 text-xs"
               >
                 <summary className="cursor-pointer font-bold text-[#31323E]">
                   {gate.gate}:{" "}
                   <span
                     className={
-                      gate.status === "failed"
+                      gate.status === "failed" || gate.status === "blocked"
                         ? "text-rose-600"
                         : "text-emerald-700"
                     }
@@ -1120,7 +1199,7 @@ function ProdigiFlowPanel({
                 )}
               </details>
             ))}
-            {(flow.events ?? []).slice(-6).map((event: any) => (
+            {(flow.events ?? []).map((event: any) => (
               <details
                 key={event.id}
                 className="rounded-lg border border-[#31323E]/8 bg-white p-3 text-xs"
@@ -1244,6 +1323,24 @@ export default function OrdersTab() {
       setProdigiFlows((prev) => ({ ...prev, [orderId]: data }));
     } catch (e) {
       console.error(e);
+    } finally {
+      setFlowLoading(null);
+    }
+  };
+
+  const runProdigiPreflight = async (orderId: number) => {
+    setFlowLoading(orderId);
+    try {
+      const res = await apiFetch(
+        `${getApiUrl()}/orders/${orderId}/prodigi-preflight`,
+        { method: "POST" },
+      );
+      const data = await apiJson(res);
+      setProdigiFlows((prev) => ({ ...prev, [orderId]: data }));
+      await fetchOrders();
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Prodigi preflight failed.");
     } finally {
       setFlowLoading(null);
     }
@@ -1645,6 +1742,11 @@ export default function OrdersTab() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#31323E]/40">
                         #{order.id}
                       </span>
+                      {orderSegmentLabel(order) && (
+                        <span className="rounded-md border border-[#31323E]/15 bg-white px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[#31323E]/45">
+                          {orderSegmentLabel(order)}
+                        </span>
+                      )}
                       <PaymentBadge status={order.payment_status} />
                       <FulfillmentBadge
                         status={order.fulfillment_status || "pending"}
@@ -2077,7 +2179,7 @@ export default function OrdersTab() {
                           flow={prodigiFlows[order.id]}
                           loading={flowLoading === order.id}
                           submitting={prodigiSubmitting === order.id}
-                          onRefresh={() => loadProdigiFlow(order.id)}
+                          onRefresh={() => runProdigiPreflight(order.id)}
                           onSubmit={() => submitOrderToProdigi(order.id)}
                         />
                       </div>

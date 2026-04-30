@@ -172,6 +172,18 @@ class Settings(BaseSettings):
     # In production, this should be https://your-domain.com
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
+    # Public storage for rendered print-order assets that Prodigi must download.
+    # Local keeps the historical /static behavior for development diagnostics;
+    # s3_compatible supports S3, Cloudflare R2, MinIO, and similar APIs.
+    PRINT_ASSET_STORAGE_BACKEND: Literal["local", "s3_compatible"] = "local"
+    PRINT_ASSET_BUCKET: str | None = None
+    PRINT_ASSET_ENDPOINT_URL: str | None = None
+    PRINT_ASSET_REGION: str | None = None
+    PRINT_ASSET_ACCESS_KEY_ID: str | None = None
+    PRINT_ASSET_SECRET_ACCESS_KEY: str | None = None
+    PRINT_ASSET_PUBLIC_BASE_URL: str | None = None
+    PRINT_ASSET_PREFIX: str = "prodigi"
+
     # Active print-on-demand provider adapter used by the domain-facing backend.
     # Provider-specific code should stay behind the print_on_demand abstraction.
     PRINT_PROVIDER: Literal["prodigi"] = "prodigi"
@@ -179,9 +191,6 @@ class Settings(BaseSettings):
     # --- Telegram Bot Integration ---
     # Bot token from @BotFather — used for both admin notifications and print partner orders.
     TELEGRAM_BOT_TOKEN: str | None = None
-    # Your personal or group chat_id where new order alerts are delivered.
-    # Obtain your chat_id by messaging @userinfobot in Telegram.
-    TELEGRAM_ADMIN_CHAT_ID: str | None = None
     # --- Prodigi Print-on-Demand ---
     # API key from https://dashboard.prodigi.com/settings/api
     PRODIGI_API_KEY: str | None = None

@@ -44,6 +44,8 @@ class ProdigiStorefrontSettingsService:
         self.db = db
 
     async def get_effective_config(self) -> dict[str, Any]:
+        if self._session_or_none() is None:
+            return self.default_config()
         row = await self._get_or_create()
         return self._build_effective_config(row)
 
@@ -89,6 +91,8 @@ class ProdigiStorefrontSettingsService:
         }
 
     async def _build_status(self) -> dict[str, Any]:
+        if self._session_or_none() is None:
+            return {"active_bake": None, "materialized_payload_count": 0}
         active_bake = (
             await self.db.session.execute(
                 select(ProdigiStorefrontBakeOrm)
@@ -129,7 +133,10 @@ class ProdigiStorefrontSettingsService:
         }
 
     async def _get_or_create(self) -> ProdigiStorefrontSettingsOrm:
-        row = await self.db.session.get(ProdigiStorefrontSettingsOrm, 1)
+        session = self._session_or_none()
+        if session is None:
+            raise RuntimeError("Prodigi storefront settings require a database session.")
+        row = await session.get(ProdigiStorefrontSettingsOrm, 1)
         if row is not None:
             return row
         defaults = self.default_config()
@@ -140,10 +147,13 @@ class ProdigiStorefrontSettingsService:
             snapshot_defaults=defaults["snapshot_defaults"],
             payload_policy_version=defaults["payload_policy_version"],
         )
-        self.db.session.add(row)
+        session.add(row)
         await self.db.commit()
-        await self.db.session.refresh(row)
+        await session.refresh(row)
         return row
+
+    def _session_or_none(self):
+        return getattr(self.db, "session", None)
 
     @classmethod
     def default_config(cls) -> dict[str, Any]:

@@ -28,6 +28,9 @@ from src.models.prodigi_fulfillment import (
 from src.models.prodigi_fulfillment import (
     ProdigiFulfillmentJobOrm as ProdigiFulfillmentJobOrm,
 )
+from src.models.prodigi_fulfillment import (
+    ProdigiFulfillmentShipmentOrm as ProdigiFulfillmentShipmentOrm,
+)
 from src.models.prodigi_storefront import (
     ProdigiArtworkStorefrontPayloadOrm as ProdigiArtworkStorefrontPayloadOrm,
 )

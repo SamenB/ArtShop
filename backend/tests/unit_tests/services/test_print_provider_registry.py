@@ -104,7 +104,13 @@ async def test_order_service_uses_active_print_provider_for_paid_submission(monk
         fulfillment_status="pending",
         first_name="Test",
         email="test@example.com",
-        items=[],
+        total_price=40.0,
+        items=[
+            SimpleNamespace(
+                edition_type="paper_print",
+                prodigi_supplier_total_eur=12.0,
+            )
+        ],
     )
     db.orders.get_filtered.return_value = [order]
 

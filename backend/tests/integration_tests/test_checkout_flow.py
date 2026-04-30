@@ -12,7 +12,10 @@ Covers:
 """
 
 import json
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
+
+from src.schemas.artworks import ArtworkPatch
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,11 +41,36 @@ def _order_payload(**overrides) -> dict:
                 "finish": "Rolled",
                 "size": "50x70",
                 "price": 1500,
+                "prodigi_destination_country_code": "UA",
             }
         ],
     }
     base.update(overrides)
     return base
+
+
+@contextmanager
+def _mock_print_rehydration(product_price: float = 1500.0):
+    def apply_rehydrated_print(item_add, _selection):
+        item_add.customer_product_price = product_price
+        item_add.customer_shipping_price = 0.0
+        item_add.customer_line_total = product_price
+        item_add.customer_currency = "USD"
+        item_add.prodigi_storefront_bake_id = 1
+        item_add.prodigi_storefront_policy_version = "test"
+
+    with (
+        patch(
+            "src.services.orders.ProdigiOrderRehydrationService.rehydrate_item",
+            new_callable=AsyncMock,
+        ) as rehydrate_item,
+        patch(
+            "src.services.orders.ProdigiOrderRehydrationService.apply_to_item_add",
+            side_effect=apply_rehydrated_print,
+        ),
+    ):
+        rehydrate_item.return_value = object()
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -54,8 +82,9 @@ class TestOrderCreation:
     async def test_create_order_basic(self, ac):
         """POST /orders with valid data returns 200 and order data."""
         payload = _order_payload()
-        resp = await ac.post("/orders", json=payload)
-        assert resp.status_code == 200
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=payload)
+        assert resp.status_code == 200, resp.text
         data = resp.json()
         assert data["status"] == "OK"
         order = data["data"]
@@ -73,8 +102,9 @@ class TestOrderCreation:
             shipping_phone="+380509999999",
             shipping_notes="Ring doorbell twice",
         )
-        resp = await ac.post("/orders", json=payload)
-        assert resp.status_code == 200
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=payload)
+        assert resp.status_code == 200, resp.text
         order = resp.json()["data"]
         assert order["shipping_country"] == "Ukraine"
         assert order["shipping_country_code"] == "UA"
@@ -154,7 +184,8 @@ class TestDBPersistence:
     async def test_order_persisted_in_db(self, ac, db, delete_all_orders):
         """After creation, order and items are retrievable from the database."""
         payload = _order_payload(email="persist_test@example.com")
-        resp = await ac.post("/orders", json=payload)
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=payload)
         assert resp.status_code == 200
         order_id = resp.json()["data"]["id"]
 
@@ -177,6 +208,7 @@ class TestDBPersistence:
                     "finish": "Rolled",
                     "size": "50x70",
                     "price": 1500,
+                    "prodigi_destination_country_code": "UA",
                 },
                 {
                     "artwork_id": 1,
@@ -184,10 +216,12 @@ class TestDBPersistence:
                     "finish": "Framed",
                     "size": "30x40",
                     "price": 800,
+                    "prodigi_destination_country_code": "UA",
                 },
             ],
         )
-        resp = await ac.post("/orders", json=payload)
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=payload)
         assert resp.status_code == 200
         order_id = resp.json()["data"]["id"]
 
@@ -195,6 +229,48 @@ class TestDBPersistence:
         assert len(order.items) == 2
         artwork_ids = {item.artwork_id for item in order.items}
         assert artwork_ids == {6, 1}
+
+    async def test_mixed_original_and_print_checkout_splits_admin_orders(
+        self, ac, db, delete_all_orders
+    ):
+        """A mixed checkout creates separate admin orders tied to one payment group."""
+        await db.artworks.edit(ArtworkPatch(original_status="available"), exclude_unset=True, id=7)
+        await db.commit()
+
+        payload = _order_payload(
+            email="mixed_checkout@example.com",
+            items=[
+                {
+                    "artwork_id": 7,
+                    "edition_type": "original",
+                    "finish": "standard",
+                    "price": 7000,
+                },
+                {
+                    "artwork_id": 6,
+                    "edition_type": "paper_print",
+                    "finish": "Rolled",
+                    "size": "50x70",
+                    "price": 1500,
+                    "prodigi_destination_country_code": "UA",
+                },
+            ],
+        )
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=payload)
+        assert resp.status_code == 200, resp.text
+        anchor_order = resp.json()["data"]
+        assert anchor_order["checkout_group_id"]
+        assert anchor_order["checkout_segment"] == "originals"
+
+        orders = await db.orders.get_filtered(checkout_group_id=anchor_order["checkout_group_id"])
+        assert len(orders) == 2
+        by_segment = {order.checkout_segment: order for order in orders}
+        assert set(by_segment) == {"originals", "prints"}
+        assert [item.edition_type for item in by_segment["originals"].items] == ["original"]
+        assert [item.edition_type for item in by_segment["prints"].items] == ["paper_print"]
+        assert by_segment["originals"].total_price == 7000
+        assert by_segment["prints"].total_price == 1500
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +284,8 @@ class TestOrderTrackingByEmail:
         email = "track_test@example.com"
         # Create two orders with same email
         for _ in range(2):
-            resp = await ac.post("/orders", json=_order_payload(email=email))
+            with _mock_print_rehydration():
+                resp = await ac.post("/orders", json=_order_payload(email=email))
             assert resp.status_code == 200
 
         # Track by email
@@ -244,7 +321,8 @@ class TestOrderTrackingByEmail:
 class TestPaymentStatus:
     async def test_payment_status_returns_pending(self, ac, delete_all_orders):
         """Newly created order has 'pending' payment status."""
-        resp = await ac.post("/orders", json=_order_payload())
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=_order_payload())
         order_id = resp.json()["data"]["id"]
 
         status_resp = await ac.get(f"/payments/{order_id}/status")
@@ -268,7 +346,8 @@ class TestPaymentCreate:
     async def test_create_payment_mocked(self, ac, db, delete_all_orders):
         """POST /payments/create with mocked Monobank → invoice data stored."""
         # 1. Create a real order first
-        resp = await ac.post("/orders", json=_order_payload())
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=_order_payload())
         order_id = resp.json()["data"]["id"]
 
         # 2. Mock Monobank's create_invoice to simulate a successful response
@@ -301,6 +380,52 @@ class TestPaymentCreate:
         assert order.payment_url == "https://pay.mbnk.biz/test_inv_001"
         assert order.payment_status == "awaiting_payment"
 
+    async def test_create_payment_links_mixed_checkout_group(self, ac, db, delete_all_orders):
+        await db.artworks.edit(ArtworkPatch(original_status="available"), exclude_unset=True, id=7)
+        await db.commit()
+        payload = _order_payload(
+            email="mixed_payment@example.com",
+            items=[
+                {
+                    "artwork_id": 7,
+                    "edition_type": "original",
+                    "finish": "standard",
+                    "price": 7000,
+                },
+                {
+                    "artwork_id": 6,
+                    "edition_type": "paper_print",
+                    "finish": "Rolled",
+                    "size": "50x70",
+                    "price": 1500,
+                    "prodigi_destination_country_code": "UA",
+                },
+            ],
+        )
+        with _mock_print_rehydration():
+            order_resp = await ac.post("/orders", json=payload)
+        anchor_order = order_resp.json()["data"]
+
+        mock_invoice = {
+            "invoiceId": "mixed_inv_001",
+            "pageUrl": "https://pay.mbnk.biz/mixed_inv_001",
+        }
+        with patch(
+            "src.api.payments.MonobankService.create_invoice",
+            new_callable=AsyncMock,
+            return_value=mock_invoice,
+        ):
+            pay_resp = await ac.post(
+                "/payments/create",
+                json={"order_id": anchor_order["id"], "currency": "UAH"},
+            )
+
+        assert pay_resp.status_code == 200, pay_resp.text
+        orders = await db.orders.get_filtered(checkout_group_id=anchor_order["checkout_group_id"])
+        assert len(orders) == 2
+        assert {order.invoice_id for order in orders} == {"mixed_inv_001"}
+        assert {order.payment_status for order in orders} == {"awaiting_payment"}
+
     async def test_create_payment_nonexistent_order(self, ac):
         """Payment for non-existent order → 404."""
         with patch(
@@ -318,7 +443,8 @@ class TestPaymentCreate:
 
     async def test_create_payment_configuration_error_returns_json(self, ac, delete_all_orders):
         """Monobank config errors should be JSON 502 responses, not plain text 500s."""
-        resp = await ac.post("/orders", json=_order_payload())
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=_order_payload())
         order_id = resp.json()["data"]["id"]
 
         with patch(
@@ -343,7 +469,8 @@ class TestPaymentCreate:
 class TestWebhookProcessing:
     async def _create_order_with_invoice(self, ac, db) -> tuple[int, str]:
         """Helper: creates an order and links a mock payment session."""
-        resp = await ac.post("/orders", json=_order_payload(email="webhook@test.com"))
+        with _mock_print_rehydration():
+            resp = await ac.post("/orders", json=_order_payload(email="webhook@test.com"))
         order_id = resp.json()["data"]["id"]
 
         mock_invoice = {"invoiceId": "wh_inv_001", "pageUrl": "https://pay.mbnk.biz/wh"}

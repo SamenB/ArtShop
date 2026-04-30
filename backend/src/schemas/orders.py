@@ -251,6 +251,8 @@ class OrderAdd(OrderAddRequest):
     """
 
     user_id: Optional[int] = None
+    checkout_group_id: Optional[str] = None
+    checkout_segment: Optional[str] = None
     subtotal_price: Optional[int] = None
     shipping_price: Optional[int] = None
     discount_price: Optional[int] = None
@@ -267,6 +269,8 @@ class Order(OrderAdd):
     id: int
     created_at: datetime
     items: List[OrderItem]
+    checkout_group_id: Optional[str] = None
+    checkout_segment: Optional[str] = None
 
     # Payment tracking
     payment_status: str = "pending"
@@ -360,6 +364,8 @@ class OrderPatch(BaseModel):
     newsletter_opt_in: Optional[bool] = None
     discovery_source: Optional[str] = None
     promo_code: Optional[str] = None
+    checkout_group_id: Optional[str] = None
+    checkout_segment: Optional[str] = None
     subtotal_price: Optional[int] = None
     shipping_price: Optional[int] = None
     discount_price: Optional[int] = None

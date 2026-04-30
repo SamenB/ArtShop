@@ -29,6 +29,7 @@ export default function AdminProfileTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isEditingTelegram, setIsEditingTelegram] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -86,8 +87,7 @@ export default function AdminProfileTab() {
     );
   }
 
-  const savedTelegramChat =
-    settings.owner_telegram_chat_id || telegramStatus?.owner_alert_chat_id || "";
+  const savedTelegramChat = settings.owner_telegram_chat_id || "";
   const telegramReady =
     Boolean(telegramStatus?.bot_configured) && Boolean(savedTelegramChat);
 
@@ -168,27 +168,45 @@ export default function AdminProfileTab() {
           </div>
 
           <div className="mt-4 space-y-3">
-            <input
-              value={settings.owner_telegram_chat_id || ""}
-              onChange={(event) =>
-                update("owner_telegram_chat_id", event.target.value)
-              }
-              className={inputClass}
-              placeholder="Telegram chat_id"
-            />
+            {!isEditingTelegram ? (
+              <div className="flex items-center justify-between rounded-lg border border-[#31323E]/15 bg-white px-4 py-3 shadow-sm">
+                <div className="flex flex-col gap-0.5">
+                  <span className={`text-sm font-medium ${savedTelegramChat ? "text-[#31323E]" : "text-[#31323E]/40"}`}>
+                    {savedTelegramChat || "No Chat ID configured"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTelegram(true)}
+                  className="text-[11px] font-bold uppercase tracking-wider text-[#31323E]/50 transition-colors hover:text-[#31323E]"
+                >
+                  Edit
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  value={settings.owner_telegram_chat_id || ""}
+                  onChange={(event) =>
+                    update("owner_telegram_chat_id", event.target.value)
+                  }
+                  className={inputClass}
+                  placeholder="Enter Telegram chat_id"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTelegram(false)}
+                  className="rounded-lg bg-[#31323E] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[#434455]"
+                >
+                  Ok
+                </button>
+              </div>
+            )}
             <div className="rounded-lg border border-[#31323E]/10 bg-white p-3 text-xs font-medium leading-relaxed text-[#31323E]/55">
               <p>
                 Bot token:{" "}
                 <strong className="text-[#31323E]">
                   {telegramStatus?.bot_configured ? "configured" : "missing"}
-                </strong>
-              </p>
-              <p>
-                Env fallback chat:{" "}
-                <strong className="text-[#31323E]">
-                  {telegramStatus?.owner_alert_chat_configured
-                    ? "configured"
-                    : "not set"}
                 </strong>
               </p>
               <p className="mt-2">

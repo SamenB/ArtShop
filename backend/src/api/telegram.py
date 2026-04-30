@@ -21,6 +21,4 @@ async def telegram_status(admin_id: AdminDep):
     """
     return {
         "bot_configured": bool(settings.TELEGRAM_BOT_TOKEN),
-        "owner_alert_chat_configured": bool(settings.TELEGRAM_ADMIN_CHAT_ID),
-        "owner_alert_chat_id": settings.TELEGRAM_ADMIN_CHAT_ID,
     }

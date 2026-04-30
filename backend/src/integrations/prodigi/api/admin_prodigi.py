@@ -3,7 +3,6 @@ from sqlalchemy import func, select
 
 from src.api.dependencies import AdminDep, DBDep
 from src.config import settings
-from src.init import redis_manager
 from src.integrations.prodigi.api.print_options import MARKUP
 from src.integrations.prodigi.connectors.client import ProdigiClient
 from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStorefrontRepository
@@ -21,6 +20,12 @@ from src.integrations.prodigi.services.prodigi_fulfillment_validation import (
     ValidationConfig,
     ValidationThresholds,
 )
+from src.integrations.prodigi.services.prodigi_runtime_cache import (
+    ARTWORK_PRINT_CACHE_PREFIXES as _ARTWORK_PRINT_CACHE_PREFIXES,
+)
+from src.integrations.prodigi.services.prodigi_runtime_cache import (
+    clear_artwork_print_storefront_cache,
+)
 from src.integrations.prodigi.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
 from src.integrations.prodigi.services.prodigi_storefront_settings import (
     ProdigiStorefrontSettingsService,
@@ -36,47 +41,11 @@ from src.models.prodigi_fulfillment import (
 
 router = APIRouter(prefix="/v1/admin/prodigi", tags=["Admin Prodigi Diagnostics"])
 catalog_service = ProdigiCatalogService()
-ARTWORK_PRINT_CACHE_PREFIXES = (
-    "api:artwork-prints:v1:",
-    "prodigi:artwork-storefront:v1:",
-    "prodigi:country-storefront:v1:",
-)
+ARTWORK_PRINT_CACHE_PREFIXES = _ARTWORK_PRINT_CACHE_PREFIXES
 
 
 async def _clear_artwork_print_storefront_cache() -> dict[str, object]:
-    redis_client = redis_manager.redis
-    if redis_client is None:
-        return {
-            "status": "skipped",
-            "deleted_keys": 0,
-            "reason": "Redis is not connected.",
-        }
-
-    keys: list[str] = []
-    if hasattr(redis_client, "scan_iter"):
-        seen: set[str] = set()
-        for prefix in ARTWORK_PRINT_CACHE_PREFIXES:
-            async for key in redis_client.scan_iter(match=f"{prefix}*"):
-                key_str = str(key)
-                if key_str not in seen:
-                    seen.add(key_str)
-                    keys.append(key_str)
-    elif hasattr(redis_client, "data") and isinstance(redis_client.data, dict):
-        keys = [
-            str(key)
-            for key in redis_client.data.keys()
-            if any(str(key).startswith(prefix) for prefix in ARTWORK_PRINT_CACHE_PREFIXES)
-        ]
-
-    deleted = 0
-    for key in keys:
-        await redis_manager.delete(key)
-        deleted += 1
-
-    return {
-        "status": "cleared",
-        "deleted_keys": deleted,
-    }
+    return await clear_artwork_print_storefront_cache()
 
 
 @router.get("/storefront-settings")
@@ -291,6 +260,10 @@ def _serialize_job(job: ProdigiFulfillmentJobOrm) -> dict:
         "attempt_count": job.attempt_count,
         "item_ids": job.item_ids,
         "payload_hash": job.payload_hash,
+        "status_stage": job.status_stage,
+        "status_details": job.status_details,
+        "issues": job.issues,
+        "submitted_at": job.submitted_at,
         "last_error": job.last_error,
         "created_at": job.created_at,
         "updated_at": job.updated_at,

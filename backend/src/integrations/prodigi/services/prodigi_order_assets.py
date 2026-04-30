@@ -104,10 +104,7 @@ class ProdigiOrderAssetService:
             slot_size_label=slot_size_label,
             target_width=int(target["width_px"]),
             target_height=int(target["height_px"]),
-            output_dir=Path("static")
-            / "print-orders"
-            / str(order_id)
-            / str(order_item_id),
+            output_dir=Path("static") / "print-orders" / str(order_id) / str(order_item_id),
             white_border_pct=white_border_pct,
         )
         rendered["print_area_name"] = target.get("print_area_name") or "default"
@@ -210,6 +207,8 @@ class ProdigiOrderAssetService:
         return {
             "width_px": int(size.print_area_width_px),
             "height_px": int(size.print_area_height_px),
+            "storefront_bake_id": int(active_bake.id),
+            "destination_country": getattr(size.offer_group, "destination_country", None),
             "print_area_name": size.print_area_name or "default",
             "print_area_source": size.print_area_source,
             "print_area_dimensions": size.print_area_dimensions,
@@ -218,7 +217,9 @@ class ProdigiOrderAssetService:
             "sku": size.sku,
             "slot_size_label": size.slot_size_label,
             "product_price": float(size.product_price) if size.product_price is not None else None,
-            "shipping_price": float(size.shipping_price) if size.shipping_price is not None else None,
+            "shipping_price": float(size.shipping_price)
+            if size.shipping_price is not None
+            else None,
         }
 
     async def verify_target_size_with_prodigi_api(
@@ -276,7 +277,9 @@ class ProdigiOrderAssetService:
             **target,
             "width_px": live_width,
             "height_px": live_height,
-            "print_area_name": live_target.get("print_area_name") or target.get("print_area_name") or "default",
+            "print_area_name": live_target.get("print_area_name")
+            or target.get("print_area_name")
+            or "default",
             "print_area_source": live_source,
             "print_area_dimensions": live_target.get("print_area_dimensions")
             or target.get("print_area_dimensions"),
@@ -371,9 +374,7 @@ class ProdigiOrderAssetService:
         # Paper categories: apply white borders programmatically
         if category_id in PAPER_CATEGORIES and white_border_pct > 0:
             return (
-                self._apply_white_border(
-                    source_img, target_width, target_height, white_border_pct
-                ),
+                self._apply_white_border(source_img, target_width, target_height, white_border_pct),
                 "white_border_contain",
             )
         # Canvas and non-bordered paper: cover-crop as before

@@ -9,15 +9,19 @@ from typing import Any
 from PIL import Image
 
 from src.config import settings
+from src.integrations.prodigi.connectors.client import ProdigiClient
+from src.integrations.prodigi.fulfillment.assets import ProdigiFulfillmentAssetStorage
+from src.integrations.prodigi.fulfillment.contract import (
+    canonical_shipping_method,
+    file_md5,
+    public_asset_url,
+)
+from src.integrations.prodigi.fulfillment.gates import FAILED, PASSED, SKIPPED
 from src.integrations.prodigi.services.prodigi_order_assets import ProdigiOrderAssetService
 from src.models.prodigi_fulfillment import (
     ProdigiFulfillmentEventOrm,
     ProdigiFulfillmentGateResultOrm,
 )
-
-PASSED = "passed"
-FAILED = "failed"
-SKIPPED = "skipped"
 
 
 @dataclass(slots=True)
@@ -55,6 +59,7 @@ class ProdigiFulfillmentQualityService:
     def __init__(self, db_session):
         self.db_session = db_session
         self.asset_service = ProdigiOrderAssetService(db_session)
+        self.asset_storage = ProdigiFulfillmentAssetStorage()
 
     async def prepare_item(
         self,
@@ -126,6 +131,38 @@ class ProdigiFulfillmentQualityService:
             await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
             return None
         self._sync_item_from_target(item=item, target=target)
+        gates.append(
+            FulfillmentGateResult(
+                gate="storefront_rehydrated",
+                status=PASSED if self._storefront_target_is_complete(item, target) else FAILED,
+                measured={
+                    "item_id": getattr(item, "id", None),
+                    "active_bake_id": target.get("storefront_bake_id"),
+                    "item_bake_id": getattr(item, "prodigi_storefront_bake_id", None),
+                    "country": order.shipping_country_code,
+                    "sku": getattr(item, "prodigi_sku", None),
+                    "category_id": category_id,
+                    "slot_size_label": getattr(item, "prodigi_slot_size_label", None),
+                    "attributes": getattr(item, "prodigi_attributes", None) or {},
+                    "shipping_method": getattr(item, "prodigi_shipping_method", None),
+                    "supplier_total": getattr(item, "prodigi_supplier_total_eur", None),
+                },
+                expected={
+                    "source": "active_prodigi_storefront_bake",
+                    "sku": "present",
+                    "category_id": "present",
+                    "slot_size_label": "present",
+                    "shipping_method": "present",
+                    "supplier_cost_basis": "present",
+                },
+                error=None
+                if self._storefront_target_is_complete(item, target)
+                else "Stored order item could not be rehydrated from the active Prodigi bake.",
+            )
+        )
+        if not self._storefront_target_is_complete(item, target):
+            await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
+            return None
 
         verified_target = await self.asset_service.verify_target_size_with_prodigi_api(
             target=target,
@@ -134,25 +171,28 @@ class ProdigiFulfillmentQualityService:
             country_code=order.shipping_country_code,
             attributes=item.prodigi_attributes or {},
         )
-        live_required = bool(settings.PRODIGI_API_KEY)
+        api_key_present = bool(settings.PRODIGI_API_KEY)
+        live_required = not settings.PRODIGI_SANDBOX
+        pixel_status = PASSED if verified_target is not None and api_key_present else SKIPPED
+        if verified_target is None or (live_required and not api_key_present):
+            pixel_status = FAILED
         gates.append(
             FulfillmentGateResult(
                 gate="live_prodigi_pixel_contract_verified",
-                status=PASSED
-                if verified_target is not None
-                else (SKIPPED if not live_required else FAILED),
+                status=pixel_status,
                 measured=self._target_measurement(verified_target),
                 expected={
-                    "live_api_key_present": live_required,
+                    "live_api_key_present": api_key_present,
+                    "api_key_required": live_required,
                     "allowed_drift_px": 2,
                     "required_in_prod": True,
                 },
                 error=None
-                if verified_target is not None
+                if pixel_status in {PASSED, SKIPPED}
                 else "Live Prodigi product-details pixels did not match the baked target.",
             )
         )
-        if verified_target is None:
+        if verified_target is None or (live_required and not api_key_present):
             await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
             return None
         self._sync_item_from_target(item=item, target=verified_target)
@@ -178,15 +218,38 @@ class ProdigiFulfillmentQualityService:
             await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
             return None
 
-        rendered = self.asset_service.render_from_master(
-            master_asset=master_asset,
-            category_id=category_id,
-            slot_size_label=getattr(item, "prodigi_slot_size_label", None) or item.size,
-            target_width=int(verified_target["width_px"]),
-            target_height=int(verified_target["height_px"]),
-            output_dir=Path("static") / "print-orders" / str(order.id) / str(item.id),
-            white_border_pct=await self.asset_service._get_artwork_border_pct(item.artwork_id),
+        quote_gate = await self._quote_gate(
+            order=order,
+            item=item,
+            print_area_name=verified_target.get("print_area_name") or "default",
         )
+        gates.append(quote_gate)
+        if quote_gate.status == FAILED:
+            await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
+            return None
+
+        try:
+            rendered = self.asset_service.render_from_master(
+                master_asset=master_asset,
+                category_id=category_id,
+                slot_size_label=getattr(item, "prodigi_slot_size_label", None) or item.size,
+                target_width=int(verified_target["width_px"]),
+                target_height=int(verified_target["height_px"]),
+                output_dir=Path("static") / "print-orders" / str(order.id) / str(item.id),
+                white_border_pct=await self.asset_service._get_artwork_border_pct(item.artwork_id),
+            )
+        except Exception as exc:
+            gates.append(
+                FulfillmentGateResult(
+                    gate="asset_rendered",
+                    status=FAILED,
+                    measured={"error": str(exc)},
+                    expected={"format": "PNG", "source": "master_asset"},
+                    error=f"Rendered asset failed: {exc}",
+                )
+            )
+            await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
+            return None
         gates.append(
             FulfillmentGateResult(
                 gate="asset_rendered",
@@ -217,21 +280,57 @@ class ProdigiFulfillmentQualityService:
             )
         )
 
-        asset_url = self._public_asset_url(rendered.get("file_url"))
+        md5_hash = file_md5(rendered.get("file_path"))
+        if md5_hash:
+            rendered["md5_hash"] = md5_hash
+        gates.append(
+            FulfillmentGateResult(
+                gate="rendered_asset_md5_ready",
+                status=PASSED if md5_hash else FAILED,
+                measured={"md5_hash": md5_hash},
+                expected={"asset_md5_hash": "present"},
+                error=None if md5_hash else "Rendered file hash could not be calculated.",
+            )
+        )
+
+        publication = self.asset_storage.publish_rendered_asset(
+            order_id=int(order.id),
+            order_item_id=int(item.id),
+            rendered=rendered,
+            md5_hash=md5_hash,
+        )
+        if publication.url:
+            rendered["public_asset_url"] = publication.url
+        if publication.key:
+            rendered["storage_key"] = publication.key
+        if publication.backend:
+            rendered["storage_backend"] = publication.backend
+
+        asset_url = publication.url or self._public_asset_url(rendered.get("file_url"))
+        external_https = self._is_external_https(asset_url)
+        public_url_error = self._public_asset_url_error(publication, asset_url, external_https)
         gates.append(
             FulfillmentGateResult(
                 gate="public_asset_url_ready",
-                status=PASSED if asset_url else FAILED,
+                status=PASSED if external_https and publication.error is None else FAILED,
                 measured={
                     "asset_url": asset_url,
+                    "storage_backend": publication.backend,
+                    "storage_key": publication.key,
+                    "storage_bucket": publication.bucket,
+                    "storage_uploaded": publication.uploaded,
+                    "storage_error": publication.error,
+                    "missing_storage_settings": publication.missing_settings,
+                    "storage_metadata": publication.metadata,
                     "public_base_url": settings.PUBLIC_BASE_URL,
-                    "external_https": self._is_external_https(asset_url),
+                    "print_asset_public_base_url": settings.PRINT_ASSET_PUBLIC_BASE_URL,
+                    "external_https": external_https,
                 },
-                expected={"downloadable_url": True},
-                error=None if asset_url else "Could not build a public asset URL.",
+                expected={"downloadable_url": True, "external_https": True},
+                error=public_url_error,
             )
         )
-        if not asset_url:
+        if not asset_url or not external_https or publication.error is not None:
             await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
             return None
 
@@ -250,7 +349,7 @@ class ProdigiFulfillmentQualityService:
         self,
         *,
         order: Any,
-        item: Any,
+        item: Any | None,
         gates: list[FulfillmentGateResult],
         job_id: int | None,
     ) -> None:
@@ -261,7 +360,9 @@ class ProdigiFulfillmentQualityService:
                 ProdigiFulfillmentGateResultOrm(
                     job_id=job_id,
                     order_id=int(order.id),
-                    order_item_id=int(item.id) if getattr(item, "id", None) is not None else None,
+                    order_item_id=int(item.id)
+                    if item is not None and getattr(item, "id", None) is not None
+                    else None,
                     gate=gate.gate,
                     status=gate.status,
                     measured=self._json_safe(gate.measured),
@@ -269,6 +370,15 @@ class ProdigiFulfillmentQualityService:
                     error=gate.error,
                 )
             )
+
+    async def persist_order_gate(
+        self,
+        *,
+        order: Any,
+        job_id: int | None,
+        gate: FulfillmentGateResult,
+    ) -> None:
+        await self.persist_gates(order=order, item=None, gates=[gate], job_id=job_id)
 
     def build_gate_summary(self, prepared_items: list[PreparedProdigiItem]) -> dict[str, Any]:
         gate_counts: dict[str, dict[str, int]] = {}
@@ -348,10 +458,73 @@ class ProdigiFulfillmentQualityService:
         if target.get("shipping_price") is not None:
             item.prodigi_shipping_eur = target.get("shipping_price")
 
-    def _public_asset_url(self, file_url: str | None) -> str | None:
-        from src.integrations.prodigi.services.prodigi_orders import ProdigiOrderService
+    def _storefront_target_is_complete(self, item: Any, target: dict[str, Any]) -> bool:
+        supplier_total = getattr(item, "prodigi_supplier_total_eur", None)
+        if supplier_total is None:
+            supplier_total = (getattr(item, "prodigi_wholesale_eur", None) or 0) + (
+                getattr(item, "prodigi_shipping_eur", None) or 0
+            )
+        return bool(
+            target.get("storefront_bake_id")
+            and getattr(item, "prodigi_sku", None)
+            and getattr(item, "prodigi_slot_size_label", None)
+            and getattr(item, "prodigi_shipping_method", None)
+            and supplier_total is not None
+        )
 
-        return ProdigiOrderService._public_asset_url(file_url)
+    async def _quote_gate(
+        self,
+        *,
+        order: Any,
+        item: Any,
+        print_area_name: str,
+    ) -> FulfillmentGateResult:
+        api_key_present = bool(settings.PRODIGI_API_KEY)
+        api_key_required = not settings.PRODIGI_SANDBOX
+        request = {
+            "sku": getattr(item, "prodigi_sku", None),
+            "destination_country": order.shipping_country_code,
+            "currency": getattr(item, "prodigi_supplier_currency", None) or "EUR",
+            "attributes": getattr(item, "prodigi_attributes", None) or {},
+            "shipping_method": canonical_shipping_method(
+                getattr(item, "prodigi_shipping_method", None)
+            ),
+            "print_area": print_area_name or "default",
+        }
+        if not api_key_present:
+            return FulfillmentGateResult(
+                gate="prodigi_quote_check",
+                status=FAILED if api_key_required else SKIPPED,
+                measured={"api_key_present": False, "request": request},
+                expected={"quote_outcome": "Created|Ok", "api_key_required": api_key_required},
+                error="PRODIGI_API_KEY is required for live Prodigi quote validation."
+                if api_key_required
+                else None,
+            )
+        try:
+            async with ProdigiClient(sandbox=settings.PRODIGI_SANDBOX) as client:
+                response = await client.get_quote(**request)
+        except Exception as exc:
+            return FulfillmentGateResult(
+                gate="prodigi_quote_check",
+                status=FAILED,
+                measured={"request": request, "error": str(exc)},
+                expected={"quote_outcome": "Created|Ok"},
+                error=f"Prodigi quote check failed: {exc}",
+            )
+        outcome = str(response.get("outcome") or "").replace(" ", "").lower()
+        quotes = response.get("quotes") if isinstance(response.get("quotes"), list) else []
+        passed = outcome in {"created", "ok"} and bool(quotes)
+        return FulfillmentGateResult(
+            gate="prodigi_quote_check",
+            status=PASSED if passed else FAILED,
+            measured={"request": request, "response": response},
+            expected={"quote_outcome": "Created|Ok", "quotes": "non-empty"},
+            error=None if passed else "Prodigi quote response did not include an accepted quote.",
+        )
+
+    def _public_asset_url(self, file_url: str | None) -> str | None:
+        return public_asset_url(file_url)
 
     def _read_image_size(self, file_path: str | None) -> list[int] | None:
         if not file_path:
@@ -393,6 +566,26 @@ class ProdigiFulfillmentQualityService:
             and "localhost" not in normalized
             and "127.0.0.1" not in normalized
         )
+
+    def _public_asset_url_error(
+        self,
+        publication: Any,
+        asset_url: str | None,
+        external_https: bool,
+    ) -> str | None:
+        if publication.error:
+            return publication.error
+        if not asset_url:
+            return "Prodigi requires a public HTTPS asset URL before order creation."
+        if not external_https and publication.backend == "local":
+            return (
+                "Prodigi requires a public HTTPS asset URL before order creation. "
+                "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible with a public bucket, "
+                "or run this from a public HTTPS staging/production host."
+            )
+        if not external_https:
+            return "Published fulfillment asset URL is not an external HTTPS URL."
+        return None
 
     def _json_safe(self, payload: Any) -> Any:
         if payload is None:

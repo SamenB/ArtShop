@@ -6,7 +6,6 @@ Provides functionality to retrieve and update configurations like contact info a
 from fastapi import APIRouter
 
 from src.api.dependencies import AdminDep, DBDep
-from src.config import settings as app_settings
 from src.models.site_settings import SiteSettingsOrm
 from src.schemas.settings import SiteSettingsResponse, SiteSettingsUpdate
 
@@ -23,10 +22,6 @@ async def get_settings(db: DBDep):
     if not settings_obj:
         settings_obj = SiteSettingsOrm(id=1)
         db.session.add(settings_obj)
-        await db.commit()
-        await db.session.refresh(settings_obj)
-    if not settings_obj.owner_telegram_chat_id and app_settings.TELEGRAM_ADMIN_CHAT_ID:
-        settings_obj.owner_telegram_chat_id = app_settings.TELEGRAM_ADMIN_CHAT_ID
         await db.commit()
         await db.session.refresh(settings_obj)
     return settings_obj

@@ -113,6 +113,22 @@ def _validate_order_totals_for_payment(order) -> None:
         )
 
 
+async def _resolve_payment_orders(db: DBDep, order) -> list:
+    if not getattr(order, "checkout_group_id", None):
+        return [order]
+    orders = await db.orders.get_filtered(checkout_group_id=order.checkout_group_id)
+    return sorted(orders, key=lambda candidate: candidate.id)
+
+
+def _validate_orders_totals_for_payment(orders: list) -> None:
+    for order in orders:
+        _validate_order_totals_for_payment(order)
+
+
+def _orders_total_price(orders: list) -> int:
+    return sum(_round_customer_amount(getattr(order, "total_price", None)) for order in orders)
+
+
 @router.post("/create", response_model=PaymentCreateResponse)
 async def create_payment(
     db: DBDep,
@@ -150,12 +166,14 @@ async def create_payment(
     if user_id and order.user_id and order.user_id != user_id:
         raise ObjectNotFoundException(detail="Order not found")
 
-    _validate_order_totals_for_payment(order)
+    payment_orders = await _resolve_payment_orders(db, order)
+    _validate_orders_totals_for_payment(payment_orders)
 
     # 3. Determine the final amount to charge from the persisted order only.
     # The browser may display a converted estimate, but the payment gateway must
     # never trust a client-submitted amount for the final charge.
-    final_amount_coins = _order_total_to_currency_coins(order.total_price, payment_data.currency)
+    group_total_price = _orders_total_price(payment_orders)
+    final_amount_coins = _order_total_to_currency_coins(group_total_price, payment_data.currency)
     if payment_data.amount_coins and payment_data.amount_coins != final_amount_coins:
         logger.warning(
             "Ignoring client payment amount for order {}: client={} server={}",
@@ -166,9 +184,14 @@ async def create_payment(
 
     # 4. Build basket items for the Monobank receipt.
     EDITION_LABELS = {"original": "Original Painting", "print": "Fine Art Print"}
-    order_total_usd_coins = sum(item.price for item in order.items) * 100 or 1
+    all_items = [
+        item
+        for payment_order in payment_orders
+        for item in (getattr(payment_order, "items", []) or [])
+    ]
+    order_total_usd_coins = sum(item.price for item in all_items) * 100 or 1
     basket_items = []
-    for item in order.items:
+    for item in all_items:
         # Use actual artwork title if the relationship is loaded.
         artwork = getattr(item, "artwork", None)
         name = artwork.title if artwork else f"Artwork #{item.artwork_id}"
@@ -222,7 +245,7 @@ async def create_payment(
             basket_items[-1]["total"] += diff
 
     # 5. Create the Monobank invoice with enriched merchant info.
-    item_count = len(order.items)
+    item_count = len(all_items)
     buyer_name = f"{order.first_name} {order.last_name}".strip()
     order_ref = public_order_code(order.id)
     description = (

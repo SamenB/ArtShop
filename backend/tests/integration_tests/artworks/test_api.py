@@ -1,4 +1,31 @@
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, patch
+
 import pytest
+
+
+@contextmanager
+def _mock_print_rehydration(product_price: float = 1000.0):
+    def apply_rehydrated_print(item_add, _selection):
+        item_add.customer_product_price = product_price
+        item_add.customer_shipping_price = 0.0
+        item_add.customer_line_total = product_price
+        item_add.customer_currency = "USD"
+        item_add.prodigi_storefront_bake_id = 1
+        item_add.prodigi_storefront_policy_version = "test"
+
+    with (
+        patch(
+            "src.services.orders.ProdigiOrderRehydrationService.rehydrate_item",
+            new_callable=AsyncMock,
+        ) as rehydrate_item,
+        patch(
+            "src.services.orders.ProdigiOrderRehydrationService.apply_to_item_add",
+            side_effect=apply_rehydrated_print,
+        ),
+    ):
+        rehydrate_item.return_value = object()
+        yield
 
 
 def get_base_payload(artwork_id: int, edition_type: str):
@@ -18,6 +45,7 @@ def get_base_payload(artwork_id: int, edition_type: str):
                 "edition_type": edition_type,
                 "finish": "none",
                 "price": 1000,
+                "prodigi_destination_country_code": "US",
             }
         ],
     }
@@ -66,10 +94,11 @@ async def test_create_and_get_my_orders(
     """Create N orders, then check GET /orders/me returns exactly N."""
     # Create orders
     for artwork_id in artwork_ids:
-        response = await authenticated_ac.post(
-            "/orders",
-            json=get_base_payload(artwork_id, "paper_print"),
-        )
+        with _mock_print_rehydration():
+            response = await authenticated_ac.post(
+                "/orders",
+                json=get_base_payload(artwork_id, "paper_print"),
+            )
         assert response.status_code == 200
 
     # Check my orders

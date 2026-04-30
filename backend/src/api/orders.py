@@ -8,6 +8,8 @@ from sqlalchemy import select
 
 from src.api.dependencies import AdminDep, DBDep, UserDep, UserDepOptional
 from src.config import settings
+from src.integrations.prodigi.fulfillment.gates import aggregate_gate_status
+from src.integrations.prodigi.fulfillment.workflow import ProdigiFulfillmentWorkflow
 from src.models.prodigi_fulfillment import (
     ProdigiFulfillmentEventOrm,
     ProdigiFulfillmentGateResultOrm,
@@ -187,7 +189,21 @@ async def get_order_prodigi_flow(order_id: int, admin_id: AdminDep, db: DBDep):
         .all()
     )
     latest_job = jobs[0] if jobs else None
+    visible_gates = [gate for gate in gates if latest_job and gate.job_id == latest_job.id]
+    if latest_job and not visible_gates:
+        visible_gates = []
+    elif not latest_job:
+        visible_gates = gates
+    visible_events = [event for event in events if latest_job and event.job_id == latest_job.id]
+    if not latest_job:
+        visible_events = events
     print_items = [item for item in (order.items or []) if item.prodigi_sku]
+    preflight_status = _preflight_status(latest_job, visible_gates)
+    can_submit = (
+        order.payment_status in {"paid", "mock_paid"}
+        and bool(print_items)
+        and preflight_status == "passed"
+    )
 
     return {
         "order": {
@@ -203,15 +219,26 @@ async def get_order_prodigi_flow(order_id: int, admin_id: AdminDep, db: DBDep):
             "webhook_secret_configured": bool(settings.PRODIGI_WEBHOOK_SECRET),
             "public_base_url": settings.PUBLIC_BASE_URL,
         },
-        "can_submit_manually": order.payment_status in {"paid", "mock_paid"} and bool(print_items),
+        "can_submit_manually": can_submit,
+        "manual_submit_blocker": _manual_submit_blocker(order, print_items, preflight_status),
+        "preflight_status": preflight_status,
         "latest_job_id": latest_job.id if latest_job else None,
-        "summary": _build_prodigi_flow_summary(order, latest_job, print_items, gates, events),
+        "summary": _build_prodigi_flow_summary(
+            order, latest_job, print_items, visible_gates, visible_events
+        ),
         "items": [_serialize_prodigi_item(item) for item in print_items],
         "jobs": [_serialize_job(job) for job in jobs],
-        "gates": [_serialize_gate(gate) for gate in gates],
-        "events": [_serialize_event(event) for event in events],
+        "gates": [_serialize_gate(gate) for gate in visible_gates],
+        "events": [_serialize_event(event) for event in visible_events],
         "job_ids": job_ids,
     }
+
+
+@router.post("/{order_id}/prodigi-preflight")
+async def run_order_prodigi_preflight(order_id: int, admin_id: AdminDep, db: DBDep):
+    order = await db.orders.get_one(id=order_id)
+    await ProdigiFulfillmentWorkflow(db.session).run_preflight(order)
+    return await get_order_prodigi_flow(order_id, admin_id, db)
 
 
 @router.post("/{order_id}/prodigi-submit")
@@ -294,87 +321,339 @@ def _build_prodigi_flow_summary(
     events: list[ProdigiFulfillmentEventOrm],
 ) -> list[dict]:
     gate_statuses = {gate.gate: gate.status for gate in gates}
-    event_keys = {(event.event_type, event.stage): event.status for event in events}
+    has_status_update = any(
+        (
+            event.event_type == "webhook"
+            and event.stage not in {"received"}
+            and event.status in {"passed", "issue"}
+        )
+        or (
+            event.event_type == "api_response"
+            and event.stage == "submit_order"
+            and event.status == "passed"
+            and latest_job is not None
+            and bool(latest_job.status_stage)
+        )
+        for event in events
+    )
 
     paid = order.payment_status in {"paid", "mock_paid"}
     has_prints = bool(print_items)
-    submitted = latest_job is not None and latest_job.status == "submitted"
+    submitted = latest_job is not None and latest_job.status in {
+        "submitted",
+        "in_progress",
+        "on_hold",
+        "issue",
+        "complete",
+    }
     failed = latest_job is not None and latest_job.status in {"failed", "blocked"}
 
-    return [
-        {
-            "key": "payment_confirmed",
-            "label": "Payment confirmed",
-            "status": "passed" if paid else "pending",
-            "detail": "Monobank payment is confirmed." if paid else "Waiting for Monobank success.",
-            "timestamp": order.confirmed_at,
-        },
-        {
-            "key": "print_items_detected",
-            "label": "Print items detected",
-            "status": "passed" if has_prints else "skipped",
-            "detail": f"{len(print_items)} Prodigi-backed print item(s) in this order.",
-        },
-        {
-            "key": "job_created",
-            "label": "Fulfillment job created",
-            "status": "passed" if latest_job else ("pending" if paid and has_prints else "skipped"),
-            "detail": (
+    steps = [
+        _flow_step_from_gates(
+            key="payment_confirmed",
+            label="Payment confirmed",
+            purpose="Confirms the order is legally allowed to enter fulfillment.",
+            gate_names=["payment_confirmed"],
+            gates=gates,
+            fallback_status="passed" if paid else "pending",
+            fallback_detail=(
+                "Monobank payment is confirmed." if paid else "Waiting for Monobank success."
+            ),
+            fallback_measured={"payment_status": order.payment_status},
+            fallback_expected={"payment_status": ["paid", "mock_paid"]},
+            next_action="Wait for payment callback or mark the test order as mock_paid.",
+            timestamp=order.confirmed_at,
+        ),
+        _flow_step_from_gates(
+            key="print_items_detected",
+            label="Print items detected",
+            purpose="Finds local order items that must be fulfilled through Prodigi.",
+            gate_names=["print_items_detected"],
+            gates=gates,
+            fallback_status="passed" if has_prints else "skipped",
+            fallback_detail=f"{len(print_items)} Prodigi-backed print item(s) in this order.",
+            fallback_measured={"count": len(print_items)},
+            fallback_expected={"count": ">=1"},
+            next_action="Recreate the order with a Prodigi-backed print item.",
+        ),
+        _flow_step_from_gates(
+            key="cost_covered",
+            label="Cost covered",
+            purpose="Blocks accidental loss-making fulfillment from persisted checkout economics.",
+            gate_names=["cost_covered"],
+            gates=gates,
+            fallback_status="pending",
+            fallback_detail="Run Refresh to compare paid total against Prodigi supplier cost.",
+            fallback_measured=None,
+            fallback_expected={"customer_paid": ">= supplier_total"},
+            next_action="Fix storefront pricing, collect adjustment, or recreate the order.",
+        ),
+        _flow_step_from_gates(
+            key="job_created",
+            label="Fulfillment job created",
+            purpose="Creates the durable local lifecycle record for this Prodigi submission attempt.",
+            gate_names=["job_created"],
+            gates=gates,
+            fallback_status="passed"
+            if latest_job
+            else ("pending" if paid and has_prints else "skipped"),
+            fallback_detail=(
                 f"Job #{latest_job.id}, status {latest_job.status}."
                 if latest_job
                 else "No Prodigi job has been created yet."
             ),
-            "timestamp": latest_job.created_at if latest_job else None,
-        },
-        {
-            "key": "quality_gates",
-            "label": "Quality gates",
-            "status": _aggregate_status(gate.status for gate in gates),
-            "detail": f"{sum(1 for gate in gates if gate.status == 'passed')}/{len(gates)} gates passed.",
-        },
-        {
-            "key": "pixel_contract",
-            "label": "Live pixel contract",
-            "status": gate_statuses.get("live_prodigi_pixel_contract_verified", "pending"),
-            "detail": "Prodigi pixel dimensions checked against our baked target.",
-        },
-        {
-            "key": "asset_rendered",
-            "label": "Order asset rendered",
-            "status": gate_statuses.get("rendered_asset_pixel_match", "pending"),
-            "detail": "Rendered file is checked pixel-for-pixel before submit.",
-        },
-        {
-            "key": "prodigi_submit",
-            "label": "Submit to Prodigi",
-            "status": "passed" if submitted else ("failed" if failed else "pending"),
-            "detail": (
-                f"Prodigi order {latest_job.prodigi_order_id}."
-                if submitted
-                else latest_job.last_error
-                if failed
-                else "Not submitted yet."
+            fallback_measured=(
+                {
+                    "job_id": latest_job.id,
+                    "revision": latest_job.submission_revision,
+                    "idempotency_key": latest_job.idempotency_key,
+                }
+                if latest_job
+                else None
             ),
-            "timestamp": latest_job.updated_at if latest_job else None,
-        },
-        {
-            "key": "prodigi_callback",
-            "label": "Prodigi callback/status",
-            "status": event_keys.get(("webhook", "prodigi_callback"), "pending"),
-            "detail": "Awaiting status updates from Prodigi after order creation.",
-        },
+            fallback_expected={"job": "persisted"},
+            next_action="Run Refresh to create a preflight job.",
+            timestamp=latest_job.created_at if latest_job else None,
+        ),
+        _flow_step_from_gates(
+            key="recipient_ready",
+            label="Recipient ready",
+            purpose="Validates the exact shipping identity and address fields Prodigi receives.",
+            gate_names=["recipient_ready"],
+            gates=gates,
+            fallback_status="pending",
+            fallback_detail="Run Refresh to validate recipient fields.",
+            fallback_measured=None,
+            fallback_expected={"address": "Prodigi required fields present"},
+            next_action="Edit the order shipping address fields.",
+        ),
+        _flow_step_from_gates(
+            key="storefront_rehydrated",
+            label="Storefront rehydrated",
+            purpose="Re-checks SKU, category, country, slot, attributes, shipping, and cost basis from the active bake.",
+            gate_names=["storefront_rehydrated"],
+            gates=gates,
+            fallback_status="pending",
+            fallback_detail="Run Refresh to rehydrate each item from the active Prodigi bake.",
+            fallback_measured=None,
+            fallback_expected={"source": "active_prodigi_storefront_bake"},
+            next_action="Rebuild the active bake or recreate the order from current storefront offers.",
+        ),
+        _flow_step_from_gates(
+            key="pixel_contract",
+            label="Live pixel contract",
+            purpose="Checks live Prodigi print-area pixels against our baked target within 2px.",
+            gate_names=["live_prodigi_pixel_contract_verified", "live_prodigi_aspect_compatible"],
+            gates=gates,
+            fallback_status=gate_statuses.get("live_prodigi_pixel_contract_verified", "pending"),
+            fallback_detail="Prodigi pixel dimensions checked against our baked target.",
+            fallback_measured=None,
+            fallback_expected={"allowed_drift_px": 2},
+            next_action="Refresh the bake or inspect the SKU/Product Details response.",
+        ),
+        _flow_step_from_gates(
+            key="quote_check",
+            label="Prodigi quote check",
+            purpose="Confirms Prodigi accepts SKU, attributes, print area, country, and shipping method before order creation.",
+            gate_names=["prodigi_quote_check"],
+            gates=gates,
+            fallback_status="pending",
+            fallback_detail="Run Refresh to call the Prodigi Quote endpoint.",
+            fallback_measured=None,
+            fallback_expected={"quote_outcome": "Created|Ok"},
+            next_action="Fix SKU, attributes, destination country, or shipping method.",
+        ),
+        _flow_step_from_gates(
+            key="asset_rendered",
+            label="Order asset rendered",
+            purpose="Renders the PNG that Prodigi will download and checks exact output pixels.",
+            gate_names=["asset_rendered", "rendered_asset_pixel_match", "rendered_asset_md5_ready"],
+            gates=gates,
+            fallback_status=gate_statuses.get("rendered_asset_pixel_match", "pending"),
+            fallback_detail="Rendered file is checked pixel-for-pixel before submit.",
+            fallback_measured=None,
+            fallback_expected={"format": "PNG", "pixels": "exact target"},
+            next_action="Upload/fix the master asset or inspect render dimensions.",
+        ),
+        _flow_step_from_gates(
+            key="asset_public_url",
+            label="Asset public URL",
+            purpose="Ensures Prodigi can download the rendered PNG through a public HTTPS URL.",
+            gate_names=["public_asset_url_ready"],
+            gates=gates,
+            fallback_status="pending",
+            fallback_detail="Run Refresh to verify the public asset URL and md5 hash.",
+            fallback_measured=None,
+            fallback_expected={"external_https": True, "md5": "present"},
+            next_action=(
+                "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible with a public HTTPS "
+                "asset base URL, or run from public HTTPS staging/production."
+            ),
+        ),
+        _flow_step_from_gates(
+            key="payload_valid",
+            label="Payload valid",
+            purpose="Builds and validates the exact order JSON that will be sent to Prodigi.",
+            gate_names=["payload_valid"],
+            gates=gates,
+            fallback_status="pending",
+            fallback_detail="Run Refresh to build the Prodigi payload preview.",
+            fallback_measured=None,
+            fallback_expected={"prodigi_order_payload": "valid"},
+            next_action="Fix the failed measured field before submitting.",
+        ),
     ]
+    steps.extend(
+        [
+            {
+                "key": "prodigi_submit",
+                "label": "Submit to Prodigi",
+                "purpose": "Creates the Prodigi order with POST /orders after preflight is green.",
+                "status": "passed" if submitted else ("failed" if failed else "pending"),
+                "detail": (
+                    f"Prodigi order {latest_job.prodigi_order_id}."
+                    if submitted
+                    else latest_job.last_error
+                    if failed
+                    else "Not submitted yet."
+                ),
+                "expected": {
+                    "prodigi_response_outcome": "Created|OnHold|CreatedWithIssues|AlreadyExists"
+                },
+                "measured": {
+                    "prodigi_order_id": latest_job.prodigi_order_id if latest_job else None,
+                    "job_status": latest_job.status if latest_job else None,
+                    "last_error": latest_job.last_error if latest_job else None,
+                },
+                "error": latest_job.last_error if failed and latest_job else None,
+                "next_action": "Fix red preflight gates, then submit again.",
+                "timestamp": latest_job.updated_at if latest_job else None,
+            },
+            {
+                "key": "prodigi_callback",
+                "label": "Prodigi callback/status",
+                "purpose": "Persists Prodigi webhook or immediate status-poll data after order creation.",
+                "status": "passed" if has_status_update else "pending",
+                "detail": (
+                    f"Latest Prodigi stage: {latest_job.status_stage}."
+                    if has_status_update and latest_job and latest_job.status_stage
+                    else "Awaiting status updates from Prodigi after order creation."
+                ),
+                "expected": {"status_update": "webhook or GET /orders/{id} snapshot persisted"},
+                "measured": {
+                    "status_stage": latest_job.status_stage if latest_job else None,
+                    "status_details": latest_job.status_details if latest_job else None,
+                    "issues": latest_job.issues if latest_job else None,
+                },
+                "next_action": "Wait for webhook or poll Prodigi status.",
+            },
+        ]
+    )
+    return steps
+
+
+def _preflight_status(
+    latest_job: ProdigiFulfillmentJobOrm | None,
+    gates: list[ProdigiFulfillmentGateResultOrm],
+) -> str:
+    if latest_job is None:
+        return "pending"
+    if latest_job.status == "preflight_passed":
+        return "passed"
+    if latest_job.status in {"blocked", "failed"}:
+        return "failed"
+    return aggregate_gate_status(gate.status for gate in gates)
+
+
+def _manual_submit_blocker(order, print_items: list, preflight_status: str) -> str | None:
+    if order.payment_status not in {"paid", "mock_paid"}:
+        return "Payment must be confirmed before Prodigi submit."
+    if not print_items:
+        return "No Prodigi-backed print items were detected."
+    if preflight_status != "passed":
+        return "Run Refresh and fix every failed preflight gate before submitting."
+    return None
+
+
+def _flow_step_from_gates(
+    *,
+    key: str,
+    label: str,
+    purpose: str,
+    gate_names: list[str],
+    gates: list[ProdigiFulfillmentGateResultOrm],
+    fallback_status: str,
+    fallback_detail: str,
+    fallback_measured,
+    fallback_expected,
+    next_action: str,
+    timestamp=None,
+) -> dict:
+    matched = [gate for gate in gates if gate.gate in set(gate_names)]
+    if not matched:
+        return {
+            "key": key,
+            "label": label,
+            "purpose": purpose,
+            "status": fallback_status,
+            "detail": fallback_detail,
+            "expected": fallback_expected,
+            "measured": fallback_measured,
+            "error": None,
+            "next_action": next_action if fallback_status != "passed" else None,
+            "timestamp": timestamp,
+        }
+
+    status = aggregate_gate_status(gate.status for gate in matched)
+    failed = [gate for gate in matched if gate.status in {"failed", "blocked"}]
+    passed_count = sum(1 for gate in matched if gate.status in {"passed", "skipped"})
+    first_error = next((gate.error for gate in failed if gate.error), None)
+    if len(matched) == 1:
+        measured = matched[0].measured
+        expected = matched[0].expected
+    else:
+        measured = {
+            "passed": passed_count,
+            "total": len(matched),
+            "gates": [
+                {
+                    "gate": gate.gate,
+                    "status": gate.status,
+                    "order_item_id": gate.order_item_id,
+                    "measured": gate.measured,
+                    "error": gate.error,
+                }
+                for gate in matched
+            ],
+        }
+        expected = {
+            "all_gates": "passed or skipped",
+            "gates": [
+                {"gate": gate.gate, "order_item_id": gate.order_item_id, "expected": gate.expected}
+                for gate in matched
+            ],
+        }
+    blocked_or_failed = status in {"failed", "blocked"}
+    return {
+        "key": key,
+        "label": label,
+        "purpose": purpose,
+        "status": status,
+        "detail": (
+            f"{passed_count}/{len(matched)} check(s) passed."
+            if not blocked_or_failed
+            else first_error or f"{len(failed)} check(s) failed."
+        ),
+        "expected": expected,
+        "measured": measured,
+        "error": first_error,
+        "next_action": next_action if status != "passed" else None,
+        "timestamp": timestamp or max((gate.created_at for gate in matched), default=None),
+    }
 
 
 def _aggregate_status(statuses) -> str:
-    values = list(statuses)
-    if not values:
-        return "pending"
-    if any(status == "failed" for status in values):
-        return "failed"
-    if all(status == "passed" for status in values):
-        return "passed"
-    return "pending"
+    return aggregate_gate_status(statuses)
 
 
 def _float_or_none(value) -> float | None:
@@ -478,6 +757,14 @@ def _serialize_job(job: ProdigiFulfillmentJobOrm) -> dict:
         "prodigi_order_id": job.prodigi_order_id,
         "attempt_count": job.attempt_count,
         "payload_hash": job.payload_hash,
+        "status_stage": job.status_stage,
+        "status_details": job.status_details,
+        "issues": job.issues,
+        "submitted_at": job.submitted_at,
+        "submission_revision": job.submission_revision,
+        "request_payload": job.request_payload,
+        "response_payload": job.response_payload,
+        "latest_status_payload": job.latest_status_payload,
         "last_error": job.last_error,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
