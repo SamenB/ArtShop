@@ -172,13 +172,13 @@ class Settings(BaseSettings):
     # In production, this should be https://your-domain.com
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
-    # Public storage for rendered print-order assets that Prodigi must download.
-    # Local keeps the historical /static behavior for development diagnostics;
-    # s3_compatible supports S3, Cloudflare R2, MinIO, and similar APIs.
+    # Public storage for rendered print-order assets sent to Prodigi.
+    # "local" keeps existing /static behavior; "s3_compatible" uploads only
+    # Prodigi fulfillment PNGs to S3/R2-compatible object storage.
     PRINT_ASSET_STORAGE_BACKEND: Literal["local", "s3_compatible"] = "local"
     PRINT_ASSET_BUCKET: str | None = None
     PRINT_ASSET_ENDPOINT_URL: str | None = None
-    PRINT_ASSET_REGION: str | None = None
+    PRINT_ASSET_REGION: str = "eu-north-1"
     PRINT_ASSET_ACCESS_KEY_ID: str | None = None
     PRINT_ASSET_SECRET_ACCESS_KEY: str | None = None
     PRINT_ASSET_PUBLIC_BASE_URL: str | None = None
@@ -204,6 +204,7 @@ class Settings(BaseSettings):
     PRODIGI_CURATED_CSV_PATH: str = (
         "src/integrations/prodigi/data/prodigi_storefront_source.csv"
     )
+    PRODIGI_STOREFRONT_BAKE_RETENTION: int = 2
 
     # CORS Policy Configuration
     # Whitelist of allowed origins for browser-based requests.

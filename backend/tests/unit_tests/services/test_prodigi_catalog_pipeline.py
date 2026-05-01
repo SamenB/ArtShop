@@ -16,6 +16,9 @@ from src.integrations.prodigi.catalog_pipeline.parser import (
 )
 from src.integrations.prodigi.catalog_pipeline.planner import ProdigiCatalogSnapshotPlanner
 from src.integrations.prodigi.catalog_pipeline.raw_source import ProdigiRawCsvSource
+from src.integrations.prodigi.catalog_pipeline.retention import (
+    ProdigiStorefrontBakeRetentionService,
+)
 from src.integrations.prodigi.catalog_pipeline.source import (
     ProdigiCsvSource,
     resolve_prodigi_csv_root,
@@ -48,6 +51,33 @@ def _rolled_paper_row(**overrides: str) -> dict[str, str]:
         "Product price": "12.50",
         "Product currency": "EUR",
         "Shipping price": "4.50",
+        "Shipping currency": "EUR",
+        "Minimum shipping (days)": "4",
+        "Maximum shipping (days)": "8",
+    }
+    row.update(overrides)
+    return row
+
+
+def _stretched_canvas_row(**overrides: str) -> dict[str, str]:
+    row = {
+        "SKU": "CAN-38MM-SC-16x20",
+        "Category": "Canvas",
+        "Product type": "Stretched Canvas",
+        "Product description": "38mm Stretched Canvas Standard Canvas",
+        "Size (cm)": "40x50",
+        "Size (inches)": "16x20",
+        "Paper type": "Standard Canvas",
+        "Wrap": "MirrorWrap",
+        "Source country": "GB",
+        "Destination country": "DE",
+        "Destination Country Name": "Germany",
+        "Shipping method": "Standard",
+        "ServiceName": "Standard",
+        "ServiceLevel": "STANDARD",
+        "Product price": "20.00",
+        "Product currency": "EUR",
+        "Shipping price": "8.00",
         "Shipping currency": "EUR",
         "Minimum shipping (days)": "4",
         "Maximum shipping (days)": "8",
@@ -221,6 +251,48 @@ def test_curator_writes_deterministic_deduped_source(tmp_path, monkeypatch) -> N
     assert output.read_bytes() == second
 
 
+def test_curator_keeps_only_production_canvas_wrap_variant(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    _write_csv(
+        raw_root / "catalog.csv",
+        [
+            _stretched_canvas_row(Wrap="MirrorWrap"),
+            _stretched_canvas_row(Wrap="Black"),
+            _stretched_canvas_row(Wrap="MirrorWrap"),
+        ],
+    )
+    output = tmp_path / "prodigi_storefront_source.csv"
+    monkeypatch.setattr(
+        ProdigiCuratedCsvBuilder,
+        "_all_category_defs",
+        lambda self: [
+            {
+                "id": "canvasStretched",
+                "medium": "canvas",
+                "material": "standard_canvas",
+                "presentation_values": ("stretched",),
+                "frame_type_values": ("stretched_canvas",),
+                "recommended_defaults": {"wrap": "MirrorWrap"},
+            }
+        ],
+    )
+
+    result = ProdigiCuratedCsvBuilder(raw_csv_root=raw_root, output_path=output).build()
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert result.raw_rows_seen == 3
+    assert result.parsed_rows_seen == 2
+    assert result.curated_rows_written == 1
+    assert result.duplicate_route_rows == 1
+    assert rows[0]["wrap"] == "MirrorWrap"
+    assert rows[0]["category_id"] == "canvasStretched"
+
+
 def test_curator_size_guard_removes_temp_file(tmp_path, monkeypatch) -> None:
     raw_root = tmp_path / "raw"
     raw_root.mkdir()
@@ -249,3 +321,15 @@ def test_backward_compatible_csv_source_still_streams_raw_rows(tmp_path) -> None
     source = ProdigiCsvSource(csv_root=csv_root)
 
     assert source.describe().rows_seen == 1
+
+
+def test_bake_retention_keeps_active_and_two_latest_inactive() -> None:
+    decision = ProdigiStorefrontBakeRetentionService.decide(
+        active_bake_id=12,
+        inactive_bake_ids=[11, 10, 9, 8],
+        keep_inactive=2,
+    )
+
+    assert decision.active_bake_id == 12
+    assert decision.kept_inactive_bake_ids == [11, 10]
+    assert decision.deleted_bake_ids == [9, 8]

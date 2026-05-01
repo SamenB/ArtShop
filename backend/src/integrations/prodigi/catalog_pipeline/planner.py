@@ -24,6 +24,7 @@ class ProdigiCatalogSnapshotPlan:
     matched_row_count: int
     files_seen: int
     rows_seen: int
+    preview_rows: list[dict[str, Any]] | None = None
 
 
 class ProdigiCatalogSnapshotPlanner:
@@ -51,8 +52,14 @@ class ProdigiCatalogSnapshotPlanner:
         self.fulfillment_policy = fulfillment_policy
         self.shipping_policy = shipping_policy
         self.parser = parser or ProdigiCsvRowParser()
+        self._category_ids = {category["id"] for category in category_defs}
 
-    def build_plan(self, source: ProdigiCsvSource) -> ProdigiCatalogSnapshotPlan:
+    def build_plan(
+        self,
+        source: ProdigiCsvSource,
+        *,
+        collect_preview_rows: bool = False,
+    ) -> ProdigiCatalogSnapshotPlan:
         ratio_category_size_stats: dict[str, Any] = defaultdict(
             lambda: defaultdict(lambda: defaultdict(lambda: {"rows": 0, "countries": set()}))
         )
@@ -83,6 +90,7 @@ class ProdigiCatalogSnapshotPlanner:
         matched_row_count = 0
         files_seen = len(source.discover_csv_files())
         rows_seen = 0
+        preview_rows: list[dict[str, Any]] | None = [] if collect_preview_rows else None
 
         for record in source.iter_records():
             rows_seen += 1
@@ -101,7 +109,7 @@ class ProdigiCatalogSnapshotPlanner:
             if ratio is None or dims is None:
                 continue
 
-            category_id = self.match_category_id(parsed)
+            category_id = self.resolve_category_id(parsed)
             if category_id is None:
                 continue
 
@@ -116,6 +124,8 @@ class ProdigiCatalogSnapshotPlanner:
 
             kept_by_category[category_id] += 1
             matched_row_count += 1
+            if preview_rows is not None:
+                preview_rows.append(dict(parsed))
             ratio_category_size_stats[ratio][category_id][dims]["rows"] += 1
             ratio_category_size_stats[ratio][category_id][dims]["countries"].add(
                 destination_country
@@ -177,7 +187,14 @@ class ProdigiCatalogSnapshotPlanner:
             matched_row_count=matched_row_count,
             files_seen=files_seen,
             rows_seen=rows_seen,
+            preview_rows=preview_rows,
         )
+
+    def resolve_category_id(self, parsed: dict[str, Any]) -> str | None:
+        curated_category_id = parsed.get("category_id")
+        if curated_category_id in self._category_ids:
+            return curated_category_id
+        return self.match_category_id(parsed)
 
     def match_category_id(self, parsed: dict[str, Any]) -> str | None:
         sku = (parsed.get("sku") or "").upper()
@@ -250,10 +267,20 @@ class ProdigiCatalogSnapshotPlanner:
         offers_by_slot: dict[str, Any],
         canvas_wraps_by_slot: dict[str, Any],
     ) -> None:
-        required_wraps = set(CANVAS_WRAP_OPTIONS)
+        all_required_wraps = set(CANVAS_WRAP_OPTIONS)
+        required_wraps_by_category = {
+            category["id"]: {category["recommended_defaults"]["wrap"]}
+            for category in self.category_defs
+            if category["id"] in WRAPPED_CANVAS_CATEGORIES
+            and (category.get("recommended_defaults") or {}).get("wrap")
+        }
         for ratio, country_map in canvas_wraps_by_slot.items():
             for country_code, category_map in country_map.items():
                 for category_id, size_map in category_map.items():
+                    required_wraps = required_wraps_by_category.get(
+                        category_id,
+                        all_required_wraps,
+                    )
                     blocked_labels = {
                         size_label
                         for size_label, wraps in size_map.items()

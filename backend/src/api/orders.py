@@ -479,15 +479,15 @@ def _build_prodigi_flow_summary(
             key="asset_public_url",
             label="Asset public URL",
             purpose="Ensures Prodigi can download the rendered PNG through a public HTTPS URL.",
-            gate_names=["public_asset_url_ready"],
+            gate_names=["public_asset_url_ready", "public_asset_download_verified"],
             gates=gates,
             fallback_status="pending",
             fallback_detail="Run Refresh to verify the public asset URL and md5 hash.",
             fallback_measured=None,
             fallback_expected={"external_https": True, "md5": "present"},
             next_action=(
-                "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible with a public HTTPS "
-                "asset base URL, or run from public HTTPS staging/production."
+                "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible and a public "
+                "PRINT_ASSET_PUBLIC_BASE_URL, then run Refresh again."
             ),
         ),
         _flow_step_from_gates(

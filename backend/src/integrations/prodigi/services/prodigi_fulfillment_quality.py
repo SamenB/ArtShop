@@ -10,11 +10,14 @@ from PIL import Image
 
 from src.config import settings
 from src.integrations.prodigi.connectors.client import ProdigiClient
-from src.integrations.prodigi.fulfillment.assets import ProdigiFulfillmentAssetStorage
+from src.integrations.prodigi.fulfillment.asset_download import verify_public_asset_download
+from src.integrations.prodigi.fulfillment.assets import (
+    AssetPublicationError,
+    ProdigiFulfillmentAssetPublisher,
+)
 from src.integrations.prodigi.fulfillment.contract import (
     canonical_shipping_method,
     file_md5,
-    public_asset_url,
 )
 from src.integrations.prodigi.fulfillment.gates import FAILED, PASSED, SKIPPED
 from src.integrations.prodigi.services.prodigi_order_assets import ProdigiOrderAssetService
@@ -59,7 +62,7 @@ class ProdigiFulfillmentQualityService:
     def __init__(self, db_session):
         self.db_session = db_session
         self.asset_service = ProdigiOrderAssetService(db_session)
-        self.asset_storage = ProdigiFulfillmentAssetStorage()
+        self.asset_publisher = ProdigiFulfillmentAssetPublisher()
 
     async def prepare_item(
         self,
@@ -293,35 +296,53 @@ class ProdigiFulfillmentQualityService:
             )
         )
 
-        publication = self.asset_storage.publish_rendered_asset(
-            order_id=int(order.id),
-            order_item_id=int(item.id),
-            rendered=rendered,
-            md5_hash=md5_hash,
-        )
-        if publication.url:
-            rendered["public_asset_url"] = publication.url
-        if publication.key:
-            rendered["storage_key"] = publication.key
-        if publication.backend:
-            rendered["storage_backend"] = publication.backend
+        try:
+            published = await self.asset_publisher.publish_rendered_asset(
+                order_id=int(order.id),
+                order_item_id=int(item.id),
+                rendered=rendered,
+                md5_hash=md5_hash,
+            )
+        except AssetPublicationError as exc:
+            gates.append(
+                FulfillmentGateResult(
+                    gate="public_asset_url_ready",
+                    status=FAILED,
+                    measured={
+                        "storage_backend": self.asset_publisher.backend,
+                        "file_path": rendered.get("file_path"),
+                        "error": str(exc),
+                    },
+                    expected={
+                        "storage_backend": "s3_compatible or public local static host",
+                        "downloadable_url": True,
+                        "external_https": True,
+                    },
+                    error=str(exc),
+                )
+            )
+            await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
+            return None
 
-        asset_url = publication.url or self._public_asset_url(rendered.get("file_url"))
+        asset_url = published.public_url
+        if asset_url:
+            rendered["public_asset_url"] = asset_url
+        rendered["asset_storage_backend"] = published.backend
+        if published.storage_key:
+            rendered["asset_storage_key"] = published.storage_key
+        if published.bucket:
+            rendered["asset_storage_bucket"] = published.bucket
         external_https = self._is_external_https(asset_url)
-        public_url_error = self._public_asset_url_error(publication, asset_url, external_https)
+        public_url_error = self._public_asset_url_error(asset_url, external_https)
         gates.append(
             FulfillmentGateResult(
                 gate="public_asset_url_ready",
-                status=PASSED if external_https and publication.error is None else FAILED,
+                status=PASSED if external_https else FAILED,
                 measured={
                     "asset_url": asset_url,
-                    "storage_backend": publication.backend,
-                    "storage_key": publication.key,
-                    "storage_bucket": publication.bucket,
-                    "storage_uploaded": publication.uploaded,
-                    "storage_error": publication.error,
-                    "missing_storage_settings": publication.missing_settings,
-                    "storage_metadata": publication.metadata,
+                    "storage_backend": published.backend,
+                    "storage_key": published.storage_key,
+                    "bucket": published.bucket,
                     "public_base_url": settings.PUBLIC_BASE_URL,
                     "print_asset_public_base_url": settings.PRINT_ASSET_PUBLIC_BASE_URL,
                     "external_https": external_https,
@@ -330,7 +351,25 @@ class ProdigiFulfillmentQualityService:
                 error=public_url_error,
             )
         )
-        if not asset_url or not external_https or publication.error is not None:
+        if not asset_url or not external_https:
+            await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
+            return None
+
+        download_check = await verify_public_asset_download(asset_url, expected_md5=md5_hash)
+        gates.append(
+            FulfillmentGateResult(
+                gate="public_asset_download_verified",
+                status=PASSED if download_check["passed"] else FAILED,
+                measured=download_check["measured"],
+                expected={
+                    "http_status": "2xx",
+                    "downloaded_bytes": ">0",
+                    "md5_hash": md5_hash,
+                },
+                error=download_check["error"],
+            )
+        )
+        if not download_check["passed"]:
             await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
             return None
 
@@ -523,9 +562,6 @@ class ProdigiFulfillmentQualityService:
             error=None if passed else "Prodigi quote response did not include an accepted quote.",
         )
 
-    def _public_asset_url(self, file_url: str | None) -> str | None:
-        return public_asset_url(file_url)
-
     def _read_image_size(self, file_path: str | None) -> list[int] | None:
         if not file_path:
             return None
@@ -569,22 +605,17 @@ class ProdigiFulfillmentQualityService:
 
     def _public_asset_url_error(
         self,
-        publication: Any,
         asset_url: str | None,
         external_https: bool,
     ) -> str | None:
-        if publication.error:
-            return publication.error
         if not asset_url:
             return "Prodigi requires a public HTTPS asset URL before order creation."
-        if not external_https and publication.backend == "local":
+        if not external_https:
             return (
                 "Prodigi requires a public HTTPS asset URL before order creation. "
-                "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible with a public bucket, "
-                "or run this from a public HTTPS staging/production host."
+                "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible with a public "
+                "PRINT_ASSET_PUBLIC_BASE_URL, or use a production HTTPS static host."
             )
-        if not external_https:
-            return "Published fulfillment asset URL is not an external HTTPS URL."
         return None
 
     def _json_safe(self, payload: Any) -> Any:

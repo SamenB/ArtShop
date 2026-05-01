@@ -4,13 +4,16 @@ from sqlalchemy import func, select
 from src.api.dependencies import AdminDep, DBDep
 from src.config import settings
 from src.integrations.prodigi.api.print_options import MARKUP
+from src.integrations.prodigi.catalog_pipeline.pipeline import ProdigiCatalogPipeline
 from src.integrations.prodigi.connectors.client import ProdigiClient
 from src.integrations.prodigi.repositories.prodigi_storefront import ProdigiStorefrontRepository
 from src.integrations.prodigi.services.prodigi_artwork_storefront_materializer import (
     ProdigiArtworkStorefrontMaterializerService,
 )
 from src.integrations.prodigi.services.prodigi_catalog import ProdigiCatalogService
-from src.integrations.prodigi.services.prodigi_catalog_preview import ProdigiCatalogPreviewService
+from src.integrations.prodigi.services.prodigi_csv_storefront_rebuild import (
+    ProdigiCsvStorefrontRebuildService,
+)
 from src.integrations.prodigi.services.prodigi_fulfillment_retry import (
     ProdigiFulfillmentRetryService,
 )
@@ -26,7 +29,6 @@ from src.integrations.prodigi.services.prodigi_runtime_cache import (
 from src.integrations.prodigi.services.prodigi_runtime_cache import (
     clear_artwork_print_storefront_cache,
 )
-from src.integrations.prodigi.services.prodigi_storefront_bake import ProdigiStorefrontBakeService
 from src.integrations.prodigi.services.prodigi_storefront_settings import (
     ProdigiStorefrontSettingsService,
 )
@@ -107,7 +109,7 @@ async def rebuild_storefront_snapshot(admin_id: AdminDep, db: DBDep):
     try:
         config = await ProdigiStorefrontSettingsService(db).get_effective_config()
         snapshot_defaults = config["snapshot_defaults"]
-        bake_result = await ProdigiStorefrontBakeService(db).bake_storefront(
+        rebuild_result = await ProdigiCsvStorefrontRebuildService(db).rebuild(
             selected_paper_material=snapshot_defaults["paper_material"],
             include_notice_level=snapshot_defaults["include_notice_level"],
         )
@@ -115,7 +117,16 @@ async def rebuild_storefront_snapshot(admin_id: AdminDep, db: DBDep):
         settings_payload = await ProdigiStorefrontSettingsService(db).build_admin_payload()
         return {
             "status": "rebuilt_snapshot_and_payload",
-            "bake": bake_result,
+            "bake": rebuild_result.get("bake"),
+            "csv_source": rebuild_result.get("csv_source"),
+            "streamed_rows_matched": rebuild_result.get("streamed_rows_matched"),
+            "artwork_storefront_materialization": rebuild_result.get(
+                "artwork_storefront_materialization"
+            ),
+            "retention": rebuild_result.get("retention"),
+            "selected_country_storefront_preview": rebuild_result.get(
+                "selected_country_storefront_preview"
+            ),
             "cache_clear": cache_clear,
             "settings": settings_payload,
         }
@@ -393,31 +404,20 @@ async def get_catalog_preview(
 ):
     """
     Curated preview of the future ArtShop print catalog.
-    Reads from imported Prodigi SQL tables and shows what the baked storefront
-    database would expose after our business filters are applied.
+    Reads the committed curated Prodigi CSV source and shows what the baked
+    storefront database would expose after our business filters are applied.
     """
     try:
-        preview_service = ProdigiCatalogPreviewService(db)
-        preview = await preview_service.get_preview(
-            selected_ratio=aspect_ratio,
-            selected_country=country,
-            selected_paper_material=paper_material,
-        )
-        bake_service = ProdigiStorefrontBakeService(db)
-        await bake_service.load_storefront_settings()
         effective_include_notice = include_notice_level
         if effective_include_notice is None:
             settings_config = await ProdigiStorefrontSettingsService(db).get_effective_config()
             effective_include_notice = settings_config["snapshot_defaults"]["include_notice_level"]
-        storefront_preview = bake_service.build_storefront_country_preview(
-            preview_payload=preview,
+        return await ProdigiCatalogPipeline(db).preview(
+            selected_ratio=aspect_ratio,
+            selected_country=country,
+            selected_paper_material=paper_material,
             include_notice_level=effective_include_notice,
         )
-        preview["storefront_mode"] = (
-            "include_notice_level" if effective_include_notice else "primary_only"
-        )
-        preview["selected_country_storefront_preview"] = storefront_preview
-        return preview
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -438,12 +438,19 @@ async def create_catalog_database_preview(
     Materialize the curated preview into dedicated storefront bake tables.
     """
     try:
-        return await ProdigiStorefrontBakeService(db).bake_storefront(
+        settings_config = await ProdigiStorefrontSettingsService(db).get_effective_config()
+        effective_include_notice = include_notice_level
+        if effective_include_notice is None:
+            effective_include_notice = settings_config["snapshot_defaults"]["include_notice_level"]
+        result = await ProdigiCsvStorefrontRebuildService(db).rebuild(
             selected_ratio=aspect_ratio,
             selected_country=country,
             selected_paper_material=paper_material,
-            include_notice_level=include_notice_level,
+            include_notice_level=effective_include_notice,
         )
+        cache_clear = await _clear_artwork_print_storefront_cache()
+        result["cache_clear"] = cache_clear
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -349,13 +349,10 @@ def curated_row_from_parsed(
     for field in CURATED_CSV_FIELDNAMES:
         if field == CURATED_VERSION_FIELD:
             row[field] = CURATED_VERSION
+        elif field in {"category", "product_type", "product_description"}:
+            row[field] = ""
         elif field == "raw_attributes_json":
-            row[field] = json.dumps(
-                parsed.get("raw_attributes") or {},
-                sort_keys=True,
-                ensure_ascii=True,
-                separators=(",", ":"),
-            )
+            row[field] = ""
         elif field == "category_id":
             row[field] = category_id or parsed.get("category_id") or ""
         elif field == "is_relevant_for_artshop":
@@ -377,6 +374,24 @@ def parse_curated_prodigi_csv_row(row: dict[str, Any]) -> dict[str, Any] | None:
         raw_attributes = {}
     if not isinstance(raw_attributes, dict):
         raw_attributes = {}
+    if not raw_attributes:
+        raw_attributes = {
+            key: value
+            for key in (
+                "finish",
+                "color",
+                "frame",
+                "style",
+                "glaze",
+                "mount",
+                "mount_color",
+                "paper_type",
+                "substrate_weight",
+                "wrap",
+                "edge",
+            )
+            if (value := _clean(row.get(key))) is not None
+        }
     return {
         "sku": sku,
         "category": _clean(row.get("category")),

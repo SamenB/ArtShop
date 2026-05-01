@@ -13,6 +13,12 @@ from sqlalchemy.orm import selectinload
 from src.config import settings
 from src.database import new_session_null_pool
 from src.integrations.prodigi.connectors.client import ProdigiClient
+from src.integrations.prodigi.fulfillment.asset_download import verify_public_asset_download
+from src.integrations.prodigi.fulfillment.assets import (
+    AssetPublicationError,
+    ProdigiFulfillmentAssetPublisher,
+)
+from src.integrations.prodigi.fulfillment.contract import file_md5
 from src.integrations.prodigi.services.prodigi_attributes import normalize_prodigi_attributes
 from src.integrations.prodigi.services.prodigi_order_assets import ProdigiOrderAssetService
 from src.integrations.prodigi.services.prodigi_orders import ProdigiOrderService
@@ -392,17 +398,6 @@ async def _run_sandbox_order_smoke(
         ]
     if not settings.PRODIGI_API_KEY:
         return [{"status": "failed", "reason": "PRODIGI_API_KEY is not configured."}]
-    if not _is_public_http_url(settings.PUBLIC_BASE_URL):
-        return [
-            {
-                "status": "failed",
-                "reason": (
-                    "PUBLIC_BASE_URL must be a public http(s) URL so Prodigi can download "
-                    "the rendered print asset."
-                ),
-                "current_public_base_url": settings.PUBLIC_BASE_URL,
-            }
-        ]
     if artwork is None or sample is None:
         return [
             {
@@ -425,7 +420,64 @@ async def _run_sandbox_order_smoke(
     if not rendered:
         return [{"status": "failed", "reason": "Could not render order asset from master."}]
 
-    asset_url = ProdigiOrderService._public_asset_url(rendered["file_url"])
+    publisher = ProdigiFulfillmentAssetPublisher()
+    md5_hash = file_md5(rendered.get("file_path"))
+    try:
+        published = await publisher.publish_rendered_asset(
+            order_id=0,
+            order_item_id=1,
+            rendered=rendered,
+            md5_hash=md5_hash,
+        )
+    except AssetPublicationError as exc:
+        return [
+            {
+                "status": "failed",
+                "stage": "asset_publication",
+                "storage_backend": publisher.backend,
+                "error": str(exc),
+                "next_action": (
+                    "Configure PRINT_ASSET_STORAGE_BACKEND=s3_compatible and the "
+                    "PRINT_ASSET_* S3 settings, then rerun the sandbox smoke."
+                ),
+            }
+        ]
+
+    asset_url = published.public_url
+    if not _is_public_http_url(asset_url):
+        return [
+            {
+                "status": "failed",
+                "stage": "public_asset_url",
+                "storage_backend": published.backend,
+                "asset_url": asset_url,
+                "current_public_base_url": settings.PUBLIC_BASE_URL,
+                "print_asset_public_base_url": settings.PRINT_ASSET_PUBLIC_BASE_URL,
+                "next_action": (
+                    "Use PRINT_ASSET_STORAGE_BACKEND=s3_compatible with a public HTTPS "
+                    "PRINT_ASSET_PUBLIC_BASE_URL before creating a sandbox order."
+                ),
+            }
+        ]
+    download_check = await verify_public_asset_download(
+        asset_url,
+        expected_md5=md5_hash,
+    )
+    if not download_check["passed"]:
+        return [
+            {
+                "status": "failed",
+                "stage": "public_asset_download",
+                "asset_url": asset_url,
+                "measured": download_check["measured"],
+                "error": download_check["error"],
+                "next_action": (
+                    "Make the S3 object publicly readable under PRINT_ASSET_PUBLIC_BASE_URL, "
+                    "then rerun the sandbox smoke."
+                ),
+            }
+        ]
+
     fake_order = _build_fake_order(country=sample["country"])
     fake_item = _build_fake_item(sample)
     payload = ProdigiOrderService.build_order_payload(
@@ -463,8 +515,13 @@ async def _run_sandbox_order_smoke(
             "payload_sent": _redact_payload(payload),
             "rendered_asset": {
                 "file_url": rendered.get("file_url"),
+                "asset_url": asset_url,
+                "storage_backend": published.backend,
+                "storage_key": published.storage_key,
+                "bucket": published.bucket,
                 "width_px": rendered.get("width_px"),
                 "height_px": rendered.get("height_px"),
+                "download_check": download_check["measured"],
                 "print_area_name": rendered.get("print_area_name"),
                 "print_area_source": rendered.get("print_area_source"),
                 "prodigi_verified": rendered.get("prodigi_verified"),

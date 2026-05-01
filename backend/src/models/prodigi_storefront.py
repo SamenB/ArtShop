@@ -57,6 +57,11 @@ class ProdigiStorefrontBakeOrm(Base):
     country_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     offer_group_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     offer_size_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    source_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    pipeline_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    policy_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

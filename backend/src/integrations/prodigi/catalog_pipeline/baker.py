@@ -44,6 +44,7 @@ class ProdigiCatalogSnapshotBaker:
         include_notice_level: bool,
         selected_ratio: str | None,
         selected_country: str | None,
+        source_payload: dict[str, Any],
     ) -> dict[str, Any]:
         policy_summary = self.storefront_policy.build_policy_summary(
             kept_by_category=dict(plan.kept_by_category),
@@ -55,10 +56,15 @@ class ProdigiCatalogSnapshotBaker:
                 bake_key=self._build_bake_key(paper_material, include_notice_level),
                 paper_material=paper_material,
                 include_notice_level=include_notice_level,
+                source_sha256=source_payload.get("sha256"),
+                source_row_count=source_payload.get("rows_seen"),
+                source_size_bytes=source_payload.get("size_bytes"),
+                pipeline_version=source_payload.get("pipeline_version"),
+                policy_version=source_payload.get("policy_version"),
                 status="ready",
                 note=(
-                    "Materialized directly from local Prodigi CSV files after category, "
-                    "policy, ratio, and provider-pixel validation were applied."
+                    "Materialized from the committed curated Prodigi CSV source after "
+                    "category, policy, ratio, and provider-pixel validation were applied."
                 ),
             )
             self.db.session.add(bake)

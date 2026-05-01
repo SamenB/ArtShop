@@ -21,8 +21,8 @@ from src.integrations.prodigi.services.prodigi_business_policy import (
     ProdigiBusinessPolicyService,
 )
 from src.integrations.prodigi.services.prodigi_catalog_preview import (
+    DEFAULT_PAPER_MATERIAL,
     DEFAULT_RATIO_PRESETS,
-    PAPER_MATERIAL_OPTIONS,
     ProdigiCatalogPreviewService,
 )
 from src.integrations.prodigi.services.prodigi_fulfillment_policy import (
@@ -33,6 +33,7 @@ from src.integrations.prodigi.services.prodigi_storefront_policy import (
     ProdigiStorefrontPolicyService,
 )
 from src.integrations.prodigi.services.sizing.selector import ProdigiSizeSelectorService
+from src.services.artwork_print_profiles import WRAPPED_CANVAS_CATEGORIES
 
 DEFAULT_MAX_CURATED_CSV_BYTES = 80 * 1024 * 1024
 
@@ -93,8 +94,8 @@ class ProdigiCuratedCsvBuilder:
         max_size_bytes: int = DEFAULT_MAX_CURATED_CSV_BYTES,
         allow_large: bool = False,
     ) -> ProdigiCuratedCsvBuildResult:
-        selected_rows_by_offer_key: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
-        selected_ranks_by_offer_key: dict[tuple[str, str, str, str, str], tuple[Any, ...]] = {}
+        selected_rows_by_offer_key: dict[tuple[str, str, str, str, str, str], dict[str, Any]] = {}
+        selected_ranks_by_offer_key: dict[tuple[str, str, str, str, str, str], tuple[Any, ...]] = {}
         raw_files_seen = 0
         raw_rows_seen = 0
         parsed_rows_seen = 0
@@ -141,13 +142,20 @@ class ProdigiCuratedCsvBuilder:
             shortlisted_rows_seen += 1
             destination_country = (parsed.get("destination_country") or "").upper()
             offer = self.planner.build_offer(parsed)
+            offer_rank = self.shipping_policy._offer_rank(offer, destination_country)
+            curated_row = curated_row_from_parsed(parsed, category_id=category_id)
             tier = self.shipping_policy.normalize_tier(
                 offer.get("shipping_method"),
                 offer.get("service_level"),
             )
-            offer_key = (ratio, category_id, dims.label, destination_country, tier)
-            offer_rank = self.shipping_policy._offer_rank(offer, destination_country)
-            curated_row = curated_row_from_parsed(parsed, category_id=category_id)
+            offer_key = self._build_curated_offer_key(
+                parsed=parsed,
+                category_id=category_id,
+                ratio=ratio,
+                dims_label=dims.label,
+                destination_country=destination_country,
+                tier=tier,
+            )
             existing_rank = selected_ranks_by_offer_key.get(offer_key)
             if existing_rank is not None:
                 duplicate_route_rows += 1
@@ -201,13 +209,12 @@ class ProdigiCuratedCsvBuilder:
     def _all_category_defs(self) -> list[dict[str, Any]]:
         categories: list[dict[str, Any]] = []
         seen: set[tuple[str, str | None]] = set()
-        for material in PAPER_MATERIAL_OPTIONS:
-            for category in self.preview_service.get_category_defs(material["id"]):
-                key = (category["id"], category.get("material"))
-                if key in seen:
-                    continue
-                seen.add(key)
-                categories.append(category)
+        for category in self.preview_service.get_category_defs(DEFAULT_PAPER_MATERIAL):
+            key = (category["id"], category.get("material"))
+            if key in seen:
+                continue
+            seen.add(key)
+            categories.append(category)
         return categories
 
     def _stable_row_key(self, row: dict[str, Any]) -> str:
@@ -225,6 +232,8 @@ class ProdigiCuratedCsvBuilder:
         if category_id is None:
             return None
         parsed["category_id"] = category_id
+        if not self._is_production_variant(parsed, category_id):
+            return None
         if not self.storefront_policy._matches_policy(category_id, parsed):
             return None
         if parsed.get("product_price") is None or parsed.get("shipping_price") is None:
@@ -244,6 +253,42 @@ class ProdigiCuratedCsvBuilder:
         if ratio is None or dims is None:
             return None
         return parsed, category_id, ratio, dims
+
+    def _is_production_variant(self, parsed: dict[str, Any], category_id: str) -> bool:
+        if parsed.get("normalized_medium") == "paper":
+            return parsed.get("normalized_material") == DEFAULT_PAPER_MATERIAL
+        if category_id in WRAPPED_CANVAS_CATEGORIES:
+            required_wrap = self._required_wrap_for_category(category_id)
+            if required_wrap is None:
+                return True
+            return self.storefront_policy._normalize_value(parsed.get("wrap")) == (
+                self.storefront_policy._normalize_value(required_wrap)
+            )
+        return True
+
+    def _required_wrap_for_category(self, category_id: str) -> str | None:
+        for category in self.category_defs:
+            if category["id"] == category_id:
+                return (category.get("recommended_defaults") or {}).get("wrap")
+        return None
+
+    def _build_curated_offer_key(
+        self,
+        *,
+        parsed: dict[str, Any],
+        category_id: str,
+        ratio: str,
+        dims_label: str,
+        destination_country: str,
+        tier: str,
+    ) -> tuple[str, str, str, str, str, str]:
+        if parsed.get("normalized_medium") == "paper":
+            variant_scope = str(parsed.get("normalized_material") or "")
+        elif category_id in WRAPPED_CANVAS_CATEGORIES:
+            variant_scope = str(parsed.get("wrap") or "")
+        else:
+            variant_scope = "base"
+        return (ratio, category_id, dims_label, destination_country, tier, variant_scope)
 
     def _build_allowed_size_labels(self, size_plan: dict[str, Any]) -> dict[tuple[str, str], set[str]]:
         allowed: dict[tuple[str, str], set[str]] = defaultdict(set)

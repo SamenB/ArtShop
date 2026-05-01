@@ -5,7 +5,6 @@ from typing import Any
 
 from sqlalchemy import text
 
-from src.integrations.prodigi.repositories.prodigi_catalog import ProdigiCatalogRepository
 from src.integrations.prodigi.services.prodigi_fulfillment_policy import (
     ProdigiFulfillmentPolicyService,
 )
@@ -187,14 +186,13 @@ class ProdigiCatalogPreviewService:
     Orchestrates admin preview payloads for curated Prodigi catalog data.
 
     Responsibilities:
-    - load curated route rows through the repository layer,
+    - expose preview helper methods for the curated CSV pipeline,
     - apply ratio-aware shortlist selection through the sizing service,
     - assemble a dense admin-facing preview payload.
     """
 
     def __init__(self, db: DBManager):
         self.db = db
-        self.catalog_repository = ProdigiCatalogRepository(db.session)
         self.storefront_policy = ProdigiStorefrontPolicyService()
         self.storefront_settings = ProdigiStorefrontSettingsService(db)
         self.fulfillment_policy = ProdigiFulfillmentPolicyService()
@@ -209,38 +207,11 @@ class ProdigiCatalogPreviewService:
         self,
         selected_paper_material: str | None = None,
     ) -> dict[str, Any]:
-        await self.load_storefront_settings()
-        selected_paper_material = self._normalize_paper_material(selected_paper_material)
-        category_defs = self.get_category_defs(selected_paper_material)
-        ratio_presets = await self._get_ratio_presets()
-        if not ratio_presets:
-            ratio_presets = list(DEFAULT_RATIO_PRESETS)
+        from src.integrations.prodigi.catalog_pipeline.pipeline import ProdigiCatalogPipeline
 
-        selector = ProdigiSizeSelectorService(
-            ratio_labels=[item["label"] for item in ratio_presets]
+        return await ProdigiCatalogPipeline(self.db).build_dataset(
+            selected_paper_material=selected_paper_material
         )
-        curated_rows = await self.catalog_repository.get_curated_rows(category_defs)
-        policy_result = self.storefront_policy.apply(curated_rows)
-        rows = policy_result["rows"]
-        size_plan = selector.build_size_plan(rows)
-        fulfillment_result = self.fulfillment_policy.build(rows, selector)
-        preview = self._build_preview(
-            rows=rows,
-            ratio_presets=ratio_presets,
-            category_defs=category_defs,
-            selector=selector,
-            size_plan=size_plan,
-            policy_summary=policy_result["policy_summary"],
-            fulfillment_summary=fulfillment_result["by_ratio"],
-        )
-
-        return {
-            "selected_paper_material": selected_paper_material,
-            "category_defs": category_defs,
-            "ratio_presets": ratio_presets,
-            "preview": preview,
-            "policy_filtered_out_routes": policy_result["removed_route_count"],
-        }
 
     async def get_preview(
         self,
@@ -248,29 +219,13 @@ class ProdigiCatalogPreviewService:
         selected_country: str | None = None,
         selected_paper_material: str | None = None,
     ) -> dict[str, Any]:
-        dataset = await self.get_catalog_dataset(selected_paper_material)
-        selection = self.resolve_selection(
-            preview=dataset["preview"],
-            ratio_presets=dataset["ratio_presets"],
-            category_defs=dataset["category_defs"],
+        from src.integrations.prodigi.catalog_pipeline.pipeline import ProdigiCatalogPipeline
+
+        return await ProdigiCatalogPipeline(self.db).preview(
             selected_ratio=selected_ratio,
             selected_country=selected_country,
+            selected_paper_material=selected_paper_material,
         )
-
-        return {
-            "selected_ratio": selection["selected_ratio"],
-            "selected_country": selection["selected_country"],
-            "selected_paper_material": dataset["selected_paper_material"],
-            "ratios": dataset["ratio_presets"],
-            "paper_materials": list(PAPER_MATERIAL_OPTIONS),
-            "categories": dataset["category_defs"],
-            "ratio_cards": dataset["preview"]["ratio_cards"],
-            "selected_ratio_preview": selection["selected_ratio_preview"],
-            "selected_country_preview": selection["selected_country_preview"],
-            "country_count": dataset["preview"]["country_count"],
-            "generated_from_curated_routes": dataset["preview"]["curated_route_count"],
-            "policy_filtered_out_routes": dataset["policy_filtered_out_routes"],
-        }
 
     async def request_bake(
         self,
@@ -817,6 +772,9 @@ class ProdigiCatalogPreviewService:
             for category in PAPER_CATEGORY_TEMPLATES
         ]
         return [*paper_categories, *CANVAS_CATEGORY_DEFS]
+
+    def get_paper_material_options(self) -> list[dict[str, Any]]:
+        return list(PAPER_MATERIAL_OPTIONS)
 
     def _to_float(self, value: Any) -> float:
         if value is None:

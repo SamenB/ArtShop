@@ -49,6 +49,50 @@ validation before opening fulfillment.
 Full operational steps are in
 [`docs/prodigi-production-runbook.md`](../../../../docs/prodigi-production-runbook.md).
 
+## Prodigi sandbox order smoke with S3 asset delivery
+
+Localhost can call Prodigi directly for Product Details and Quote checks, but
+Prodigi must download order artwork from a public URL. The preferred local and
+production path is:
+
+```text
+render PNG locally -> upload that PNG to S3 -> verify public HTTPS download + md5 -> POST sandbox order
+```
+
+Only rendered fulfillment PNGs use this storage path. Gallery images and master
+print files remain on the existing local/static paths until we intentionally
+migrate them.
+
+Configure the backend process:
+
+```powershell
+$env:PRODIGI_SANDBOX = "true"
+$env:PRODIGI_API_KEY = "<prodigi-sandbox-api-key>"
+$env:PRINT_ASSET_STORAGE_BACKEND = "s3_compatible"
+$env:PRINT_ASSET_BUCKET = "artshop-prodigi-assets"
+$env:PRINT_ASSET_REGION = "eu-north-1"
+$env:PRINT_ASSET_ACCESS_KEY_ID = "<iam-access-key-id>"
+$env:PRINT_ASSET_SECRET_ACCESS_KEY = "<iam-secret-access-key>"
+$env:PRINT_ASSET_PUBLIC_BASE_URL = "https://artshop-prodigi-assets.s3.eu-north-1.amazonaws.com"
+$env:PRINT_ASSET_PREFIX = "prodigi"
+```
+
+For AWS S3, leave `PRINT_ASSET_ENDPOINT_URL` empty. That setting exists only for
+S3-compatible providers such as Cloudflare R2 or MinIO.
+
+Run the guarded playground:
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m src.integrations.prodigi.tasks.prodigi_sandbox_playground --artwork-id 2 --country DE --ratio 4:5 --per-country 1 --include-resize --create-sandbox-order
+```
+
+Before `POST /orders`, the playground uploads the rendered PNG, downloads it
+back from `PRINT_ASSET_PUBLIC_BASE_URL`, verifies HTTP `2xx`, non-empty bytes,
+and md5 parity with the local rendered file. If S3 is not configured or the
+bucket policy does not allow public read for the object, the smoke stops before
+creating the sandbox order.
+
 There are no compatibility shims for the old `src.services.prodigi_*`,
 `src.repositories.prodigi_*`, `src.connectors.prodigi`, `src.api.*prodigi*`, or
 `src.tasks.prodigi_*` modules. New backend code should import from

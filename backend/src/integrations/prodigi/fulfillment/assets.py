@@ -1,222 +1,193 @@
 from __future__ import annotations
 
-import hashlib
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 from urllib.parse import quote
 
 from src.config import settings
-from src.integrations.prodigi.fulfillment.contract import public_asset_url
+from src.integrations.prodigi.fulfillment.contract import file_md5
 
 
-class S3ClientProtocol(Protocol):
-    def put_object(self, **kwargs: Any) -> Any: ...
+class AssetPublicationError(RuntimeError):
+    pass
 
 
 @dataclass(slots=True)
-class FulfillmentAssetPublication:
+class PublishedAsset:
     backend: str
-    url: str | None
-    key: str | None = None
+    public_url: str | None
+    storage_key: str | None = None
     bucket: str | None = None
-    etag: str | None = None
-    uploaded: bool = False
-    error: str | None = None
-    missing_settings: list[str] | None = None
+    md5_hash: str | None = None
     metadata: dict[str, Any] | None = None
 
+
+class ProdigiFulfillmentAssetPublisher:
+    """
+    Publishes rendered order assets to the public URL Prodigi will download.
+
+    The local backend is kept for development and existing /static behavior.
+    The s3_compatible backend is the durable path for real Prodigi submissions.
+    """
+
+    def __init__(self, settings_obj: Any = settings):
+        self.settings = settings_obj
+
     @property
-    def ok(self) -> bool:
-        return bool(self.url and self.error is None)
+    def backend(self) -> str:
+        return str(getattr(self.settings, "PRINT_ASSET_STORAGE_BACKEND", "local") or "local")
 
-
-class ProdigiFulfillmentAssetStorage:
-    """
-    Publishes rendered fulfillment PNGs to a URL Prodigi can fetch.
-
-    The render pipeline remains local and deterministic. This class owns the
-    final public delivery step only, so normal artwork/static uploads do not get
-    coupled to the print-order fulfillment contract.
-    """
-
-    def __init__(
-        self,
-        *,
-        backend: str | None = None,
-        s3_client: S3ClientProtocol | None = None,
-    ) -> None:
-        self.backend = backend or settings.PRINT_ASSET_STORAGE_BACKEND
-        self._s3_client = s3_client
-
-    def publish_rendered_asset(
+    async def publish_rendered_asset(
         self,
         *,
         order_id: int,
         order_item_id: int,
         rendered: dict[str, Any],
-        md5_hash: str | None,
-    ) -> FulfillmentAssetPublication:
+        md5_hash: str | None = None,
+    ) -> PublishedAsset:
+        file_path = self._rendered_file_path(rendered)
+        resolved_md5 = md5_hash or file_md5(str(file_path))
         if self.backend == "local":
-            url = public_asset_url(rendered.get("file_url"))
-            return FulfillmentAssetPublication(
+            return PublishedAsset(
                 backend="local",
-                url=url,
-                uploaded=False,
-                metadata={
-                    "file_path": rendered.get("file_path"),
-                    "file_url": rendered.get("file_url"),
-                    "md5_hash": md5_hash,
-                },
+                public_url=self._local_public_asset_url(rendered.get("file_url")),
+                md5_hash=resolved_md5,
+                metadata={"file_path": str(file_path), "file_url": rendered.get("file_url")},
             )
-        if self.backend == "s3_compatible":
-            return self._publish_to_s3(
-                order_id=order_id,
-                order_item_id=order_item_id,
-                rendered=rendered,
-                md5_hash=md5_hash,
-            )
-        return FulfillmentAssetPublication(
-            backend=self.backend,
-            url=None,
-            error=(
-                "Unsupported PRINT_ASSET_STORAGE_BACKEND. "
-                "Use local or s3_compatible."
-            ),
-        )
-
-    def build_object_key(
-        self,
-        *,
-        order_id: int,
-        order_item_id: int,
-        md5_hash: str | None,
-        file_path: str | None,
-    ) -> str:
-        digest = md5_hash or self._file_sha256(file_path) or "unhashed"
-        prefix = self._normalized_prefix(settings.PRINT_ASSET_PREFIX)
-        key = f"orders/{order_id}/items/{order_item_id}/{digest}.png"
-        return f"{prefix}/{key}" if prefix else key
-
-    def _publish_to_s3(
-        self,
-        *,
-        order_id: int,
-        order_item_id: int,
-        rendered: dict[str, Any],
-        md5_hash: str | None,
-    ) -> FulfillmentAssetPublication:
-        missing = self._missing_s3_settings()
-        if missing:
-            return FulfillmentAssetPublication(
-                backend="s3_compatible",
-                url=None,
-                bucket=settings.PRINT_ASSET_BUCKET,
-                error=(
-                    "Fulfillment asset object storage is not fully configured."
-                ),
-                missing_settings=missing,
+        if self.backend != "s3_compatible":
+            raise AssetPublicationError(
+                "Unsupported PRINT_ASSET_STORAGE_BACKEND. Use 'local' or 's3_compatible'."
             )
 
-        file_path = rendered.get("file_path")
-        path = Path(str(file_path)) if file_path else None
-        if path is None or not path.exists():
-            return FulfillmentAssetPublication(
-                backend="s3_compatible",
-                url=None,
-                bucket=settings.PRINT_ASSET_BUCKET,
-                error="Rendered PNG file does not exist and cannot be uploaded.",
-                metadata={"file_path": file_path},
-            )
-
-        key = self.build_object_key(
+        config = self._s3_config()
+        key = self._asset_key(
             order_id=order_id,
             order_item_id=order_item_id,
-            md5_hash=md5_hash,
-            file_path=str(path),
+            md5_hash=resolved_md5,
         )
-        public_url = self._public_url_for_key(key)
         metadata = {
-            "md5": md5_hash or "",
+            "md5-hash": resolved_md5 or "",
             "artshop-order-id": str(order_id),
             "artshop-order-item-id": str(order_item_id),
         }
-        try:
-            response = self._client().put_object(
-                Bucket=settings.PRINT_ASSET_BUCKET,
-                Key=key,
-                Body=path.read_bytes(),
-                ContentType="image/png",
-                CacheControl="public, max-age=31536000, immutable",
-                Metadata={key: value for key, value in metadata.items() if value},
-            )
-        except Exception as exc:
-            return FulfillmentAssetPublication(
-                backend="s3_compatible",
-                url=public_url,
-                key=key,
-                bucket=settings.PRINT_ASSET_BUCKET,
-                error=f"Object storage upload failed: {exc}",
-                metadata={"file_path": str(path), "md5_hash": md5_hash},
-            )
-
-        return FulfillmentAssetPublication(
-            backend="s3_compatible",
-            url=public_url,
+        await asyncio.to_thread(
+            self._upload_s3_object,
+            file_path,
+            bucket=config["bucket"],
             key=key,
-            bucket=settings.PRINT_ASSET_BUCKET,
-            etag=self._response_etag(response),
-            uploaded=True,
-            metadata={"file_path": str(path), "md5_hash": md5_hash},
+            endpoint_url=config["endpoint_url"],
+            region=config["region"],
+            access_key_id=config["access_key_id"],
+            secret_access_key=config["secret_access_key"],
+            metadata=metadata,
+        )
+        return PublishedAsset(
+            backend="s3_compatible",
+            public_url=self._public_url(config["public_base_url"], key),
+            storage_key=key,
+            bucket=config["bucket"],
+            md5_hash=resolved_md5,
+            metadata=metadata,
         )
 
-    def _client(self) -> S3ClientProtocol:
-        if self._s3_client is not None:
-            return self._s3_client
+    def _rendered_file_path(self, rendered: dict[str, Any]) -> Path:
+        value = rendered.get("file_path")
+        if not value:
+            raise AssetPublicationError("Rendered asset has no local file_path to publish.")
+        file_path = Path(str(value))
+        if not file_path.exists():
+            raise AssetPublicationError(f"Rendered asset file does not exist: {file_path}")
+        return file_path
+
+    def _s3_config(self) -> dict[str, str | None]:
+        required = {
+            "PRINT_ASSET_BUCKET": getattr(self.settings, "PRINT_ASSET_BUCKET", None),
+            "PRINT_ASSET_REGION": getattr(self.settings, "PRINT_ASSET_REGION", None),
+            "PRINT_ASSET_ACCESS_KEY_ID": getattr(
+                self.settings, "PRINT_ASSET_ACCESS_KEY_ID", None
+            ),
+            "PRINT_ASSET_SECRET_ACCESS_KEY": getattr(
+                self.settings, "PRINT_ASSET_SECRET_ACCESS_KEY", None
+            ),
+            "PRINT_ASSET_PUBLIC_BASE_URL": getattr(
+                self.settings, "PRINT_ASSET_PUBLIC_BASE_URL", None
+            ),
+        }
+        missing = [name for name, value in required.items() if not str(value or "").strip()]
+        if missing:
+            raise AssetPublicationError(
+                "Prodigi S3 asset storage is not configured. Missing: "
+                + ", ".join(missing)
+                + "."
+            )
+        return {
+            "bucket": str(required["PRINT_ASSET_BUCKET"]),
+            "endpoint_url": self._optional_str(
+                getattr(self.settings, "PRINT_ASSET_ENDPOINT_URL", None)
+            ),
+            "region": str(required["PRINT_ASSET_REGION"]),
+            "access_key_id": str(required["PRINT_ASSET_ACCESS_KEY_ID"]),
+            "secret_access_key": str(required["PRINT_ASSET_SECRET_ACCESS_KEY"]),
+            "public_base_url": str(required["PRINT_ASSET_PUBLIC_BASE_URL"]),
+        }
+
+    def _asset_key(self, *, order_id: int, order_item_id: int, md5_hash: str | None) -> str:
+        prefix = str(getattr(self.settings, "PRINT_ASSET_PREFIX", "prodigi") or "prodigi")
+        clean_prefix = "/".join(part for part in prefix.strip("/").split("/") if part)
+        fingerprint = md5_hash or "unhashed"
+        key = f"orders/{order_id}/items/{order_item_id}/{fingerprint}.png"
+        return f"{clean_prefix}/{key}" if clean_prefix else key
+
+    def _public_url(self, public_base_url: str, key: str) -> str:
+        return f"{public_base_url.rstrip('/')}/{quote(key, safe='/')}"
+
+    def _local_public_asset_url(self, file_url: str | None) -> str | None:
+        if not file_url:
+            return None
+        if file_url.startswith("http://") or file_url.startswith("https://"):
+            return file_url
+        if file_url.startswith("/"):
+            return f"{str(getattr(self.settings, 'PUBLIC_BASE_URL', '')).rstrip('/')}{file_url}"
+        return file_url
+
+    def _upload_s3_object(
+        self,
+        file_path: Path,
+        *,
+        bucket: str,
+        key: str,
+        endpoint_url: str | None,
+        region: str,
+        access_key_id: str,
+        secret_access_key: str,
+        metadata: dict[str, str],
+    ) -> None:
         try:
             import boto3
         except ImportError as exc:
-            raise RuntimeError(
+            raise AssetPublicationError(
                 "boto3 is required for PRINT_ASSET_STORAGE_BACKEND=s3_compatible."
             ) from exc
-        self._s3_client = boto3.client(
+
+        client = boto3.client(
             "s3",
-            endpoint_url=settings.PRINT_ASSET_ENDPOINT_URL,
-            region_name=settings.PRINT_ASSET_REGION or "auto",
-            aws_access_key_id=settings.PRINT_ASSET_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.PRINT_ASSET_SECRET_ACCESS_KEY,
+            endpoint_url=endpoint_url,
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
         )
-        return self._s3_client
+        with file_path.open("rb") as handle:
+            client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=handle,
+                ContentType="image/png",
+                CacheControl="public, max-age=31536000, immutable",
+                Metadata=metadata,
+            )
 
-    def _missing_s3_settings(self) -> list[str]:
-        required = {
-            "PRINT_ASSET_BUCKET": settings.PRINT_ASSET_BUCKET,
-            "PRINT_ASSET_ACCESS_KEY_ID": settings.PRINT_ASSET_ACCESS_KEY_ID,
-            "PRINT_ASSET_SECRET_ACCESS_KEY": settings.PRINT_ASSET_SECRET_ACCESS_KEY,
-            "PRINT_ASSET_PUBLIC_BASE_URL": settings.PRINT_ASSET_PUBLIC_BASE_URL,
-        }
-        return [key for key, value in required.items() if not value]
-
-    def _public_url_for_key(self, key: str) -> str:
-        base = str(settings.PRINT_ASSET_PUBLIC_BASE_URL or "").rstrip("/")
-        return f"{base}/{quote(key, safe='/')}"
-
-    def _file_sha256(self, file_path: str | None) -> str | None:
-        if not file_path:
-            return None
-        path = Path(file_path)
-        if not path.exists():
-            return None
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
-
-    def _normalized_prefix(self, value: str | None) -> str:
-        return "/".join(part for part in (value or "").strip("/").split("/") if part)
-
-    def _response_etag(self, response: Any) -> str | None:
-        if isinstance(response, dict):
-            return response.get("ETag")
-        return None
+    def _optional_str(self, value: Any) -> str | None:
+        normalized = str(value or "").strip()
+        return normalized or None

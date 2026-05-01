@@ -55,6 +55,8 @@ backend/tests.log
 # Local editor and agent files
 .vscode/
 AGENTS.md
+!.agents/
+!.agents/**
 backend/src/scratch/
 
 # Local supplier dumps
