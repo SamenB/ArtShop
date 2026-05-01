@@ -355,16 +355,22 @@ class ProdigiFulfillmentQualityService:
             await self.persist_gates(order=order, item=item, gates=gates, job_id=job_id)
             return None
 
-        download_check = await verify_public_asset_download(asset_url, expected_md5=md5_hash)
+        verification_method = "HEAD" if published.backend == "s3_compatible" else "GET"
+        download_check = await verify_public_asset_download(
+            asset_url,
+            expected_md5=md5_hash,
+            method=verification_method,
+            timeout_seconds=60.0,
+        )
         gates.append(
             FulfillmentGateResult(
                 gate="public_asset_download_verified",
                 status=PASSED if download_check["passed"] else FAILED,
                 measured=download_check["measured"],
                 expected={
+                    "method": verification_method,
                     "http_status": "2xx",
-                    "downloaded_bytes": ">0",
-                    "md5_hash": md5_hash,
+                    "etag_or_downloaded_md5": md5_hash,
                 },
                 error=download_check["error"],
             )

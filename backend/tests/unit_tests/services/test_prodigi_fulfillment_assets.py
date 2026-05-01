@@ -38,6 +38,7 @@ async def test_s3_publisher_builds_deterministic_key_and_public_url(tmp_path, mo
 
     def fake_upload(path: Path, **kwargs):
         uploads.append({"path": path, **kwargs})
+        return {"ETag": f'"{"a" * 32}"'}
 
     monkeypatch.setattr(publisher, "_upload_s3_object", fake_upload)
 
@@ -54,8 +55,10 @@ async def test_s3_publisher_builds_deterministic_key_and_public_url(tmp_path, mo
         f"https://artshop-prodigi-assets.s3.eu-north-1.amazonaws.com/"
         f"prodigi/orders/31/items/28/{'a' * 32}.png"
     )
+    assert published.etag == "a" * 32
     assert uploads[0]["bucket"] == "artshop-prodigi-assets"
     assert uploads[0]["metadata"]["md5-hash"] == "a" * 32
+    assert uploads[0]["md5_hash"] == "a" * 32
 
 
 @pytest.mark.asyncio

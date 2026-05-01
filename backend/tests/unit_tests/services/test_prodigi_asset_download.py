@@ -45,6 +45,9 @@ class _FakeAsyncClient:
     def stream(self, method, url):
         return _FakeStream(self.response)
 
+    async def head(self, url):
+        return self.response
+
 
 @pytest.mark.asyncio
 async def test_verify_public_asset_download_passes_with_matching_md5(monkeypatch):
@@ -87,3 +90,35 @@ async def test_verify_public_asset_download_fails_on_md5_mismatch(monkeypatch):
     assert result["passed"] is False
     assert result["measured"]["expected_md5_hash"] == "0" * 32
     assert result["error"] == "Downloaded public asset md5 does not match the rendered file md5."
+
+
+@pytest.mark.asyncio
+async def test_verify_public_asset_head_passes_with_matching_etag(monkeypatch):
+    expected_md5 = "a" * 32
+    _FakeAsyncClient.response = _FakeResponse(headers={"etag": f'"{expected_md5}"'})
+    monkeypatch.setattr(asset_download.httpx, "AsyncClient", _FakeAsyncClient)
+
+    result = await asset_download.verify_public_asset_download(
+        "https://asset.test/file.png",
+        expected_md5=expected_md5,
+        method="HEAD",
+    )
+
+    assert result["passed"] is True
+    assert result["measured"]["method"] == "HEAD"
+    assert result["measured"]["etag"] == expected_md5
+
+
+@pytest.mark.asyncio
+async def test_verify_public_asset_head_fails_on_etag_mismatch(monkeypatch):
+    _FakeAsyncClient.response = _FakeResponse(headers={"etag": '"bbbb"'})
+    monkeypatch.setattr(asset_download.httpx, "AsyncClient", _FakeAsyncClient)
+
+    result = await asset_download.verify_public_asset_download(
+        "https://asset.test/file.png",
+        expected_md5="a" * 32,
+        method="HEAD",
+    )
+
+    assert result["passed"] is False
+    assert result["error"] == "Public asset ETag does not match the rendered file md5."

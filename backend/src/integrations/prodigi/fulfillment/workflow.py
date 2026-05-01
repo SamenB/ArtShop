@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 
 from src.config import settings
 from src.integrations.prodigi.connectors.client import ProdigiClient
@@ -40,6 +42,15 @@ log = logging.getLogger(__name__)
 SUBMITTED_OR_TERMINAL_STATUSES = {
     "submitted",
     "submitting",
+    "in_progress",
+    "on_hold",
+    "issue",
+    "complete",
+    "cancelled",
+}
+
+SUBMITTED_STATUSES = {
+    "submitted",
     "in_progress",
     "on_hold",
     "issue",
@@ -208,6 +219,15 @@ class ProdigiFulfillmentWorkflow:
         await self.submit_ready_order(order)
 
     async def submit_ready_order(self, order: OrdersOrm) -> None:
+        existing_job = await self._latest_job_for_order(order)
+        if (
+            existing_job is not None
+            and existing_job.status in SUBMITTED_STATUSES
+            and existing_job.prodigi_order_id
+        ):
+            await self.poll_status(existing_job, order=order)
+            return
+
         preflight = await self.run_preflight(order, commit=False, clear_previous=True)
         job = preflight.job
         job_id = getattr(job, "id", None)
@@ -240,15 +260,55 @@ class ProdigiFulfillmentWorkflow:
         )
         await self.db_session.commit()
 
-    async def poll_status(self, job: ProdigiFulfillmentJobOrm) -> dict[str, Any] | None:
+    async def poll_status(
+        self,
+        job: ProdigiFulfillmentJobOrm,
+        *,
+        order: OrdersOrm | None = None,
+    ) -> dict[str, Any] | None:
         if not job.prodigi_order_id:
             return None
+        order = order or await self._load_order(int(job.order_id))
         async with ProdigiClient(sandbox=settings.PRODIGI_SANDBOX) as client:
-            payload = await client.get_order(str(job.prodigi_order_id))
+            try:
+                payload = await client.get_order(str(job.prodigi_order_id))
+            except Exception as exc:
+                self.quality.add_event(
+                    event_type="api_response",
+                    stage="status_poll",
+                    status="failed",
+                    order=order,
+                    job_id=job.id,
+                    external_id=str(job.prodigi_order_id),
+                    error=str(exc),
+                )
+                await self.db_session.commit()
+                raise
         if not isinstance(payload, dict):
             return None
         order_data = payload.get("order") if isinstance(payload.get("order"), dict) else payload
         apply_order_status_to_job(job=job, order_data=order_data, response_payload=payload)
+        if order is not None:
+            apply_prodigi_items_to_local_items(order, order_data)
+            await persist_shipments(
+                db_session=self.db_session,
+                job=job,
+                order=order,
+                order_data=order_data,
+            )
+        self.quality.add_event(
+            event_type="api_response",
+            stage="status_poll",
+            status="passed",
+            order=order,
+            job_id=job.id,
+            external_id=str(job.prodigi_order_id),
+            response_payload=payload,
+            metadata={
+                "status_stage": job.status_stage,
+                "issues": job.issues,
+            },
+        )
         await self.db_session.commit()
         return payload
 
@@ -381,6 +441,11 @@ class ProdigiFulfillmentWorkflow:
         for prepared in prepared_items:
             prepared.item.prodigi_order_id = prodigi_order_id
             prepared.item.prodigi_status = "Submitted"
+        if getattr(order, "fulfillment_status", None) in {None, "pending", "confirmed"}:
+            order.fulfillment_status = "print_ordered"
+            order.print_ordered_at = getattr(order, "print_ordered_at", None) or datetime.now(
+                timezone.utc
+            ).replace(tzinfo=None)
         if job is not None:
             job.prodigi_order_id = str(prodigi_order_id)
             apply_order_status_to_job(
@@ -412,6 +477,28 @@ class ProdigiFulfillmentWorkflow:
             job.last_error = error
             if response_payload is not None:
                 job.response_payload = response_payload
+
+    async def _latest_job_for_order(self, order: OrdersOrm) -> ProdigiFulfillmentJobOrm | None:
+        if not hasattr(self.db_session, "execute"):
+            return None
+        result = await self.db_session.execute(
+            select(ProdigiFulfillmentJobOrm)
+            .where(ProdigiFulfillmentJobOrm.order_id == int(order.id))
+            .order_by(ProdigiFulfillmentJobOrm.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _load_order(self, order_id: int) -> OrdersOrm | None:
+        if not hasattr(self.db_session, "execute"):
+            return None
+        result = await self.db_session.execute(
+            select(OrdersOrm)
+            .where(OrdersOrm.id == order_id)
+            .options(selectinload(OrdersOrm.items))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def _create_or_get_job(
         self,

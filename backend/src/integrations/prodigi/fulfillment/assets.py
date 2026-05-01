@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ class PublishedAsset:
     storage_key: str | None = None
     bucket: str | None = None
     md5_hash: str | None = None
+    etag: str | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -72,23 +74,31 @@ class ProdigiFulfillmentAssetPublisher:
             "artshop-order-id": str(order_id),
             "artshop-order-item-id": str(order_item_id),
         }
-        await asyncio.to_thread(
-            self._upload_s3_object,
-            file_path,
-            bucket=config["bucket"],
-            key=key,
-            endpoint_url=config["endpoint_url"],
-            region=config["region"],
-            access_key_id=config["access_key_id"],
-            secret_access_key=config["secret_access_key"],
-            metadata=metadata,
-        )
+        try:
+            upload_response = await asyncio.to_thread(
+                self._upload_s3_object,
+                file_path,
+                bucket=config["bucket"],
+                key=key,
+                endpoint_url=config["endpoint_url"],
+                region=config["region"],
+                access_key_id=config["access_key_id"],
+                secret_access_key=config["secret_access_key"],
+                metadata=metadata,
+                md5_hash=resolved_md5,
+            )
+        except AssetPublicationError:
+            raise
+        except Exception as exc:
+            raise AssetPublicationError(f"S3 asset upload failed: {exc}") from exc
+
         return PublishedAsset(
             backend="s3_compatible",
             public_url=self._public_url(config["public_base_url"], key),
             storage_key=key,
             bucket=config["bucket"],
             md5_hash=resolved_md5,
+            etag=self._normalize_etag(upload_response.get("ETag")),
             metadata=metadata,
         )
 
@@ -163,9 +173,11 @@ class ProdigiFulfillmentAssetPublisher:
         access_key_id: str,
         secret_access_key: str,
         metadata: dict[str, str],
-    ) -> None:
+        md5_hash: str | None,
+    ) -> dict[str, Any]:
         try:
             import boto3
+            from botocore.config import Config
         except ImportError as exc:
             raise AssetPublicationError(
                 "boto3 is required for PRINT_ASSET_STORAGE_BACKEND=s3_compatible."
@@ -177,17 +189,30 @@ class ProdigiFulfillmentAssetPublisher:
             region_name=region,
             aws_access_key_id=access_key_id,
             aws_secret_access_key=secret_access_key,
+            config=Config(
+                connect_timeout=10,
+                read_timeout=120,
+                retries={"max_attempts": 2, "mode": "standard"},
+            ),
         )
+        extra_args: dict[str, Any] = {}
+        if md5_hash:
+            extra_args["ContentMD5"] = base64.b64encode(bytes.fromhex(md5_hash)).decode("ascii")
         with file_path.open("rb") as handle:
-            client.put_object(
+            return client.put_object(
                 Bucket=bucket,
                 Key=key,
                 Body=handle,
                 ContentType="image/png",
                 CacheControl="public, max-age=31536000, immutable",
                 Metadata=metadata,
+                **extra_args,
             )
 
     def _optional_str(self, value: Any) -> str | None:
         normalized = str(value or "").strip()
+        return normalized or None
+
+    def _normalize_etag(self, value: Any) -> str | None:
+        normalized = str(value or "").strip().strip('"').lower()
         return normalized or None

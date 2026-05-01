@@ -23,6 +23,7 @@ class _ScalarResult:
 class _FakeProdigiClient:
     calls = []
     response = {"outcome": "Created", "order": {"id": "ord_test_123"}}
+    order_response = None
 
     def __init__(self, *args, **kwargs):
         pass
@@ -38,7 +39,7 @@ class _FakeProdigiClient:
         return self.response
 
     async def get_order(self, order_id):
-        return None
+        return self.order_response
 
 
 class _FakeOrderAssetService:
@@ -102,6 +103,8 @@ def _build_order_item(**overrides):
         "prodigi_shipping_method": "Standard",
         "prodigi_status": None,
         "prodigi_order_id": None,
+        "prodigi_order_item_id": None,
+        "prodigi_asset_id": None,
         "prodigi_supplier_total_eur": 12.0,
         "prodigi_wholesale_eur": 8.0,
         "prodigi_shipping_eur": 4.0,
@@ -128,6 +131,8 @@ def _build_order(item):
         shipping_phone=None,
         phone="+380000000000",
         email="buyer@example.com",
+        fulfillment_status="confirmed",
+        print_ordered_at=None,
         items=[item],
     )
 
@@ -165,6 +170,7 @@ async def test_preflight_builds_payload_preview_without_submitting(monkeypatch):
 async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
     monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "https://example.test")
     _FakeProdigiClient.calls = []
+    _FakeProdigiClient.order_response = None
     monkeypatch.setattr(
         "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
@@ -188,6 +194,8 @@ async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
 
     assert item.prodigi_status == "Submitted"
     assert item.prodigi_order_id == "ord_test_123"
+    assert order.fulfillment_status == "print_ordered"
+    assert order.print_ordered_at is not None
     assert len(_FakeProdigiClient.calls) == 1
     path, body = _FakeProdigiClient.calls[0]
     assert path == "/orders"
@@ -202,6 +210,7 @@ async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
 @pytest.mark.asyncio
 async def test_submit_order_items_uses_resolved_print_area_name(monkeypatch):
     _FakeProdigiClient.calls = []
+    _FakeProdigiClient.order_response = None
     monkeypatch.setattr(
         "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
@@ -230,6 +239,7 @@ async def test_submit_order_items_uses_resolved_print_area_name(monkeypatch):
 @pytest.mark.asyncio
 async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypatch):
     _FakeProdigiClient.calls = []
+    _FakeProdigiClient.order_response = None
     monkeypatch.setattr(
         "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
@@ -284,6 +294,7 @@ async def test_preflight_marks_payload_blocked_when_upstream_gates_fail(monkeypa
 @pytest.mark.asyncio
 async def test_submit_order_items_batches_multiple_prints_in_one_prodigi_request(monkeypatch):
     _FakeProdigiClient.calls = []
+    _FakeProdigiClient.order_response = None
     monkeypatch.setattr(
         "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
     )
@@ -314,6 +325,61 @@ async def test_submit_order_items_batches_multiple_prints_in_one_prodigi_request
     assert [item["sku"] for item in body["items"]] == ["GLOBAL-CAN-16X20", "GLOBAL-CAN-20X24"]
     assert first.prodigi_order_id == "ord_test_123"
     assert second.prodigi_order_id == "ord_test_123"
+
+
+@pytest.mark.asyncio
+async def test_submit_ready_order_does_not_create_duplicate_when_already_submitted(monkeypatch):
+    _FakeProdigiClient.calls = []
+    _FakeProdigiClient.order_response = {
+        "order": {
+            "id": "ord_test_123",
+            "status": {"stage": "InProgress", "issues": []},
+            "items": [
+                {
+                    "id": "remote-item-11",
+                    "merchantReference": "artshop-order-101-item-11",
+                    "status": "InProgress",
+                    "assets": [{"id": "remote-asset-1"}],
+                }
+            ],
+        }
+    }
+    monkeypatch.setattr(
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiClient", _FakeProdigiClient
+    )
+    monkeypatch.setattr(
+        "src.integrations.prodigi.fulfillment.workflow.ProdigiFulfillmentQualityService",
+        _FakeQualityService,
+    )
+
+    existing_job = SimpleNamespace(
+        id=5,
+        order_id=101,
+        status="submitted",
+        prodigi_order_id="ord_test_123",
+        latest_status_payload=None,
+        response_payload=None,
+        trace_parent=None,
+        status_stage=None,
+        status_details=None,
+        issues=None,
+        submitted_at=None,
+        last_error=None,
+    )
+    db_session = SimpleNamespace(
+        execute=AsyncMock(return_value=_ScalarResult(existing_job)),
+        commit=AsyncMock(),
+    )
+    item = _build_order_item()
+    order = _build_order(item)
+
+    await ProdigiFulfillmentWorkflow(db_session).submit_ready_order(order)
+
+    assert _FakeProdigiClient.calls == []
+    assert existing_job.status == "in_progress"
+    assert existing_job.status_stage == "InProgress"
+    assert item.prodigi_order_item_id == "remote-item-11"
+    assert item.prodigi_asset_id == "remote-asset-1"
 
 
 def test_resolve_category_id_falls_back_for_legacy_finish_labels():

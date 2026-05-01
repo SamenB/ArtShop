@@ -3,7 +3,7 @@ API endpoints for managing artwork orders.
 Includes order creation, tracking, and administrative management.
 """
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, HTTPException
 from sqlalchemy import select
 
 from src.api.dependencies import AdminDep, DBDep, UserDep, UserDepOptional
@@ -26,6 +26,15 @@ from src.schemas.orders import (
 from src.services.orders import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+PRODIGI_SUBMITTED_STATUSES = {
+    "submitted",
+    "in_progress",
+    "on_hold",
+    "issue",
+    "complete",
+    "cancelled",
+}
 
 
 @router.get("")
@@ -199,10 +208,12 @@ async def get_order_prodigi_flow(order_id: int, admin_id: AdminDep, db: DBDep):
         visible_events = events
     print_items = [item for item in (order.items or []) if item.prodigi_sku]
     preflight_status = _preflight_status(latest_job, visible_gates)
+    already_submitted = _job_has_been_submitted(latest_job)
     can_submit = (
         order.payment_status in {"paid", "mock_paid"}
         and bool(print_items)
         and preflight_status == "passed"
+        and not already_submitted
     )
 
     return {
@@ -220,7 +231,12 @@ async def get_order_prodigi_flow(order_id: int, admin_id: AdminDep, db: DBDep):
             "public_base_url": settings.PUBLIC_BASE_URL,
         },
         "can_submit_manually": can_submit,
-        "manual_submit_blocker": _manual_submit_blocker(order, print_items, preflight_status),
+        "manual_submit_blocker": _manual_submit_blocker(
+            order,
+            print_items,
+            preflight_status,
+            latest_job,
+        ),
         "preflight_status": preflight_status,
         "latest_job_id": latest_job.id if latest_job else None,
         "summary": _build_prodigi_flow_summary(
@@ -237,13 +253,31 @@ async def get_order_prodigi_flow(order_id: int, admin_id: AdminDep, db: DBDep):
 @router.post("/{order_id}/prodigi-preflight")
 async def run_order_prodigi_preflight(order_id: int, admin_id: AdminDep, db: DBDep):
     order = await db.orders.get_one(id=order_id)
+    reusable_job = await _get_latest_reusable_preflight_job(order_id, db)
+    if reusable_job is not None:
+        return await get_order_prodigi_flow(order_id, admin_id, db)
     await ProdigiFulfillmentWorkflow(db.session).run_preflight(order)
     return await get_order_prodigi_flow(order_id, admin_id, db)
 
 
 @router.post("/{order_id}/prodigi-submit")
 async def submit_order_to_prodigi(order_id: int, admin_id: AdminDep, db: DBDep):
+    latest_job = await _get_latest_job(order_id, db)
+    if _job_has_been_submitted(latest_job):
+        return await get_order_prodigi_flow(order_id, admin_id, db)
     await OrderService(db).submit_order_to_print_provider(order_id)
+    return await get_order_prodigi_flow(order_id, admin_id, db)
+
+
+@router.post("/{order_id}/prodigi-status-poll")
+async def poll_order_prodigi_status(order_id: int, admin_id: AdminDep, db: DBDep):
+    latest_job = await _get_latest_job(order_id, db)
+    if latest_job is None or not latest_job.prodigi_order_id:
+        raise HTTPException(
+            status_code=409,
+            detail="This order has not been submitted to Prodigi yet.",
+        )
+    await ProdigiFulfillmentWorkflow(db.session).poll_status(latest_job)
     return await get_order_prodigi_flow(order_id, admin_id, db)
 
 
@@ -313,6 +347,36 @@ async def _get_or_create_settings(db: DBDep) -> SiteSettingsOrm:
     return settings_obj
 
 
+async def _get_latest_reusable_preflight_job(
+    order_id: int,
+    db: DBDep,
+) -> ProdigiFulfillmentJobOrm | None:
+    current_mode = "sandbox" if settings.PRODIGI_SANDBOX else "live"
+    job = await _get_latest_job(order_id, db)
+    if (
+        job is not None
+        and job.status == "preflight_passed"
+        and job.mode == current_mode
+        and bool(job.request_payload)
+        and bool(job.payload_hash)
+    ):
+        return job
+    return None
+
+
+async def _get_latest_job(
+    order_id: int,
+    db: DBDep,
+) -> ProdigiFulfillmentJobOrm | None:
+    result = await db.session.execute(
+        select(ProdigiFulfillmentJobOrm)
+        .where(ProdigiFulfillmentJobOrm.order_id == order_id)
+        .order_by(ProdigiFulfillmentJobOrm.id.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 def _build_prodigi_flow_summary(
     order,
     latest_job: ProdigiFulfillmentJobOrm | None,
@@ -329,7 +393,7 @@ def _build_prodigi_flow_summary(
         )
         or (
             event.event_type == "api_response"
-            and event.stage == "submit_order"
+            and event.stage in {"submit_order", "status_poll"}
             and event.status == "passed"
             and latest_job is not None
             and bool(latest_job.status_stage)
@@ -339,13 +403,7 @@ def _build_prodigi_flow_summary(
 
     paid = order.payment_status in {"paid", "mock_paid"}
     has_prints = bool(print_items)
-    submitted = latest_job is not None and latest_job.status in {
-        "submitted",
-        "in_progress",
-        "on_hold",
-        "issue",
-        "complete",
-    }
+    submitted = _job_has_been_submitted(latest_job)
     failed = latest_job is not None and latest_job.status in {"failed", "blocked"}
 
     steps = [
@@ -565,7 +623,22 @@ def _preflight_status(
     return aggregate_gate_status(gate.status for gate in gates)
 
 
-def _manual_submit_blocker(order, print_items: list, preflight_status: str) -> str | None:
+def _job_has_been_submitted(latest_job: ProdigiFulfillmentJobOrm | None) -> bool:
+    return bool(
+        latest_job is not None
+        and latest_job.prodigi_order_id
+        and latest_job.status in PRODIGI_SUBMITTED_STATUSES
+    )
+
+
+def _manual_submit_blocker(
+    order,
+    print_items: list,
+    preflight_status: str,
+    latest_job: ProdigiFulfillmentJobOrm | None,
+) -> str | None:
+    if _job_has_been_submitted(latest_job):
+        return "This order has already been submitted to Prodigi."
     if order.payment_status not in {"paid", "mock_paid"}:
         return "Payment must be confirmed before Prodigi submit."
     if not print_items:

@@ -462,6 +462,8 @@ async def _run_sandbox_order_smoke(
     download_check = await verify_public_asset_download(
         asset_url,
         expected_md5=md5_hash,
+        method="HEAD" if published.backend == "s3_compatible" else "GET",
+        timeout_seconds=60.0,
     )
     if not download_check["passed"]:
         return [
