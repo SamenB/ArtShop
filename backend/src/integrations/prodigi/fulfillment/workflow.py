@@ -74,11 +74,15 @@ class ProdigiFulfillmentWorkflow:
 
     async def run_preflight(
         self,
-        order: OrdersOrm,
+        order: Any,
         *,
         commit: bool = True,
         clear_previous: bool = True,
     ) -> ProdigiPreflightResult:
+        order_orm = await self._load_order(order.id)
+        if order_orm is None:
+            return ProdigiPreflightResult(job=None, prepared_items=[], passed=False)
+        order = order_orm
         print_items = [item for item in order.items if item.prodigi_sku]
         if not print_items:
             log.info("No print-on-demand items found for order #%s.", order.id)
@@ -218,7 +222,11 @@ class ProdigiFulfillmentWorkflow:
     async def submit_paid_order(self, order: OrdersOrm) -> None:
         await self.submit_ready_order(order)
 
-    async def submit_ready_order(self, order: OrdersOrm) -> None:
+    async def submit_ready_order(self, order: Any) -> None:
+        order_orm = await self._load_order(order.id)
+        if order_orm is None:
+            return
+        order = order_orm
         existing_job = await self._latest_job_for_order(order)
         if (
             existing_job is not None
@@ -407,7 +415,10 @@ class ProdigiFulfillmentWorkflow:
                 )
             except Exception as exc:
                 response = getattr(exc, "response", None)
-                response_payload = response.json() if response is not None else None
+                try:
+                    response_payload = response.json() if response is not None else None
+                except Exception:
+                    response_payload = None
                 self._mark_api_failure(
                     order=order,
                     job=job,
@@ -425,7 +436,15 @@ class ProdigiFulfillmentWorkflow:
                     response_payload=response_payload,
                     error=str(exc),
                 )
-                log.error("Exception submitting Order #%s to Prodigi: %s", order.id, exc)
+                log.error(
+                    "Exception submitting Order #%s to Prodigi: %s\n"
+                    "order type=%s, items types=%s",
+                    order.id,
+                    exc,
+                    type(order).__name__,
+                    [type(i).__name__ for i in (getattr(order, "items", None) or [])],
+                    exc_info=True,
+                )
 
     def _mark_submitted(
         self,

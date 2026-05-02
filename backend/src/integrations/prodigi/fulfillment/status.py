@@ -88,7 +88,7 @@ def apply_order_status_to_job(
     if order_data.get("id"):
         job.prodigi_order_id = str(order_data["id"])
     if mapped_status in {"submitted", "in_progress", "on_hold", "issue", "complete"}:
-        job.submitted_at = job.submitted_at or datetime.now(timezone.utc)
+        job.submitted_at = job.submitted_at or datetime.now(timezone.utc).replace(tzinfo=None)
     if issues:
         job.last_error = (
             "; ".join(
@@ -101,6 +101,9 @@ def apply_order_status_to_job(
 
 
 def apply_prodigi_items_to_local_items(order: OrdersOrm, order_data: dict[str, Any]) -> None:
+    import logging
+
+    _log = logging.getLogger(__name__)
     local_by_reference = {
         f"artshop-order-{order.id}-item-{item.id}": item for item in (order.items or [])
     }
@@ -110,13 +113,26 @@ def apply_prodigi_items_to_local_items(order: OrdersOrm, order_data: dict[str, A
         local_item = local_by_reference.get(str(remote_item.get("merchantReference") or ""))
         if local_item is None:
             continue
+        _log.debug(
+            "apply_prodigi_items: item type=%s, class=%s",
+            type(local_item).__name__,
+            type(local_item).__module__,
+        )
         if remote_item.get("id"):
-            local_item.prodigi_order_item_id = str(remote_item["id"])
+            _safe_set(local_item, "prodigi_order_item_id", str(remote_item["id"]))
         if remote_item.get("status"):
-            local_item.prodigi_status = str(remote_item["status"])
+            _safe_set(local_item, "prodigi_status", str(remote_item["status"]))
         assets = [asset for asset in remote_item.get("assets") or [] if isinstance(asset, dict)]
         if assets and assets[0].get("id"):
-            local_item.prodigi_asset_id = str(assets[0]["id"])
+            _safe_set(local_item, "prodigi_asset_id", str(assets[0]["id"]))
+
+
+def _safe_set(obj: Any, attr: str, value: Any) -> None:
+    """Set attribute on ORM or Pydantic model without raising for missing fields."""
+    try:
+        setattr(obj, attr, value)
+    except (ValueError, AttributeError):
+        pass
 
 
 async def find_job_for_prodigi_order(

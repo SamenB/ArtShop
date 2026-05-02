@@ -135,16 +135,20 @@ def file_md5(path: str | None) -> str | None:
 
 
 def _recipient_payload(order: Any) -> dict[str, Any]:
+    address: dict[str, Any] = {
+        "line1": order.shipping_address_line1 or "",
+        "postalOrZipCode": order.shipping_postal_code or "",
+        "countryCode": (order.shipping_country_code or "US").upper(),
+        "townOrCity": order.shipping_city or "",
+    }
+    if order.shipping_address_line2 and order.shipping_address_line2.strip():
+        address["line2"] = order.shipping_address_line2.strip()
+    if order.shipping_state and order.shipping_state.strip():
+        address["stateOrCounty"] = order.shipping_state.strip()
+
     recipient: dict[str, Any] = {
         "name": f"{order.first_name} {order.last_name}".strip(),
-        "address": {
-            "line1": order.shipping_address_line1 or "",
-            "line2": order.shipping_address_line2 or "",
-            "postalOrZipCode": order.shipping_postal_code or "",
-            "countryCode": (order.shipping_country_code or "US").upper(),
-            "townOrCity": order.shipping_city or "",
-            "stateOrCounty": order.shipping_state or "",
-        },
+        "address": address,
     }
     if order.email:
         recipient["email"] = order.email
