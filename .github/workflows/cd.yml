@@ -25,6 +25,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 60m
           script: |
             set -e
 
@@ -56,17 +57,17 @@ jobs:
             # ── 4. Health check ──
             echo "🩺 Checking service health..."
             sleep 10
-            docker compose -f docker-compose.prod.yml ps
+            docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 
             echo "Checking whether Prodigi production prepare is needed..."
-            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T api \
               python -m src.integrations.prodigi.tasks.prodigi_should_prepare_production \
               --format shell)
             echo "$PRODIGI_DECISION"
 
             if echo "$PRODIGI_DECISION" | grep 'PRODIGI_PREPARE_NEEDED=true' >/dev/null; then
               echo "Prodigi storefront data is stale or missing; rebuilding production snapshot..."
-              docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+              docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T api \
                 python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
                 --include-api-checks \
                 --include-quotes \

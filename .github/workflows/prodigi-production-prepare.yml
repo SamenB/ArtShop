@@ -53,7 +53,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
+          command_timeout: 60m
           script: |
             set -euo pipefail
 
@@ -86,7 +86,7 @@ jobs:
             fi
 
             echo "Checking whether Prodigi production prepare is needed..."
-            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm --no-deps api \
               python -m src.integrations.prodigi.tasks.prodigi_should_prepare_production \
               --format shell \
               $DECIDER_ARGS)
@@ -94,7 +94,7 @@ jobs:
 
             if echo "$PRODIGI_DECISION" | grep 'PRODIGI_PREPARE_NEEDED=true' >/dev/null; then
               echo "Rebuilding Prodigi snapshot and payloads..."
-              docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+              docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm --no-deps api \
                 python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
                 --output /tmp/prodigi_production_prepare_report.json \
                 $EXTRA_ARGS
