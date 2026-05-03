@@ -46,6 +46,10 @@ report. Add `--include-api-checks --include-quotes --require-api-checks` when th
 server has the intended Prodigi API credentials and you want live provider
 validation before opening fulfillment.
 
+For manual production recovery, use
+`Admin -> Prodigi -> Storefront Settings -> Production Prepare`; it uses the same
+backend decider and prepare service as CD.
+
 Full operational steps are in
 [`docs/prodigi-production-runbook.md`](../../../../docs/prodigi-production-runbook.md).
 

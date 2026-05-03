@@ -23,6 +23,13 @@ from src.integrations.prodigi.services.prodigi_fulfillment_validation import (
     ValidationConfig,
     ValidationThresholds,
 )
+from src.integrations.prodigi.services.prodigi_production_prepare import (
+    ProdigiProductionPrepareOptions,
+    ProdigiProductionPrepareService,
+)
+from src.integrations.prodigi.services.prodigi_production_prepare_decider import (
+    ProdigiProductionPrepareDecider,
+)
 from src.integrations.prodigi.services.prodigi_runtime_cache import (
     ARTWORK_PRINT_CACHE_PREFIXES as _ARTWORK_PRINT_CACHE_PREFIXES,
 )
@@ -71,67 +78,80 @@ async def update_storefront_settings(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/storefront-settings/rebuild-payload")
-async def rebuild_storefront_payload(admin_id: AdminDep, db: DBDep):
+@router.get("/production-prepare")
+async def get_production_prepare_status(
+    admin_id: AdminDep,
+    db: DBDep,
+    force: bool = Query(False),
+):
     try:
-        repository = ProdigiStorefrontRepository(db.session)
-        active_bake = await repository.get_active_bake()
-        if active_bake is None:
-            raise HTTPException(
-                status_code=400,
-                detail="No active storefront bake exists yet. Rebuild snapshot first.",
-            )
-        materialization = await ProdigiArtworkStorefrontMaterializerService(
-            db
-        ).materialize_active_bake()
-        cache_clear = await _clear_artwork_print_storefront_cache()
-        settings_payload = await ProdigiStorefrontSettingsService(db).build_admin_payload()
-        return {
-            "status": "rebuilt_payload",
-            "bake": {
-                "id": active_bake.id,
-                "bake_key": active_bake.bake_key,
-                "paper_material": active_bake.paper_material,
-                "include_notice_level": active_bake.include_notice_level,
-            },
-            "artwork_storefront_materialization": materialization,
-            "cache_clear": cache_clear,
-            "settings": settings_payload,
-        }
-    except HTTPException:
-        raise
+        decision = await ProdigiProductionPrepareDecider(db.session).evaluate(force=force)
+        return decision.as_dict()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.post("/storefront-settings/rebuild-snapshot")
-async def rebuild_storefront_snapshot(admin_id: AdminDep, db: DBDep):
+@router.post("/production-prepare")
+async def run_production_prepare(
+    admin_id: AdminDep,
+    db: DBDep,
+    payload: dict | None = Body(None),
+):
     try:
+        payload = payload or {}
+        force = bool(payload.get("force", False))
+        decision = await ProdigiProductionPrepareDecider(db.session).evaluate(force=force)
+        if not decision.prepare_needed:
+            return {
+                "status": "skipped",
+                "decision": decision.as_dict(),
+                "report": None,
+            }
+
         config = await ProdigiStorefrontSettingsService(db).get_effective_config()
         snapshot_defaults = config["snapshot_defaults"]
-        rebuild_result = await ProdigiCsvStorefrontRebuildService(db).rebuild(
-            selected_paper_material=snapshot_defaults["paper_material"],
-            include_notice_level=snapshot_defaults["include_notice_level"],
+        include_notice_level = payload.get(
+            "include_notice_level",
+            snapshot_defaults["include_notice_level"],
         )
-        cache_clear = await _clear_artwork_print_storefront_cache()
+        options = ProdigiProductionPrepareOptions(
+            skip_csv_rebuild=bool(payload.get("skip_csv_rebuild", False)),
+            curated_csv=payload.get("curated_csv") or None,
+            selected_ratio=payload.get("selected_ratio") or None,
+            selected_country=payload.get("selected_country") or None,
+            selected_paper_material=(
+                payload.get("selected_paper_material") or snapshot_defaults["paper_material"]
+            ),
+            include_notice_level=bool(include_notice_level),
+            country=payload.get("country") or None,
+            ratio=payload.get("ratio") or None,
+            category=payload.get("category") or None,
+            max_sizes_per_group=int(payload.get("max_sizes_per_group", 0)),
+            simulate_orders=int(payload.get("simulate_orders", 1500)),
+            batch_size=int(payload.get("batch_size", 3)),
+            include_api_checks=bool(payload.get("include_api_checks", False)),
+            include_quotes=bool(payload.get("include_quotes", False)),
+            require_api_checks=bool(payload.get("require_api_checks", False)),
+            min_samples=int(payload.get("min_samples", 1)),
+            min_simulated_orders=int(payload.get("min_simulated_orders", 1)),
+            max_failures=int(payload.get("max_failures", 0)),
+            min_pass_rate=float(payload.get("min_pass_rate", 1.0)),
+            output=None,
+        )
+        report = await ProdigiProductionPrepareService(db).run(options)
         settings_payload = await ProdigiStorefrontSettingsService(db).build_admin_payload()
+        refreshed_decision = await ProdigiProductionPrepareDecider(db.session).evaluate()
         return {
-            "status": "rebuilt_snapshot_and_payload",
-            "bake": rebuild_result.get("bake"),
-            "csv_source": rebuild_result.get("csv_source"),
-            "streamed_rows_matched": rebuild_result.get("streamed_rows_matched"),
-            "artwork_storefront_materialization": rebuild_result.get(
-                "artwork_storefront_materialization"
-            ),
-            "retention": rebuild_result.get("retention"),
-            "selected_country_storefront_preview": rebuild_result.get(
-                "selected_country_storefront_preview"
-            ),
-            "cache_clear": cache_clear,
+            "status": report["status"],
+            "decision": decision.as_dict(),
+            "refreshed_decision": refreshed_decision.as_dict(),
+            "report": report,
             "settings": settings_payload,
         }
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

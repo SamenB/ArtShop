@@ -3,86 +3,20 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from src.database import new_session_null_pool
-from src.integrations.prodigi.catalog_pipeline.curated_source import ProdigiCuratedCsvSource
-from src.integrations.prodigi.services.prodigi_business_policy import (
-    ProdigiBusinessPolicyService,
-)
-from src.integrations.prodigi.services.prodigi_csv_storefront_rebuild import (
-    ProdigiCsvStorefrontRebuildService,
-)
-from src.integrations.prodigi.services.prodigi_fulfillment_validation import (
-    KEY_COUNTRIES,
-    ProdigiFulfillmentValidationService,
-    ValidationConfig,
-    ValidationThresholds,
-)
-from src.integrations.prodigi.services.prodigi_runtime_cache import (
-    clear_artwork_print_storefront_cache,
+from src.integrations.prodigi.services.prodigi_production_prepare import (
+    ProdigiProductionPrepareOptions,
+    ProdigiProductionPrepareService,
 )
 from src.utils.db_manager import DBManager
 
 
 async def run(args: argparse.Namespace) -> dict[str, Any]:
-    started_at = datetime.now(UTC)
-    if not args.skip_csv_rebuild:
-        _assert_curated_csv_ready(args.curated_csv)
+    options = ProdigiProductionPrepareOptions.from_namespace(args)
     async with DBManager(session_factory=new_session_null_pool) as db:
-        rebuild_result = None
-        if not args.skip_csv_rebuild:
-            rebuild_result = await ProdigiCsvStorefrontRebuildService(
-                db,
-                curated_csv_path=args.curated_csv,
-            ).rebuild(
-                selected_ratio=args.selected_ratio,
-                selected_country=args.selected_country,
-                selected_paper_material=args.selected_paper_material,
-                include_notice_level=not args.strict_fulfillment_only,
-            )
-
-        validation = await ProdigiFulfillmentValidationService(db.session).run(
-            ValidationConfig(
-                countries=args.country or KEY_COUNTRIES,
-                ratios=args.ratio or None,
-                categories=args.category or None,
-                max_sizes_per_group=args.max_sizes_per_group,
-                simulate_orders=args.simulate_orders,
-                batch_size=args.batch_size,
-                include_api_checks=args.include_api_checks,
-                include_quotes=args.include_quotes,
-                thresholds=ValidationThresholds(
-                    min_samples=args.min_samples,
-                    min_simulated_orders=args.min_simulated_orders,
-                    max_failures=args.max_failures,
-                    min_pass_rate=args.min_pass_rate,
-                    require_api_checks=args.require_api_checks,
-                ),
-                output_path=None,
-            )
-        )
-
-        cache_clear = await clear_artwork_print_storefront_cache()
-
-    report = {
-        "status": "ready" if validation.get("approved") else "failed",
-        "started_at": started_at.isoformat(),
-        "finished_at": datetime.now(UTC).isoformat(),
-        "policy_version": ProdigiBusinessPolicyService.POLICY_VERSION,
-        "csv_rebuild": rebuild_result,
-        "validation": validation,
-        "cache_clear": cache_clear,
-        "operational_note": (
-            "Run this on the production server against the production database after "
-            "code deploy and migrations. It rebuilds catalog/storefront data from "
-            "the committed curated Prodigi CSV; it does not copy local database snapshots."
-        ),
-    }
-    _write_report(args.output, report)
-    return report
+        return await ProdigiProductionPrepareService(db).run(options)
 
 
 def main() -> None:
@@ -128,24 +62,6 @@ def main() -> None:
     args = parser.parse_args()
     report = asyncio.run(run(args))
     print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
-
-
-def _write_report(output: str | None, report: dict[str, Any]) -> None:
-    if not output:
-        return
-    path = Path(output)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-
-
-def _assert_curated_csv_ready(curated_csv_path: str | None) -> None:
-    stats = ProdigiCuratedCsvSource(csv_path=curated_csv_path).describe()
-    if stats.size_bytes <= 0 or stats.rows_seen <= 0:
-        raise RuntimeError(
-            "Curated Prodigi CSV source is missing usable rows. "
-            "Generate it with python -m src.integrations.prodigi.tasks."
-            "prodigi_prepare_storefront_source before running production prepare."
-        )
 
 
 if __name__ == "__main__":

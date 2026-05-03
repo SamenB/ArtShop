@@ -25,11 +25,5 @@ def test_cd_uses_backend_prodigi_prepare_decider_instead_of_inline_path_grep():
     assert "script_stop" not in cd
 
 
-def test_manual_prodigi_prepare_has_long_timeout_and_no_dependency_restart():
-    workflow = (ROOT / ".github" / "workflows" / "prodigi-production-prepare.yml").read_text(
-        encoding="utf-8"
-    )
-
-    assert "command_timeout: 60m" in workflow
-    assert "run --rm --no-deps api" in workflow
-    assert "script_stop" not in workflow
+def test_manual_prodigi_prepare_workflow_is_not_duplicated_outside_admin():
+    assert not (ROOT / ".github" / "workflows" / "prodigi-production-prepare.yml").exists()

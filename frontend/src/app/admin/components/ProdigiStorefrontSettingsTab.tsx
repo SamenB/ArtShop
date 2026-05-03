@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Database, RefreshCcw, Save } from "lucide-react";
+import { Database, Play, RefreshCcw, Save } from "lucide-react";
 
 import { apiFetch, apiJson, getApiUrl } from "@/utils";
 
@@ -65,6 +65,55 @@ type StorefrontSettingsPayload = {
   };
 };
 
+type ProductionPrepareDecision = {
+  prepare_needed: boolean;
+  status: string;
+  reasons: string[];
+  source?: {
+    path?: string;
+    sha256?: string;
+    rows_seen?: number;
+    size_bytes?: number;
+    error?: string;
+  } | null;
+  active_bake?: {
+    id?: number;
+    bake_key?: string;
+    status?: string;
+    source_sha256?: string;
+    source_row_count?: number;
+    source_size_bytes?: number;
+    pipeline_version?: string;
+    policy_version?: string;
+    offer_group_count?: number;
+    offer_size_count?: number;
+    settings?: {
+      payload_policy_version?: string;
+    } | null;
+  } | null;
+  materialized_payload_count: number;
+  expected: {
+    pipeline_version?: string;
+    policy_version?: string;
+  };
+};
+
+type ProductionPrepareResult = {
+  status: string;
+  decision: ProductionPrepareDecision;
+  refreshed_decision?: ProductionPrepareDecision;
+  settings?: StorefrontSettingsPayload;
+  report?: {
+    status?: string;
+    validation?: {
+      approved?: boolean;
+      summary?: Record<string, unknown>;
+    };
+    cache_clear?: Record<string, unknown>;
+    csv_rebuild?: Record<string, unknown> | null;
+  } | null;
+};
+
 type CategoryDraft = {
   fixed: string;
   allowed: string;
@@ -100,6 +149,25 @@ function parseObject(value: string, label: string) {
   return parsed as Record<string, unknown>;
 }
 
+function formatNumber(value: number | undefined) {
+  return typeof value === "number" ? value.toLocaleString() : "Unknown";
+}
+
+function formatDecision(decision: ProductionPrepareDecision | null) {
+  if (!decision) return "Loading";
+  return decision.prepare_needed ? "Needed" : "Current";
+}
+
+function formatPrepareMessage(result: ProductionPrepareResult) {
+  if (result.status === "skipped") {
+    return "Production prepare skipped because the active snapshot is current.";
+  }
+  if (result.report?.status === "ready") {
+    return "Production prepare completed: snapshot, payloads, validation, and cache clear are ready.";
+  }
+  return "Production prepare completed with failed validation. Check the report before relying on the snapshot.";
+}
+
 export default function ProdigiStorefrontSettingsTab() {
   const [payload, setPayload] = useState<StorefrontSettingsPayload | null>(null);
   const [shippingPolicy, setShippingPolicy] = useState<ShippingPolicy | null>(null);
@@ -108,6 +176,10 @@ export default function ProdigiStorefrontSettingsTab() {
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, CategoryDraft>>({});
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [productionDecision, setProductionDecision] =
+    useState<ProductionPrepareDecision | null>(null);
+  const [includeApiChecks, setIncludeApiChecks] = useState(false);
+  const [includeQuotes, setIncludeQuotes] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -152,9 +224,19 @@ export default function ProdigiStorefrontSettingsTab() {
     }
   }, [applyPayload]);
 
+  const loadProductionStatus = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${getApiUrl()}/v1/admin/prodigi/production-prepare`);
+      setProductionDecision(await apiJson<ProductionPrepareDecision>(response));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load production prepare status.");
+    }
+  }, []);
+
   useEffect(() => {
     void loadSettings();
-  }, [loadSettings]);
+    void loadProductionStatus();
+  }, [loadSettings, loadProductionStatus]);
 
   const buildSaveBody = () => {
     if (!shippingPolicy || !snapshotDefaults || !payload) {
@@ -212,34 +294,30 @@ export default function ProdigiStorefrontSettingsTab() {
     }
   };
 
-  const runRebuild = async (mode: "payload" | "snapshot") => {
-    setBusyAction(mode);
+  const runProductionPrepare = async (force: boolean) => {
+    setBusyAction(force ? "prepare-force" : "prepare");
     setError(null);
     setMessage(null);
     try {
-      const endpoint =
-        mode === "payload"
-          ? "rebuild-payload"
-          : "rebuild-snapshot";
-      const response = await apiFetch(
-        `${getApiUrl()}/v1/admin/prodigi/storefront-settings/${endpoint}`,
-        { method: "POST" },
-      );
-      const result = await apiJson<{ settings?: StorefrontSettingsPayload; status?: string }>(
-        response,
-      );
+      const response = await apiFetch(`${getApiUrl()}/v1/admin/prodigi/production-prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          force,
+          include_api_checks: includeApiChecks,
+          include_quotes: includeQuotes,
+        }),
+      });
+      const result = await apiJson<ProductionPrepareResult>(response);
       if (result.settings) {
         applyPayload(result.settings);
       } else {
         await loadSettings();
       }
-      setMessage(
-        mode === "payload"
-          ? "Payload rebuilt and runtime caches cleared."
-          : "Snapshot and payload rebuilt from current storefront settings.",
-      );
+      setProductionDecision(result.refreshed_decision || result.decision);
+      setMessage(formatPrepareMessage(result));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Rebuild failed.");
+      setError(err instanceof Error ? err.message : "Production prepare failed.");
     } finally {
       setBusyAction(null);
     }
@@ -299,21 +377,12 @@ export default function ProdigiStorefrontSettingsTab() {
           </button>
           <button
             type="button"
-            onClick={() => runRebuild("payload")}
+            onClick={loadProductionStatus}
             disabled={busyAction !== null}
             className="inline-flex items-center gap-2 rounded-md border border-[#31323E]/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#31323E] disabled:opacity-45"
           >
             <RefreshCcw size={15} />
-            Rebuild Payload
-          </button>
-          <button
-            type="button"
-            onClick={() => runRebuild("snapshot")}
-            disabled={busyAction !== null}
-            className="inline-flex items-center gap-2 rounded-md border border-[#31323E]/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#31323E] disabled:opacity-45"
-          >
-            <Database size={15} />
-            Rebuild Snapshot + Payload
+            Check Prepare
           </button>
         </div>
       </div>
@@ -352,6 +421,98 @@ export default function ProdigiStorefrontSettingsTab() {
           </div>
         ) : (
           <p className="text-sm font-semibold text-[#31323E]/50">No active bake exists yet.</p>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-[#31323E]/10 p-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold">Production Prepare</h3>
+            <p className="mt-1 text-xs font-semibold text-[#31323E]/45">
+              Curated CSV fingerprint, active bake, materialized payloads, validation, and cache clear.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => runProductionPrepare(false)}
+              disabled={busyAction !== null}
+              className="inline-flex items-center gap-2 rounded-md bg-[#31323E] px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-white disabled:opacity-45"
+            >
+              <Play size={15} />
+              {busyAction === "prepare" ? "Running" : "Run If Needed"}
+            </button>
+            <button
+              type="button"
+              onClick={() => runProductionPrepare(true)}
+              disabled={busyAction !== null}
+              className="inline-flex items-center gap-2 rounded-md border border-[#31323E]/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#31323E] disabled:opacity-45"
+            >
+              <Database size={15} />
+              {busyAction === "prepare-force" ? "Running" : "Force Rebuild"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 text-sm md:grid-cols-4">
+          <StatusMetric
+            label="Decision"
+            value={formatDecision(productionDecision)}
+          />
+          <StatusMetric
+            label="Reasons"
+            value={
+              productionDecision?.reasons.length
+                ? productionDecision.reasons.join(", ")
+                : "None"
+            }
+          />
+          <StatusMetric
+            label="CSV Rows"
+            value={formatNumber(productionDecision?.source?.rows_seen)}
+          />
+          <StatusMetric
+            label="Payloads"
+            value={formatNumber(productionDecision?.materialized_payload_count)}
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="flex items-center gap-3 rounded-md border border-[#31323E]/10 px-3 py-2 text-sm font-bold">
+            <input
+              type="checkbox"
+              checked={includeApiChecks}
+              onChange={(event) => setIncludeApiChecks(event.target.checked)}
+            />
+            Cross-check product details with Prodigi API
+          </label>
+          <label className="flex items-center gap-3 rounded-md border border-[#31323E]/10 px-3 py-2 text-sm font-bold">
+            <input
+              type="checkbox"
+              checked={includeQuotes}
+              onChange={(event) => setIncludeQuotes(event.target.checked)}
+            />
+            Include Prodigi quote checks
+          </label>
+        </div>
+
+        {productionDecision && (
+          <div className="mt-4 grid gap-3 text-xs font-semibold text-[#31323E]/55 md:grid-cols-2">
+            <div className="rounded-md bg-[#F7F7F5] px-3 py-2">
+              <div className="font-bold text-[#31323E]/70">Expected</div>
+              <div>Pipeline {productionDecision.expected.pipeline_version || "unknown"}</div>
+              <div>Policy {productionDecision.expected.policy_version || "unknown"}</div>
+            </div>
+            <div className="rounded-md bg-[#F7F7F5] px-3 py-2">
+              <div className="font-bold text-[#31323E]/70">Active Bake</div>
+              <div>{productionDecision.active_bake?.bake_key || "No active bake"}</div>
+              <div>
+                {productionDecision.active_bake?.offer_group_count || 0} groups /
+                {" "}
+                {productionDecision.active_bake?.offer_size_count || 0} sizes
+              </div>
+            </div>
+          </div>
         )}
       </section>
 

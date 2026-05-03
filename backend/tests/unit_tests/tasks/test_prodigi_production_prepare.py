@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.integrations.prodigi.services import prodigi_production_prepare as prepare_service
 from src.integrations.prodigi.tasks import prodigi_production_prepare
 
 
@@ -87,17 +88,17 @@ def _patch_runtime(monkeypatch):
     _FakeValidationService.approved = True
     monkeypatch.setattr(prodigi_production_prepare, "DBManager", _FakeDbManager)
     monkeypatch.setattr(
-        prodigi_production_prepare,
+        prepare_service,
         "ProdigiCsvStorefrontRebuildService",
         _FakeRebuildService,
     )
     monkeypatch.setattr(
-        prodigi_production_prepare,
+        prepare_service,
         "ProdigiFulfillmentValidationService",
         _FakeValidationService,
     )
     monkeypatch.setattr(
-        prodigi_production_prepare,
+        prepare_service,
         "clear_artwork_print_storefront_cache",
         _fake_clear_cache,
     )

@@ -51,18 +51,15 @@ The generator fails if the curated CSV exceeds 80MB unless you explicitly pass
 
 ## Automatic Production Prepare
 
-The CD workflow captures the deployed SHA before and after `git reset --hard
-origin/main`. If any of these paths changed, it automatically runs production
-prepare after Docker deploy:
-
-- `backend/src/integrations/prodigi/data/prodigi_storefront_source.csv`
-- `backend/src/integrations/prodigi/catalog_pipeline/`
-- relevant Prodigi policy/catalog task files
+The CD workflow deploys code, applies migrations, then asks the backend decider
+whether production storefront data is stale. The decider compares the committed
+curated CSV fingerprint, pipeline version, policy version, active bake metadata,
+storefront settings version, and materialized payload count.
 
 The automatic command is:
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T api \
   python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
   --include-api-checks \
   --include-quotes \
@@ -72,15 +69,15 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
 This rebuilds the active storefront bake and materialized artwork payloads in
 the production database from the committed curated CSV.
 
-## Manual Fallback
+## Admin Fallback
 
-Use the manual GitHub workflow when you want to rerun prepare without a new
-deploy:
+Use the admin UI when you want to inspect or rerun prepare without a new deploy:
 
-`Actions -> Prodigi Production Prepare -> Run workflow`
+`Admin -> Prodigi -> Storefront Settings -> Production Prepare`
 
-It checks that the committed curated CSV exists on the server, applies Alembic
-migrations, and runs the same production prepare command over SSH.
+The panel checks the same backend decider, can run only when stale/missing, and
+has a force rebuild option for recovery after manual diagnosis. Live Prodigi API
+product/quote checks are opt-in from the admin panel.
 
 You can also run it directly on the server:
 
