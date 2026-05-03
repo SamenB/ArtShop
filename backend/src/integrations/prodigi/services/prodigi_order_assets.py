@@ -51,6 +51,18 @@ _LEGACY_FALLBACK_ROLES = {
 }
 
 
+def _resolve_local_file_path(file_url: str | None) -> Path:
+    raw = str(file_url or "").strip()
+    if not raw:
+        return Path("")
+    direct_path = Path(raw)
+    if direct_path.exists():
+        return direct_path
+    if raw.startswith("/"):
+        return Path(raw.lstrip("/"))
+    return direct_path
+
+
 class ProdigiOrderAssetService:
     def __init__(self, db_session):
         self.db_session = db_session
@@ -319,7 +331,7 @@ class ProdigiOrderAssetService:
         output_dir: Path,
         white_border_pct: float = 0.0,
     ) -> dict[str, Any]:
-        master_path = Path(str(master_asset.file_url or "").lstrip("/"))
+        master_path = _resolve_local_file_path(master_asset.file_url)
         if not master_path.exists():
             raise FileNotFoundError(f"Master print asset not found: {master_path}")
 

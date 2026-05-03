@@ -71,6 +71,19 @@ MASTER_SLOTS: dict[str, dict[str, Any]] = {
     },
 }
 
+
+def _resolve_local_file_path(file_url: str | None) -> Path:
+    raw = str(file_url or "").strip()
+    if not raw:
+        return Path("")
+    direct_path = Path(raw)
+    if direct_path.exists():
+        return direct_path
+    if raw.startswith("/"):
+        return Path(raw.lstrip("/"))
+    return direct_path
+
+
 ASSET_ROLE_RULES: dict[str, dict[str, Any]] = {
     "master": {
         "label": "Production master asset",
@@ -433,8 +446,8 @@ class ArtworkPrintWorkflowService:
 
         await self.delete_generated_assets_for_master(master_asset)
 
-        master_path = str(master_asset.file_url or "").lstrip("/")
-        if not master_path or not os.path.exists(master_path):
+        master_path = _resolve_local_file_path(master_asset.file_url)
+        if not str(master_path) or not master_path.exists():
             return []
 
         bake = await self.storefront_repository.get_active_bake()
@@ -499,9 +512,9 @@ class ArtworkPrintWorkflowService:
             if metadata.get("generated_from_asset_id") != master_asset.id:
                 continue
             await self.db.artwork_print_assets.delete_one(asset.id)
-            file_path = str(asset.file_url or "").lstrip("/")
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
+            file_path = _resolve_local_file_path(asset.file_url)
+            if str(file_path) and file_path.exists():
+                file_path.unlink()
 
     def _build_slot_status(
         self,
