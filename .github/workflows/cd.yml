@@ -25,7 +25,6 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
           script: |
             set -e
 
@@ -45,8 +44,14 @@ jobs:
             # ── 3. Build and deploy ──
             # .env.prod is created manually on the server once (not overwritten)
             echo "🐳 Building and deploying..."
-            docker compose --env-file .env.prod -f docker-compose.prod.yml down
-            docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d
+            docker compose --env-file .env.prod -f docker-compose.prod.yml down --remove-orphans
+            if ! docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d; then
+              echo "Deployment failed. Recent migrator logs:"
+              docker compose --env-file .env.prod -f docker-compose.prod.yml logs --no-color --tail=200 migrator || true
+              echo "Container status after failed deploy:"
+              docker compose --env-file .env.prod -f docker-compose.prod.yml ps -a || true
+              exit 1
+            fi
 
             # ── 4. Health check ──
             echo "🩺 Checking service health..."
