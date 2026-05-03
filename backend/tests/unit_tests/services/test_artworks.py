@@ -11,6 +11,8 @@ class MockDBManager:
     def __init__(self):
         self.artworks = AsyncMock()
         self.artworks.get_one_or_none.return_value = None
+        self.artwork_print_assets = AsyncMock()
+        self.artwork_print_assets.get_file_urls_for_artwork.return_value = []
         self.artwork_labels = AsyncMock()
         self.commit = AsyncMock()
         self.rollback = AsyncMock()

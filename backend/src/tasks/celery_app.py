@@ -17,7 +17,10 @@ setup_logging()
 celery_instance = Celery(
     "art_shop_app",
     broker=settings.REDIS_URL,
-    include=["src.tasks.tasks"],
+    include=[
+        "src.tasks.tasks",
+        "src.integrations.prodigi.tasks.prodigi_retry_fulfillment",
+    ],
 )
 
 # Configuration for periodic/scheduled tasks (Celery Beat)
@@ -26,5 +29,10 @@ celery_instance.conf.beat_schedule = {
     "release-abandoned-orders": {
         "task": "release_abandoned_orders",
         "schedule": 3600,  # Run every hour
+    },
+    "retry-prodigi-fulfillment": {
+        "task": "retry_prodigi_fulfillment_jobs",
+        "schedule": 900,  # Run every 15 minutes
+        "args": (20,),
     },
 }

@@ -112,7 +112,7 @@ export default function AboutPage() {
                                 fontFamily: "var(--font-sans)", fontSize: "1rem", color: "var(--color-charcoal-mid)",
                                 lineHeight: 1.8, fontWeight: 300
                             }}>
-                                I don’t believe in perfection. I believe in the "honest" mark—the visible brushstroke that tells the story of its creation. My goal is not to replicate reality, but to invite the viewer into a space where they can find their own reflections.
+                                I don’t believe in perfection. I believe in the &quot;honest&quot; mark—the visible brushstroke that tells the story of its creation. My goal is not to replicate reality, but to invite the viewer into a space where they can find their own reflections.
                             </p>
                         </div>
 

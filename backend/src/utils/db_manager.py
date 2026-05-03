@@ -8,13 +8,16 @@ import asyncio
 
 from sqlalchemy.exc import OperationalError
 
+from src.repositories.artwork_print_assets import ArtworkPrintAssetsRepository
 from src.repositories.artworks import ArtworksRepository
+from src.repositories.email_templates import EmailTemplatesRepository
 from src.repositories.labels import (
     ArtworkLabelsRepository,
     LabelCategoriesRepository,
     LabelsRepository,
 )
 from src.repositories.orders import OrderItemsRepository, OrdersRepository
+from src.repositories.print_pricing import PrintAspectRatioRepository
 from src.repositories.users import UsersRepository
 
 
@@ -37,12 +40,15 @@ class DBManager:
         self.session = self.session_factory()
 
         self.artworks = ArtworksRepository(self.session)
+        self.artwork_print_assets = ArtworkPrintAssetsRepository(self.session)
         self.users = UsersRepository(self.session)
         self.orders = OrdersRepository(self.session)
         self.order_items = OrderItemsRepository(self.session)
         self.labels = LabelsRepository(self.session)
         self.artwork_labels = ArtworkLabelsRepository(self.session)
         self.label_categories = LabelCategoriesRepository(self.session)
+        self.email_templates = EmailTemplatesRepository(self.session)
+        self.aspect_ratios = PrintAspectRatioRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

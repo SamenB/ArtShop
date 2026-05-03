@@ -13,6 +13,7 @@ Security model:
 """
 
 import json
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Request, Response
 from loguru import logger
@@ -20,6 +21,7 @@ from loguru import logger
 from src.api.dependencies import DBDep, UserDepOptional
 from src.config import settings
 from src.exeptions import (
+    InvalidDataException,
     MonobankServiceError,
     ObjectNotFoundException,
     PaymentGatewayException,
@@ -33,6 +35,7 @@ from src.schemas.payments import (
 )
 from src.services.monobank import MonobankService
 from src.services.orders import OrderService
+from src.utils.order_public_code import public_order_code, resolve_public_order_code
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -45,6 +48,85 @@ MONOBANK_STATUS_MAP: dict[str, str] = {
     "hold": "hold",
     "created": "awaiting_payment",
 }
+
+
+def _payment_currency_rate(currency: str) -> Decimal:
+    normalized = currency.upper()
+    if normalized == "USD":
+        return Decimal("1")
+    if normalized == "UAH":
+        return Decimal(str(settings.MONOBANK_USD_TO_UAH_RATE))
+    if normalized == "EUR":
+        return Decimal(str(settings.MONOBANK_USD_TO_EUR_RATE))
+    raise ValueError(f"Unsupported payment currency: {currency}")
+
+
+def _order_total_to_currency_coins(total_price_usd: int | float, currency: str) -> int:
+    amount = Decimal(str(total_price_usd)) * _payment_currency_rate(currency) * Decimal("100")
+    return max(1, int(amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+
+
+def _round_customer_amount(value: int | float | None) -> int:
+    if value is None:
+        return 0
+    return int(float(value) + 0.5)
+
+
+def _validate_order_totals_for_payment(order) -> None:
+    subtotal = _round_customer_amount(getattr(order, "subtotal_price", None))
+    shipping = _round_customer_amount(getattr(order, "shipping_price", None))
+    discount = _round_customer_amount(getattr(order, "discount_price", None))
+    total = _round_customer_amount(getattr(order, "total_price", None))
+
+    item_total = 0
+    for item in getattr(order, "items", []) or []:
+        is_print = getattr(item, "edition_type", None) != "original"
+        if is_print and (
+            getattr(item, "prodigi_storefront_bake_id", None) is None
+            or not getattr(item, "prodigi_storefront_policy_version", None)
+            or getattr(item, "customer_product_price", None) is None
+            or getattr(item, "customer_shipping_price", None) is None
+            or getattr(item, "customer_line_total", None) is None
+        ):
+            raise InvalidDataException(
+                detail=(
+                    "Payment blocked: order item is missing server-resolved "
+                    "storefront economics from the active payload."
+                ),
+                status_code=409,
+            )
+        item_total += _round_customer_amount(
+            getattr(item, "customer_line_total", None)
+            if getattr(item, "customer_line_total", None) is not None
+            else getattr(item, "price", None)
+        )
+
+    expected_total = max(0, subtotal + shipping - discount)
+    if total != expected_total or total != max(0, item_total - discount):
+        raise InvalidDataException(
+            detail=(
+                "Payment blocked: order total does not match persisted customer economics "
+                f"(subtotal={subtotal}, shipping={shipping}, discount={discount}, "
+                f"items={item_total}, total={total})."
+            ),
+            status_code=409,
+        )
+
+
+async def _resolve_payment_orders(db: DBDep, order) -> list:
+    if not getattr(order, "checkout_group_id", None):
+        return [order]
+    orders = await db.orders.get_filtered(checkout_group_id=order.checkout_group_id)
+    return sorted(orders, key=lambda candidate: candidate.id)
+
+
+def _validate_orders_totals_for_payment(orders: list) -> None:
+    for order in orders:
+        _validate_order_totals_for_payment(order)
+
+
+def _orders_total_price(orders: list) -> int:
+    return sum(_round_customer_amount(getattr(order, "total_price", None)) for order in orders)
 
 
 @router.post("/create", response_model=PaymentCreateResponse)
@@ -84,19 +166,32 @@ async def create_payment(
     if user_id and order.user_id and order.user_id != user_id:
         raise ObjectNotFoundException(detail="Order not found")
 
-    # 3. Determine the final amount to charge.
-    # If the frontend provides a pre-converted amount_coins (e.g., UAH kopiykas),
-    # use it to avoid exchange rate discrepancies between frontend display and Monobank.
-    if payment_data.amount_coins and payment_data.amount_coins > 0:
-        final_amount_coins = payment_data.amount_coins
-    else:
-        final_amount_coins = order.total_price * 100  # Fallback: treat as same currency.
+    payment_orders = await _resolve_payment_orders(db, order)
+    _validate_orders_totals_for_payment(payment_orders)
+
+    # 3. Determine the final amount to charge from the persisted order only.
+    # The browser may display a converted estimate, but the payment gateway must
+    # never trust a client-submitted amount for the final charge.
+    group_total_price = _orders_total_price(payment_orders)
+    final_amount_coins = _order_total_to_currency_coins(group_total_price, payment_data.currency)
+    if payment_data.amount_coins and payment_data.amount_coins != final_amount_coins:
+        logger.warning(
+            "Ignoring client payment amount for order {}: client={} server={}",
+            order.id,
+            payment_data.amount_coins,
+            final_amount_coins,
+        )
 
     # 4. Build basket items for the Monobank receipt.
     EDITION_LABELS = {"original": "Original Painting", "print": "Fine Art Print"}
-    order_total_usd_coins = sum(item.price for item in order.items) * 100 or 1
+    all_items = [
+        item
+        for payment_order in payment_orders
+        for item in (getattr(payment_order, "items", []) or [])
+    ]
+    order_total_usd_coins = sum(item.price for item in all_items) * 100 or 1
     basket_items = []
-    for item in order.items:
+    for item in all_items:
         # Use actual artwork title if the relationship is loaded.
         artwork = getattr(item, "artwork", None)
         name = artwork.title if artwork else f"Artwork #{item.artwork_id}"
@@ -150,10 +245,11 @@ async def create_payment(
             basket_items[-1]["total"] += diff
 
     # 5. Create the Monobank invoice with enriched merchant info.
-    item_count = len(order.items)
+    item_count = len(all_items)
     buyer_name = f"{order.first_name} {order.last_name}".strip()
+    order_ref = public_order_code(order.id)
     description = (
-        f"Samen Bondarenko Gallery - Order #{order.id} "
+        f"Samen Bondarenko Gallery - Order {order_ref} "
         f"for {buyer_name} "
         f"({item_count} {'item' if item_count == 1 else 'items'})"
     )
@@ -163,15 +259,18 @@ async def create_payment(
         invoice_data = await mono.create_invoice(
             amount_coins=final_amount_coins,
             currency=payment_data.currency,
-            order_reference=f"artshop-order-{order.id}",
+            order_reference=f"artshop-order-{order_ref}",
             destination=description,
             basket_items=basket_items,
             redirect_url=(
-                f"{settings.MONOBANK_REDIRECT_URL}?orderId={order.id}"
+                f"{settings.MONOBANK_REDIRECT_URL}?orderRef={order_ref}"
                 if settings.MONOBANK_REDIRECT_URL
                 else None
             ),
         )
+    except ValueError as e:
+        logger.error("Monobank configuration error for order {}: {}", order.id, e)
+        raise PaymentGatewayException(detail=f"Payment configuration error: {e}") from e
     except MonobankServiceError as e:
         logger.error("Monobank invoice creation failed for order {}: {}", order.id, e)
         raise PaymentGatewayException(detail=f"Payment gateway error: {e.detail}")
@@ -191,6 +290,7 @@ async def create_payment(
 
     return PaymentCreateResponse(
         order_id=order.id,
+        order_reference=order_ref,
         invoice_id=invoice_data["invoiceId"],
         payment_url=invoice_data["pageUrl"],
     )
@@ -279,8 +379,8 @@ async def monobank_webhook(request: Request, db: DBDep):
     return Response(status_code=200)
 
 
-@router.get("/{order_id}/status", response_model=PaymentStatusResponse)
-async def get_payment_status(order_id: int, db: DBDep):
+@router.get("/{order_ref}/status", response_model=PaymentStatusResponse)
+async def get_payment_status(order_ref: str, db: DBDep):
     """
     Returns the current payment status for a given order.
 
@@ -288,7 +388,7 @@ async def get_payment_status(order_id: int, db: DBDep):
     the buyer is redirected back from the Monobank payment page.
 
     Args:
-        order_id: The ID of the order to check.
+        order_ref: Public order reference, with legacy numeric IDs still supported.
 
     Returns:
         PaymentStatusResponse with the current payment status.
@@ -296,6 +396,11 @@ async def get_payment_status(order_id: int, db: DBDep):
     Raises:
         ObjectNotFoundException: If the order does not exist.
     """
+    try:
+        order_id = resolve_public_order_code(order_ref)
+    except ValueError as exc:
+        raise ObjectNotFoundException(detail="Order not found") from exc
+
     order = await db.orders.get_one_or_none(id=order_id)
     if not order:
         raise ObjectNotFoundException(detail="Order not found")
@@ -326,6 +431,7 @@ async def get_payment_status(order_id: int, db: DBDep):
 
     return PaymentStatusResponse(
         order_id=order.id,
+        order_reference=public_order_code(order.id),
         payment_status=order.payment_status,
         invoice_id=order.invoice_id,
     )

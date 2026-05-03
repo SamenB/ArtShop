@@ -2,88 +2,68 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import Lightbox from "@/components/Lightbox";
+import PrintConfigurator from "@/components/PrintConfigurator";
+import type { ArtworkPrintStorefront } from "@/lib/artworkStorefront";
+import { buildArtworkStorefrontKey, loadArtworkStorefront } from "@/lib/artworkStorefront";
 import { getApiUrl, getImageUrl, artworkUrl, apiFetch } from "@/utils";
+import { detectDeliveryCountry, storeDeliveryCountry } from "@/lib/deliveryCountry";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 
-type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
+import { type Artwork, type OriginalStatus, type ArtworkImage } from "./types";
+import { DEFAULT_GRADIENTS, STATUS_BADGE } from "./constants";
+import { AuthPromptModal } from "./components/AuthPromptModal";
 
-interface ArtworkImage {
-    thumb: string;
-    medium: string;
-    original: string;
-}
-
-interface Artwork {
-    id: number;
-    title: string;
-    description: string;
-    medium: string;
-    size: string;
-    original_price: number;
-    original_status: OriginalStatus;
-    has_prints: boolean;
-    orientation?: string;
-    base_print_price?: number;
-    images?: (string | ArtworkImage)[];
-    aspect_ratio?: string;
-    gradientFrom?: string;
-    gradientTo?: string;
-    width_cm?: number;
-    height_cm?: number;
-}
-
-const DEFAULT_GRADIENTS = [
-    ["#6A9FB5", "#3A6E85"],
-    ["#2A5F7A", "#1A3A55"],
-    ["#8A7AB5", "#4A5A8A"],
-    ["#5A8A8A", "#2A5A5A"],
-    ["#D4905A", "#8A5030"],
-];
-
-const STATUS_BADGE: Record<OriginalStatus, { label: string; bg: string; border: string; desc?: string } | null> = {
-    available: { label: "AVAILABLE", bg: "#F0FDF4", border: "#166534", desc: "Ready to ship globally" },
-    sold: { label: "SOLD", bg: "#FEF2F2", border: "#991B1B", desc: "This original has found a home" },
-    reserved: { label: "RESERVED", bg: "#FFFBEB", border: "#92400E", desc: "Currently on hold for a collector" },
-    not_for_sale: { label: "NOT FOR SALE", bg: "#F8FAFC", border: "#475569", desc: "Private collection" },
-    on_exhibition: { label: "EXHIBITION", bg: "#EFF6FF", border: "#1E40AF", desc: "Currently on display at a gallery" },
-    archived: null,
-    digital: { label: "DIGITAL ONLY", bg: "#FAF5FF", border: "#6B21A8", desc: "Available as high-res digital file" },
-};
-
-const CANVAS_SIZES = [
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.0 },
-    { labelCm: "60 × 90 cm", labelIn: "24 × 36 in", multiplier: 1.8 },
-    { labelCm: "80 × 120 cm", labelIn: "32 × 48 in", multiplier: 2.8 },
-];
-
-const PAPER_SIZES = [
-    { labelCm: "30 × 45 cm", labelIn: "12 × 18 in", multiplier: 1.0 },
-    { labelCm: "40 × 60 cm", labelIn: "16 × 24 in", multiplier: 1.5 },
-    { labelCm: "50 × 75 cm", labelIn: "20 × 30 in", multiplier: 2.2 },
-];
-
+import { ArtworkPurchasePanel } from "./components/ArtworkPurchasePanel";
+import { ArtworkPurchaseStyles } from "./components/ArtworkPurchaseStyles";
 export default function ArtworkDetailPage() {
     const params = useParams();
+    const pathname = usePathname();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const slug = params?.slug as string;
-    const { units, convertPrice, globalPrintPrice } = usePreferences();
+    const { units, convertPrice } = usePreferences();
     const { addItem } = useCart();
 
     const [work, setWork] = useState<Artwork | null>(null);
     const [loading, setLoading] = useState(true);
-    const [selectedCanvas, setSelectedCanvas] = useState(CANVAS_SIZES[0]);
-    const [selectedPaper, setSelectedPaper] = useState(PAPER_SIZES[0]);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [fullSizeOpen, setFullSizeOpen] = useState(false);
-    const [purchaseType, setPurchaseType] = useState<"original" | "canvas" | "paper">("original");
-    const [canvasStyle, setCanvasStyle] = useState<"rolled" | "framed">("rolled");
-    const [canvasFrame, setCanvasFrame] = useState<"black" | "oak" | "white">("black");
-    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [allSlugs, setAllSlugs] = useState<string[]>([]); // For prev/next navigation
+    const [userCountryCode, setUserCountryCode] = useState<string>("");
+    const [storefrontState, setStorefrontState] = useState<{
+        requestKey: string;
+        storefront: ArtworkPrintStorefront | null;
+        error: string | null;
+    } | null>(null);
+    const urlCountry = (searchParams.get("country") || "").toUpperCase();
+    const urlView = searchParams.get("view");
+    const activeCountryCode = /^[A-Z]{2}$/.test(urlCountry) ? urlCountry : userCountryCode;
+
+    useEffect(() => {
+        detectDeliveryCountry()
+            .then(setUserCountryCode)
+            .catch(() => setUserCountryCode("US"));
+    }, []);
+
+    useEffect(() => {
+        if (/^[A-Z]{2}$/.test(urlCountry)) {
+            storeDeliveryCountry(urlCountry);
+        }
+    }, [urlCountry]);
+
+    useEffect(() => {
+        if (/^[A-Z]{2}$/.test(urlCountry) || !/^[A-Z]{2}$/.test(userCountryCode)) {
+            return;
+        }
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set("country", userCountryCode);
+        router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+    }, [pathname, router, searchParams, urlCountry, userCountryCode]);
 
     const { user } = useUser();
     const [liked, setLiked] = useState(false);
@@ -148,7 +128,12 @@ export default function ArtworkDetailPage() {
 
     useEffect(() => {
         if (!slug) return;
-        apiFetch(`${getApiUrl()}/artworks/${slug}`)
+        const params = new URLSearchParams();
+        if (activeCountryCode) {
+            params.set("country", activeCountryCode);
+        }
+
+        apiFetch(`${getApiUrl()}/artworks/${slug}${params.size ? `?${params.toString()}` : ""}`)
             .then(res => res.json())
             .then(data => {
                 const item = data.data || data;
@@ -157,19 +142,59 @@ export default function ArtworkDetailPage() {
                     gradientFrom: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][0],
                     gradientTo: DEFAULT_GRADIENTS[item.id % DEFAULT_GRADIENTS.length][1],
                 });
-
-                // Auto-select the most relevant tab
-                if (item.original_status === "available") {
-                    setPurchaseType("original");
-                } else if (item.has_prints) {
-                    setPurchaseType("canvas");
-                } else {
-                    setPurchaseType("original");
+                if (item.print_storefront && activeCountryCode) {
+                    setStorefrontState({
+                        requestKey: buildArtworkStorefrontKey(slug, activeCountryCode),
+                        storefront: item.print_storefront,
+                        error: null,
+                    });
                 }
             })
             .catch(() => console.warn("Backend unavailable"))
             .finally(() => setLoading(false));
-    }, [slug]);
+    }, [activeCountryCode, slug]);
+
+    useEffect(() => {
+        if (!slug || !activeCountryCode || loading) {
+            return;
+        }
+
+        let cancelled = false;
+        const requestKey = buildArtworkStorefrontKey(slug, activeCountryCode);
+
+        if (work?.print_storefront?.country_code === activeCountryCode) {
+            return;
+        }
+
+        if (storefrontState?.requestKey === requestKey && storefrontState.storefront) {
+            return;
+        }
+
+        loadArtworkStorefront(slug, activeCountryCode)
+            .then((data) => {
+                if (!cancelled) {
+                    setStorefrontState({
+                        requestKey,
+                        storefront: data,
+                        error: null,
+                    });
+                }
+            })
+            .catch((err: unknown) => {
+                if (!cancelled) {
+                    setStorefrontState({
+                        requestKey,
+                        storefront: null,
+                        error:
+                            err instanceof Error ? err.message : "Unable to load print offers.",
+                    });
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeCountryCode, loading, slug, storefrontState, work]);
 
     const { pendingLikes, addPendingLike, removePendingLike, unauthLikeCount, incrementUnauthLikeCount } = usePreferences();
 
@@ -188,7 +213,6 @@ export default function ArtworkDetailPage() {
     // Fetch initial like state if authenticated
     useEffect(() => {
         if (!user || !work) {
-            setLiked(false);
             return;
         }
         apiFetch(`${getApiUrl()}/users/me/likes`)
@@ -209,10 +233,52 @@ export default function ArtworkDetailPage() {
     if (loading) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Loading artwork...</div>;
     if (!work) return <div style={{ height: "60vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", color: "var(--color-muted)" }}>Artwork not found.</div>;
 
+    const storefrontRequestKey = buildArtworkStorefrontKey(slug, activeCountryCode);
+    const embeddedStorefront =
+        work.print_storefront?.country_code === activeCountryCode ? work.print_storefront : null;
+    const storefront = embeddedStorefront
+        || (storefrontState?.requestKey === storefrontRequestKey ? storefrontState.storefront : null);
+    const storefrontError = embeddedStorefront
+        ? null
+        : storefrontState?.requestKey === storefrontRequestKey ? storefrontState.error : null;
+    const storefrontLoading = !embeddedStorefront && storefrontState?.requestKey !== storefrontRequestKey;
     const images = work.images || [];
-    const currentCanvasPrice = Math.round(globalPrintPrice * selectedCanvas.multiplier);
-    const currentPaperPrice = Math.round((globalPrintPrice * 0.8) * selectedPaper.multiplier);
+    const storefrontCanvasAvailable = Boolean(storefront?.mediums?.canvas?.cards?.length);
+    const storefrontPaperAvailable = Boolean(storefront?.mediums?.paper?.cards?.length);
+    const hasCanvasOffers = storefront
+        ? storefrontCanvasAvailable
+        : Boolean(work.has_canvas_print || work.has_canvas_print_limited);
+    const hasPaperOffers = storefront
+        ? storefrontPaperAvailable
+        : Boolean(work.has_paper_print || work.has_paper_print_limited);
+    const defaultPurchaseType: "original" | "canvas" | "paper" =
+        work.original_status === "available"
+            ? "original"
+            : work.has_canvas_print || work.has_canvas_print_limited
+              ? "canvas"
+              : work.has_paper_print || work.has_paper_print_limited
+                ? "paper"
+                : "original";
+    const resolvedPurchaseType: "original" | "canvas" | "paper" =
+        urlView === "canvas" || urlView === "paper" || urlView === "original"
+            ? urlView
+            : defaultPurchaseType;
     const effectiveLiked = user ? liked : pendingLikes.includes(work.id);
+
+    const updateRouteState = (next: { country?: string; view?: "original" | "canvas" | "paper" }) => {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        const nextCountry = (next.country || activeCountryCode || userCountryCode).toUpperCase();
+        if (!/^[A-Z]{2}$/.test(nextCountry)) {
+            return;
+        }
+        nextParams.set("country", nextCountry);
+        if (next.view) {
+            nextParams.set("view", next.view);
+        } else {
+            nextParams.delete("view");
+        }
+        router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+    };
 
     // Compute prev/next slugs
     const currentSlugIdx = allSlugs.indexOf(slug);
@@ -634,7 +700,6 @@ export default function ArtworkDetailPage() {
                                                                     ...explicitDimensions
                                                                 }}
                                                             >
-                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                                 <img
                                                                     src={getImageUrl(img, 'original')}
                                                                     alt={work.title}
@@ -777,7 +842,6 @@ export default function ArtworkDetailPage() {
                                                             }
                                                         }}
                                                     >
-                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img
                                                             src={getImageUrl(img, 'thumb')}
                                                             alt=""
@@ -800,801 +864,31 @@ export default function ArtworkDetailPage() {
                     </div>{/* end .artwork-img-col / left cell */}
 
                     {/* ── Right: Purchase panel ── */}
-                    <div style={{ marginTop: layoutMetrics.winW >= 768 ? "-1rem" : "0", paddingBottom: layoutMetrics.winW < 768 ? "1rem" : "6rem" }}>
-                        <div className="desktop-title-row" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", marginTop: "-0.5rem", gap: "1rem" }}>
-                            <h1 style={{ fontFamily: "var(--font-artwork-title)", fontSize: "clamp(2.4rem, 4.5vw, 3.4rem)", fontWeight: 400, fontStyle: "normal", color: "var(--color-charcoal)", lineHeight: 1.2 }}>{work.title}</h1>
-                            <button
-                                onClick={async () => {
-                                    const newState = !effectiveLiked;
-                                    setLiked(newState); // Optimistic UI for animation
-                                    setLikeAnimating(true);
-                                    setTimeout(() => setLikeAnimating(false), 400);
-
-                                    if (!user) { 
-                                        if (work) {
-                                            if (newState) addPendingLike(work.id);
-                                            else removePendingLike(work.id);
-                                        }
-                                        incrementUnauthLikeCount();
-                                        const nextCount = unauthLikeCount + 1;
-                                        if ((nextCount - 1) % 3 === 0) {
-                                            setTimeout(() => setShowAuthPrompt(true), 1000);
-                                        }
-                                        return; 
-                                    }
-                                    
-                                    try {
-                                        await apiFetch(`${getApiUrl()}/users/me/likes/${work.id}`, { method: newState ? "POST" : "DELETE" });
-                                    } catch {}
-                                }}
-                                aria-label={effectiveLiked ? "Unlike" : "Like"}
-                                style={{
-                                    background: "rgba(255,255,255,0.88)", border: "1px solid rgba(0,0,0,0.05)", borderRadius: "50%",
-                                    width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center",
-                                    cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", flexShrink: 0,
-                                    transform: likeAnimating ? "scale(1.2)" : "scale(1)",
-                                    transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s",
-                                    outline: "none"
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)"}
-                                onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"}
-                            >
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill={effectiveLiked ? "#e84057" : "none"} stroke={effectiveLiked ? "#e84057" : "#999"} strokeWidth={effectiveLiked ? "1.5" : "2"} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "fill 0.25s, stroke 0.25s" }}>
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        <div style={{ position: "relative", marginTop: layoutMetrics.winW < 768 ? "-0.5rem" : "1rem", width: layoutMetrics.winW < 768 ? "calc(100% + 4rem)" : "100%", marginLeft: layoutMetrics.winW < 768 ? "-2rem" : "0", marginRight: layoutMetrics.winW < 768 ? "-2rem" : "0" }}>
-                            {/* ── Fluid Morphing Folder Tabs ── */}
-                            {(() => {
-                                const isSmall = layoutMetrics.winW < 768;
-                                // Determine radii to make the active tab merge seamlessly into the card
-                                const cardBorderRadiusTopLeft = isSmall ? "0" : (purchaseType === "original" ? "0" : "24px");
-                                const cardBorderRadiusTopRight = isSmall ? "0" : (purchaseType === "paper" ? "0" : "24px");
-
-                                return (
-                                    <>
-                                        <style>{`
-                                            /* ══════════════════════════════════════
-                                               Liquid Glass Purchase Tabs — iOS 2026
-                                               ══════════════════════════════════════ */
-                                            .fluid-tabs-container {
-                                                display: flex;
-                                                position: relative;
-                                                z-index: 10;
-                                                margin-bottom: -1px;
-                                                gap: 3px;
-                                                padding: 0 16px; /* breathe from card edges on desktop */
-                                            }
-
-                                            /* ── Base tab (inactive / glass state) ── */
-                                            .fluid-tab {
-                                                flex: 1;
-                                                position: relative;
-                                                padding: 1.1rem 0.75rem 1rem;
-                                                font-family: 'Cormorant Garamond', Georgia, serif;
-                                                font-weight: 400;
-                                                font-size: 1rem;
-                                                letter-spacing: 0.03em;
-                                                color: rgba(26, 26, 24, 0.5);
-                                                border: none;
-                                                cursor: pointer;
-                                                z-index: 1;
-                                                text-align: center;
-                                                white-space: nowrap;
-                                                border-radius: 14px 14px 0 0;
-                                                -webkit-tap-highlight-color: transparent;
-
-                                                /* ✦ Frosted glass — the inactive "you can click me" state */
-                                                background: rgba(255, 255, 255, 0.35);
-                                                backdrop-filter: blur(16px) saturate(1.4);
-                                                -webkit-backdrop-filter: blur(16px) saturate(1.4);
-                                                border: 1px solid rgba(255, 255, 255, 0.5);
-                                                border-bottom: none;
-                                                box-shadow:
-                                                    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-                                                    0 -1px 4px rgba(0, 0, 0, 0.02);
-
-                                                transition:
-                                                    color 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                                                    background 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                                                    backdrop-filter 0.35s ease,
-                                                    box-shadow 0.4s ease,
-                                                    border-color 0.35s ease,
-                                                    transform 0.25s ease;
-                                            }
-
-                                            /* Inactive hover — glass brightens */
-                                            @media (hover: hover) and (pointer: fine) {
-                                                .fluid-tab:hover:not(.active) {
-                                                    color: rgba(26, 26, 24, 0.68);
-                                                    background: rgba(255, 255, 255, 0.52);
-                                                    border-color: rgba(255, 255, 255, 0.7);
-                                                    box-shadow:
-                                                        inset 0 1px 0 rgba(255, 255, 255, 0.8),
-                                                        0 -2px 8px rgba(0, 0, 0, 0.03);
-                                                    transform: translateY(-1px);
-                                                }
-                                            }
-
-                                            /* ── Active tab — solid, elevated, highlighted ── */
-                                            .fluid-tab.active {
-                                                color: var(--color-charcoal);
-                                                font-weight: 500;
-                                                z-index: 10;
-
-                                                /* Solid white — no glass, this is THE surface */
-                                                background: #fff;
-                                                backdrop-filter: none;
-                                                -webkit-backdrop-filter: none;
-                                                border-color: rgba(0, 0, 0, 0.06);
-
-                                                box-shadow:
-                                                    0 -3px 14px rgba(0, 0, 0, 0.05),
-                                                    0 -1px 4px rgba(0, 0, 0, 0.03),
-                                                    inset 0 2px 0 rgba(255, 255, 255, 1);
-                                            }
-
-                                            /* Active highlight bar — warm accent glow at top */
-                                            .fluid-tab.active .tab-highlight {
-                                                position: absolute;
-                                                top: 0;
-                                                left: 20%;
-                                                right: 20%;
-                                                height: 2.5px;
-                                                border-radius: 0 0 4px 4px;
-                                                background: linear-gradient(90deg, #ec4899, #fb923c);
-                                                opacity: 0.7;
-                                                transition: opacity 0.35s ease;
-                                            }
-
-                                            /* Organic inverse-radius curves — seamless card merge */
-                                            .fluid-tab.active::before,
-                                            .fluid-tab.active::after {
-                                                content: "";
-                                                position: absolute;
-                                                bottom: 0;
-                                                width: 16px;
-                                                height: 16px;
-                                                pointer-events: none;
-                                                z-index: 10;
-                                            }
-                                            .fluid-tab.active::before {
-                                                left: -16px;
-                                                background: radial-gradient(circle at 0 0, transparent 15.5px, #fff 16px);
-                                            }
-                                            .fluid-tab.active::after {
-                                                right: -16px;
-                                                background: radial-gradient(circle at 100% 0, transparent 15.5px, #fff 16px);
-                                            }
-
-                                            /* Don't draw curves at container edges */
-                                            .fluid-tab:first-child.active::before { display: none; }
-                                            .fluid-tab:last-child.active::after  { display: none; }
-
-                                            /* ── Mobile refinements ── */
-                                            @media (max-width: 767px) {
-                                                .fluid-tabs-container {
-                                                    gap: 2px;
-                                                    padding: 0 10px;
-                                                }
-                                                .fluid-tab {
-                                                    font-size: 0.85rem;
-                                                    padding: 0.9rem 0.2rem 0.8rem;
-                                                    letter-spacing: 0.01em;
-                                                    border-radius: 10px 10px 0 0;
-                                                }
-                                                .fluid-tab.active::before,
-                                                .fluid-tab.active::after {
-                                                    width: 10px;
-                                                    height: 10px;
-                                                }
-                                                .fluid-tab.active::before {
-                                                    left: -10px;
-                                                    background: radial-gradient(circle at 0 0, transparent 9.5px, #fff 10px);
-                                                }
-                                                .fluid-tab.active::after {
-                                                    right: -10px;
-                                                    background: radial-gradient(circle at 100% 0, transparent 9.5px, #fff 10px);
-                                                }
-                                            }
-
-                                            /* ── Card & content transitions ── */
-                                            .purchase-card {
-                                                transition: border-radius 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-                                            }
-                                            .purchase-card-content {
-                                                animation: pcFadeIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-                                            }
-                                            @keyframes pcFadeIn {
-                                                from { opacity: 0; transform: translateY(6px); }
-                                                to   { opacity: 1; transform: translateY(0); }
-                                            }
-
-                                            /* ══════════════════════════════════════
-                                               Step-by-Step Configurator
-                                               ══════════════════════════════════════ */
-
-                                            /* Header with title + subtitle */
-                                            .pc-header {
-                                                padding-bottom: 1.25rem;
-                                                border-bottom: 1px solid var(--color-border);
-                                            }
-                                            .pc-title {
-                                                font-family: 'Cormorant Garamond', Georgia, serif;
-                                                font-size: 1.15rem;
-                                                font-weight: 500;
-                                                color: var(--color-charcoal);
-                                                margin: 0 0 0.3rem;
-                                                letter-spacing: 0.01em;
-                                            }
-                                            .pc-subtitle {
-                                                font-family: var(--font-sans);
-                                                font-size: 0.68rem;
-                                                color: var(--color-muted);
-                                                margin: 0;
-                                                letter-spacing: 0.02em;
-                                            }
-
-                                            /* Step row: number + label + dropdown */
-                                            .step-row {
-                                                display: flex;
-                                                flex-direction: column;
-                                                gap: 0.6rem;
-                                            }
-                                            .step-label {
-                                                display: flex;
-                                                align-items: center;
-                                                gap: 0.5rem;
-                                                margin-left: -6px;
-                                            }
-                                            .step-number {
-                                                font-family: 'Cormorant Garamond', Georgia, serif;
-                                                font-size: 1.65rem;
-                                                font-weight: 500;
-                                                color: var(--color-charcoal);
-                                                line-height: 1;
-                                                width: 1.6rem;
-                                                flex-shrink: 0;
-                                            }
-                                            .step-text {
-                                                font-family: var(--font-sans);
-                                                font-size: 0.82rem;
-                                                font-weight: 600;
-                                                letter-spacing: 0.1em;
-                                                text-transform: uppercase;
-                                                color: var(--color-muted);
-                                                line-height: 1;
-                                                transform: translateY(1px);
-                                            }
-
-                                            /* Custom inline expandable selector */
-                                            .step-select-wrap {
-                                                position: relative;
-                                                padding-left: 10px;
-                                            }
-                                            .step-trigger {
-                                                display: flex;
-                                                align-items: center;
-                                                justify-content: space-between;
-                                                width: 100%;
-                                                padding: 0.9rem 1.1rem;
-                                                font-family: var(--font-sans);
-                                                font-size: 0.85rem;
-                                                font-weight: 400;
-                                                color: var(--color-charcoal);
-                                                background: #fff;
-                                                border: 1.5px solid var(--color-border-dark);
-                                                border-radius: 10px;
-                                                cursor: pointer;
-                                                outline: none;
-                                                text-align: left;
-                                                transition:
-                                                    border-color 0.25s ease,
-                                                    box-shadow 0.25s ease,
-                                                    border-radius 0.2s ease;
-                                                -webkit-tap-highlight-color: transparent;
-                                            }
-                                            .step-trigger.open {
-                                                border-color: var(--color-charcoal);
-                                                box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.06);
-                                                border-radius: 10px 10px 0 0;
-                                                border-bottom-color: var(--color-border);
-                                            }
-                                            @media (hover: hover) and (pointer: fine) {
-                                                .step-trigger:hover:not(.open) {
-                                                    border-color: rgba(17, 17, 17, 0.35);
-                                                }
-                                            }
-                                            /* Chevron */
-                                            .step-chevron {
-                                                width: 10px;
-                                                height: 10px;
-                                                border-right: 1.5px solid var(--color-muted);
-                                                border-bottom: 1.5px solid var(--color-muted);
-                                                transform: rotate(45deg);
-                                                transition: transform 0.25s ease, border-color 0.2s ease;
-                                                flex-shrink: 0;
-                                                margin-left: 0.75rem;
-                                            }
-                                            .step-trigger.open .step-chevron {
-                                                transform: rotate(-135deg);
-                                                border-color: var(--color-charcoal);
-                                            }
-
-                                            /* Options panel — inline, pushes content down */
-                                            .step-options {
-                                                overflow: hidden;
-                                                max-height: 0;
-                                                opacity: 0;
-                                                border: 1.5px solid transparent;
-                                                border-top: none;
-                                                border-radius: 0 0 10px 10px;
-                                                background: #fff;
-                                                transition:
-                                                    max-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                                                    opacity 0.25s ease,
-                                                    border-color 0.2s ease;
-                                            }
-                                            .step-options.open {
-                                                max-height: 400px;
-                                                opacity: 1;
-                                                border-color: var(--color-charcoal);
-                                            }
-
-                                            /* Individual option */
-                                            .step-option {
-                                                display: flex;
-                                                align-items: center;
-                                                justify-content: space-between;
-                                                width: 100%;
-                                                padding: 0.75rem 1.1rem;
-                                                font-family: var(--font-sans);
-                                                font-size: 0.82rem;
-                                                font-weight: 400;
-                                                color: var(--color-charcoal-mid);
-                                                background: transparent;
-                                                border: none;
-                                                border-top: 1px solid var(--color-border);
-                                                cursor: pointer;
-                                                text-align: left;
-                                                transition: background 0.15s ease, color 0.15s ease;
-                                                -webkit-tap-highlight-color: transparent;
-                                            }
-                                            .step-option:first-child {
-                                                border-top: none;
-                                            }
-                                            .step-option:last-child {
-                                                border-radius: 0 0 8px 8px;
-                                            }
-                                            .step-option.active {
-                                                color: var(--color-charcoal);
-                                                font-weight: 500;
-                                                background: rgba(17, 17, 17, 0.03);
-                                            }
-                                            .step-option .opt-check {
-                                                width: 16px;
-                                                height: 16px;
-                                                border-radius: 50%;
-                                                border: 1.5px solid var(--color-border-dark);
-                                                flex-shrink: 0;
-                                                display: flex;
-                                                align-items: center;
-                                                justify-content: center;
-                                                transition: all 0.2s ease;
-                                            }
-                                            .step-option.active .opt-check {
-                                                border-color: var(--color-charcoal);
-                                                background: var(--color-charcoal);
-                                            }
-                                            .step-option.active .opt-check::after {
-                                                content: "";
-                                                width: 4px;
-                                                height: 4px;
-                                                border-radius: 50%;
-                                                background: #fff;
-                                            }
-                                            @media (hover: hover) and (pointer: fine) {
-                                                .step-option:hover:not(.active) {
-                                                    background: rgba(17, 17, 17, 0.02);
-                                                    color: var(--color-charcoal);
-                                                }
-                                            }
-
-                                            /* Info badge — neutral grey */
-                                            .info-badge {
-                                                display: flex;
-                                                align-items: flex-start;
-                                                gap: 0.7rem;
-                                                padding: 0.85rem 1rem;
-                                                border-radius: 8px;
-                                                background: rgba(17, 17, 17, 0.03);
-                                                border-left: 3px solid rgba(17, 17, 17, 0.15);
-                                            }
-                                            .info-badge-content {
-                                                flex: 1;
-                                            }
-                                            .info-badge-title {
-                                                font-family: var(--font-sans);
-                                                font-size: 0.72rem;
-                                                font-weight: 600;
-                                                color: var(--color-charcoal);
-                                                margin: 0 0 0.2rem;
-                                                letter-spacing: 0.02em;
-                                            }
-                                            .info-badge-desc {
-                                                font-family: var(--font-sans);
-                                                font-size: 0.68rem;
-                                                color: var(--color-charcoal-mid);
-                                                margin: 0;
-                                                line-height: 1.5;
-                                            }
-
-                                            /* Conditional step reveal animation */
-                                            .step-reveal {
-                                                animation: stepSlideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-                                            }
-                                            @keyframes stepSlideIn {
-                                                from { opacity: 0; transform: translateY(8px); }
-                                                to   { opacity: 1; transform: translateY(0); }
-                                            }
-
-                                            /* Mobile refinements */
-                                            @media (max-width: 767px) {
-                                                .step-number { font-size: 1.45rem; width: 1.4rem; }
-                                                .step-text { font-size: 0.72rem; }
-                                                .step-label { margin-left: -3px; }
-                                                .step-select-wrap { padding-left: 6px; }
-                                                .step-trigger { font-size: 0.82rem; padding: 0.8rem 0.9rem; }
-                                                .step-option { font-size: 0.78rem; padding: 0.7rem 0.9rem; }
-                                                .pc-title { font-size: 1.05rem; }
-                                                .info-badge { padding: 0.75rem 0.85rem; }
-                                            }
-                                        `}</style>
-
-                                        <div className="fluid-tabs-container">
-                                            {([
-                                                { key: "original", label: "Original" },
-                                                { key: "canvas", label: "Canvas Prints" },
-                                                { key: "paper", label: "Paper Prints" },
-                                            ] as const).map(({ key, label }) => {
-                                                const isActive = purchaseType === key;
-                                                return (
-                                                    <button
-                                                        key={key}
-                                                        className={`fluid-tab ${isActive ? "active" : ""}`}
-                                                        onClick={() => setPurchaseType(key)}
-                                                    >
-                                                        {isActive && <span className="tab-highlight" />}
-                                                        {label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-
-                                        <div className="purchase-card" style={{
-                                            backgroundColor: "#fff",
-                                            padding: isSmall ? "2rem 1.25rem" : "2rem",
-                                            borderTopLeftRadius: cardBorderRadiusTopLeft,
-                                            borderTopRightRadius: cardBorderRadiusTopRight,
-                                            borderBottomLeftRadius: isSmall ? "0" : "24px",
-                                            borderBottomRightRadius: isSmall ? "0" : "24px",
-                                            boxShadow: "0 4px 16px rgba(0,0,0,0.04), 0 16px 48px rgba(0,0,0,0.06)",
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "2rem",
-                                            position: "relative",
-                                            zIndex: 1,
-                                            width: "100%",
-                                            boxSizing: "border-box"
-                                        }}>
-                                            <div className="purchase-card-content" key={purchaseType} style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-                                                {purchaseType === "original" ? (
-                                                    <>
-                                                        {/* Purchase Details */}
-                                                        {work.original_status === "available" && (
-                                                            <div style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "1.5rem" }}>
-                                                                <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.5rem" }}>Purchase Details</h3>
-                                                                <p className="font-price" style={{ fontSize: "1.65rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(work.original_price)}</p>
-                                                                <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginTop: "0.25rem" }}>Original Artwork • Certificate of Authenticity included</p>
-                                                            </div>
-                                                        )}
-                                                        <div>
-                                                            <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", color: "var(--color-muted)", marginBottom: "0.8rem", marginTop: "0.5rem" }}>About the Painting</h3>
-                                                            <p style={{ fontSize: "0.9rem", lineHeight: 1.7, color: "var(--color-charcoal-mid)" }}>{work.description}</p>
-                                                        </div>
-
-                                                        {/* Shipping details — only when purchasable */}
-                                                        {work.original_status === "available" && (
-                                                            <>
-                                                                <div className="info-badge">
-                                                                    <div className="info-badge-content">
-                                                                        <p className="info-badge-title">Shipped Rolled in Protective Tube</p>
-                                                                        <p className="info-badge-desc">
-                                                                            Gallery-standard shipping method · Reinforced tube with acid-free tissue · Worldwide delivery
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div style={{
-                                                                    backgroundColor: "#FFF8F0",
-                                                                    borderLeft: "3px solid #D4A574",
-                                                                    borderRadius: "6px",
-                                                                    padding: "0.85rem 1rem",
-                                                                }}>
-                                                                    <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.68rem", fontWeight: 600, color: "var(--color-charcoal)", marginBottom: "0.2rem" }}>Flat crate available on request</p>
-                                                                    <p style={{ margin: 0, fontFamily: "var(--font-sans)", fontSize: "0.65rem", color: "var(--color-charcoal-mid)", lineHeight: 1.5 }}>
-                                                                        Custom crates from <span className="font-price font-medium">{convertPrice(1000)}</span>+. Contact us for details.
-                                                                    </p>
-                                                                </div>
-                                                            </>
-                                                        )}
-
-                                                        {/* Availability notice */}
-                                                        {work.original_status !== "available" && STATUS_BADGE[work.original_status] && (() => {
-                                                            const s = STATUS_BADGE[work.original_status]!;
-                                                            return (
-                                                                <div style={{
-                                                                    backgroundColor: s.bg,
-                                                                    borderLeft: `3px solid ${s.border}`,
-                                                                    borderRadius: "6px",
-                                                                    padding: "0.85rem 1rem",
-                                                                    display: "flex",
-                                                                    alignItems: "flex-start",
-                                                                    gap: "0.65rem",
-                                                                }}>
-                                                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: s.border, marginTop: "0.35rem", flexShrink: 0 }}></div>
-                                                                    <div style={{ flex: 1 }}>
-                                                                        <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700, color: "var(--color-charcoal)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</p>
-                                                                        {s.desc && <p style={{ margin: "0.2rem 0 0", fontSize: "0.7rem", color: "var(--color-muted)", lineHeight: 1.4 }}>{s.desc}</p>}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
-
-                                                        <button
-                                                            className="premium-cta-btn"
-                                                            disabled={work.original_status !== "available"}
-                                                            onClick={() => addItem({ id: String(work.id), slug: String(work.id), title: work.title, type: "original", imageGradientFrom: work.gradientFrom!, imageGradientTo: work.gradientTo!, imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined, price: work.original_price, size: work.size, finish: "Original" })}
-                                                            style={{ width: "100%", marginTop: "auto", opacity: work.original_status === "available" ? 1 : 0.6 }}
-                                                        >
-                                                            {work.original_status === "available" ? "Add Original to Cart" : STATUS_BADGE[work.original_status]?.label || "Unavailable"}
-                                                        </button>
-                                                    </>
-                                                ) : purchaseType === "canvas" ? (
-                                                    <>
-                                                        {/* ── Canvas Prints — Step-by-Step Configurator ── */}
-                                                        <div className="pc-header">
-                                                            <p className="pc-title">Fine Art Canvas Prints</p>
-                                                            <p className="pc-subtitle">Printed &amp; fulfilled by Prodigi · Shipped worldwide</p>
-                                                        </div>
-
-                                                        {/* Step 1: Select Format */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">1</span>
-                                                                <span className="step-text">Select Format</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "canvas-format" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "canvas-format" ? null : "canvas-format")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{canvasStyle === "rolled" ? `Rolled Canvas — up to ${units === "cm" ? "80 × 120 cm" : "32 × 48 in"}` : `Framed Canvas — up to ${units === "cm" ? "60 × 90 cm" : "24 × 36 in"}`}</span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "canvas-format" ? "open" : ""}`}>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`step-option ${canvasStyle === "rolled" ? "active" : ""}`}
-                                                                        onClick={() => { setCanvasStyle("rolled"); setOpenDropdown(null); }}
-                                                                    >
-                                                                        <span>Rolled Canvas — up to {units === "cm" ? "80 × 120 cm" : "32 × 48 in"}</span>
-                                                                        <span className="opt-check" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`step-option ${canvasStyle === "framed" ? "active" : ""}`}
-                                                                        onClick={() => { setCanvasStyle("framed"); setOpenDropdown(null); }}
-                                                                    >
-                                                                        <span>Framed Canvas — up to {units === "cm" ? "60 × 90 cm" : "24 × 36 in"}</span>
-                                                                        <span className="opt-check" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Step 2: Select Size */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">2</span>
-                                                                <span className="step-text">Select Size</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "canvas-size" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "canvas-size" ? null : "canvas-size")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "canvas-size" ? "open" : ""}`}>
-                                                                    {(canvasStyle === "framed" ? CANVAS_SIZES.slice(0, 2) : CANVAS_SIZES).map(ps => (
-                                                                        <button
-                                                                            key={ps.labelCm}
-                                                                            type="button"
-                                                                            className={`step-option ${selectedCanvas === ps ? "active" : ""}`}
-                                                                            onClick={() => { setSelectedCanvas(ps); setOpenDropdown(null); }}
-                                                                        >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * ps.multiplier + (canvasStyle === "framed" ? 120 : 0)))}</span></span>
-                                                                            <span className="opt-check" />
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Step 3: Select Frame (conditional — only when framed) */}
-                                                        {canvasStyle === "framed" && (
-                                                            <div className="step-row step-reveal" key="frame-step">
-                                                                <div className="step-label">
-                                                                    <span className="step-number">3</span>
-                                                                    <span className="step-text">Select Frame</span>
-                                                                </div>
-                                                                <div className="step-select-wrap">
-                                                                    <button
-                                                                        className={`step-trigger ${openDropdown === "canvas-frame" ? "open" : ""}`}
-                                                                        onClick={() => setOpenDropdown(openDropdown === "canvas-frame" ? null : "canvas-frame")}
-                                                                        type="button"
-                                                                    >
-                                                                        <span>{canvasFrame === "black" ? "Black Floater Frame" : canvasFrame === "oak" ? "Natural Oak Frame" : "White Slim Frame"}</span>
-                                                                        <span className="step-chevron" />
-                                                                    </button>
-                                                                    <div className={`step-options ${openDropdown === "canvas-frame" ? "open" : ""}`}>
-                                                                        {([
-                                                                            { value: "black" as const, label: "Black Floater Frame" },
-                                                                            { value: "oak" as const, label: "Natural Oak Frame" },
-                                                                            { value: "white" as const, label: "White Slim Frame" },
-                                                                        ]).map(opt => (
-                                                                            <button
-                                                                                key={opt.value}
-                                                                                type="button"
-                                                                                className={`step-option ${canvasFrame === opt.value ? "active" : ""}`}
-                                                                                onClick={() => { setCanvasFrame(opt.value); setOpenDropdown(null); }}
-                                                                            >
-                                                                                <span>{opt.label}</span>
-                                                                                <span className="opt-check" />
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Info Badge — material details */}
-                                                        <div className="info-badge">
-                                                            <div className="info-badge-content">
-                                                                <p className="info-badge-title">Museum-Grade 400gsm Canvas</p>
-                                                                <p className="info-badge-desc">
-                                                                    {canvasStyle === "framed"
-                                                                        ? `Premium floating frame · ${canvasFrame === "black" ? "Matte black" : canvasFrame === "oak" ? "Natural oak" : "White slim"} finish · Ready to hang`
-                                                                        : "Shipped rolled in protective tube · Ideal for custom stretching or framing"
-                                                                    }
-                                                                    {" · UV-resistant archival inks"}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Footer — price + CTA */}
-                                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                            <div>
-                                                                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                    <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>
-                                                                    {convertPrice(Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)))}
-                                                                </span>
-                                                            </div>
-                                                            <button
-                                                                className="premium-cta-btn"
-                                                                onClick={() => addItem({
-                                                                    id: `${work.id}-canvas-${canvasStyle}${canvasStyle === "framed" ? `-${canvasFrame}` : ""}-${selectedCanvas.labelCm}`,
-                                                                    slug: String(work.id),
-                                                                    title: work.title,
-                                                                    type: "print",
-                                                                    imageGradientFrom: work.gradientFrom!,
-                                                                    imageGradientTo: work.gradientTo!,
-                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
-                                                                    price: Math.round(globalPrintPrice * selectedCanvas.multiplier + (canvasStyle === "framed" ? 120 : 0)),
-                                                                    finish: canvasStyle === "framed" ? `Framed (${canvasFrame})` : "Rolled Canvas",
-                                                                    size: units === "cm" ? selectedCanvas.labelCm : selectedCanvas.labelIn,
-                                                                })}
-                                                            >Add to Cart</button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {/* ── Paper Prints — Rolled Only ── */}
-                                                        <div className="pc-header">
-                                                            <p className="pc-title">Fine Art Paper Prints</p>
-                                                            <p className="pc-subtitle">Printed &amp; fulfilled by Prodigi · Shipped rolled worldwide</p>
-                                                        </div>
-
-                                                        {/* Step 1: Select Size */}
-                                                        <div className="step-row">
-                                                            <div className="step-label">
-                                                                <span className="step-number">1</span>
-                                                                <span className="step-text">Select Size</span>
-                                                            </div>
-                                                            <div className="step-select-wrap">
-                                                                <button
-                                                                    className={`step-trigger ${openDropdown === "paper-size" ? "open" : ""}`}
-                                                                    onClick={() => setOpenDropdown(openDropdown === "paper-size" ? null : "paper-size")}
-                                                                    type="button"
-                                                                >
-                                                                    <span>{units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * selectedPaper.multiplier))}</span></span>
-                                                                    <span className="step-chevron" />
-                                                                </button>
-                                                                <div className={`step-options ${openDropdown === "paper-size" ? "open" : ""}`}>
-                                                                    {PAPER_SIZES.map(ps => (
-                                                                        <button
-                                                                            key={ps.labelCm}
-                                                                            type="button"
-                                                                            className={`step-option ${selectedPaper === ps ? "active" : ""}`}
-                                                                            onClick={() => { setSelectedPaper(ps); setOpenDropdown(null); }}
-                                                                        >
-                                                                            <span>{units === "cm" ? ps.labelCm : ps.labelIn}  —  <span className="font-price font-medium">{convertPrice(Math.round(globalPrintPrice * 0.8 * ps.multiplier))}</span></span>
-                                                                            <span className="opt-check" />
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Info Badge — material details */}
-                                                        <div className="info-badge">
-                                                            <div className="info-badge-content">
-                                                                <p className="info-badge-title">Hahnemühle 310gsm Museum Paper</p>
-                                                                <p className="info-badge-desc">
-                                                                    Archival giclée printing · Matte finish · Shipped rolled in protective tube · Colour-accurate · Fade-resistant for 100+ years
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Footer — price + CTA */}
-                                                        <div className="purchase-card-footer" style={{ backgroundColor: "#F8F7F5", margin: isSmall ? "1rem -1.25rem -2rem" : "1rem -2rem -2rem", padding: isSmall ? "1.5rem 1.25rem" : "1.5rem 2rem", borderRadius: isSmall ? "0" : "0 0 24px 24px", borderTop: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                            <div>
-                                                                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.6rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 2px" }}>Total</p>
-                                                                <span className="font-price" style={{ fontSize: "1.75rem", fontWeight: 600, color: "var(--color-charcoal)", letterSpacing: "-0.03em" }}>{convertPrice(currentPaperPrice)}</span>
-                                                            </div>
-                                                            <button
-                                                                className="premium-cta-btn"
-                                                                onClick={() => addItem({
-                                                                    id: `${work.id}-paper-rolled-${selectedPaper.labelCm}`,
-                                                                    slug: String(work.id),
-                                                                    title: work.title,
-                                                                    type: "print",
-                                                                    imageGradientFrom: work.gradientFrom!,
-                                                                    imageGradientTo: work.gradientTo!,
-                                                                    imageUrl: getImageUrl(work.images?.[0], 'thumb') || undefined,
-                                                                    price: currentPaperPrice,
-                                                                    finish: "Rolled — Matte",
-                                                                    size: units === "cm" ? selectedPaper.labelCm : selectedPaper.labelIn,
-                                                                })}
-                                                            >Add to Cart</button>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </>
-                                );
-                            })()}
-                        </div>
-                    </div>
+                    <ArtworkPurchaseStyles />
+                    <ArtworkPurchasePanel
+                        work={work}
+                        layoutMetrics={layoutMetrics}
+                        effectiveLiked={effectiveLiked}
+                        setLiked={setLiked}
+                        user={user}
+                        addPendingLike={addPendingLike}
+                        removePendingLike={removePendingLike}
+                        incrementUnauthLikeCount={incrementUnauthLikeCount}
+                        unauthLikeCount={unauthLikeCount}
+                        setShowAuthPrompt={setShowAuthPrompt}
+                        resolvedPurchaseType={resolvedPurchaseType}
+                        hasCanvasOffers={hasCanvasOffers}
+                        hasPaperOffers={hasPaperOffers}
+                        updateRouteState={updateRouteState}
+                        activeCountryCode={activeCountryCode}
+                        convertPrice={convertPrice}
+                        addItem={addItem}
+                        units={units}
+                        storefront={storefront}
+                        storefrontLoading={storefrontLoading}
+                        storefrontError={storefrontError}
+                    />
                 </div>
-
                 {/* ── Artwork details section ── */}
                 <div style={{ marginTop: layoutMetrics.winW < 768 ? "1.5rem" : "6rem", borderTop: "1px solid var(--color-border)", paddingTop: layoutMetrics.winW < 768 ? "2rem" : "4rem" }}>
                     <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", fontStyle: "italic", marginBottom: "3rem", textAlign: "center" }}>Artwork Details</h2>
@@ -1620,50 +914,7 @@ export default function ArtworkDetailPage() {
                 )}
 
                 {/* Auth Prompt Modal */}
-                {showAuthPrompt && (
-                    <div
-                        onClick={() => setShowAuthPrompt(false)}
-                        style={{
-                            position: "fixed", inset: 0, zIndex: 9999,
-                            background: "rgba(10,10,10,0.65)",
-                            backdropFilter: "blur(6px)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            padding: "1rem",
-                        }}
-                    >
-                        <div
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                                background: "#fff",
-                                borderRadius: "20px",
-                                padding: "2.5rem 2rem",
-                                maxWidth: "360px",
-                                width: "100%",
-                                textAlign: "center",
-                                boxShadow: "0 32px 80px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)",
-                            }}
-                        >
-                            <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>♡</div>
-                            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", fontWeight: 400, fontStyle: "italic", color: "#1a1a18", marginBottom: "0.5rem" }}>
-                                Save to your collection
-                            </h2>
-                            <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.85rem", color: "#777", lineHeight: 1.6, marginBottom: "1.75rem" }}>
-                                Sign in to save artworks you love and revisit them anytime from your profile.
-                            </p>
-                            {/* Modern Google Authentication Button */}
-                            <GoogleLoginButton 
-                                onSuccess={() => setShowAuthPrompt(false)} 
-                                containerStyle={{ marginBottom: "1rem" }}
-                            />
-                            <button
-                                onClick={() => setShowAuthPrompt(false)}
-                                style={{ marginTop: "1rem", background: "none", border: "none", fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "#999", cursor: "pointer", letterSpacing: "0.05em" }}
-                            >
-                                Continue browsing
-                            </button>
-                        </div>
-                    </div>
-                )}
+                <AuthPromptModal isOpen={showAuthPrompt} onClose={() => setShowAuthPrompt(false)} />
             </div>
         </div>
     );

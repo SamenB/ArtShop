@@ -9,7 +9,7 @@ class TestArtworkCRUD:
         resp = await ac.get("/artworks")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) >= 7  # Based on mock data
+        assert len(data) >= 6  # Publicly available artworks from current mock data
 
     async def test_get_artwork_by_slug(self, ac: AsyncClient):
         """GET /artworks/{slug} returns a single artwork."""
@@ -24,8 +24,7 @@ class TestArtworkCRUD:
             "description": "Test Description",
             "original_price": 500,
             "original_status": "available",
-            "collection_id": 1,
-            "has_prints": True,
+            "has_paper_print": True,
             "orientation": "Square",
         }
         resp = await authenticated_ac.post("/artworks", json=payload)
@@ -45,7 +44,6 @@ class TestArtworkCRUD:
                 "description": "Fail",
                 "original_price": 1,
                 "original_status": "available",
-                "collection_id": 1,
                 "orientation": "Square",
             }
             resp = await ac.post("/artworks", json=payload)
@@ -59,7 +57,6 @@ class TestArtworkCRUD:
             "description": "...",
             "original_price": 100,
             "original_status": "available",
-            "collection_id": 1,
             "orientation": "Square",
         }
         create_resp = await authenticated_ac.post("/artworks", json=payload)

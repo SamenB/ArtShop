@@ -4,7 +4,7 @@ SQLAlchemy database models for orders and their constituent items.
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -46,6 +46,11 @@ class OrdersOrm(Base):
 
     # Order Specifics
     promo_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    checkout_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    checkout_segment: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    subtotal_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shipping_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    discount_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_price: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -91,20 +96,51 @@ class OrdersOrm(Base):
 class OrderItemOrm(Base):
     """
     Represents an individual item within an order.
-    Can be an original artwork or a specific print edition.
+    Supports all edition types: original, canvas print, limited canvas,
+    paper print, and limited paper print.
     """
 
     __tablename__ = "order_items"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"))
-    artwork_id: Mapped[int] = mapped_column(Integer, ForeignKey("artworks.id"))
+    artwork_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("artworks.id", ondelete="SET NULL"), nullable=True
+    )
 
-    edition_type: Mapped[str] = mapped_column(String(20))  # 'original' | 'print'
+    # Edition type — one of EditionType enum values (String(30) to accommodate all variants)
+    # original | canvas_print | canvas_print_limited | paper_print | paper_print_limited
+    edition_type: Mapped[str] = mapped_column(String(30))
     finish: Mapped[str] = mapped_column(String(50))  # 'Rolled' | 'Framed' | 'Unframed' | etc.
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     price: Mapped[int] = mapped_column(Integer)
+    customer_product_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    customer_shipping_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    customer_line_total: Mapped[float | None] = mapped_column(Float, nullable=True)
+    customer_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     # Relationships
     order: Mapped["OrdersOrm"] = relationship("OrdersOrm", back_populates="items")
     artwork: Mapped["ArtworksOrm"] = relationship("ArtworksOrm", lazy="selectin")
+
+    # Prodigi Print-on-Demand Fields
+    prodigi_storefront_offer_size_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prodigi_sku: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prodigi_category_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    prodigi_slot_size_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    prodigi_attributes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    prodigi_storefront_bake_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prodigi_storefront_policy_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    prodigi_shipping_tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prodigi_shipping_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prodigi_delivery_days: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    prodigi_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prodigi_order_item_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    prodigi_asset_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    prodigi_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prodigi_wholesale_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_shipping_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_supplier_total_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_retail_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prodigi_supplier_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    prodigi_destination_country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)

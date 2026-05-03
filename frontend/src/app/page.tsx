@@ -1,12 +1,11 @@
 /**
  * Homepage component for the ArtShop.
  * A server component that fetches featured artworks and site settings 
- * to render a dynamic landing page with a hero slideshow and recent works.
+ * to render a dynamic landing page with a static hero image and recent works.
  */
 
 import Link from "next/link";
 import { getApiUrl, getImageUrl, artworkUrl } from "@/utils";
-import HeroSlideshow from "@/components/HeroSlideshow";
 import HomeArtCard from "@/components/HomeArtCard";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +20,6 @@ interface Artwork {
   title: string;
   description: string;
   medium: string;
-  materials?: string;
   size: string;
   orientation?: string;
   original_price: number;
@@ -79,7 +77,7 @@ export default async function Home() {
     <>
       {/* 
           HERO SECTION
-          High-impact introduction with a full-screen slideshow and primary CTAs.
+          High-impact introduction with a single static hero image and primary CTAs.
       */}
       <section
         style={{
@@ -93,38 +91,37 @@ export default async function Home() {
           overflow: "hidden",
         }}
       >
-        {/* Dynamic Background Slideshow based on administrative settings. */}
-        {(() => {
-          const coverSlots = [
-            { desktop: settings?.main_bg_desktop_url, mobile: settings?.main_bg_mobile_url },
-            { desktop: settings?.cover_2_desktop_url, mobile: settings?.cover_2_mobile_url },
-            { desktop: settings?.cover_3_desktop_url, mobile: settings?.cover_3_mobile_url },
-          ];
-          const covers = coverSlots
-            .filter(c => c.desktop || c.mobile)
-            .map(c => ({
-              desktopUrl: c.desktop ? getImageUrl(c.desktop, 'original') : '',
-              mobileUrl: c.mobile ? getImageUrl(c.mobile, 'medium') : '',
-            })) as { desktopUrl: string; mobileUrl: string }[];
-
-          return covers.length > 0 ? (
-            <HeroSlideshow
-              covers={covers}
-              kenBurnsEnabled={settings?.hero_ken_burns_enabled !== false}
-              slideDuration={settings?.hero_slide_duration || 15}
-            />
-          ) : (
-            // Fallback gradient if no cover images are configured.
-            <div
-              aria-hidden="true"
+        {settings?.main_bg_desktop_url || settings?.main_bg_mobile_url ? (
+          <picture>
+            {settings?.main_bg_mobile_url ? (
+              <source
+                media="(max-width: 768px)"
+                srcSet={getImageUrl(settings.main_bg_mobile_url, "medium")}
+              />
+            ) : null}
+            <img
+              src={getImageUrl(settings?.main_bg_desktop_url || settings?.main_bg_mobile_url, "original")}
+              alt=""
+              fetchPriority="high"
               style={{
                 position: "absolute",
                 inset: 0,
-                background: "linear-gradient(135deg, #0A1A1C 0%, #1A3638 40%, #254D4F 70%, #0A1A1C 100%)",
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
               }}
             />
-          );
-        })()}
+          </picture>
+        ) : (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "linear-gradient(135deg, #0A1A1C 0%, #1A3638 40%, #254D4F 70%, #0A1A1C 100%)",
+            }}
+          />
+        )}
 
         {/* Subtle radial overlay for enhanced text legibility. */}
         <div
@@ -526,7 +523,7 @@ export default async function Home() {
               marginBottom: "1.5rem",
             }}
           >
-            "I paint not what I see, but what I feel when I look."
+            &ldquo;I paint not what I see, but what I feel when I look.&rdquo;
           </p>
           <cite
             style={{

@@ -1,8 +1,10 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.exeptions import (
+    InvalidDataException,
     OriginalSoldOutException,
     PrintsSoldOutException,
 )
@@ -16,6 +18,8 @@ class MockDBManager:
     def __init__(self):
         self.artworks = AsyncMock()
         self.orders = AsyncMock()
+        self.email_templates = AsyncMock()
+        self.email_templates.get_by_key = AsyncMock(return_value=None)
         from src.models.orders import OrdersOrm
 
         self.orders.model = OrdersOrm
@@ -24,12 +28,73 @@ class MockDBManager:
         self.rollback = AsyncMock()
         self.session = MagicMock()
         self.session.execute = AsyncMock()
+        self.session.get = AsyncMock(return_value=None)
 
 
 @pytest.fixture
-def order_service():
+def order_service(monkeypatch):
+    class FakeProdigiOrderRehydrationService:
+        def __init__(self, db):
+            self.db = db
+
+        async def rehydrate_item(self, **kwargs):
+            return None
+
+        def apply_to_item_add(self, item_add, selection):
+            return None
+
+    monkeypatch.setattr(
+        "src.services.orders.ProdigiOrderRehydrationService",
+        FakeProdigiOrderRehydrationService,
+    )
     service = OrderService(MockDBManager())
     return service
+
+
+def test_print_provider_cost_check_blocks_underpaid_order(order_service):
+    order = SimpleNamespace(
+        total_price=18,
+        items=[
+            SimpleNamespace(prodigi_wholesale_eur=5.0, prodigi_shipping_eur=17.95),
+        ],
+    )
+
+    assert order_service._print_provider_cost_is_covered(order) is False
+    assert order_service._print_provider_cost_summary(order) == {
+        "customer_paid": 18.0,
+        "supplier_total": 22.95,
+    }
+
+
+def test_print_provider_cost_check_allows_covered_order(order_service):
+    order = SimpleNamespace(
+        total_price=30,
+        items=[
+            SimpleNamespace(prodigi_wholesale_eur=9.0, prodigi_shipping_eur=20.95),
+        ],
+    )
+
+    assert order_service._print_provider_cost_is_covered(order) is True
+
+
+def test_prodigi_destination_country_contract_allows_matching_country(order_service):
+    item = SimpleNamespace(prodigi_destination_country_code="de")
+
+    order_service._validate_prodigi_destination_country(item, "DE")
+
+
+def test_prodigi_destination_country_contract_blocks_mismatch(order_service):
+    item = SimpleNamespace(prodigi_destination_country_code="DE")
+
+    with pytest.raises(InvalidDataException, match="priced for DE"):
+        order_service._validate_prodigi_destination_country(item, "US")
+
+
+def test_prodigi_destination_country_contract_requires_country(order_service):
+    item = SimpleNamespace(prodigi_destination_country_code=None)
+
+    with pytest.raises(InvalidDataException, match="missing the Prodigi destination country"):
+        order_service._validate_prodigi_destination_country(item, "US")
 
 
 @pytest.mark.asyncio
@@ -65,7 +130,7 @@ async def test_create_order_print_sold_out_fails(order_service):
     # Setup mock artwork that has 0 prints available
     mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
-    mock_artwork.has_prints = False
+    mock_artwork.has_paper_print = False
 
     order_service.db.artworks.get_one.return_value = mock_artwork
 
@@ -80,7 +145,15 @@ async def test_create_order_print_sold_out_fails(order_service):
         shipping_address_line1="St 1",
         shipping_postal_code="01001",
         items=[
-            {"artwork_id": 1, "edition_type": EditionType.PRINT, "finish": "none", "price": 1000}
+            {
+                "artwork_id": 1,
+                "edition_type": EditionType.PAPER_PRINT,
+                "finish": "none",
+                "price": 1000,
+                "prodigi_category_id": "paperPrintRolled",
+                "prodigi_slot_size_label": "40x50",
+                "prodigi_destination_country_code": "UA",
+            }
         ],
     )
 
@@ -135,8 +208,7 @@ async def test_create_order_original_success(order_service):
 async def test_create_order_print_success(order_service):
     mock_artwork = MagicMock(spec=ArtworkWithLabels)
     mock_artwork.id = 1
-    mock_artwork.has_prints = True
-    mock_artwork.base_print_price = 50
+    mock_artwork.has_paper_print = True
 
     order_service.db.artworks.get_one.return_value = mock_artwork
 
@@ -156,7 +228,15 @@ async def test_create_order_print_success(order_service):
         shipping_address_line1="St 1",
         shipping_postal_code="01001",
         items=[
-            {"artwork_id": 1, "edition_type": EditionType.PRINT, "finish": "none", "price": 1000}
+            {
+                "artwork_id": 1,
+                "edition_type": EditionType.PAPER_PRINT,
+                "finish": "none",
+                "price": 1000,
+                "prodigi_category_id": "paperPrintRolled",
+                "prodigi_slot_size_label": "40x50",
+                "prodigi_destination_country_code": "UA",
+            }
         ],
     )
 
@@ -166,6 +246,11 @@ async def test_create_order_print_success(order_service):
 
     # Print purchase no longer edits artworks.
     order_service.db.artworks.edit.assert_not_called()
+
+    order_item_args, _order_item_kwargs = order_service.db.order_items.add.await_args
+    assert order_item_args[0].prodigi_category_id == "paperPrintRolled"
+    assert order_item_args[0].prodigi_slot_size_label == "40x50"
+    assert order_item_args[0].prodigi_destination_country_code == "UA"
 
     order_service.db.orders.add.assert_awaited_once()
     order_service.db.commit.assert_awaited_once()

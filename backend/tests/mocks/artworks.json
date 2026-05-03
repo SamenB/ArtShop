@@ -5,9 +5,10 @@
         "description": "Oil on canvas",
         "original_price": 10000,
         "original_status": "available",
-        "has_prints": true,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_original": true,
+        "has_canvas_print": true,
+        "has_paper_print": true
     },
     {
         "title": "Mona Lisa Print",
@@ -15,9 +16,9 @@
         "description": "High quality print",
         "original_price": null,
         "original_status": "sold",
-        "has_prints": true,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_paper_print": true,
+        "has_paper_print_limited": true
     },
     {
         "title": "Urban Graffiti",
@@ -25,9 +26,10 @@
         "description": "Spray paint on wall",
         "original_price": 3000,
         "original_status": "available",
-        "has_prints": true,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_original": true,
+        "has_canvas_print": true,
+        "has_paper_print": true
     },
     {
         "title": "Sunset Photo",
@@ -35,9 +37,9 @@
         "description": "Landscape photography",
         "original_price": 1500,
         "original_status": "available",
-        "has_prints": true,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_original": true,
+        "has_paper_print": true
     },
     {
         "title": "Digital Abstract",
@@ -45,9 +47,8 @@
         "description": "AI generated art",
         "original_price": 2000,
         "original_status": "available",
-        "has_prints": false,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_original": true
     },
     {
         "title": "Water Lilies",
@@ -55,9 +56,10 @@
         "description": "Impressionist painting",
         "original_price": 8000,
         "original_status": "available",
-        "has_prints": true,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_original": true,
+        "has_canvas_print": true,
+        "has_paper_print": true
     },
     {
         "title": "The Scream Copy",
@@ -65,8 +67,9 @@
         "description": "Museum quality replica",
         "original_price": 7000,
         "original_status": "available",
-        "has_prints": true,
         "orientation": "Horizontal",
-        "base_print_price": 100
+        "has_original": true,
+        "has_canvas_print": true,
+        "has_paper_print": true
     }
 ]

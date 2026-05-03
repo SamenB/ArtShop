@@ -1,19 +1,19 @@
 import sys
+from logging.config import fileConfig
 from os.path import abspath, dirname
 
-# Ensure the project root is in sys.path
-sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))))
-
-from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
+
+PROJECT_ROOT = dirname(dirname(dirname(abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from src.config import settings
 from src.database import Base
-from src.models import *
+
+# Import model registry so Alembic autogenerate sees every mapped table.
+import src.models  # noqa: F401, E402
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -52,9 +52,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

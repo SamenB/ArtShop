@@ -13,11 +13,48 @@ from pydantic import BaseModel, Field, field_validator
 
 class EditionType(str, Enum):
     """
-    Specifies whether an item in the order is an original artwork or a print.
+    Specifies the edition type of an item in the order.
+
+    Supports five distinct product types:
+        original              — One-of-a-kind original artwork
+        canvas_print          — Open edition canvas print
+        canvas_print_limited  — Signed & numbered limited edition canvas print
+        paper_print           — Open edition paper print
+        paper_print_limited   — Signed & numbered limited edition paper print
     """
 
     ORIGINAL = "original"
-    PRINT = "print"
+    CANVAS_PRINT = "canvas_print"
+    CANVAS_PRINT_LIMITED = "canvas_print_limited"
+    PAPER_PRINT = "paper_print"
+    PAPER_PRINT_LIMITED = "paper_print_limited"
+
+    @property
+    def label(self) -> str:
+        """Human-readable label for admin UI and customer emails."""
+        return {
+            "original": "Original",
+            "canvas_print": "Canvas Print",
+            "canvas_print_limited": "Canvas Print — Limited Edition",
+            "paper_print": "Paper Print",
+            "paper_print_limited": "Paper Print — Limited Edition",
+        }[self.value]
+
+    @property
+    def is_print(self) -> bool:
+        """Returns True for all non-original edition types."""
+        return self != EditionType.ORIGINAL
+
+    @property
+    def artwork_availability_flag(self) -> str:
+        """Returns the corresponding ArtworksOrm boolean field name."""
+        return {
+            "original": "has_original",
+            "canvas_print": "has_canvas_print",
+            "canvas_print_limited": "has_canvas_print_limited",
+            "paper_print": "has_paper_print",
+            "paper_print_limited": "has_paper_print_limited",
+        }[self.value]
 
 
 class FulfillmentStatus(str, Enum):
@@ -82,6 +119,60 @@ class OrderItemBase(BaseModel):
     finish: str
     size: Optional[str] = None
     price: int
+    customer_product_price: Optional[float] = None
+    customer_shipping_price: Optional[float] = None
+    customer_line_total: Optional[float] = None
+    customer_currency: Optional[str] = Field(default="USD", min_length=3, max_length=3)
+
+    # Prodigi Print-on-Demand Fields
+    prodigi_storefront_offer_size_id: Optional[int] = None
+    prodigi_sku: Optional[str] = None
+    prodigi_category_id: Optional[str] = None
+    prodigi_slot_size_label: Optional[str] = None
+    prodigi_attributes: Optional[dict] = None
+    prodigi_storefront_bake_id: Optional[int] = None
+    prodigi_storefront_policy_version: Optional[str] = None
+    prodigi_shipping_tier: Optional[str] = None
+    prodigi_shipping_method: Optional[str] = None
+    prodigi_delivery_days: Optional[str] = None
+    prodigi_order_id: Optional[str] = None
+    prodigi_status: Optional[str] = None
+    prodigi_wholesale_eur: Optional[float] = None
+    prodigi_shipping_eur: Optional[float] = None
+    prodigi_supplier_total_eur: Optional[float] = None
+    prodigi_retail_eur: Optional[float] = None
+    prodigi_supplier_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    prodigi_destination_country_code: Optional[str] = Field(None, min_length=2, max_length=2)
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def normalize_price_to_integer(cls, value):
+        if isinstance(value, bool):
+            raise ValueError("Price must be a valid number")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return round(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                raise ValueError("Price must be a valid number")
+            try:
+                return round(float(stripped))
+            except ValueError as exc:
+                raise ValueError("Price must be a valid number") from exc
+        return value
+
+    @field_validator("prodigi_destination_country_code")
+    @classmethod
+    def validate_prodigi_destination_country_code(cls, v: str | None) -> str | None:
+        """Normalize the country code used when the storefront offer was selected."""
+        if v is None:
+            return v
+        v = v.strip().upper()
+        if len(v) != 2 or not v.isalpha():
+            raise ValueError("Prodigi destination country code must be a 2-letter ISO code")
+        return v
 
 
 class OrderItem(OrderItemBase):
@@ -160,6 +251,11 @@ class OrderAdd(OrderAddRequest):
     """
 
     user_id: Optional[int] = None
+    checkout_group_id: Optional[str] = None
+    checkout_segment: Optional[str] = None
+    subtotal_price: Optional[int] = None
+    shipping_price: Optional[int] = None
+    discount_price: Optional[int] = None
     total_price: int
 
 
@@ -173,6 +269,8 @@ class Order(OrderAdd):
     id: int
     created_at: datetime
     items: List[OrderItem]
+    checkout_group_id: Optional[str] = None
+    checkout_segment: Optional[str] = None
 
     # Payment tracking
     payment_status: str = "pending"
@@ -266,6 +364,12 @@ class OrderPatch(BaseModel):
     newsletter_opt_in: Optional[bool] = None
     discovery_source: Optional[str] = None
     promo_code: Optional[str] = None
+    checkout_group_id: Optional[str] = None
+    checkout_segment: Optional[str] = None
+    subtotal_price: Optional[int] = None
+    shipping_price: Optional[int] = None
+    discount_price: Optional[int] = None
+    total_price: Optional[int] = None
     invoice_id: Optional[str] = None
     payment_url: Optional[str] = None
 

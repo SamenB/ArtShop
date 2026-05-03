@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { FormEvent, useState, useId, useEffect } from "react";
 import { Globe, CreditCard, MapPin } from "lucide-react";
-import { getApiUrl, apiFetch } from "@/utils";
+import { getApiUrl, apiFetch, apiJson } from "@/utils";
 
 const InstagramLogo = ({ size = 24, color = "currentColor" }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} xmlns="http://www.w3.org/2000/svg">
@@ -40,7 +40,7 @@ export default function Footer() {
 
     useEffect(() => {
         apiFetch(`${getApiUrl()}/settings`)
-            .then(res => res.json())
+            .then(res => apiJson(res))
             .then(data => setSettings(data))
             .catch(err => console.error("Error fetching footer settings:", err));
     }, []);
@@ -453,7 +453,7 @@ export default function Footer() {
                         </p>
                         {subscribed ? (
                              <p style={{ color: "#FFFFFF", fontStyle: "italic", marginTop: "1rem" }}>
-                                Thank you. You're now on the list.
+                                Thank you. You&apos;re now on the list.
                              </p>
                         ) : (
                             <form onSubmit={submit} className="nl-input-group">
@@ -491,6 +491,7 @@ export default function Footer() {
                         <Link href="/about">About</Link>
                         <Link href="/contact">Contact</Link>
                         <Link href="/shipping">Shipping</Link>
+                        <Link href="/faq">FAQ</Link>
                         <Link href="/terms">Terms</Link>
                         <Link href="/privacy">Privacy</Link>
                         <span className="footer-copyright">© {year}</span>

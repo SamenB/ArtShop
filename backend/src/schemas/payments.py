@@ -29,9 +29,8 @@ class PaymentCreateRequest(BaseModel):
     amount_coins: Optional[int] = Field(
         default=None,
         description=(
-            "Pre-converted total amount in the currency's smallest unit "
-            "(e.g., kopiykas for UAH). If provided, overrides server-side "
-            "conversion from the order's USD total_price."
+            "Deprecated compatibility field. The backend ignores this value "
+            "and derives the gateway amount from the stored order total."
         ),
     )
 
@@ -44,6 +43,7 @@ class PaymentCreateResponse(BaseModel):
     """
 
     order_id: int
+    order_reference: str
     invoice_id: str = Field(..., description="Monobank-assigned invoice identifier.")
     payment_url: str = Field(
         ..., description="URL of the Monobank payment page for buyer redirect."
@@ -89,5 +89,6 @@ class PaymentStatusResponse(BaseModel):
     """
 
     order_id: int
+    order_reference: str
     payment_status: str
     invoice_id: Optional[str] = None

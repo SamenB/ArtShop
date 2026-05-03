@@ -20,16 +20,22 @@ from src.api.artworks import bulk_router as artworks_bulk_router
 from src.api.artworks import router as artworks_router
 from src.api.auth import router as auth_router
 from src.api.contact import router as contact_router
+from src.api.email_templates import router as email_templates_router
+from src.api.geo import router as geo_router
 from src.api.labels import router as labels_router
 from src.api.orders import router as orders_router
 from src.api.payments import router as payments_router
+from src.api.print_pricing import router as print_pricing_router
+from src.api.print_pricing_regions import router as print_pricing_regions_router
 from src.api.settings import router as settings_router
+from src.api.telegram import router as telegram_router
 from src.api.upload import router as upload_router
 from src.api.users import router as users_router
 from src.config import settings
 from src.exeptions import ArtShopExeption
 from src.init import redis_manager
 from src.logging_config import setup_logging
+from src.print_on_demand import get_print_provider
 
 # Initialize global logging configuration immediately upon module load.
 setup_logging()
@@ -118,6 +124,13 @@ app.include_router(users_router)
 app.include_router(settings_router)
 app.include_router(upload_router)
 app.include_router(contact_router)
+app.include_router(email_templates_router)
+app.include_router(print_pricing_router)
+app.include_router(print_pricing_regions_router)
+app.include_router(telegram_router)
+app.include_router(geo_router)
+for provider_router in get_print_provider().get_api_routers():
+    app.include_router(provider_router)
 
 if __name__ == "__main__":
     # Local development server execution.

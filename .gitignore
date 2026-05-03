@@ -9,6 +9,8 @@ backend/venv/
 # Tests cache
 .pytest_cache/
 backend/.pytest_cache/
+backend/.pytest_tmp/
+.ruff_cache/
 
 # Secrets
 .env
@@ -27,6 +29,7 @@ backend/logs/*
 !backend/logs/.gitkeep
 docs/*
 !docs/.gitkeep
+!docs/prodigi-production-runbook.md
 # Dev notes
 backend/src/utils/halping_commands.txt
 
@@ -38,6 +41,30 @@ nginx/htpasswd
 # Temp files
 error.txt
 test_script.py
+test_shadow.html
+update_colors.py
+site_content_ideas.md
+frontend/lint_output.txt
+frontend/test.ts
+frontend/*.log
+backend/*.log
+backend/test_*.log
+backend/test_*.txt
+backend/tests.log
+logs/*.log
+temp/*.json
+temp/db_recovery/
 
 # OS
 .DS_Store
+
+# Local editor and agent files
+.vscode/
+AGENTS.md
+!.agents/
+!.agents/**
+backend/src/scratch/
+
+# Local supplier dumps
+prodigy/
+Prodigy/

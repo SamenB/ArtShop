@@ -1,0 +1,105 @@
+# ==============================================================
+# ArtShop - Prodigi Production Prepare
+# Manually rebuilds CSV-backed Prodigi snapshot/payloads on prod.
+# ==============================================================
+
+name: Prodigi Production Prepare
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_api_checks:
+        description: "Call Prodigi Product Details during validation"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      include_quotes:
+        description: "Call Prodigi Quote endpoint during validation"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      require_api_checks:
+        description: "Fail report if no live API pixel check passes"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      force:
+        description: "Force rebuild even if production fingerprint is current"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  prepare:
+    name: Rebuild Prodigi Snapshot
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run production prepare via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            cd ~/ArtShop
+
+            echo "Checking committed curated CSV source..."
+            CURATED_CSV="backend/src/integrations/prodigi/data/prodigi_storefront_source.csv"
+            if [ ! -s "$CURATED_CSV" ]; then
+              echo "Curated CSV is missing or empty: $CURATED_CSV"
+              exit 1
+            fi
+
+            echo "Applying migrations..."
+            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm migrator alembic upgrade head
+
+            EXTRA_ARGS=""
+            if [ "${{ inputs.include_api_checks }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --include-api-checks"
+            fi
+            if [ "${{ inputs.include_quotes }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --include-quotes"
+            fi
+            if [ "${{ inputs.require_api_checks }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --require-api-checks"
+            fi
+
+            DECIDER_ARGS=""
+            if [ "${{ inputs.force }}" = "true" ]; then
+              DECIDER_ARGS="$DECIDER_ARGS --force"
+            fi
+
+            echo "Checking whether Prodigi production prepare is needed..."
+            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+              python -m src.integrations.prodigi.tasks.prodigi_should_prepare_production \
+              --format shell \
+              $DECIDER_ARGS)
+            echo "$PRODIGI_DECISION"
+
+            if echo "$PRODIGI_DECISION" | grep 'PRODIGI_PREPARE_NEEDED=true' >/dev/null; then
+              echo "Rebuilding Prodigi snapshot and payloads..."
+              docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+                python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
+                --output /tmp/prodigi_production_prepare_report.json \
+                $EXTRA_ARGS
+            else
+              echo "Prodigi production data is already current; skipping rebuild."
+            fi
+
+            echo "Prodigi production prepare completed."

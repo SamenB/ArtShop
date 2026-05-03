@@ -53,6 +53,23 @@ jobs:
             sleep 10
             docker compose -f docker-compose.prod.yml ps
 
+            echo "Checking whether Prodigi production prepare is needed..."
+            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+              python -m src.integrations.prodigi.tasks.prodigi_should_prepare_production \
+              --format shell)
+            echo "$PRODIGI_DECISION"
+
+            if echo "$PRODIGI_DECISION" | grep 'PRODIGI_PREPARE_NEEDED=true' >/dev/null; then
+              echo "Prodigi storefront data is stale or missing; rebuilding production snapshot..."
+              docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+                python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
+                --include-api-checks \
+                --include-quotes \
+                --output /tmp/prodigi_production_prepare_report.json
+            else
+              echo "Prodigi storefront data is current; skipping snapshot prepare."
+            fi
+
             # ── 5. Cleanup ──
             echo "🧹 Cleaning up old images..."
             docker image prune -f

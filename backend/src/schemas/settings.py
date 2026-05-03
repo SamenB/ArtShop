@@ -4,17 +4,25 @@ Pydantic schemas for site settings data validation and serialization.
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SiteSettingsBase(BaseModel):
     """
     Base schema for site configuration.
-    Includes branding texts, image URLs, slideshow settings, and global print prices.
+    Includes branding texts, image URLs, and static homepage media.
+
+    Note: Print pricing is managed separately via the /print-pricing API.
     """
+
+    model_config = ConfigDict(from_attributes=True)
 
     about_text: Optional[str] = None
     contact_email: Optional[str] = None
+    owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_telegram_chat_id: Optional[str] = None
     social_instagram: Optional[str] = None
     social_telegram: Optional[str] = None
     social_threads: Optional[str] = None
@@ -23,17 +31,15 @@ class SiteSettingsBase(BaseModel):
     footer_text_discover: Optional[str] = None
     footer_text_services: Optional[str] = None
     footer_text_circle: Optional[str] = None
+    shipping_page_text: Optional[str] = None
+    faq_page_text: Optional[str] = None
+    terms_page_text: Optional[str] = None
+    privacy_page_text: Optional[str] = None
+    prodigi_fulfillment_mode: Optional[str] = None
     artist_home_photo_url: Optional[str] = None
     artist_about_photo_url: Optional[str] = None
     main_bg_desktop_url: Optional[str] = None
     main_bg_mobile_url: Optional[str] = None
-    cover_2_desktop_url: Optional[str] = None
-    cover_2_mobile_url: Optional[str] = None
-    cover_3_desktop_url: Optional[str] = None
-    cover_3_mobile_url: Optional[str] = None
-    hero_ken_burns_enabled: bool = True
-    hero_slide_duration: int = 15
-    global_print_price: int = 150
 
 
 class SiteSettingsResponse(SiteSettingsBase):

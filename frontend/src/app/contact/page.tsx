@@ -82,7 +82,7 @@ export default function ContactPage() {
                         fontFamily: "var(--font-serif)", fontSize: "clamp(3rem, 8vw, 6rem)", fontStyle: "italic",
                         fontWeight: 400, color: "var(--color-charcoal)", lineHeight: 1.1
                     }}>
-                        Let's Start a <br /> Conversation
+                        Let&apos;s Start a <br /> Conversation
                     </h1>
                 </header>
 

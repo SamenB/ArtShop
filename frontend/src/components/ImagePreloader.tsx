@@ -6,58 +6,87 @@
  */
 
 import { useEffect } from "react";
-import { getApiUrl, getImageUrl, apiFetch } from "@/utils";
+import { usePathname } from "next/navigation";
+import { getApiUrl, getImageUrl, apiFetch, apiJson } from "@/utils";
 
 interface Artwork {
     id: number;
-    images?: string[];
+    images?: (string | { thumb?: string; medium?: string; original?: string })[];
 }
 
 export default function ImagePreloader() {
+    const pathname = usePathname();
+
     useEffect(() => {
-        // Run preloading aggressively after initial mount but without blocking
-        // main thread interactive paint
-        const runPreload = () => {
-             apiFetch(`${getApiUrl()}/artworks?limit=1000`)
-                .then(res => res.json())
-                .then(data => {
-                    const rawData = data.items || data.data || data;
-                    if (!Array.isArray(rawData)) return;
-                    
-                    const urlsToPreload = new Set<string>();
+        if (pathname === "/shop" || pathname?.startsWith("/artwork/")) {
+            return;
+        }
 
-                    rawData.forEach((art: Artwork) => {
-                        if (art.images && art.images.length > 0) {
-                            const url = getImageUrl(art.images[0], 'medium');
-                            if (url) urlsToPreload.add(url);
-                        }
-                    });
+        const storageKey = "artshop_preloaded_artwork_images_v1";
+        if (sessionStorage.getItem(storageKey) === "1") {
+            return;
+        }
 
-                    // Preload unique URLs
-                    urlsToPreload.forEach(url => {
-                        const img = new Image();
-                        img.src = url;
-                    });
-                    
-                    if (urlsToPreload.size > 0) {
-                        console.log(`Preloaded ${urlsToPreload.size} artwork images.`);
-                    }
+        const abortController = new AbortController();
+        let cancelled = false;
+
+        const preloadImage = (url: string) => new Promise<void>((resolve) => {
+            if (cancelled) {
+                resolve();
+                return;
+            }
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = url;
+        });
+
+        const runPreload = async () => {
+            try {
+                const data = await apiFetch(`${getApiUrl()}/artworks?limit=12`, {
+                    signal: abortController.signal,
                 })
-                .catch(err => console.error("Preloader error:", err));       
+                    .then(res => apiJson<Artwork[] | { items?: Artwork[]; data?: Artwork[] }>(res));
+                if (cancelled) return;
+                const rawData = Array.isArray(data) ? data : data.items || data.data || [];
+                if (!Array.isArray(rawData)) return;
+
+                const urlsToPreload = [...new Set(rawData
+                    .map((art) => art.images?.[0] ? getImageUrl(art.images[0], "thumb") : undefined)
+                    .filter((url): url is string => Boolean(url))
+                )].slice(0, 8);
+
+                for (const url of urlsToPreload) {
+                    if (cancelled) break;
+                    await preloadImage(url);
+                }
+
+                if (!cancelled) {
+                    sessionStorage.setItem(storageKey, "1");
+                }
+            } catch (err) {
+                if (!cancelled && !abortController.signal.aborted) {
+                    console.warn("Preloader skipped:", err);
+                }
+            }
         };
 
-        let handle: any;
-        if ('requestIdleCallback' in window) {
-            handle = window.requestIdleCallback(runPreload, { timeout: 2000 });
+        let handle: ReturnType<typeof setTimeout> | number;
+        let idleHandle = false;
+        if ("requestIdleCallback" in window) {
+            handle = window.requestIdleCallback(runPreload, { timeout: 3000 });
+            idleHandle = true;
         } else {
-            handle = setTimeout(runPreload, 200);
+            handle = globalThis.setTimeout(runPreload, 1000);
         }
 
         return () => {
-            if ('cancelIdleCallback' in window) window.cancelIdleCallback(handle);
+            cancelled = true;
+            abortController.abort();
+            if (idleHandle && "cancelIdleCallback" in window) window.cancelIdleCallback(handle as number);
             else clearTimeout(handle);
         };
-    }, []);
+    }, [pathname]);
 
     return null;
 }

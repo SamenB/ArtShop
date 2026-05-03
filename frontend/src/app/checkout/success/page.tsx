@@ -9,8 +9,8 @@ import { getApiUrl, apiFetch } from "@/utils";
  * Payment confirmation page shown after Monobank redirect.
  *
  * Flow:
- * 1. Reads `orderId` from the URL query parameters.
- * 2. Polls the backend `/payments/{orderId}/status` endpoint to determine
+ * 1. Reads `orderRef` from the URL query parameters.
+ * 2. Polls the backend `/payments/{orderRef}/status` endpoint to determine
  *    the final payment outcome.
  * 3. Displays a success, pending, or failure message accordingly.
  *
@@ -41,13 +41,13 @@ export default function CheckoutSuccessPage() {
 
 function CheckoutSuccessContent() {
     const searchParams = useSearchParams();
-    const orderId = searchParams.get("orderId");
-    const [status, setStatus] = useState<PaymentStatus>("loading");
+    const orderRef = searchParams.get("orderRef") || searchParams.get("orderId");
+    const [status, setStatus] = useState<PaymentStatus>(orderRef ? "loading" : "unknown");
+    const [displayOrderRef, setDisplayOrderRef] = useState(orderRef || "");
     const [pollCount, setPollCount] = useState(0);
 
     useEffect(() => {
-        if (!orderId) {
-            setStatus("unknown");
+        if (!orderRef) {
             return;
         }
 
@@ -55,13 +55,16 @@ function CheckoutSuccessContent() {
 
         const checkStatus = async () => {
             try {
-                const res = await apiFetch(`${getApiUrl()}/payments/${orderId}/status`);
+                const res = await apiFetch(`${getApiUrl()}/payments/${orderRef}/status`);
                 if (!res.ok) {
                     setStatus("unknown");
                     return;
                 }
 
                 const data = await res.json();
+                if (data.order_reference) {
+                    setDisplayOrderRef(data.order_reference);
+                }
                 const ps = data.payment_status;
 
                 if (ps === "paid") {
@@ -88,7 +91,7 @@ function CheckoutSuccessContent() {
 
         checkStatus();
         return () => { cancelled = true; };
-    }, [orderId, pollCount]);
+    }, [orderRef, pollCount]);
 
     return (
         <div style={{
@@ -263,7 +266,7 @@ function CheckoutSuccessContent() {
                             fontSize: "0.85rem",
                             letterSpacing: "0.02em",
                         }}>
-                            Order #{orderId} — A confirmation email is on its way.
+                            Order {displayOrderRef} — A confirmation email is on its way.
                         </p>
                         <Link href="/gallery" className="luxury-btn">
                             Return to Gallery

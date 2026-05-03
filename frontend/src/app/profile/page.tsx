@@ -245,7 +245,7 @@ export default function ProfilePage() {
                 <div className="max-w-[1000px] mx-auto">
                     <h1 className="text-4xl lg:text-5xl font-serif italic tracking-widest mb-4 text-white">My Orders</h1>
                     <p className="text-white/60 font-mono text-[0.8rem] tracking-widest uppercase">
-                        Welcome back, {user.username}
+                        Welcome back, {user?.username}
                     </p>
                 </div>
             </div>

@@ -16,383 +16,10 @@ import { usePreferences } from "@/context/PreferencesContext";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 import { useUser } from "@/context/UserContext";
 
-/** Exhaustive list of physical and digital availability states for an artwork. */
-type OriginalStatus = "available" | "sold" | "reserved" | "not_for_sale" | "on_exhibition" | "archived" | "digital";
-
-/** Detailed artwork data representing a catalog entry. */
-interface Artwork {
-    id: number;
-    slug?: string;
-    title: string;
-    description: string;
-    medium?: string;
-    materials?: string;
-    style?: string;
-    size: string;
-    original_price: number;
-    original_status: OriginalStatus;
-    has_prints: boolean;
-    orientation?: string;
-    base_print_price?: number;
-    width_cm?: number;
-    height_cm?: number;
-    width_in?: number;
-    height_in?: number;
-    images?: (string | { thumb: string; medium: string; original: string })[];
-    /** UI fallback gradient start color. */
-    gradientFrom?: string;
-    /** UI fallback gradient end color. */
-    gradientTo?: string;
-    labels?: Array<{ title: string; category_id?: number; id: number }>;
-}
-
-/** 
- * Predefined aesthetic color pairs for artwork card backgrounds.
- * Used when specific image gradients are not provided.
- */
-const DEFAULT_GRADIENTS = [
-    ["#6A9FB5", "#3A6E85"],
-    ["#2A5F7A", "#1A3A55"],
-    ["#8A7AB5", "#4A5A8A"],
-    ["#5A8A8A", "#2A5A5A"],
-    ["#D4905A", "#8A5030"],
-];
-
-/** Collection metadata for grouping artworks. */
-interface CollectionData {
-    id: number;
-    title: string;
-}
-
-/** Supported sorting strategies for the gallery exhibition. */
-type SortKey = "default" | "year" | "title" | "available";
-
-/** Human-readable labels for the sort selector. */
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-    { key: "default", label: "Collection" },
-    { key: "year", label: "Newest" },
-    { key: "title", label: "Title A–Z" },
-    { key: "available", label: "Available" },
-];
-
-/**
- * Pure utility function to sort an array of artworks based on the specified key.
- */
-const sortWorks = (works: Artwork[], key: SortKey): Artwork[] => {
-    const c = [...works];
-    if (key === "year") c.sort((a, b) => b.id - a.id);
-    if (key === "title") c.sort((a, b) => a.title.localeCompare(b.title));
-    if (key === "available") c.sort((a, b) => (a.original_status === "available" ? 0 : 1) - (b.original_status === "available" ? 0 : 1));
-    return c;
-};
-
-/** Image viewing area heights mapped to the grid density mode. */
-const IMAGE_ZONE: Record<string, number> = { "1": 480, "2": 380, "3": 260 };
-
-/** Visual styling and labeling for artwork status indicators. */
-const STATUS: Record<string, { label: string; badgeBg: string; badgeText: string; textColor: string }> = {
-    available:     { label: "AVAILABLE",    badgeBg: "rgba(100,185,120,0.13)", badgeText: "#3a7a4a",  textColor: "#6DB87E" },
-    sold:          { label: "SOLD",          badgeBg: "rgba(180,60,60,0.11)",   badgeText: "#9b2c2c",  textColor: "#C05050" },
-    reserved:      { label: "RESERVED",      badgeBg: "rgba(200,160,50,0.13)",  badgeText: "#836a1a",  textColor: "#C8A32A" },
-    not_for_sale:  { label: "NOT FOR SALE",  badgeBg: "rgba(120,120,120,0.11)", badgeText: "#555",     textColor: "#999" },
-    on_exhibition: { label: "ON EXHIBITION", badgeBg: "rgba(50,130,200,0.11)",  badgeText: "#20527a",  textColor: "#4A90BE" },
-    archived:      { label: "ARCHIVED",      badgeBg: "rgba(100,100,100,0.10)", badgeText: "#666",     textColor: "#7f8c8d" },
-    digital:       { label: "DIGITAL ONLY",  badgeBg: "rgba(120,90,200,0.12)",  badgeText: "#5a3a9a",  textColor: "#8E44AD" },
-};
-
-/** Properties for the individual artwork exhibition card. */
-interface ArtCardProps {
-    work: Artwork;
-    onClick: () => void;
-    zoneH: number;
-    gridMode: string;
-    isMobile: boolean;
-    liked?: boolean;
-    onLike?: (id: number, newState: boolean) => void;
-    onAuthRequired?: (id: number, newState: boolean) => void;
-}
-
-/**
- * Individual gallery card component.
- * Dynamically calculates padding and positioning to anchor title boxes strictly to image edges.
- */
-function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initialLiked, onLike, onAuthRequired }: ArtCardProps) {
-    const { units } = usePreferences();
-    const ori = (work.orientation || "vertical").toLowerCase();
-    const isHorizontal = ori === "horizontal";
-    const isSquare = ori === "square";
-    const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") || "" : "";
-    const st = STATUS[work.original_status];
-
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [textPad, setTextPad] = useState(0);
-    const [emptyBottom, setEmptyBottom] = useState(0);
-    const [measuredImgH, setMeasuredImgH] = useState(0); // Track exact image height safely
-    const [measuredImgW, setMeasuredImgW] = useState(0); // Track exact image width safely
-    const [imgHovered, setImgHovered] = useState(false);
-    const [liked, setLiked] = useState(initialLiked || false);
-    const [likeAnimating, setLikeAnimating] = useState(false);
-
-    // Sync on parent prop change (e.g., after DB load)
-    useEffect(() => { setLiked(initialLiked || false); }, [initialLiked]);
-
-    /** Format dimensions based on user's persistent unit preference (cm/in). */
-    const sizeStr = useMemo(() => {
-        const w = units === "in" ? work.width_in : work.width_cm;
-        const h = units === "in" ? work.height_in : work.height_cm;
-        if (w && h) return `${w} x ${h} ${units}`;
-        return (work.size || "").replace(/([\d.]+) × ([\d.]+) in/, (m: string, width: string, height: string) => {
-            if (units === "cm") return `${Math.round(Number(width) * 2.54)} x ${Math.round(Number(height) * 2.54)} cm`;
-            return m;
-        });
-    }, [work, units]);
-
-    /**
-     * Recalculates visual offsets to ensure the floating title title box 
-     * aligns perfectly with the rendered image's variable aspect ratio.
-     */
-    const recalc = useCallback(() => {
-        const c = containerRef.current;
-        if (!c) return;
-        const inner = c.querySelector(".art-card-inner") as HTMLElement;
-        if (!inner) return;
-        if (inner.tagName === "IMG") {
-            const img = inner as HTMLImageElement;
-            if (!img.complete || !img.naturalWidth) return;
-        }
-        setTextPad(Math.max(0, (c.clientWidth - inner.offsetWidth) / 2));
-        setEmptyBottom(Math.max(0, (c.clientHeight - inner.offsetHeight) / 2));
-        setMeasuredImgH(inner.offsetHeight);
-        setMeasuredImgW(inner.offsetWidth);
-    }, []);
-
-    useEffect(() => {
-        recalc();
-        window.addEventListener("resize", recalc);
-        return () => window.removeEventListener("resize", recalc);
-    }, [recalc]);
-
-    // Recalculate whenever the viewing zone height changes (e.g., density toggle).
-    useEffect(() => {
-        requestAnimationFrame(recalc);
-    }, [zoneH, recalc]);
-
-    return (
-        <div
-            onClick={onClick}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
-            className="art-card magnetic-scroll"
-            style={{
-                display: "flex", flexDirection: "column",
-                cursor: "pointer", width: "100%",
-                background: "none", border: "none", margin: 0,
-                textAlign: "left", pointerEvents: "auto", padding: 0,
-                /* Unified scale: image + text move as one glass plate */
-                transform: imgHovered && !isMobile ? "scale(1.03)" : "scale(1)",
-                transformOrigin: "center center",
-                transition: "transform 0.2s ease-out",
-                WebkitTapHighlightColor: "transparent",
-            }}
-        >
-            <div
-                ref={containerRef}
-                className="art-card-container"
-                style={{
-                    position: "relative",
-                    width: "100%",
-                    height: `${zoneH}px`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    zIndex: 10,
-                    pointerEvents: "none",
-                }}
-            >
-                {imgSrc ? (
-                    <img
-                        src={imgSrc}
-                        alt={work.title}
-                        className="art-card-inner"
-                        onLoad={recalc}
-                        onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
-                        onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}
-                        style={{
-                            display: "block",
-                            maxWidth: "76%",
-                            maxHeight: isHorizontal || isSquare ? `${zoneH * 0.76}px` : `${zoneH * 0.90}px`,
-                            width: "auto", height: "auto",
-                            borderRadius: "4px",
-                            alignSelf: "center",
-                            flexShrink: 0,
-                            boxShadow: imgHovered && !isMobile
-                                ? "4px 16px 40px rgba(28,25,22,0.58), 0 4px 12px rgba(28,25,22,0.35)"
-                                : "2px 10px 28px rgba(28,25,22,0.48), 0 3px 8px rgba(28,25,22,0.25)",
-                            transition: "box-shadow 0.2s ease-out, transform 0.2s ease-out",
-                            WebkitTouchCallout: "none",
-                            userSelect: "none",
-                            WebkitUserSelect: "none",
-                            pointerEvents: "auto",
-                        }}
-                    />
-                ) : (
-                    <div className="art-card-inner" style={{
-                        width: isHorizontal || isSquare ? "76%" : "55%",
-                        height: isHorizontal ? "55%" : "85%",
-                        backgroundImage: `linear-gradient(160deg, ${work.gradientFrom} 0%, ${work.gradientTo} 100%)`,
-                        borderRadius: "4px",
-                        alignSelf: "center",
-                        flexShrink: 0,
-                        boxShadow: "2px 8px 22px rgba(28,25,22,0.36), 0 2px 6px rgba(28,25,22,0.20)",
-                    }} />
-                )}
-            </div>
-
-            {/* Metadata overlay: sits behind the image, text below. Uses frosted glass style. */}
-            {(gridMode !== "3" || !isMobile) && (
-                <div style={{
-                    position: "relative",
-                    zIndex: 5,
-                    marginTop: measuredImgH > 0
-                        ? `-${emptyBottom + measuredImgH + 4}px`
-                        : `-${emptyBottom - (isMobile ? 10 : 8)}px`,
-                    marginLeft: `${textPad - 4}px`,
-                    marginRight: `${textPad - 4}px`,
-                    paddingTop: measuredImgH > 0
-                        ? `${measuredImgH + (isMobile ? 10 : 8) + 4}px`
-                        : "0.15rem",
-                    paddingBottom: "0.5rem",
-                    paddingLeft: "0.55rem",
-                    paddingRight: "0.55rem",
-                    backgroundColor: "rgba(235, 235, 237, 0.82)",
-                    backdropFilter: "blur(12px) saturate(1.3)",
-                    WebkitBackdropFilter: "blur(12px) saturate(1.3)",
-                    borderTop: "1px solid rgba(255,255,255,0.75)",
-                    borderLeft: "1px solid rgba(255,255,255,0.55)",
-                    borderRight: "1px solid rgba(200,200,205,0.38)",
-                    borderBottom: "1px solid rgba(180,180,190,0.3)",
-                    borderRadius: "4px",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.6) inset",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    gap: "0.3rem",
-                }}>
-                    {/* Left: text info */}
-                    <div style={{
-                        display: "flex", flexDirection: "column", gap: "0.05rem",
-                        flex: 1, minWidth: 0,
-                        pointerEvents: "auto",
-                    }}>
-                        <p style={{
-                            fontFamily: "var(--font-sans)",
-                            fontSize: gridMode === "1" ? "0.90rem" : gridMode === "2" ? "0.85rem" : "0.78rem",
-                            fontWeight: 400, fontStyle: "italic", letterSpacing: "0.01em",
-                            color: "#333", margin: 0,
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            lineHeight: 1.2
-                        }}>
-                            {work.title}
-                        </p>
-
-                        <p style={{
-                            fontFamily: "var(--font-sans)",
-                            fontSize: gridMode === "1" ? "0.68rem" : gridMode === "2" ? "0.64rem" : "0.60rem",
-                            fontWeight: 400, color: "#777", lineHeight: 1.2, margin: 0
-                        }}>
-                            {sizeStr}
-                        </p>
-                        {st && (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1px" }}>
-                                <span style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    backgroundColor: st.badgeBg,
-                                    border: `1px solid ${st.badgeText}33`,
-                                    borderRadius: "4px",
-                                    padding: "2px 7px 2px 5px",
-                                }}>
-                                    <span style={{
-                                        display: "inline-block",
-                                        width: "5px",
-                                        height: "5px",
-                                        borderRadius: "50%",
-                                        backgroundColor: st.badgeText,
-                                        flexShrink: 0,
-                                    }} />
-                                    <span style={{
-                                        fontFamily: "var(--font-sans)",
-                                        fontSize: gridMode === "1" ? "0.60rem" : gridMode === "2" ? "0.58rem" : "0.55rem",
-                                        fontWeight: 600,
-                                        letterSpacing: "0.07em",
-                                        textTransform: "uppercase",
-                                        color: st.badgeText,
-                                        lineHeight: 1,
-                                        whiteSpace: "nowrap",
-                                    }}>
-                                        {st.label}
-                                    </span>
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Right: Like button — prominent, stops card-hover propagation on pointer enter/leave */}
-                    <button
-                        onClick={e => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            const newState = !liked;
-                            
-                            setLiked(newState);
-                            setLikeAnimating(true);
-                            setTimeout(() => setLikeAnimating(false), 400);
-
-                            if (onAuthRequired) { 
-                                onAuthRequired(work.id, newState); 
-                                return; 
-                            }
-                            
-                            onLike?.(work.id, newState);
-                        }}
-                        onPointerDown={e => e.stopPropagation()}
-                        onMouseDown={e => e.stopPropagation()}
-                        aria-label={liked ? "Unlike" : "Like"}
-                        style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            padding: "6px", marginTop: "-2px", flexShrink: 0,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            transform: likeAnimating ? "scale(1.35)" : "scale(1)",
-                            transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                            outline: "none",
-                            pointerEvents: "auto",
-                        }}
-                    >
-                        <svg
-                            width={gridMode === "3" ? "18" : gridMode === "2" ? "22" : "26"}
-                            height={gridMode === "3" ? "18" : gridMode === "2" ? "22" : "26"}
-                            viewBox="0 0 24 24"
-                            fill={liked ? "#e84057" : "none"}
-                            stroke={liked ? "#e84057" : "#888"}
-                            strokeWidth={liked ? "1.5" : "2"}
-                            strokeLinecap="round" strokeLinejoin="round"
-                            style={{
-                                transition: "fill 0.25s ease, stroke 0.25s ease, filter 0.25s ease",
-                                filter: liked ? "drop-shadow(0 2px 6px rgba(232,64,87,0.4))" : "none",
-                                pointerEvents: "none",
-                            }}
-                        >
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                        </svg>
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-}
+import { Artwork, SortKey } from "./types";
+import { DEFAULT_GRADIENTS, SORT_OPTIONS, IMAGE_ZONE } from "./constants";
+import { sortWorks } from "./utils";
+import { ArtCard } from "./components/ArtCard";
 
 /**
  * Main Gallery exhibition page.
@@ -469,7 +96,7 @@ export default function GalleryPage() {
     }, []);
 
     useEffect(() => {
-        apiFetch(`${getApiUrl()}/artworks?limit=1000`).then(res => res.json())
+        apiFetch(`${getApiUrl()}/artworks?limit=1000&surface=gallery`).then(res => res.json())
             .then(artworksData => {
                 const rawData = artworksData.items || artworksData.data || artworksData;
                 if (!Array.isArray(rawData)) {
@@ -504,7 +131,7 @@ export default function GalleryPage() {
                 setLikedIds(new Set(items.map(a => a.id)));
             })
             .catch(() => setLikedIds(new Set()));
-    }, [user]);
+    }, [user, pendingLikes]);
 
     /** 
      * Derived state: Groups artworks by their parent collections to create 
@@ -536,7 +163,7 @@ export default function GalleryPage() {
                 }
             } else if (groupBy === "medium") {
                 const firstLabel = a.labels?.[0];
-                groupName = firstLabel?.title || a.medium || a.style || a.materials || "Other";
+                groupName = firstLabel?.title || a.medium || a.style || "Other";
                 // Capitalize properly if it exists, or provide safe fallback
                 if (groupName !== "Other") {
                     groupName = groupName.charAt(0).toUpperCase() + groupName.slice(1);
@@ -786,9 +413,8 @@ export default function GalleryPage() {
                 </div>
             </div>
 
-            {/* Rendered Exhibition Sections grouped by Collection. */}
             <div style={{ display: "flex", flexDirection: "column" }}>
-                {sorted.map(({ name, id, bg, works, totalInGroup }, idx) => {
+                {sorted.map(({ name, id, works, totalInGroup }, idx) => {
                     return (
                         <section key={name} style={{ paddingBottom: "1.25rem", marginBottom: 0 }}>
                             {/* Visual hierarchy header: Full-width ribbon styled collection title. */}
@@ -850,7 +476,7 @@ export default function GalleryPage() {
                                                     gridMode={gridMode}
                                                     isMobile={isMobile}
                                                     liked={effectiveLikedIds.has(work.id)}
-                                                    onLike={async (id, newState) => {
+                                                    onLike={async (id: number, newState: boolean) => {
                                                         try {
                                                             if (newState) {
                                                                 await apiFetch(`${getApiUrl()}/users/me/likes/${id}`, { method: "POST" });
@@ -865,7 +491,7 @@ export default function GalleryPage() {
                                                             }
                                                         } catch {}
                                                     }}
-                                                    onAuthRequired={!user ? handleAuthRequired : undefined}
+                                                    onAuthRequired={(id: number, newState: boolean) => handleAuthRequired(id, newState)}
                                                 />
                                             )})}
                                         </div>
