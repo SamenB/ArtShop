@@ -105,7 +105,9 @@ class ProdigiArtworkStorefrontMaterializerService:
                 bake=active_bake,
                 ratio_supported=bool(ratio_label and ratio_label in supported_ratio_labels),
             )
-            medium_availability = self.artwork_storefront_service._build_medium_availability(artwork)
+            medium_availability = self.artwork_storefront_service._build_medium_availability(
+                artwork
+            )
 
             for country_code, snapshot in country_snapshots.items():
                 payload = self.artwork_storefront_service.build_payload_from_snapshot(
@@ -140,12 +142,7 @@ class ProdigiArtworkStorefrontMaterializerService:
             "bake_id": active_bake.id,
             "artwork_count": len(artworks),
             "payload_count": len(payload_rows),
-            "country_count": len(
-                {
-                    row.country_code
-                    for row in payload_rows
-                }
-            ),
+            "country_count": len({row.country_code for row in payload_rows}),
         }
 
     async def _get_candidate_artworks(

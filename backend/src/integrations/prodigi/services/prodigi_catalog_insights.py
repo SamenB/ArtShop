@@ -54,15 +54,12 @@ class ProdigiCatalogInsightsService:
             if row.get("destination_country")
         }
         source_countries = {
-            (row.get("source_country") or "").upper()
-            for row in rows
-            if row.get("source_country")
+            (row.get("source_country") or "").upper() for row in rows if row.get("source_country")
         }
         variant_ids = {row.get("variant_id") for row in rows if row.get("variant_id") is not None}
 
         attribute_summaries = {
-            field: self._summarize_attribute_field(field, rows)
-            for field in ATTRIBUTE_FIELDS
+            field: self._summarize_attribute_field(field, rows) for field in ATTRIBUTE_FIELDS
         }
         shipping_summary = self._summarize_shipping(rows)
 
@@ -163,7 +160,12 @@ class ProdigiCatalogInsightsService:
                 bucket["max_days"].append(int(row["max_shipping_days"]))
 
         results = []
-        for (shipping_method, service_name, service_level, tracked_shipping), bucket in buckets.items():
+        for (
+            shipping_method,
+            service_name,
+            service_level,
+            tracked_shipping,
+        ), bucket in buckets.items():
             results.append(
                 {
                     "shipping_method": shipping_method,

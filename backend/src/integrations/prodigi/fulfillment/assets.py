@@ -115,9 +115,7 @@ class ProdigiFulfillmentAssetPublisher:
         required = {
             "PRINT_ASSET_BUCKET": getattr(self.settings, "PRINT_ASSET_BUCKET", None),
             "PRINT_ASSET_REGION": getattr(self.settings, "PRINT_ASSET_REGION", None),
-            "PRINT_ASSET_ACCESS_KEY_ID": getattr(
-                self.settings, "PRINT_ASSET_ACCESS_KEY_ID", None
-            ),
+            "PRINT_ASSET_ACCESS_KEY_ID": getattr(self.settings, "PRINT_ASSET_ACCESS_KEY_ID", None),
             "PRINT_ASSET_SECRET_ACCESS_KEY": getattr(
                 self.settings, "PRINT_ASSET_SECRET_ACCESS_KEY", None
             ),
@@ -128,9 +126,7 @@ class ProdigiFulfillmentAssetPublisher:
         missing = [name for name, value in required.items() if not str(value or "").strip()]
         if missing:
             raise AssetPublicationError(
-                "Prodigi S3 asset storage is not configured. Missing: "
-                + ", ".join(missing)
-                + "."
+                "Prodigi S3 asset storage is not configured. Missing: " + ", ".join(missing) + "."
             )
         return {
             "bucket": str(required["PRINT_ASSET_BUCKET"]),

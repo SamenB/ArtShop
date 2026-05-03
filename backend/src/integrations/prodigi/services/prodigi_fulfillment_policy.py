@@ -253,9 +253,7 @@ class ProdigiFulfillmentPolicyService:
             "tax_risk": "elevated",
             "row_count": row_count,
             "fastest_delivery_days": fastest_delivery_days,
-            "note": (
-                f"{source_note} Delivery can still be shown, but customs or taxes may apply."
-            ),
+            "note": (f"{source_note} Delivery can still be shown, but customs or taxes may apply."),
         }
 
     def _build_cross_border_source_note(self, sorted_sources: list[str]) -> str:
@@ -273,10 +271,7 @@ class ProdigiFulfillmentPolicyService:
     ) -> str:
         if destination_country in source_countries:
             return "domestic"
-        if (
-            destination_country in EUROPE_COUNTRY_CODES
-            and source_countries & EUROPE_COUNTRY_CODES
-        ):
+        if destination_country in EUROPE_COUNTRY_CODES and source_countries & EUROPE_COUNTRY_CODES:
             return "europe"
         return "international"
 

@@ -81,5 +81,3 @@ class AspectRatioMapper(DataMapper):
 
     db_model = PrintAspectRatioOrm
     schema = AspectRatioItem
-
-

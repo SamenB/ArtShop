@@ -14,6 +14,4 @@ class ProdigiCatalogPayloadMaterializer:
         self.db = db
 
     async def materialize_active_bake(self) -> dict[str, Any]:
-        return await ProdigiArtworkStorefrontMaterializerService(
-            self.db
-        ).materialize_active_bake()
+        return await ProdigiArtworkStorefrontMaterializerService(self.db).materialize_active_bake()

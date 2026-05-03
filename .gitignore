@@ -9,6 +9,7 @@ backend/venv/
 # Tests cache
 .pytest_cache/
 backend/.pytest_cache/
+backend/.pytest_tmp/
 .ruff_cache/
 
 # Secrets
@@ -45,9 +46,14 @@ update_colors.py
 site_content_ideas.md
 frontend/lint_output.txt
 frontend/test.ts
+frontend/*.log
+backend/*.log
 backend/test_*.log
 backend/test_*.txt
 backend/tests.log
+logs/*.log
+temp/*.json
+temp/db_recovery/
 
 # OS
 .DS_Store

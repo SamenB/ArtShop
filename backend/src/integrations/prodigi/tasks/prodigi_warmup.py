@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 
 catalog_service = ProdigiCatalogService()
 
+
 @celery_instance.task(name="warmup_prodigi_catalog")
 def warmup_prodigi_catalog():
     """Pre-populate Redis cache for top countries."""
@@ -22,8 +23,8 @@ def warmup_prodigi_catalog():
     # Run async logic in synchronous celery task
     loop = asyncio.get_event_loop()
     if loop.is_closed():
-         loop = asyncio.new_event_loop()
-         asyncio.set_event_loop(loop)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
     async def run_warmup():
         for country in priority_countries:

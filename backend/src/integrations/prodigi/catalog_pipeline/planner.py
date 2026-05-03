@@ -154,16 +154,12 @@ class ProdigiCatalogSnapshotPlanner:
             offer = self.build_offer(parsed)
             wrap = str(parsed.get("wrap") or "").strip()
             if category_id in WRAPPED_CANVAS_CATEGORIES and wrap:
-                canvas_wraps_by_slot[ratio][destination_country][category_id][
-                    dims.label
-                ].add(wrap)
+                canvas_wraps_by_slot[ratio][destination_country][category_id][dims.label].add(wrap)
             tier = self.shipping_policy.normalize_tier(
                 offer.get("shipping_method"),
                 offer.get("service_level"),
             )
-            existing = offers_by_slot[ratio][destination_country][category_id][dims.label].get(
-                tier
-            )
+            existing = offers_by_slot[ratio][destination_country][category_id][dims.label].get(tier)
             if existing is None or self.shipping_policy._offer_rank(
                 offer,
                 destination_country,
@@ -246,9 +242,7 @@ class ProdigiCatalogSnapshotPlanner:
             "product_price": product_price,
             "shipping_price": shipping_price,
             "total_cost": round(product_price + shipping_price, 2),
-            "currency": parsed.get("product_currency")
-            or parsed.get("shipping_currency")
-            or "EUR",
+            "currency": parsed.get("product_currency") or parsed.get("shipping_currency") or "EUR",
             "delivery_days": self.preview_service._format_delivery_days(
                 parsed.get("min_shipping_days"),
                 parsed.get("max_shipping_days"),
@@ -289,8 +283,8 @@ class ProdigiCatalogSnapshotPlanner:
                     if not blocked_labels:
                         continue
 
-                    presence = country_size_presence.get(ratio, {}).get(country_code, {}).get(
-                        category_id
+                    presence = (
+                        country_size_presence.get(ratio, {}).get(country_code, {}).get(category_id)
                     )
                     if presence:
                         country_size_presence[ratio][country_code][category_id] = {

@@ -75,10 +75,7 @@ def resolve_profile_attribute_config(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[Any]]]:
     resolved_fixed = dict(fixed_attributes or {})
     resolved_defaults = dict(recommended_defaults or {})
-    resolved_allowed = {
-        key: list(values)
-        for key, values in (allowed_attributes or {}).items()
-    }
+    resolved_allowed = {key: list(values) for key, values in (allowed_attributes or {}).items()}
     if not isinstance(effective_profile, dict):
         return resolved_fixed, resolved_defaults, resolved_allowed
 
@@ -98,6 +95,7 @@ def resolve_profile_attribute_config(
         }
 
     return resolved_fixed, resolved_defaults, resolved_allowed
+
 
 CATEGORY_PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
     "paperPrintRolled": {

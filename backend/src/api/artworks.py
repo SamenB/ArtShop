@@ -232,10 +232,7 @@ async def upload_artwork_images(
         temp_paths.append(temp_path)
 
     final_paths = await run_in_threadpool(
-        process_and_attach_image,
-        model_type="artwork",
-        model_id=artwork_id,
-        temp_paths=temp_paths
+        process_and_attach_image, model_type="artwork", model_id=artwork_id, temp_paths=temp_paths
     )
     return {"status": "success", "images": final_paths or []}
 
@@ -261,6 +258,7 @@ async def upload_print_quality_image(
     original_ext = os.path.splitext(file.filename or "upload")[1] or ".jpg"
     safe_ext = original_ext.lower().replace(".tiff", ".tif")
     from uuid import uuid4
+
     filename = f"print_{artwork_id}_{uuid4().hex[:8]}{safe_ext}"
     dest_path = f"{out_dir}/{filename}"
 
@@ -349,9 +347,7 @@ async def upload_artwork_print_asset(
     )
     os.makedirs(out_dir, exist_ok=True)
 
-    filename = (
-        f"{_sanitize_path_fragment(slot_size_label, 'variant')}_{uuid4().hex[:8]}{file_ext or '.png'}"
-    )
+    filename = f"{_sanitize_path_fragment(slot_size_label, 'variant')}_{uuid4().hex[:8]}{file_ext or '.png'}"
     dest_path = os.path.join(out_dir, filename)
 
     try:

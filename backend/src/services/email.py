@@ -78,7 +78,9 @@ def send_contact_emails(
     Returns:
         bool: True if both emails were sent successfully, False otherwise.
     """
-    target_email = admin_email or (settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else settings.SMTP_USER)
+    target_email = admin_email or (
+        settings.ADMIN_EMAILS[0] if settings.ADMIN_EMAILS else settings.SMTP_USER
+    )
 
     ok1 = True
     ok2 = True

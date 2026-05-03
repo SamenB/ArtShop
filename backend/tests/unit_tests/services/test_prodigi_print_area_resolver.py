@@ -217,7 +217,9 @@ async def test_resolver_can_fallback_from_preferred_wrap_to_provider_variant() -
 
 
 @pytest.mark.asyncio
-async def test_resolver_uses_prodigi_product_dimensions_when_variant_print_area_sizes_are_empty() -> None:
+async def test_resolver_uses_prodigi_product_dimensions_when_variant_print_area_sizes_are_empty() -> (
+    None
+):
     resolver = ProdigiPrintAreaResolver()
     resolver._client = object()  # Product is pre-cached, so no HTTP call is made.
     resolver._product_cache["GLOBAL-FRA-CAN-14X14"] = ProductDetails(

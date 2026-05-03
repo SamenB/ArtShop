@@ -57,7 +57,9 @@ class PrintPricingService(BaseService):
         existing_rows = await self.db.aspect_ratios.get_all_ordered()
         existing_labels = {row.label for row in existing_rows}
         missing_presets = [
-            preset for preset in DEFAULT_ASPECT_RATIO_PRESETS if preset["label"] not in existing_labels
+            preset
+            for preset in DEFAULT_ASPECT_RATIO_PRESETS
+            if preset["label"] not in existing_labels
         ]
         if not missing_presets:
             return
@@ -92,7 +94,9 @@ class PrintPricingService(BaseService):
             await self.db.rollback()
             raise DatabaseException from None
 
-    async def update_aspect_ratio(self, aspect_ratio_id: int, data: AspectRatioUpdate) -> AspectRatioItem:
+    async def update_aspect_ratio(
+        self, aspect_ratio_id: int, data: AspectRatioUpdate
+    ) -> AspectRatioItem:
         """Applies a partial update to an aspect ratio category."""
         try:
             result = await self.db.session.execute(

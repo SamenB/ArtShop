@@ -715,7 +715,9 @@ class ProdigiCatalogPreviewService:
                         "offer": (
                             {
                                 **offer,
-                                "default_shipping_tier": shipping_selection["default_shipping_tier"],
+                                "default_shipping_tier": shipping_selection[
+                                    "default_shipping_tier"
+                                ],
                                 "shipping_profiles": shipping_selection["shipping_profiles"],
                                 "available_shipping_tiers": shipping_selection[
                                     "available_shipping_tiers"

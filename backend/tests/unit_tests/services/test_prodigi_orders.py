@@ -20,6 +20,21 @@ class _ScalarResult:
         return self._value
 
 
+class _FakeDbSession:
+    def __init__(self, *, order=None, latest_job=None):
+        self.order = order
+        self.latest_job = latest_job
+        self.commit = AsyncMock()
+
+    async def execute(self, statement):
+        statement_text = str(statement)
+        if "prodigi_fulfillment_jobs" in statement_text:
+            return _ScalarResult(self.latest_job)
+        if "orders" in statement_text:
+            return _ScalarResult(self.order)
+        return _ScalarResult(None)
+
+
 class _FakeProdigiClient:
     calls = []
     response = {"outcome": "Created", "order": {"id": "ord_test_123"}}
@@ -152,7 +167,8 @@ async def test_preflight_builds_payload_preview_without_submitting(monkeypatch):
 
     item = _build_order_item()
     order = _build_order(item)
-    result = await ProdigiFulfillmentWorkflow(SimpleNamespace()).run_preflight(
+    db_session = _FakeDbSession(order=order)
+    result = await ProdigiFulfillmentWorkflow(db_session).run_preflight(
         order,
         commit=False,
     )
@@ -183,12 +199,9 @@ async def test_submit_order_items_uses_prepared_asset_url(monkeypatch):
         _FakeQualityService,
     )
 
-    db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(None)),
-        commit=AsyncMock(),
-    )
     item = _build_order_item()
     order = _build_order(item)
+    db_session = _FakeDbSession(order=order)
 
     await ProdigiOrderService.submit_order_items(order, db_session)
 
@@ -223,12 +236,9 @@ async def test_submit_order_items_uses_resolved_print_area_name(monkeypatch):
         _FakeQualityService,
     )
 
-    db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(None)),
-        commit=AsyncMock(),
-    )
     item = _build_order_item()
     order = _build_order(item)
+    db_session = _FakeDbSession(order=order)
 
     await ProdigiOrderService.submit_order_items(order, db_session)
 
@@ -249,12 +259,9 @@ async def test_submit_order_items_blocks_when_prepared_asset_is_missing(monkeypa
         _FakeQualityService,
     )
 
-    db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(None)),
-        commit=AsyncMock(),
-    )
     item = _build_order_item()
     order = _build_order(item)
+    db_session = _FakeDbSession(order=order)
 
     await ProdigiOrderService.submit_order_items(order, db_session)
 
@@ -273,12 +280,9 @@ async def test_preflight_marks_payload_blocked_when_upstream_gates_fail(monkeypa
         _FakeQualityService,
     )
 
-    db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(None)),
-        commit=AsyncMock(),
-    )
     item = _build_order_item()
     order = _build_order(item)
+    db_session = _FakeDbSession(order=order)
 
     result = await ProdigiFulfillmentWorkflow(db_session).run_preflight(order)
 
@@ -307,14 +311,11 @@ async def test_submit_order_items_batches_multiple_prints_in_one_prodigi_request
         _FakeQualityService,
     )
 
-    db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(None)),
-        commit=AsyncMock(),
-    )
     first = _build_order_item(id=11, prodigi_sku="GLOBAL-CAN-16X20")
     second = _build_order_item(id=12, prodigi_sku="GLOBAL-CAN-20X24")
     order = _build_order(first)
     order.items = [first, second]
+    db_session = _FakeDbSession(order=order)
 
     await ProdigiOrderService.submit_order_items(order, db_session)
 
@@ -366,12 +367,9 @@ async def test_submit_ready_order_does_not_create_duplicate_when_already_submitt
         submitted_at=None,
         last_error=None,
     )
-    db_session = SimpleNamespace(
-        execute=AsyncMock(return_value=_ScalarResult(existing_job)),
-        commit=AsyncMock(),
-    )
     item = _build_order_item()
     order = _build_order(item)
+    db_session = _FakeDbSession(order=order, latest_job=existing_job)
 
     await ProdigiFulfillmentWorkflow(db_session).submit_ready_order(order)
 

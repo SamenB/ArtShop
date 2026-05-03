@@ -100,8 +100,12 @@ def test_snapshot_builds_country_matrix_with_missing_slots() -> None:
             country_name="Germany",
             category_id="canvasStretched",
             sizes=[
-                make_size(slot_size_label="20x25", size_label="20x25", source_country="DE", total_cost=40),
-                make_size(slot_size_label="40x50", size_label="40x50", source_country="DE", total_cost=70),
+                make_size(
+                    slot_size_label="20x25", size_label="20x25", source_country="DE", total_cost=40
+                ),
+                make_size(
+                    slot_size_label="40x50", size_label="40x50", source_country="DE", total_cost=70
+                ),
             ],
         ),
         make_group(
@@ -109,7 +113,9 @@ def test_snapshot_builds_country_matrix_with_missing_slots() -> None:
             country_name="United States",
             category_id="canvasStretched",
             sizes=[
-                make_size(slot_size_label="20x25", size_label="20x25", source_country="US", total_cost=50),
+                make_size(
+                    slot_size_label="20x25", size_label="20x25", source_country="US", total_cost=50
+                ),
             ],
         ),
     ]
@@ -117,7 +123,14 @@ def test_snapshot_builds_country_matrix_with_missing_slots() -> None:
     payload = service._build_ratio_visualization(
         bake=bake,
         selected_ratio="4:5",
-        ratio_options=[{"ratio_label": "4:5", "ratio_title": "Core Portrait", "group_count": 2, "country_count": 2}],
+        ratio_options=[
+            {
+                "ratio_label": "4:5",
+                "ratio_title": "Core Portrait",
+                "group_count": 2,
+                "country_count": 2,
+            }
+        ],
         groups=groups,
     )
 

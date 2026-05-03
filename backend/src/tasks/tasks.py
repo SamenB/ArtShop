@@ -160,5 +160,3 @@ def release_abandoned_orders():
         logger.error("Task failed: release_abandoned_orders: {}", e)
         return
     logger.info("Task finished: release_abandoned_orders")
-
-

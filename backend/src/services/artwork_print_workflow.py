@@ -100,7 +100,10 @@ class ArtworkPrintWorkflowService:
 
         ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
         ratio_assigned = bool(ratio_label)
-        size_catalog, provider_attribute_coverage = await self._build_size_catalog_with_provider_coverage(
+        (
+            size_catalog,
+            provider_attribute_coverage,
+        ) = await self._build_size_catalog_with_provider_coverage(
             bake=bake,
             ratio_label=ratio_label,
         )
@@ -155,7 +158,9 @@ class ArtworkPrintWorkflowService:
             ),
         }
 
-    async def build_bulk_readiness_summaries(self, artworks: list[Any]) -> dict[int, dict[str, Any]]:
+    async def build_bulk_readiness_summaries(
+        self, artworks: list[Any]
+    ) -> dict[int, dict[str, Any]]:
         if not artworks:
             return {}
 
@@ -180,7 +185,11 @@ class ArtworkPrintWorkflowService:
 
         summaries: dict[int, dict[str, Any]] = {}
         for artwork in artworks:
-            ratio_label = artwork.print_aspect_ratio.label if getattr(artwork, "print_aspect_ratio", None) else None
+            ratio_label = (
+                artwork.print_aspect_ratio.label
+                if getattr(artwork, "print_aspect_ratio", None)
+                else None
+            )
             ratio_assigned = bool(ratio_label)
             size_catalog = deepcopy(size_catalogs.get(ratio_label or "", {}))
             selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
@@ -202,14 +211,14 @@ class ArtworkPrintWorkflowService:
                     orientation=orientation,
                     size_catalog=size_catalog,
                     master_assets=master_assets,
-                all_assets=artwork_assets,
-                print_enabled=print_enabled,
-                ratio_assigned=ratio_assigned,
-                provider_attribute_coverage={},
-                selected_canvas_wrap=selected_canvas_wrap,
-            )
-            for slot_id, slot_def in MASTER_SLOTS.items()
-        ]
+                    all_assets=artwork_assets,
+                    print_enabled=print_enabled,
+                    ratio_assigned=ratio_assigned,
+                    provider_attribute_coverage={},
+                    selected_canvas_wrap=selected_canvas_wrap,
+                )
+                for slot_id, slot_def in MASTER_SLOTS.items()
+            ]
             overall_status = self._compute_overall_status(slots, print_enabled)
             summaries[int(artwork.id)] = self._build_readiness_summary(
                 slots,
@@ -310,7 +319,11 @@ class ArtworkPrintWorkflowService:
         bake = await self.storefront_repository.get_active_bake()
         size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
         selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
-        if slot_id == "master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
+        if (
+            slot_id == "master"
+            and self._artwork_has_wrapped_canvas(artwork)
+            and not selected_canvas_wrap
+        ):
             raise ValueError("Choose a canvas wrap in Offerings before uploading the clean master.")
         if selected_canvas_wrap:
             size_catalog = await self._apply_canvas_wrap_to_size_catalog(
@@ -356,9 +369,7 @@ class ArtworkPrintWorkflowService:
             return
 
         slot_label = "production master"
-        target_label = (
-            "exact upload target"
-        )
+        target_label = "exact upload target"
         message = (
             f"Uploaded {slot_label} is {width_px}x{height_px} px, but this slot expects the "
             f"{target_label} {expected_width}x{expected_height} px."
@@ -371,12 +382,22 @@ class ArtworkPrintWorkflowService:
         raise ValueError(message)
 
     @staticmethod
-    def extract_prepared_asset_metadata(file_path: str, public_url: str | None = None) -> dict[str, Any]:
+    def extract_prepared_asset_metadata(
+        file_path: str, public_url: str | None = None
+    ) -> dict[str, Any]:
         path = Path(file_path)
         with Image.open(path) as img:
             dpi_info = img.info.get("dpi")
-            dpi_x = round(float(dpi_info[0]), 2) if isinstance(dpi_info, tuple) and len(dpi_info) >= 2 else None
-            dpi_y = round(float(dpi_info[1]), 2) if isinstance(dpi_info, tuple) and len(dpi_info) >= 2 else None
+            dpi_x = (
+                round(float(dpi_info[0]), 2)
+                if isinstance(dpi_info, tuple) and len(dpi_info) >= 2
+                else None
+            )
+            dpi_y = (
+                round(float(dpi_info[1]), 2)
+                if isinstance(dpi_info, tuple) and len(dpi_info) >= 2
+                else None
+            )
             width_px, height_px = img.size
             return {
                 "public_url": public_url,
@@ -399,7 +420,9 @@ class ArtworkPrintWorkflowService:
                 hasher.update(chunk)
         return hasher.hexdigest()
 
-    async def generate_derivatives_for_master(self, *, artwork_id: int, asset_role: str) -> list[Any]:
+    async def generate_derivatives_for_master(
+        self, *, artwork_id: int, asset_role: str
+    ) -> list[Any]:
         slot_id, slot_def = self._find_slot_by_asset_role(asset_role)
         artwork = await self._get_artwork_orm(artwork_id)
         assets = await self.db.artwork_print_assets.list_for_artwork(artwork_id)
@@ -418,7 +441,11 @@ class ArtworkPrintWorkflowService:
         ratio_label = artwork.print_aspect_ratio.label if artwork.print_aspect_ratio else None
         size_catalog = await self._build_size_catalog(bake=bake, ratio_label=ratio_label)
         selected_canvas_wrap = self._get_selected_canvas_wrap(artwork)
-        if slot_id == "master" and self._artwork_has_wrapped_canvas(artwork) and not selected_canvas_wrap:
+        if (
+            slot_id == "master"
+            and self._artwork_has_wrapped_canvas(artwork)
+            and not selected_canvas_wrap
+        ):
             raise ValueError("Choose a canvas wrap in Offerings before uploading the clean master.")
         if selected_canvas_wrap:
             size_catalog = await self._apply_canvas_wrap_to_size_catalog(
@@ -561,7 +588,9 @@ class ArtworkPrintWorkflowService:
                         strict_ratio_target["height_px"],
                     )
 
-                matches_provider_ratio = provider_aspect_error is None or provider_aspect_error <= 1.0
+                matches_provider_ratio = (
+                    provider_aspect_error is None or provider_aspect_error <= 1.0
+                )
                 matches_artwork_ratio = (
                     strict_aspect_error is not None and strict_aspect_error <= 1.0
                 )
@@ -592,7 +621,9 @@ class ArtworkPrintWorkflowService:
                         f"requires at least {required_w}x{required_h} px at {TARGET_DPI} DPI."
                     )
 
-                aspect_error_px = self._aspect_error_px(uploaded_w, uploaded_h, required_w, required_h)
+                aspect_error_px = self._aspect_error_px(
+                    uploaded_w, uploaded_h, required_w, required_h
+                )
                 if aspect_error_px is not None and aspect_error_px > 1.0:
                     issues.append(
                         "Uploaded master aspect ratio does not match the target print area. "
@@ -694,7 +725,9 @@ class ArtworkPrintWorkflowService:
         if artwork_ratio and target_ratio:
             expected_height = target_width / artwork_ratio
             expected_width = target_height * artwork_ratio
-            ratio_diff_px = round(min(abs(target_height - expected_height), abs(target_width - expected_width)), 2)
+            ratio_diff_px = round(
+                min(abs(target_height - expected_height), abs(target_width - expected_width)), 2
+            )
             ratio_warning = ratio_diff_px > 1.0
 
         strict_ratio_target = None
@@ -714,9 +747,7 @@ class ArtworkPrintWorkflowService:
                 target_height=target_height,
             )
             wrap_note = (
-                f"Selected canvas wrap: {selected_canvas_wrap}. "
-                if selected_canvas_wrap
-                else ""
+                f"Selected canvas wrap: {selected_canvas_wrap}. " if selected_canvas_wrap else ""
             )
             message = (
                 "Export one large clean master in the artwork ratio. We will generate exact "
@@ -811,7 +842,9 @@ class ArtworkPrintWorkflowService:
         os.makedirs(out_dir, exist_ok=True)
         icc_profile = source_img.info.get("icc_profile")
 
-        for label, dims in sorted(size_catalog.get(category_id, {}).items(), key=lambda item: item[1]["short_cm"]):
+        for label, dims in sorted(
+            size_catalog.get(category_id, {}).items(), key=lambda item: item[1]["short_cm"]
+        ):
             if not dims["available"]:
                 continue
             required_width, required_height = self._resolve_required_pixels(
@@ -859,7 +892,9 @@ class ArtworkPrintWorkflowService:
         out_dir = self._build_derivative_output_dir(artwork_id, slot_id, category_id)
         os.makedirs(out_dir, exist_ok=True)
         icc_profile = source_img.info.get("icc_profile")
-        for label, dims in sorted(size_catalog.get(category_id, {}).items(), key=lambda item: item[1]["short_cm"]):
+        for label, dims in sorted(
+            size_catalog.get(category_id, {}).items(), key=lambda item: item[1]["short_cm"]
+        ):
             if not dims["available"]:
                 continue
             required_width, required_height = self._resolve_required_pixels(
@@ -908,7 +943,9 @@ class ArtworkPrintWorkflowService:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
         if derivative_img.mode not in {"RGB", "RGBA", "L"}:
-            derivative_img = derivative_img.convert("RGBA" if "A" in derivative_img.getbands() else "RGB")
+            derivative_img = derivative_img.convert(
+                "RGBA" if "A" in derivative_img.getbands() else "RGB"
+            )
         derivative_img.save(dest_path, format="PNG", **save_kwargs)
         public_url = "/" + dest_path.replace("\\", "/")
         metadata = self.extract_prepared_asset_metadata(dest_path, public_url=public_url)
@@ -1068,7 +1105,9 @@ class ArtworkPrintWorkflowService:
             return None
         return "horizontal" if width > height else "vertical"
 
-    def _count_generated_derivatives(self, uploaded_asset: Any | None, all_assets: list[Any]) -> int:
+    def _count_generated_derivatives(
+        self, uploaded_asset: Any | None, all_assets: list[Any]
+    ) -> int:
         if uploaded_asset is None:
             return 0
         count = 0
@@ -1332,10 +1371,14 @@ class ArtworkPrintWorkflowService:
         for category_id in categories:
             medium = "paper" if category_id.startswith("paper") else "canvas"
             if medium == "paper":
-                if getattr(artwork, "has_paper_print", False) or getattr(artwork, "has_paper_print_limited", False):
+                if getattr(artwork, "has_paper_print", False) or getattr(
+                    artwork, "has_paper_print_limited", False
+                ):
                     return True
             else:
-                if getattr(artwork, "has_canvas_print", False) or getattr(artwork, "has_canvas_print_limited", False):
+                if getattr(artwork, "has_canvas_print", False) or getattr(
+                    artwork, "has_canvas_print_limited", False
+                ):
                     return True
         return False
 
@@ -1382,7 +1425,9 @@ class ArtworkPrintWorkflowService:
             "not_required": "No print offerings are enabled.",
         }
         if print_enabled and not ratio_assigned:
-            messages["blocked"] = "Choose a print aspect ratio in Basics to unlock the print pipeline."
+            messages["blocked"] = (
+                "Choose a print aspect ratio in Basics to unlock the print pipeline."
+            )
         return {
             "status": overall_status,
             "message": messages.get(overall_status, ""),
@@ -1391,7 +1436,11 @@ class ArtworkPrintWorkflowService:
             "ready_slots": ready_count,
             "blocked_slots": blocked_count,
             "highlight_variant": (
-                "danger" if overall_status == "blocked" else "warning" if overall_status == "attention" else "success"
+                "danger"
+                if overall_status == "blocked"
+                else "warning"
+                if overall_status == "attention"
+                else "success"
             ),
             "blocking_step_count": blocked_count,
             "attention_step_count": attention_count,
@@ -1405,7 +1454,11 @@ class ArtworkPrintWorkflowService:
         for asset in assets:
             if asset.slot_size_label is not None:
                 continue
-            asset_role = "master" if asset.asset_role in {"paper_clean", "canvas_clean", "clean_master"} else asset.asset_role
+            asset_role = (
+                "master"
+                if asset.asset_role in {"paper_clean", "canvas_clean", "clean_master"}
+                else asset.asset_role
+            )
             existing = index.get(asset_role)
             if existing is None or int(asset.id) > int(existing.id):
                 index[asset_role] = asset
@@ -1423,7 +1476,9 @@ class ArtworkPrintWorkflowService:
             raise ObjectNotFoundException(detail="Artwork not found in artworks")
         return artwork
 
-    async def _build_size_catalog(self, *, bake: Any | None, ratio_label: str | None) -> dict[str, dict[str, Any]]:
+    async def _build_size_catalog(
+        self, *, bake: Any | None, ratio_label: str | None
+    ) -> dict[str, dict[str, Any]]:
         catalog, _coverage = await self._build_size_catalog_with_provider_coverage(
             bake=bake,
             ratio_label=ratio_label,
@@ -1598,7 +1653,8 @@ class ArtworkPrintWorkflowService:
                     or (not existing["available"] and candidate["available"])
                     or (
                         existing["available"] == candidate["available"]
-                        and self._candidate_print_area(candidate) > self._candidate_print_area(existing)
+                        and self._candidate_print_area(candidate)
+                        > self._candidate_print_area(existing)
                     )
                 ):
                     catalog[group.category_id][label] = candidate
@@ -1657,12 +1713,16 @@ class ArtworkPrintWorkflowService:
             return long_side / short_side
         return short_side / long_side
 
-    def _ratio_components_from_artwork(self, artwork: Any, *, orientation: str) -> tuple[int, int] | None:
+    def _ratio_components_from_artwork(
+        self, artwork: Any, *, orientation: str
+    ) -> tuple[int, int] | None:
         aspect_ratio = getattr(artwork, "print_aspect_ratio", None)
         label = str(getattr(aspect_ratio, "label", "") or "")
         return self._ratio_components_from_label(label, orientation=orientation)
 
-    def _ratio_components_from_label(self, label: str, *, orientation: str) -> tuple[int, int] | None:
+    def _ratio_components_from_label(
+        self, label: str, *, orientation: str
+    ) -> tuple[int, int] | None:
         match = RATIO_PATTERN.search(str(label or ""))
         if not match:
             return None
@@ -1677,7 +1737,9 @@ class ArtworkPrintWorkflowService:
 
         common_denominator = math.lcm(width_fraction.denominator, height_fraction.denominator)
         width_units = width_fraction.numerator * (common_denominator // width_fraction.denominator)
-        height_units = height_fraction.numerator * (common_denominator // height_fraction.denominator)
+        height_units = height_fraction.numerator * (
+            common_denominator // height_fraction.denominator
+        )
         divisor = math.gcd(width_units, height_units)
         return width_units // divisor, height_units // divisor
 

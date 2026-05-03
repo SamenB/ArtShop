@@ -14,6 +14,7 @@ class SiteSettingsBase(BaseModel):
 
     Note: Print pricing is managed separately via the /print-pricing API.
     """
+
     model_config = ConfigDict(from_attributes=True)
 
     about_text: Optional[str] = None

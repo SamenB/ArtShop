@@ -157,7 +157,8 @@ class ProdigiStorefrontBakeService:
                     size_options_with_support.append(
                         {
                             **item,
-                            "currency": shipping_support.get("chosen_currency") or item.get("currency"),
+                            "currency": shipping_support.get("chosen_currency")
+                            or item.get("currency"),
                             "product_price": selected_product_price,
                             "shipping_price": selected_shipping_price,
                             "total_cost": (
@@ -234,9 +235,7 @@ class ProdigiStorefrontBakeService:
             )
 
         return {
-            "storefront_mode": (
-                "include_notice_level" if include_notice_level else "primary_only"
-            ),
+            "storefront_mode": ("include_notice_level" if include_notice_level else "primary_only"),
             "country_code": selected_country_preview["country_code"],
             "country_name": selected_country_preview["country_name"],
             "ratio": preview_payload["selected_ratio"],
@@ -320,9 +319,7 @@ class ProdigiStorefrontBakeService:
                     {
                         "category_id": card.get("category_id"),
                         "label": card.get("label"),
-                        "reason": (
-                            "No size options remain after provider pixel validation."
-                        ),
+                        "reason": ("No size options remain after provider pixel validation."),
                         "storefront_action": card.get("storefront_action"),
                         "fulfillment_level": card.get("fulfillment_level"),
                         "geography_scope": card.get("geography_scope"),
@@ -334,8 +331,12 @@ class ProdigiStorefrontBakeService:
             card["size_options"] = kept_sizes
             card["available_size_count"] = len(kept_sizes)
             card["size_labels"] = [item["size_label"] for item in kept_sizes]
-            totals = [item["total_cost"] for item in kept_sizes if item.get("total_cost") is not None]
-            currency = next((item.get("currency") for item in kept_sizes if item.get("currency")), None)
+            totals = [
+                item["total_cost"] for item in kept_sizes if item.get("total_cost") is not None
+            ]
+            currency = next(
+                (item.get("currency") for item in kept_sizes if item.get("currency")), None
+            )
             card["price_range"] = {
                 "currency": currency,
                 "min_total": min(totals) if totals else None,
@@ -393,9 +394,7 @@ class ProdigiStorefrontBakeService:
                     {
                         "category_id": card.get("category_id"),
                         "label": card.get("label"),
-                        "reason": (
-                            "No size options remain after canvas wrap support validation."
-                        ),
+                        "reason": ("No size options remain after canvas wrap support validation."),
                         "storefront_action": card.get("storefront_action"),
                         "fulfillment_level": card.get("fulfillment_level"),
                         "geography_scope": card.get("geography_scope"),
@@ -407,8 +406,12 @@ class ProdigiStorefrontBakeService:
             card["size_options"] = kept_sizes
             card["available_size_count"] = len(kept_sizes)
             card["size_labels"] = [item["size_label"] for item in kept_sizes]
-            totals = [item["total_cost"] for item in kept_sizes if item.get("total_cost") is not None]
-            currency = next((item.get("currency") for item in kept_sizes if item.get("currency")), None)
+            totals = [
+                item["total_cost"] for item in kept_sizes if item.get("total_cost") is not None
+            ]
+            currency = next(
+                (item.get("currency") for item in kept_sizes if item.get("currency")), None
+            )
             card["price_range"] = {
                 "currency": currency,
                 "min_total": min(totals) if totals else None,

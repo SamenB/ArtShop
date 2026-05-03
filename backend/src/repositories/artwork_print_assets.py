@@ -62,4 +62,3 @@ class ArtworkPrintAssetsRepository(BaseRepository):
         )
         result = await self.session.execute(query)
         return [row[0] for row in result.all()]
-

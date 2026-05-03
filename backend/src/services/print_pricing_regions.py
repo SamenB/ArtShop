@@ -184,12 +184,16 @@ class PrintPricingRegionService:
         if await self._needs_default_sync():
             await self.seed_defaults()
         regions = (
-            await self.db.session.execute(
-                select(PrintPricingRegionOrm)
-                .options(selectinload(PrintPricingRegionOrm.multipliers))
-                .order_by(PrintPricingRegionOrm.sort_order)
+            (
+                await self.db.session.execute(
+                    select(PrintPricingRegionOrm)
+                    .options(selectinload(PrintPricingRegionOrm.multipliers))
+                    .order_by(PrintPricingRegionOrm.sort_order)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [self._serialize_region(region) for region in regions]
 
     async def get_region_by_id(self, region_id: int) -> dict[str, Any] | None:
@@ -208,12 +212,16 @@ class PrintPricingRegionService:
         """Resolve the multiplier for a country and category."""
         normalized = (country_code or "").upper()
         regions = (
-            await self.db.session.execute(
-                select(PrintPricingRegionOrm)
-                .options(selectinload(PrintPricingRegionOrm.multipliers))
-                .order_by(PrintPricingRegionOrm.sort_order)
+            (
+                await self.db.session.execute(
+                    select(PrintPricingRegionOrm)
+                    .options(selectinload(PrintPricingRegionOrm.multipliers))
+                    .order_by(PrintPricingRegionOrm.sort_order)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         matched_region: PrintPricingRegionOrm | None = None
         fallback_region: PrintPricingRegionOrm | None = None
@@ -294,12 +302,16 @@ class PrintPricingRegionService:
             return None
 
         regions = (
-            await self.db.session.execute(
-                select(PrintPricingRegionOrm)
-                .options(selectinload(PrintPricingRegionOrm.multipliers))
-                .order_by(PrintPricingRegionOrm.sort_order)
+            (
+                await self.db.session.execute(
+                    select(PrintPricingRegionOrm)
+                    .options(selectinload(PrintPricingRegionOrm.multipliers))
+                    .order_by(PrintPricingRegionOrm.sort_order)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         regions_by_slug = {region.slug: region for region in regions}
         target_region = regions_by_slug.get(target_slug)
         if target_region is None:
@@ -327,12 +339,16 @@ class PrintPricingRegionService:
         draft rows are removed.
         """
         existing = (
-            await self.db.session.execute(
-                select(PrintPricingRegionOrm).options(
-                    selectinload(PrintPricingRegionOrm.multipliers)
+            (
+                await self.db.session.execute(
+                    select(PrintPricingRegionOrm).options(
+                        selectinload(PrintPricingRegionOrm.multipliers)
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         existing_by_slug = {region.slug: region for region in existing}
         desired_slugs = {region["slug"] for region in DEFAULT_REGIONS}
 
@@ -379,12 +395,16 @@ class PrintPricingRegionService:
 
     async def _needs_default_sync(self) -> bool:
         existing = (
-            await self.db.session.execute(
-                select(PrintPricingRegionOrm).options(
-                    selectinload(PrintPricingRegionOrm.multipliers)
+            (
+                await self.db.session.execute(
+                    select(PrintPricingRegionOrm).options(
+                        selectinload(PrintPricingRegionOrm.multipliers)
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if not existing:
             return True
         existing_slugs = {region.slug for region in existing}

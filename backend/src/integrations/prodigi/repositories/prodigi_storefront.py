@@ -30,7 +30,9 @@ class ProdigiStorefrontRepository:
             select(ProdigiStorefrontBakeOrm)
             .options(noload(ProdigiStorefrontBakeOrm.offer_groups))
             .where(ProdigiStorefrontBakeOrm.is_active.is_(True))
-            .order_by(ProdigiStorefrontBakeOrm.created_at.desc(), ProdigiStorefrontBakeOrm.id.desc())
+            .order_by(
+                ProdigiStorefrontBakeOrm.created_at.desc(), ProdigiStorefrontBakeOrm.id.desc()
+            )
             .limit(1)
         )
         result = await self.session.execute(query)
@@ -177,12 +179,9 @@ class ProdigiStorefrontRepository:
         country_code: str,
     ) -> ProdigiArtworkStorefrontPayloadOrm | None:
         normalized_country = (country_code or "").upper()
-        query = (
-            select(ProdigiArtworkStorefrontPayloadOrm)
-            .where(
-                ProdigiArtworkStorefrontPayloadOrm.bake_id == bake_id,
-                ProdigiArtworkStorefrontPayloadOrm.country_code == normalized_country,
-            )
+        query = select(ProdigiArtworkStorefrontPayloadOrm).where(
+            ProdigiArtworkStorefrontPayloadOrm.bake_id == bake_id,
+            ProdigiArtworkStorefrontPayloadOrm.country_code == normalized_country,
         )
         if artwork_id_or_slug.isdigit():
             query = query.where(
@@ -205,13 +204,10 @@ class ProdigiStorefrontRepository:
     ) -> list[ProdigiArtworkStorefrontPayloadOrm]:
         if not artwork_ids:
             return []
-        query = (
-            select(ProdigiArtworkStorefrontPayloadOrm)
-            .where(
-                ProdigiArtworkStorefrontPayloadOrm.bake_id == bake_id,
-                ProdigiArtworkStorefrontPayloadOrm.country_code == (country_code or "").upper(),
-                ProdigiArtworkStorefrontPayloadOrm.artwork_id.in_(artwork_ids),
-            )
+        query = select(ProdigiArtworkStorefrontPayloadOrm).where(
+            ProdigiArtworkStorefrontPayloadOrm.bake_id == bake_id,
+            ProdigiArtworkStorefrontPayloadOrm.country_code == (country_code or "").upper(),
+            ProdigiArtworkStorefrontPayloadOrm.artwork_id.in_(artwork_ids),
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())

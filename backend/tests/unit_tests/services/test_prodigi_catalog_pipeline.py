@@ -305,9 +305,7 @@ def test_curator_size_guard_removes_temp_file(tmp_path, monkeypatch) -> None:
     )
 
     with pytest.raises(RuntimeError, match="safety limit"):
-        ProdigiCuratedCsvBuilder(raw_csv_root=raw_root, output_path=output).build(
-            max_size_bytes=1
-        )
+        ProdigiCuratedCsvBuilder(raw_csv_root=raw_root, output_path=output).build(max_size_bytes=1)
 
     assert not output.exists()
     assert not output.with_suffix(".csv.tmp").exists()

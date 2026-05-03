@@ -169,10 +169,7 @@ class ProdigiCuratedCsvBuilder:
             selected_ranks_by_offer_key[offer_key] = offer_rank
 
         raw_files_seen = len(seen_files)
-        rows = [
-            selected_rows_by_offer_key[key]
-            for key in sorted(selected_rows_by_offer_key)
-        ]
+        rows = [selected_rows_by_offer_key[key] for key in sorted(selected_rows_by_offer_key)]
         temp_path = self.output_path.with_suffix(f"{self.output_path.suffix}.tmp")
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         with temp_path.open("w", encoding="utf-8", newline="") as handle:
@@ -290,7 +287,9 @@ class ProdigiCuratedCsvBuilder:
             variant_scope = "base"
         return (ratio, category_id, dims_label, destination_country, tier, variant_scope)
 
-    def _build_allowed_size_labels(self, size_plan: dict[str, Any]) -> dict[tuple[str, str], set[str]]:
+    def _build_allowed_size_labels(
+        self, size_plan: dict[str, Any]
+    ) -> dict[tuple[str, str], set[str]]:
         allowed: dict[tuple[str, str], set[str]] = defaultdict(set)
         for ratio, category_map in size_plan.get("global_shortlists", {}).items():
             for category_id, slots in category_map.items():

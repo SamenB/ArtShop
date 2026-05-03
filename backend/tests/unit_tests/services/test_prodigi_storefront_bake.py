@@ -129,7 +129,10 @@ def test_storefront_preview_keeps_notice_level_when_enabled() -> None:
     assert preview["visible_cards"][0]["default_shipping_tier"] == "express"
     assert preview["visible_cards"][0]["available_shipping_tiers"] == ["express", "standard"]
     assert preview["visible_cards"][0]["shipping_support"]["status"] == "covered"
-    assert preview["visible_cards"][0]["size_options"][0]["shipping_support"]["chosen_tier"] == "express"
+    assert (
+        preview["visible_cards"][0]["size_options"][0]["shipping_support"]["chosen_tier"]
+        == "express"
+    )
 
 
 def test_bake_rejects_visible_sizes_without_prodigi_print_area_pixels() -> None:
@@ -240,7 +243,9 @@ def test_bake_filters_visible_sizes_with_mismatched_visible_art_ratio() -> None:
     )
 
 
-def test_bake_keeps_provider_sizes_when_visible_art_ratio_matches_even_if_print_area_drifts() -> None:
+def test_bake_keeps_provider_sizes_when_visible_art_ratio_matches_even_if_print_area_drifts() -> (
+    None
+):
     service = ProdigiStorefrontBakeService(SimpleNamespace(session=None))
     preview = service.build_storefront_country_preview(
         preview_payload=make_preview_payload("show"),

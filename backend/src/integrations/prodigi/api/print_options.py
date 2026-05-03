@@ -8,11 +8,12 @@ catalog_service = ProdigiCatalogService()
 MARKUP = 2.5
 SHIPPING_PASSTHROUGH = 1.0
 
+
 @router.get("/options")
 async def get_options(
     country: str = Query(..., description="ISO 3166-1 alpha-2, e.g. DE"),
     aspect_ratio: str = Query(..., description="Normalised portrait ratio, e.g. 4:5"),
-    currency: str = Query("EUR", description="ISO 4217, e.g. EUR")
+    currency: str = Query("EUR", description="ISO 4217, e.g. EUR"),
 ):
     country = country.upper()
     try:
@@ -32,13 +33,11 @@ async def get_options(
                     "id": "no_frame",
                     "label": "Rolled (no frame)",
                     "description": "Ships in a protective tube.",
-                    "surcharge_eur": 0
+                    "surcharge_eur": 0,
                 }
-            ]
+            ],
         },
-        "canvas_prints": {
-            "types": []
-        }
+        "canvas_prints": {"types": []},
     }
 
     products = grouped.get("products", [])
@@ -49,34 +48,47 @@ async def get_options(
     canvas_types = {}
 
     def add_variant(target_list, p):
-        target_list.append({
-            "sku": p.sku,
-            "size_in": f'{p.width_in}\u00d7{p.height_in}"',
-            "size_cm": f'{p.width_cm}\u00d7{p.height_cm} cm',
-            "attributes": p.attributes,
-            "wholesale_eur": p.unit_cost_eur,
-            "shipping_std_eur": p.shipping_std_eur,
-            "total_wholesale_eur": round((p.unit_cost_eur or 0) + (p.shipping_std_eur or 0), 2) if p.unit_cost_eur is not None else None,
-            "retail_eur": round((p.unit_cost_eur or 0) * MARKUP, 2) if p.unit_cost_eur is not None else None,
-        })
+        target_list.append(
+            {
+                "sku": p.sku,
+                "size_in": f'{p.width_in}\u00d7{p.height_in}"',
+                "size_cm": f"{p.width_cm}\u00d7{p.height_cm} cm",
+                "attributes": p.attributes,
+                "wholesale_eur": p.unit_cost_eur,
+                "shipping_std_eur": p.shipping_std_eur,
+                "total_wholesale_eur": round((p.unit_cost_eur or 0) + (p.shipping_std_eur or 0), 2)
+                if p.unit_cost_eur is not None
+                else None,
+                "retail_eur": round((p.unit_cost_eur or 0) * MARKUP, 2)
+                if p.unit_cost_eur is not None
+                else None,
+            }
+        )
 
     for p in products:
         prefix = "-".join(p.sku.split("-")[:2])
         if p.sku.startswith("GLOBAL-FRA-CAN"):
-             prefix = "GLOBAL-FRA-CAN"
+            prefix = "GLOBAL-FRA-CAN"
         elif p.sku.startswith("GLOBAL-CFP"):
-             prefix = "GLOBAL-CFP"
+            prefix = "GLOBAL-CFP"
         elif p.sku.startswith("GLOBAL-BFP"):
-             prefix = "GLOBAL-BFP"
+            prefix = "GLOBAL-BFP"
 
-        if prefix in ["GLOBAL-HPR", "GLOBAL-HGE", "GLOBAL-FAP", "GLOBAL-EMA", "GLOBAL-BAP", "GLOBAL-SAP"]:
+        if prefix in [
+            "GLOBAL-HPR",
+            "GLOBAL-HGE",
+            "GLOBAL-FAP",
+            "GLOBAL-EMA",
+            "GLOBAL-BAP",
+            "GLOBAL-SAP",
+        ]:
             if prefix not in paper_types:
                 paper_types[prefix] = {
                     "id": prefix.lower().replace("-", "_"),
                     "label": p.description.split(",")[0],
                     "description": "Premium flat print options.",
                     "sku_prefix": prefix,
-                    "variants": []
+                    "variants": [],
                 }
             add_variant(paper_types[prefix]["variants"], p)
 
@@ -88,12 +100,16 @@ async def get_options(
                     "description": "Premium canvas stretched over solid wood frame.",
                     "sku_prefix": prefix,
                     "wrap_options": [
-                        {"id": "image_wrap", "label": "Image Wrap", "description": "Image printed around sides"},
+                        {
+                            "id": "image_wrap",
+                            "label": "Image Wrap",
+                            "description": "Image printed around sides",
+                        },
                         {"id": "black_wrap", "label": "Black Border"},
                         {"id": "white_wrap", "label": "White Border"},
-                        {"id": "mirror_wrap", "label": "Mirror Wrap"}
+                        {"id": "mirror_wrap", "label": "Mirror Wrap"},
                     ],
-                    "variants": []
+                    "variants": [],
                 }
             add_variant(canvas_types[prefix]["variants"], p)
 
@@ -107,9 +123,9 @@ async def get_options(
                     "frame_colors": [
                         {"id": "black", "label": "Black"},
                         {"id": "white", "label": "White"},
-                        {"id": "natural", "label": "Natural"}
+                        {"id": "natural", "label": "Natural"},
                     ],
-                    "variants": []
+                    "variants": [],
                 }
             add_variant(canvas_types[prefix]["variants"], p)
 
@@ -122,13 +138,9 @@ async def get_options(
                     "colors": [
                         {"id": "black", "label": "Black", "hex": "#1a1a1a"},
                         {"id": "white", "label": "White", "hex": "#f5f5f5"},
-                        {"id": "natural", "label": "Natural Wood", "hex": "#c4a265"}
+                        {"id": "natural", "label": "Natural Wood", "hex": "#c4a265"},
                     ],
-                    "variants_per_color": {
-                        "black": [],
-                        "white": [],
-                        "natural": []
-                    }
+                    "variants_per_color": {"black": [], "white": [], "natural": []},
                 }
             # For frames we assume they should be categorised inside variants_per_color.
             # In Prodigi APIs, actual attributes dict can contain the color.
@@ -141,6 +153,7 @@ async def get_options(
 
     return response
 
+
 @router.get("/options/quote")
 async def get_quote(
     sku: str = Query(...),
@@ -149,6 +162,7 @@ async def get_quote(
     attributes: str = Query("{}"),
 ):
     import json
+
     try:
         attr_dict = json.loads(attributes)
     except json.JSONDecodeError:
@@ -167,16 +181,14 @@ async def get_quote(
         prod_retail = round(float(prod_cost) * MARKUP, 2)
         total_eur = round(prod_retail + float(ship_cost) * SHIPPING_PASSTHROUGH, 2)
 
-        shipping_options.append({
-            "method": method,
-            "product_wholesale_eur": round(float(prod_cost), 2),
-            "product_eur": prod_retail,
-            "shipping_eur": round(float(ship_cost) * SHIPPING_PASSTHROUGH, 2),
-            "total_eur": total_eur
-        })
+        shipping_options.append(
+            {
+                "method": method,
+                "product_wholesale_eur": round(float(prod_cost), 2),
+                "product_eur": prod_retail,
+                "shipping_eur": round(float(ship_cost) * SHIPPING_PASSTHROUGH, 2),
+                "total_eur": total_eur,
+            }
+        )
 
-    return {
-        "sku": sku,
-        "country": country,
-        "shipping_options": shipping_options
-    }
+    return {"sku": sku, "country": country, "shipping_options": shipping_options}

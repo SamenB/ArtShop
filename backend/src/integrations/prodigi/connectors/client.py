@@ -24,18 +24,18 @@ log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-PRODIGI_LIVE_URL    = "https://api.prodigi.com/v4.0"
+PRODIGI_LIVE_URL = "https://api.prodigi.com/v4.0"
 PRODIGI_SANDBOX_URL = "https://api.sandbox.prodigi.com/v4.0"
 
 # SKU families we care about for fine art / poster prints (paper only, unframed).
 # These are the Prodigi SKU prefixes that correspond to paper-based prints.
 PAPER_SKU_PREFIXES = [
-    "GLOBAL-HPR",   # Hahnemühle Photo Rag         – museum-quality fine art
-    "GLOBAL-HGE",   # Hahnemühle German Etching     – textured fine art
-    "GLOBAL-EMA",   # Enhanced Matte Art Paper       – posters / fine art
-    "GLOBAL-FAP",   # Fine Art Paper (generic EMA)   – poster range
-    "GLOBAL-BAP",   # Baryta Art Paper               – photo-like fine art
-    "GLOBAL-SAP",   # Smooth Art Paper               – mid-range poster
+    "GLOBAL-HPR",  # Hahnemühle Photo Rag         – museum-quality fine art
+    "GLOBAL-HGE",  # Hahnemühle German Etching     – textured fine art
+    "GLOBAL-EMA",  # Enhanced Matte Art Paper       – posters / fine art
+    "GLOBAL-FAP",  # Fine Art Paper (generic EMA)   – poster range
+    "GLOBAL-BAP",  # Baryta Art Paper               – photo-like fine art
+    "GLOBAL-SAP",  # Smooth Art Paper               – mid-range poster
 ]
 
 # All standard sizes Prodigi offers (width x height in inches).
@@ -97,22 +97,27 @@ CANDIDATE_SIZES_IN = [
 
 # ── Data classes ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ProductVariant:
     """One variant of a Prodigi product (a set of attributes that ships to certain countries)."""
+
     attributes: dict[str, str]
     ships_to: list[str]
-    print_area_sizes: dict[str, dict]  # {"default": {"horizontalResolution": N, "verticalResolution": N}}
+    print_area_sizes: dict[
+        str, dict
+    ]  # {"default": {"horizontalResolution": N, "verticalResolution": N}}
 
 
 @dataclass
 class ProductDetails:
     """Full product details returned by GET /v4.0/products/{sku}."""
+
     sku: str
     description: str
     width_in: float
     height_in: float
-    attributes: dict[str, list[str]]           # {"wrap": ["Black", "ImageWrap", ...]}
+    attributes: dict[str, list[str]]  # {"wrap": ["Black", "ImageWrap", ...]}
     variants: list[ProductVariant] = field(default_factory=list)
 
     @property
@@ -122,6 +127,7 @@ class ProductDetails:
         if w == 0 or h == 0:
             return "unknown"
         from math import gcd
+
         w_i, h_i = int(round(w * 100)), int(round(h * 100))
         g = gcd(w_i, h_i)
         rw, rh = w_i // g, h_i // g
@@ -141,6 +147,7 @@ class ProductDetails:
 
 
 # ── HTTP client ────────────────────────────────────────────────────────────────
+
 
 class ProdigiClient:
     """
@@ -211,11 +218,13 @@ class ProdigiClient:
 
         variants = []
         for v in p.get("variants", []):
-            variants.append(ProductVariant(
-                attributes=v.get("attributes", {}),
-                ships_to=v.get("shipsTo", []),
-                print_area_sizes=v.get("printAreaSizes", {}),
-            ))
+            variants.append(
+                ProductVariant(
+                    attributes=v.get("attributes", {}),
+                    ships_to=v.get("shipsTo", []),
+                    print_area_sizes=v.get("printAreaSizes", {}),
+                )
+            )
 
         raw_w = float(dims.get("width", 0))
         raw_h = float(dims.get("height", 0))
@@ -276,7 +285,9 @@ class ProdigiClient:
                 for w, h in CANDIDATE_SIZES_IN:
                     candidates.append(f"{prefix}-{w}X{h}")
 
-        log.info("Probing %d candidate SKUs (imperial/metric) for country=%s...", len(candidates), cc)
+        log.info(
+            "Probing %d candidate SKUs (imperial/metric) for country=%s...", len(candidates), cc
+        )
 
         semaphore = asyncio.Semaphore(max_concurrent)
         results: list[ProductDetails] = []
@@ -287,7 +298,9 @@ class ProdigiClient:
                     product = await self.get_product(sku)
                     if product and product.ships_to_country(cc):
                         results.append(product)
-                        log.debug("Found: %s (%s) → %s", sku, product.aspect_ratio, product.description)
+                        log.debug(
+                            "Found: %s (%s) → %s", sku, product.aspect_ratio, product.description
+                        )
                 except Exception as exc:
                     log.warning("Error probing %s: %s", sku, exc)
 
@@ -339,6 +352,7 @@ class ProdigiClient:
 
 
 # ── Utilities ──────────────────────────────────────────────────────────────────
+
 
 def _normalise_ratio(raw: str) -> str:
     """

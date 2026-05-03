@@ -42,7 +42,9 @@ async def export_test_resizes(
             ratio_label,
             country_code.upper(),
         )
-        export_root = Path("static") / "print-prep-test" / f"artwork_{artwork_id}_{country_code.upper()}"
+        export_root = (
+            Path("static") / "print-prep-test" / f"artwork_{artwork_id}_{country_code.upper()}"
+        )
         manifest: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
 
@@ -77,7 +79,9 @@ async def export_test_resizes(
                     target_width=int(target["width_px"]),
                     target_height=int(target["height_px"]),
                     output_dir=export_root / group.category_id,
-                    white_border_pct=float(artwork.white_border_pct or 5.0) if group.category_id.startswith("paperPrint") else 0.0,
+                    white_border_pct=float(artwork.white_border_pct or 5.0)
+                    if group.category_id.startswith("paperPrint")
+                    else 0.0,
                 )
                 manifest.append(
                     {

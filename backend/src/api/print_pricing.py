@@ -33,7 +33,9 @@ async def create_aspect_ratio(data: AspectRatioCreate, admin_id: AdminDep, db: D
 
 
 @router.put("/aspect-ratios/{ratio_id}", response_model=AspectRatioItem)
-async def update_aspect_ratio(ratio_id: int, data: AspectRatioUpdate, admin_id: AdminDep, db: DBDep):
+async def update_aspect_ratio(
+    ratio_id: int, data: AspectRatioUpdate, admin_id: AdminDep, db: DBDep
+):
     """Updates an existing aspect ratio category. Requires admin privileges."""
     try:
         return await PrintPricingService(db).update_aspect_ratio(ratio_id, data)

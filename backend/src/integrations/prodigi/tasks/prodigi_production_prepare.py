@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from src.database import new_session_null_pool
+from src.integrations.prodigi.catalog_pipeline.curated_source import ProdigiCuratedCsvSource
 from src.integrations.prodigi.services.prodigi_business_policy import (
     ProdigiBusinessPolicyService,
 )
@@ -28,6 +29,8 @@ from src.utils.db_manager import DBManager
 
 async def run(args: argparse.Namespace) -> dict[str, Any]:
     started_at = datetime.now(UTC)
+    if not args.skip_csv_rebuild:
+        _assert_curated_csv_ready(args.curated_csv)
     async with DBManager(session_factory=new_session_null_pool) as db:
         rebuild_result = None
         if not args.skip_csv_rebuild:
@@ -133,6 +136,16 @@ def _write_report(output: str | None, report: dict[str, Any]) -> None:
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+
+def _assert_curated_csv_ready(curated_csv_path: str | None) -> None:
+    stats = ProdigiCuratedCsvSource(csv_path=curated_csv_path).describe()
+    if stats.size_bytes <= 0 or stats.rows_seen <= 0:
+        raise RuntimeError(
+            "Curated Prodigi CSV source is missing usable rows. "
+            "Generate it with python -m src.integrations.prodigi.tasks."
+            "prodigi_prepare_storefront_source before running production prepare."
+        )
 
 
 if __name__ == "__main__":

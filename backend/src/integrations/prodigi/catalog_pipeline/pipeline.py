@@ -144,9 +144,7 @@ class ProdigiCatalogPipeline:
             selected_country=selected_country,
             source_payload=context.source_payload(),
         )
-        materialization = await ProdigiCatalogPayloadMaterializer(
-            self.db
-        ).materialize_active_bake()
+        materialization = await ProdigiCatalogPayloadMaterializer(self.db).materialize_active_bake()
         retention = await ProdigiStorefrontBakeRetentionService(self.db).prune(
             keep_inactive=settings.PRODIGI_STOREFRONT_BAKE_RETENTION
         )
@@ -154,9 +152,9 @@ class ProdigiCatalogPipeline:
         bake = bake_result["bake"]
         selected_storefront_preview = bake_result["selected_storefront_preview"]
         selected_ratio_value = selected_ratio or (selected_storefront_preview or {}).get("ratio")
-        selected_country_value = selected_country or (
-            selected_storefront_preview or {}
-        ).get("country_code")
+        selected_country_value = selected_country or (selected_storefront_preview or {}).get(
+            "country_code"
+        )
 
         return {
             "status": "baked",
@@ -223,19 +221,19 @@ class ProdigiCatalogPipeline:
                     category_id = category["id"]
                     payload = category_map.get(category_id)
                     if not payload:
-                        summary[ratio][country_code][
-                            category_id
-                        ] = context.preview_service.fulfillment_policy.build_empty_country_category_summary(
-                            country_code
+                        summary[ratio][country_code][category_id] = (
+                            context.preview_service.fulfillment_policy.build_empty_country_category_summary(
+                                country_code
+                            )
                         )
                         continue
-                    summary[ratio][country_code][
-                        category_id
-                    ] = context.preview_service.fulfillment_policy._build_country_category_summary(
-                        destination_country=country_code,
-                        source_countries=payload["source_countries"],
-                        row_count=payload["row_count"],
-                        fastest_min_shipping_days=payload["fastest_min_shipping_days"],
-                        fastest_max_shipping_days=payload["fastest_max_shipping_days"],
+                    summary[ratio][country_code][category_id] = (
+                        context.preview_service.fulfillment_policy._build_country_category_summary(
+                            destination_country=country_code,
+                            source_countries=payload["source_countries"],
+                            row_count=payload["row_count"],
+                            fastest_min_shipping_days=payload["fastest_min_shipping_days"],
+                            fastest_max_shipping_days=payload["fastest_max_shipping_days"],
+                        )
                     )
         return summary

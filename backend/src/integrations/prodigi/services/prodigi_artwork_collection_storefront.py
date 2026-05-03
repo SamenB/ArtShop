@@ -136,5 +136,3 @@ class ProdigiArtworkCollectionStorefrontService(BaseService):
             summary["print_country_supported"] = True
 
         return summary
-
-

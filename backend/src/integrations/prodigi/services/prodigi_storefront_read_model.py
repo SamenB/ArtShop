@@ -204,7 +204,9 @@ class ProdigiStorefrontReadModelService:
         if offer_size_id is None:
             raise ValueError("Selected print size has no materialized storefront offer size id.")
         if customer_product is None or customer_shipping is None or customer_total is None:
-            raise ValueError("Selected print size is missing customer pricing in the active payload.")
+            raise ValueError(
+                "Selected print size is missing customer pricing in the active payload."
+            )
         if abs((customer_product + customer_shipping) - customer_total) > 0.01:
             raise ValueError(
                 "Selected print customer total does not match product plus shipping in the active payload."
@@ -237,8 +239,7 @@ class ProdigiStorefrontReadModelService:
             customer_shipping_price=customer_shipping,
             customer_total_price=customer_total,
             customer_currency=str(size.get("customer_currency") or "USD"),
-            shipping_tier=shipping_support.get("chosen_tier")
-            or size.get("default_shipping_tier"),
+            shipping_tier=shipping_support.get("chosen_tier") or size.get("default_shipping_tier"),
             shipping_method=shipping_support.get("chosen_shipping_method")
             or size.get("shipping_method")
             or size.get("default_shipping_tier"),

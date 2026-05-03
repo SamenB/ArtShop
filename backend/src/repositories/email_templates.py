@@ -26,7 +26,5 @@ class EmailTemplatesRepository(BaseRepository):
         Returns the ORM instance directly (not schema) so callers can
         read the raw fields without an extra DB round-trip.
         """
-        result = await self.session.execute(
-            select(self.model).where(self.model.key == key)
-        )
+        result = await self.session.execute(select(self.model).where(self.model.key == key))
         return result.scalars().one_or_none()

@@ -93,7 +93,9 @@ class ProdigiBusinessPolicyService:
         """
 
         shipping_support = shipping_support or {}
-        multiplier = self.get_markup_multiplier(category_id, multiplier_override=multiplier_override)
+        multiplier = self.get_markup_multiplier(
+            category_id, multiplier_override=multiplier_override
+        )
         normalized_product_price = self._to_decimal(product_price)
         retail_product_price = None
         if normalized_product_price is not None:
@@ -129,9 +131,7 @@ class ProdigiBusinessPolicyService:
                 "shipping_price_for_margin": Decimal("0.00"),
                 "shipping_reference_price": candidate_shipping,
                 "shipping_credit_applied": Decimal("0.00"),
-                "reason": (
-                    "Prodigi print shipping is passed through to the buyer at checkout."
-                ),
+                "reason": ("Prodigi print shipping is passed through to the buyer at checkout."),
             }
 
         return {

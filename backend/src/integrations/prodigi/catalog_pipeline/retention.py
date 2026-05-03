@@ -28,7 +28,9 @@ class ProdigiStorefrontBakeRetentionService:
             await self.db.session.execute(
                 select(ProdigiStorefrontBakeOrm)
                 .where(ProdigiStorefrontBakeOrm.is_active.is_(True))
-                .order_by(ProdigiStorefrontBakeOrm.created_at.desc(), ProdigiStorefrontBakeOrm.id.desc())
+                .order_by(
+                    ProdigiStorefrontBakeOrm.created_at.desc(), ProdigiStorefrontBakeOrm.id.desc()
+                )
                 .limit(1)
             )
         ).scalar_one_or_none()

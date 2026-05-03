@@ -114,9 +114,7 @@ def test_shipping_support_chooses_cheapest_only_when_standard_is_absent() -> Non
 
 
 def test_shipping_support_can_still_block_when_configured() -> None:
-    service = ProdigiShippingSupportPolicyService(
-        {"fallback_when_none_under_cap": "block"}
-    )
+    service = ProdigiShippingSupportPolicyService({"fallback_when_none_under_cap": "block"})
 
     result = service.evaluate_size(
         [

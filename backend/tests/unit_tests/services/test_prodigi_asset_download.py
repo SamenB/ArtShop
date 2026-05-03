@@ -6,7 +6,9 @@ from src.integrations.prodigi.fulfillment import asset_download
 
 
 class _FakeResponse:
-    def __init__(self, *, status_code=200, body=b"png-bytes", headers=None, url="https://asset.test/file.png"):
+    def __init__(
+        self, *, status_code=200, body=b"png-bytes", headers=None, url="https://asset.test/file.png"
+    ):
         self.status_code = status_code
         self._body = body
         self.headers = headers or {

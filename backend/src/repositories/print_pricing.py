@@ -24,4 +24,3 @@ class PrintAspectRatioRepository(BaseRepository):
             .order_by(self.model.sort_order, self.model.label)
         )
         return list(result.scalars().unique().all())
-

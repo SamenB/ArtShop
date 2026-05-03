@@ -42,7 +42,9 @@ async def submit_contact_form(
 
         admin_subject = admin_tpl.subject if admin_tpl and admin_tpl.is_active else None
         admin_body = admin_tpl.body if admin_tpl and admin_tpl.is_active else None
-        autoreply_subject = autoreply_tpl.subject if autoreply_tpl and autoreply_tpl.is_active else None
+        autoreply_subject = (
+            autoreply_tpl.subject if autoreply_tpl and autoreply_tpl.is_active else None
+        )
         autoreply_body = autoreply_tpl.body if autoreply_tpl and autoreply_tpl.is_active else None
 
         background_tasks.add_task(

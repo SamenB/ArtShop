@@ -24,6 +24,7 @@ def mock_settings():
         mock_set.ADMIN_EMAILS = ["admin@test.com"]
         yield mock_set
 
+
 @pytest.fixture
 def mock_smtp():
     with patch("src.services.email.smtplib.SMTP_SSL") as mock_ssl:
@@ -31,10 +32,12 @@ def mock_smtp():
         mock_ssl.return_value = mock_server
         yield mock_server
 
+
 @pytest.fixture
 def mock_send_single():
     with patch("src.services.email._send_single_email", return_value=True) as m:
         yield m
+
 
 class TestSendSingleEmail:
     def test_missing_credentials(self, mock_settings):
@@ -78,6 +81,7 @@ class TestSendSingleEmail:
             result = _send_single_email(to="user@test.com", subject="Hello", body="Test Body")
             assert result is False
             mock_log.assert_called_once()
+
 
 class TestContactEmails:
     def test_both_templates_active(self, mock_settings, mock_send_single):
@@ -125,21 +129,29 @@ class TestContactEmails:
     def test_partial_template_skipped(self, mock_settings, mock_send_single):
         """Should skip processing if one part of a template pair is empty/none."""
         res = send_contact_emails(
-            name="John Doe", email="john@test.com", message="Hi",
-            admin_subject="Subj", admin_body_template=None,     # Partial
-            autoreply_subject=None, autoreply_body_template="H" # Partial
+            name="John Doe",
+            email="john@test.com",
+            message="Hi",
+            admin_subject="Subj",
+            admin_body_template=None,  # Partial
+            autoreply_subject=None,
+            autoreply_body_template="H",  # Partial
         )
         assert res is True
         assert mock_send_single.call_count == 0
+
 
 class TestFulfillmentEmails:
     def test_template_inactive_skipped(self, mock_send_single):
         """Should just return True and log a warning if template is missing."""
         with patch("src.services.email.logger.warning") as mock_log:
             res = send_fulfillment_status_email(
-                order_id=1, first_name="Jane", customer_email="jane@test.com",
+                order_id=1,
+                first_name="Jane",
+                customer_email="jane@test.com",
                 fulfillment_status="shipped",
-                subject_template=None, body_template=None
+                subject_template=None,
+                body_template=None,
             )
             assert res is True
             assert mock_send_single.call_count == 0
@@ -148,25 +160,31 @@ class TestFulfillmentEmails:
     def test_generic_status_delivered(self, mock_send_single):
         """Checks formatting for statuses lacking tracking codes."""
         res = send_fulfillment_status_email(
-            order_id=1, first_name="Jane", customer_email="jane@test.com",
+            order_id=1,
+            first_name="Jane",
+            customer_email="jane@test.com",
             fulfillment_status="delivered",
             subject_template="Order #{order_id}",
-            body_template="Hi {first_name}, {tracking_block} Enjoy!"
+            body_template="Hi {first_name}, {tracking_block} Enjoy!",
         )
         assert res is True
         mock_send_single.assert_called_once()
         args = mock_send_single.call_args[1]
         assert args["subject"] == "Order #1"
-        assert args["body"] == "Hi Jane,  Enjoy!" # Empty tracking block
+        assert args["body"] == "Hi Jane,  Enjoy!"  # Empty tracking block
 
     def test_shipped_status_with_tracking(self, mock_send_single):
         """Checks injection of tracking urls."""
         res = send_fulfillment_status_email(
-            order_id=2, first_name="Tom", customer_email="tom@test.com",
+            order_id=2,
+            first_name="Tom",
+            customer_email="tom@test.com",
             fulfillment_status="shipped",
-            tracking_number="ABC", carrier="FedEx", tracking_url="http://track.me",
+            tracking_number="ABC",
+            carrier="FedEx",
+            tracking_url="http://track.me",
             subject_template="Shipped #{order_id}",
-            body_template="T: {tracking_block}"
+            body_template="T: {tracking_block}",
         )
         assert res is True
         args = mock_send_single.call_args[1]
@@ -176,10 +194,15 @@ class TestFulfillmentEmails:
     def test_shipped_status_without_carrier_url(self, mock_send_single):
         """Defaults for incomplete tracking info."""
         res = send_fulfillment_status_email(
-            order_id=2, first_name="Tom", customer_email="tom@test.com",
+            order_id=2,
+            first_name="Tom",
+            customer_email="tom@test.com",
             fulfillment_status="shipped",
-            tracking_number="ABC", carrier=None, tracking_url=None,
-            subject_template="Shipped", body_template="T: {tracking_block}"
+            tracking_number="ABC",
+            carrier=None,
+            tracking_url=None,
+            subject_template="Shipped",
+            body_template="T: {tracking_block}",
         )
         assert res is True
         args = mock_send_single.call_args[1]
@@ -192,9 +215,12 @@ class TestFulfillmentEmails:
         # Force a key error by providing a mock template with undefined keys
         with patch("src.services.email.logger.error") as mock_log:
             res = send_fulfillment_status_email(
-                order_id=1, first_name="Bob", customer_email="bob@test.com",
+                order_id=1,
+                first_name="Bob",
+                customer_email="bob@test.com",
                 fulfillment_status="shipped",
-                subject_template="{undefined_key}", body_template="Valid"
+                subject_template="{undefined_key}",
+                body_template="Valid",
             )
             assert res is False
             mock_log.assert_called_once()

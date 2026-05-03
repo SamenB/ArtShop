@@ -93,18 +93,21 @@ class ProdigiCatalogSnapshotBaker:
                     policy_summary=policy_summary,
                     ratio_category_slots=ratio_category_slots,
                 )
-                available_countries = sorted(
-                    plan.country_size_presence.get(ratio_label, {}).keys()
-                )
+                available_countries = sorted(plan.country_size_presence.get(ratio_label, {}).keys())
 
                 for country_code in available_countries:
-                    country_slots = size_plan["country_shortlists"].get(ratio_label, {}).get(
-                        country_code,
-                        {},
+                    country_slots = (
+                        size_plan["country_shortlists"]
+                        .get(ratio_label, {})
+                        .get(
+                            country_code,
+                            {},
+                        )
                     )
                     country_offers = self._build_country_offers(
-                        offers_by_slot=plan.offers_by_slot.get(ratio_label, {})
-                        .get(country_code, {})
+                        offers_by_slot=plan.offers_by_slot.get(ratio_label, {}).get(
+                            country_code, {}
+                        )
                     )
                     country_fulfillment = self._build_country_fulfillment(
                         destination_country=country_code,

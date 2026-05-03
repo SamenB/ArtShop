@@ -75,7 +75,9 @@ class ArtworkService(BaseService):
         return enriched_artworks
 
     async def _attach_print_readiness(self, artworks: list) -> list[dict]:
-        summaries = await ArtworkPrintWorkflowService(self.db).build_bulk_readiness_summaries(artworks)
+        summaries = await ArtworkPrintWorkflowService(self.db).build_bulk_readiness_summaries(
+            artworks
+        )
         enriched_artworks = []
         for artwork in artworks:
             item = self._serialize_admin_artwork(artwork)
@@ -231,7 +233,11 @@ class ArtworkService(BaseService):
                         item["print_readiness_summary"] = readiness_by_id.get(item["id"])
                 artworks = storefront_items
 
-        logger.info("Admin artworks retrieved: count={}, readiness={}", len(artworks), include_print_readiness)
+        logger.info(
+            "Admin artworks retrieved: count={}, readiness={}",
+            len(artworks),
+            include_print_readiness,
+        )
         return artworks
 
     async def _refresh_materialized_storefront(self, artwork_ids: list[int]) -> None:
@@ -370,9 +376,7 @@ class ArtworkService(BaseService):
             files_to_delete.append(artwork.print_quality_url.lstrip("/"))
 
         # 1c. Print-prep asset files (masters + generated derivatives)
-        asset_file_urls = await self.db.artwork_print_assets.get_file_urls_for_artwork(
-            artwork_id
-        )
+        asset_file_urls = await self.db.artwork_print_assets.get_file_urls_for_artwork(artwork_id)
         for url in asset_file_urls:
             files_to_delete.append(url.lstrip("/"))
 

@@ -212,9 +212,9 @@ class ProdigiShippingSupportPolicyService:
             return None
         return min(
             profiles,
-            key=lambda item: item["shipping_price"]
-            if item["shipping_price"] is not None
-            else 999999,
+            key=lambda item: (
+                item["shipping_price"] if item["shipping_price"] is not None else 999999
+            ),
         )
 
     def _build_note(self, chosen_profile: dict[str, Any], selection_reason: str) -> str:
@@ -253,9 +253,7 @@ class ProdigiShippingSupportPolicyService:
             "chosen_shipping_method": (
                 chosen_profile["shipping_method"] if chosen_profile else None
             ),
-            "chosen_shipping_price": (
-                chosen_profile["shipping_price"] if chosen_profile else None
-            ),
+            "chosen_shipping_price": (chosen_profile["shipping_price"] if chosen_profile else None),
             "chosen_product_price": (
                 chosen_profile.get("product_price") if chosen_profile else None
             ),

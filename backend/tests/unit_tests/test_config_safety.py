@@ -23,7 +23,9 @@ def make_settings(**overrides):
 
 
 def test_settings_reject_test_mode_against_non_test_database_name() -> None:
-    with pytest.raises(ValueError, match="refuses to run against a non-test PostgreSQL database name"):
+    with pytest.raises(
+        ValueError, match="refuses to run against a non-test PostgreSQL database name"
+    ):
         make_settings(MODE="TEST", POSTGRES_DB="artshop")
 
 

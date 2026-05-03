@@ -517,8 +517,7 @@ class ProdigiStorefrontSnapshotService:
                 "shipping_price": selected_shipping_price,
                 "total_cost": (
                     round(selected_product_price + selected_shipping_price, 2)
-                    if selected_product_price is not None
-                    and selected_shipping_price is not None
+                    if selected_product_price is not None and selected_shipping_price is not None
                     else self._to_float(size.total_cost)
                 ),
                 "delivery_days": shipping_support.get("chosen_delivery_days") or size.delivery_days,

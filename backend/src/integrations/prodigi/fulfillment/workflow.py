@@ -437,8 +437,7 @@ class ProdigiFulfillmentWorkflow:
                     error=str(exc),
                 )
                 log.error(
-                    "Exception submitting Order #%s to Prodigi: %s\n"
-                    "order type=%s, items types=%s",
+                    "Exception submitting Order #%s to Prodigi: %s\norder type=%s, items types=%s",
                     order.id,
                     exc,
                     type(order).__name__,

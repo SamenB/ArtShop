@@ -59,7 +59,9 @@ PRIORITY_COUNTRY_ORDER = [
     "CO",
 ]
 
-PRIORITY_RANK = {country_code: index + 1 for index, country_code in enumerate(PRIORITY_COUNTRY_ORDER)}
+PRIORITY_RANK = {
+    country_code: index + 1 for index, country_code in enumerate(PRIORITY_COUNTRY_ORDER)
+}
 
 
 def get_market_priority(country_code: str) -> dict[str, Any]:
@@ -80,4 +82,3 @@ def get_market_priority(country_code: str) -> dict[str, Any]:
         "segment": segment,
         "is_priority": rank != 999,
     }
-

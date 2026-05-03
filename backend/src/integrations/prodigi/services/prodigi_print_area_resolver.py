@@ -269,11 +269,7 @@ class ProdigiPrintAreaResolver:
                 if all(available.get(key) == value for key, value in wanted.items()):
                     return variant
             optional = {self._normalize_attr_key(key) for key in optional_attribute_keys}
-            required = {
-                key: value
-                for key, value in wanted.items()
-                if key not in optional
-            }
+            required = {key: value for key, value in wanted.items() if key not in optional}
             if optional and required:
                 for variant in variants:
                     available = {
@@ -366,7 +362,9 @@ class ProdigiPrintAreaResolver:
         return Decimal(match.group("w")), Decimal(match.group("h"))
 
     def _decimal_px(self, inches: Decimal) -> int:
-        return int((inches * Decimal(self.target_dpi)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        return int(
+            (inches * Decimal(self.target_dpi)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        )
 
     def _first_print_area_dimensions(
         self,

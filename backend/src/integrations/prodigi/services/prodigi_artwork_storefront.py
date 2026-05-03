@@ -37,6 +37,7 @@ CATEGORY_MEDIUM_MAP = {
     "canvasFloatingFrame": "canvas",
 }
 
+
 class ProdigiArtworkStorefrontService:
     """
     Public-facing storefront read model for one artwork in one destination country.
@@ -249,9 +250,11 @@ class ProdigiArtworkStorefrontService:
         size_options = []
         destination_country = (cell.get("destination_country") or "").upper()
         market_segment = get_market_priority(destination_country).get("segment", "rest")
-        regional_multiplier = self.snapshot_service._resolve_multiplier(
-            destination_country, category_id
-        ) if hasattr(self.snapshot_service, "_resolve_multiplier") else None
+        regional_multiplier = (
+            self.snapshot_service._resolve_multiplier(destination_country, category_id)
+            if hasattr(self.snapshot_service, "_resolve_multiplier")
+            else None
+        )
 
         for size_entry in cell.get("size_entries", []):
             if not size_entry.get("available"):
@@ -414,4 +417,3 @@ class ProdigiArtworkStorefrontService:
             return float(value)
         except (TypeError, ValueError):
             return None
-

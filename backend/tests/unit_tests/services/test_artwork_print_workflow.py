@@ -115,7 +115,9 @@ def make_group(
     )
 
 
-def make_service(*, assets: list[ArtworkPrintAsset] | None = None, groups: list[object] | None = None):
+def make_service(
+    *, assets: list[ArtworkPrintAsset] | None = None, groups: list[object] | None = None
+):
     service = ArtworkPrintWorkflowService(FakeDB(assets or []))
     service.storefront_repository = SimpleNamespace(
         get_active_bake=AsyncMock(return_value=SimpleNamespace(id=7, bake_key="active-bake")),
@@ -181,7 +183,10 @@ async def test_get_workflow_blocks_when_prints_enabled_but_ratio_is_missing():
     assert payload["print_enabled"] is True
     assert payload["ratio_assigned"] is False
     assert payload["overall_status"] == "blocked"
-    assert payload["readiness_summary"]["message"] == "Choose a print aspect ratio in Basics to unlock the print pipeline."
+    assert (
+        payload["readiness_summary"]["message"]
+        == "Choose a print aspect ratio in Basics to unlock the print pipeline."
+    )
     assert slot["relevant"] is True
     assert slot["status"] == "blocked"
     assert slot["issues"] == ["Choose a print aspect ratio in Basics before uploading masters."]
@@ -566,7 +571,9 @@ async def test_validate_master_upload_dimensions_rejects_wrong_paper_target():
 
 
 @pytest.mark.asyncio
-async def test_generate_derivatives_from_paper_master_creates_pngs_for_available_sizes_only(tmp_path):
+async def test_generate_derivatives_from_paper_master_creates_pngs_for_available_sizes_only(
+    tmp_path,
+):
     artwork = make_artwork(paper=True, canvas=False)
     master_path = tmp_path / "master.png"
     Image.new("RGB", (6000, 8000), color="white").save(master_path)
@@ -631,8 +638,8 @@ async def test_generate_clean_master_derivatives_include_canvas_and_framed_paper
         ],
     )
     service._get_artwork_orm = AsyncMock(return_value=artwork)
-    service._build_derivative_output_dir = (
-        lambda artwork_id, slot_id, category_id: str(tmp_path / slot_id / category_id)
+    service._build_derivative_output_dir = lambda artwork_id, slot_id, category_id: str(
+        tmp_path / slot_id / category_id
     )
 
     generated = await service.generate_derivatives_for_master(
@@ -652,7 +659,9 @@ async def test_generate_clean_master_derivatives_include_canvas_and_framed_paper
 
 
 @pytest.mark.asyncio
-async def test_generate_clean_master_derivative_resizes_to_exact_target_when_ratio_differs(tmp_path):
+async def test_generate_clean_master_derivative_resizes_to_exact_target_when_ratio_differs(
+    tmp_path,
+):
     artwork = make_artwork(paper=False, canvas=True, ratio_label="4:5")
     master_path = tmp_path / "canvas-clean.png"
     Image.new("RGB", (6000, 8000), color="white").save(master_path)
@@ -687,8 +696,8 @@ async def test_generate_clean_master_derivative_resizes_to_exact_target_when_rat
         ],
     )
     service._get_artwork_orm = AsyncMock(return_value=artwork)
-    service._build_derivative_output_dir = (
-        lambda artwork_id, slot_id, category_id: str(tmp_path / slot_id / category_id)
+    service._build_derivative_output_dir = lambda artwork_id, slot_id, category_id: str(
+        tmp_path / slot_id / category_id
     )
 
     generated = await service.generate_derivatives_for_master(

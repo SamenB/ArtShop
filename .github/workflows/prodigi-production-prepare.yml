@@ -32,6 +32,14 @@ on:
         options:
           - "false"
           - "true"
+      force:
+        description: "Force rebuild even if production fingerprint is current"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   prepare:
@@ -72,10 +80,26 @@ jobs:
               EXTRA_ARGS="$EXTRA_ARGS --require-api-checks"
             fi
 
-            echo "Rebuilding Prodigi snapshot and payloads..."
-            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
-              python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
-              --output /tmp/prodigi_production_prepare_report.json \
-              $EXTRA_ARGS
+            DECIDER_ARGS=""
+            if [ "${{ inputs.force }}" = "true" ]; then
+              DECIDER_ARGS="$DECIDER_ARGS --force"
+            fi
+
+            echo "Checking whether Prodigi production prepare is needed..."
+            PRODIGI_DECISION=$(docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+              python -m src.integrations.prodigi.tasks.prodigi_should_prepare_production \
+              --format shell \
+              $DECIDER_ARGS)
+            echo "$PRODIGI_DECISION"
+
+            if echo "$PRODIGI_DECISION" | grep 'PRODIGI_PREPARE_NEEDED=true' >/dev/null; then
+              echo "Rebuilding Prodigi snapshot and payloads..."
+              docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api \
+                python -m src.integrations.prodigi.tasks.prodigi_production_prepare \
+                --output /tmp/prodigi_production_prepare_report.json \
+                $EXTRA_ARGS
+            else
+              echo "Prodigi production data is already current; skipping rebuild."
+            fi
 
             echo "Prodigi production prepare completed."

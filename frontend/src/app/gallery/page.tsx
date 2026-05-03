@@ -131,7 +131,7 @@ export default function GalleryPage() {
                 setLikedIds(new Set(items.map(a => a.id)));
             })
             .catch(() => setLikedIds(new Set()));
-    }, [user]);
+    }, [user, pendingLikes]);
 
     /** 
      * Derived state: Groups artworks by their parent collections to create 
