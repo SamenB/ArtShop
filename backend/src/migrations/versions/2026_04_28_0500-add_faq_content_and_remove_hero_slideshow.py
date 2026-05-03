@@ -16,14 +16,32 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    return any(column["name"] == column_name for column in inspector.get_columns(table_name))
+
+
+def _add_column_if_missing(table_name: str, column: sa.Column) -> None:
+    if not _has_column(table_name, column.name):
+        op.add_column(table_name, column)
+
+
+def _drop_column_if_exists(table_name: str, column_name: str) -> None:
+    if _has_column(table_name, column_name):
+        op.drop_column(table_name, column_name)
+
+
 def upgrade() -> None:
-    op.add_column("site_settings", sa.Column("faq_page_text", sa.Text(), nullable=True))
-    op.drop_column("site_settings", "hero_slide_duration")
-    op.drop_column("site_settings", "hero_ken_burns_enabled")
-    op.drop_column("site_settings", "cover_3_mobile_url")
-    op.drop_column("site_settings", "cover_3_desktop_url")
-    op.drop_column("site_settings", "cover_2_mobile_url")
-    op.drop_column("site_settings", "cover_2_desktop_url")
+    _add_column_if_missing("site_settings", sa.Column("faq_page_text", sa.Text(), nullable=True))
+    for column_name in (
+        "hero_slide_duration",
+        "hero_ken_burns_enabled",
+        "cover_3_mobile_url",
+        "cover_3_desktop_url",
+        "cover_2_mobile_url",
+        "cover_2_desktop_url",
+    ):
+        _drop_column_if_exists("site_settings", column_name)
 
 
 def downgrade() -> None:

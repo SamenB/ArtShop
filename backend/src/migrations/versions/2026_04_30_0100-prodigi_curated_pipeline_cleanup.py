@@ -8,9 +8,8 @@ Create Date: 2026-04-30 01:00:00.000000
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d91e8f4a6c20"
@@ -19,27 +18,25 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    return any(column["name"] == column_name for column in inspector.get_columns(table_name))
+
+
+def _add_column_if_missing(table_name: str, column: sa.Column) -> None:
+    if not _has_column(table_name, column.name):
+        op.add_column(table_name, column)
+
+
 def upgrade() -> None:
-    op.add_column(
-        "prodigi_storefront_bakes",
+    for column in (
         sa.Column("source_sha256", sa.String(length=64), nullable=True),
-    )
-    op.add_column(
-        "prodigi_storefront_bakes",
         sa.Column("source_row_count", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "prodigi_storefront_bakes",
         sa.Column("source_size_bytes", sa.BigInteger(), nullable=True),
-    )
-    op.add_column(
-        "prodigi_storefront_bakes",
         sa.Column("pipeline_version", sa.String(length=120), nullable=True),
-    )
-    op.add_column(
-        "prodigi_storefront_bakes",
         sa.Column("policy_version", sa.String(length=120), nullable=True),
-    )
+    ):
+        _add_column_if_missing("prodigi_storefront_bakes", column)
 
     op.execute("DROP TABLE IF EXISTS prodigi_catalog_routes CASCADE")
     op.execute("DROP TABLE IF EXISTS prodigi_catalog_variants CASCADE")
