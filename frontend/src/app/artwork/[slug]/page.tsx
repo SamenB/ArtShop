@@ -323,7 +323,7 @@ export default function ArtworkDetailPage() {
         `}</style>
             <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "1.5rem 2rem 6rem" }}>
                 {images.length > 0 && (
-                    <link rel="preload" as="image" href={getImageUrl(images[selectedImageIndex], 'original')} />
+                    <link rel="preload" as="image" href={getImageUrl(images[selectedImageIndex], 'medium')} />
                 )}
                 {/* ── Desktop: [LEFT 50% = image-viewer] [RIGHT 50% = purchase] ── */}
                 {/* ── Mobile: single column ──────────────────────────────────── */}
@@ -701,7 +701,7 @@ export default function ArtworkDetailPage() {
                                                                 }}
                                                             >
                                                                 <img
-                                                                    src={getImageUrl(img, 'original')}
+                                                                    src={getImageUrl(img, 'medium')}
                                                                     alt={work.title}
                                                                     loading={idx === 0 ? "eager" : "lazy"}
                                                                     onLoad={(e) => handleImgLoad(idx, e)}

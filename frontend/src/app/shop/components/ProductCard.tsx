@@ -34,7 +34,7 @@ export function ProductCard({ product, zoneH, gridMode, isMobile, countryCode, i
     const ori = (product.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
     const isSquare = ori === "square";
-    const imgSrc = product.images?.[0] ? getImageUrl(product.images[0], "original") || "" : "";
+    const imgSrc = product.images?.[0] ? getImageUrl(product.images[0], "medium") || "" : "";
     const st = STATUS[product.original_status];
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -137,6 +137,8 @@ export function ProductCard({ product, zoneH, gridMode, isMobile, countryCode, i
                             src={imgSrc}
                             alt={product.title}
                             className="art-card-inner"
+                            loading={listIndex !== undefined && listIndex < 4 ? "eager" : "lazy"}
+                            fetchPriority={listIndex !== undefined && listIndex < 2 ? "high" : "auto"}
                             onLoad={recalc}
                             onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
                             onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}

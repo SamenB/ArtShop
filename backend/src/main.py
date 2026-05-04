@@ -4,6 +4,7 @@ Configures the FastAPI instance, manages lifecycle events (lifespan),
 registers global middleware (CORS, logging), and orchestrates API routing.
 """
 
+import mimetypes
 from contextlib import asynccontextmanager
 
 import redis.asyncio as redis
@@ -39,6 +40,7 @@ from src.print_on_demand import get_print_provider
 
 # Initialize global logging configuration immediately upon module load.
 setup_logging()
+mimetypes.add_type("image/webp", ".webp")
 
 
 @asynccontextmanager

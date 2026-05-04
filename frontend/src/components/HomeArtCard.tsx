@@ -28,7 +28,7 @@ export default function HomeArtCard({ work, zoneH = 380 }: Props) {
   const ori = (work.orientation || "vertical").toLowerCase();
   const isHorizontal = ori === "horizontal";
   const isSquare = ori === "square";
-  const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") : "";
+  const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "medium") : "";
 
   const containerRef = useRef<HTMLDivElement>(null);
   const linkRef = useRef<HTMLAnchorElement>(null);

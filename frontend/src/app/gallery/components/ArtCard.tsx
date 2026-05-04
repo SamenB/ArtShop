@@ -26,7 +26,7 @@ export function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initi
     const ori = (work.orientation || "vertical").toLowerCase();
     const isHorizontal = ori === "horizontal";
     const isSquare = ori === "square";
-    const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "original") || "" : "";
+    const imgSrc = work.images?.[0] ? getImageUrl(work.images[0], "medium") || "" : "";
     const st = STATUS[work.original_status];
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -121,6 +121,7 @@ export function ArtCard({ work, onClick, zoneH, gridMode, isMobile, liked: initi
                         src={imgSrc}
                         alt={work.title}
                         className="art-card-inner"
+                        loading="lazy"
                         onLoad={recalc}
                         onMouseEnter={() => { if (!isMobile) setImgHovered(true); }}
                         onMouseLeave={() => { if (!isMobile) setImgHovered(false); }}
